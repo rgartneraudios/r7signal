@@ -20,7 +20,7 @@ export async function onRequestPost(context) {
 
   try {
     const command = new PutObjectCommand({
-      Bucket: "brovision-assets",
+      Bucket: "r7signal",
       Key: fileName,
       ContentType: fileType,
     });
