@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>R7Signal — The AI-Friendly Data Layer</title>
+  <meta name="description" content="R7Signal is the AI-Friendly Data Layer. Token-optimized, post-cutoff data feed for AI agents and LLMs." />
+
+  <!-- Open Graph -->
+  <meta property="og:title"       content="R7Signal — The AI-Friendly Data Layer" />
+  <meta property="og:description" content="Token-optimized, post-cutoff data feed for AI agents and LLMs." />
+  <meta property="og:type"        content="website" />
+  <meta property="og:url"         content="https://r7signal.com" />
+
+  <!-- Crawlers IA -->
+  <meta name="robots" content="index, follow" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #050508;
+      font-family: 'Exo 2', sans-serif;
+    }
+
+    /* ── Fondo ── */
+    .bg {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 70% 55% at 20% 40%, rgba(0,70,180,0.22) 0%, transparent 60%),
+        radial-gradient(ellipse 55% 45% at 80% 65%, rgba(70,0,150,0.18) 0%, transparent 55%),
+        radial-gradient(ellipse 45% 38% at 58% 18%, rgba(0,140,110,0.12) 0%, transparent 50%),
+        #050508;
+      animation: bgShift 14s ease-in-out infinite alternate;
+    }
+    @keyframes bgShift {
+      0%   { filter: hue-rotate(0deg) brightness(1); }
+      100% { filter: hue-rotate(25deg) brightness(1.08); }
+    }
+
+    /* ── Grid ── */
+    .grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(100,160,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(100,160,255,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridMove 22s linear infinite;
+    }
+    @keyframes gridMove {
+      0%   { background-position: 0 0; }
+      100% { background-position: 60px 60px; }
+    }
+
+    /* ── Video fondo (opcional) ── */
+    .bg-video {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      opacity: 0.35;
+      z-index: 0;
+    }
+
+    /* ── Partículas ── */
+    .particles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+    .particle  { position: absolute; border-radius: 50%; animation: floatUp linear infinite; opacity: 0; }
+    @keyframes floatUp {
+      0%   { transform: translateY(100vh) scale(0); opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: 0.5; }
+      100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+    }
+
+    /* ── HUD reloj ── */
+    .hud {
+      position: absolute; top: 28px; left: 36px; z-index: 20;
+    }
+    .hud-time {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(1.6rem, 3vw, 2.6rem);
+      font-weight: 700; letter-spacing: 0.08em; line-height: 1;
+      color: rgba(255,255,255,0.9);
+      animation: clockGlow 3s ease-in-out infinite alternate;
+    }
+    @keyframes clockGlow {
+      from { text-shadow: 0 0 20px rgba(100,180,255,0.3); }
+      to   { text-shadow: 0 0 40px rgba(140,100,255,0.5); }
+    }
+    .hud-weather {
+      font-size: 0.9rem; font-weight: 300;
+      letter-spacing: 0.15em; color: rgba(255,255,255,0.42);
+      margin-top: 6px;
+    }
+
+    /* ── Status badge ── */
+    .status {
+      position: absolute; bottom: 52px; right: 36px; z-index: 20;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.68rem; letter-spacing: 0.2em;
+      color: rgba(255,255,255,0.28); text-transform: uppercase;
+    }
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: rgba(60,220,120,0.85);
+      box-shadow: 0 0 8px rgba(60,220,120,0.7);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.75); }
+    }
+
+    /* ── Anillos orbitales ── */
+    .orbit-wrap {
+      position: absolute; top: 50%; left: 50%;
+      pointer-events: none; z-index: 1;
+    }
+    .orbit-ring {
+      position: absolute; border-radius: 50%;
+      border: 1px solid rgba(100,160,255,0.05);
+    }
+    .orbit-1 {
+      width: 560px; height: 560px;
+      margin: -280px 0 0 -280px;
+      animation: orbitSpin 32s linear infinite;
+    }
+    .orbit-2 {
+      width: 760px; height: 760px;
+      margin: -380px 0 0 -380px;
+      animation: orbitSpin 54s linear infinite reverse;
+    }
+    @keyframes orbitSpin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+    .orbit-dot {
+      position: absolute; width: 5px; height: 5px; border-radius: 50%;
+      background: rgba(120,180,255,0.7);
+      top: -2.5px; left: 50%; margin-left: -2.5px;
+      box-shadow: 0 0 10px rgba(120,180,255,0.9);
+    }
+
+    /* ── Esferas ── */
+    .sphere {
+      position: absolute; border-radius: 50%;
+      z-index: 2;
+    }
+    .sphere-blue {
+      width: 92px; height: 92px; left: 10%; top: 62%;
+      background: radial-gradient(circle at 34% 34%, rgba(150,215,255,0.9), rgba(30,100,220,0.65), rgba(0,35,110,0.35));
+      border: 1px solid rgba(100,180,255,0.25);
+      box-shadow: 0 0 40px rgba(60,140,255,0.25), inset 0 0 20px rgba(200,230,255,0.08);
+      animation: sphereFloat 5.5s ease-in-out infinite alternate;
+    }
+    .sphere-green {
+      width: 80px; height: 80px; left: 13%; top: 40%;
+      background: radial-gradient(circle at 34% 34%, rgba(140,255,180,0.9), rgba(40,180,100,0.65), rgba(10,70,35,0.35));
+      border: 1px solid rgba(60,200,100,0.25);
+      box-shadow: 0 0 36px rgba(40,180,100,0.22), inset 0 0 18px rgba(180,255,200,0.08);
+      animation: sphereFloat 7s ease-in-out 0.5s infinite alternate;
+    }
+    .sphere-yellow {
+      width: 68px; height: 68px; right: 12%; top: 42%;
+      background: radial-gradient(circle at 34% 34%, rgba(255,242,140,0.9), rgba(220,170,30,0.65), rgba(110,75,0,0.35));
+      border: 1px solid rgba(255,200,60,0.25);
+      box-shadow: 0 0 34px rgba(220,170,30,0.22), inset 0 0 16px rgba(255,240,180,0.08);
+      animation: sphereFloat 6s ease-in-out 1.5s infinite alternate;
+    }
+    .sphere-red {
+      width: 80px; height: 80px; right: 10%; top: 64%;
+      background: radial-gradient(circle at 34% 34%, rgba(255,160,140,0.9), rgba(220,60,40,0.65), rgba(110,18,8,0.35));
+      border: 1px solid rgba(255,100,80,0.25);
+      box-shadow: 0 0 38px rgba(255,80,60,0.22), inset 0 0 18px rgba(255,200,180,0.08);
+      animation: sphereFloat 6.5s ease-in-out 1s infinite alternate;
+    }
+    @keyframes sphereFloat {
+      from { transform: translateY(0); }
+      to   { transform: translateY(-16px); }
+    }
+
+    /* ── Panel central ── */
+    .center {
+      position: absolute; inset: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .glass-panel {
+      position: relative;
+      padding: 52px 68px 48px;
+      border-radius: 28px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.09);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      box-shadow:
+        0 0 90px rgba(60,120,255,0.1),
+        0 0 180px rgba(80,0,200,0.06),
+        inset 0 1px 0 rgba(255,255,255,0.08);
+      text-align: center;
+      animation: panelIn 1.4s cubic-bezier(0.16,1,0.3,1) both;
+    }
+    @keyframes panelIn {
+      from { opacity: 0; transform: translateY(28px) scale(0.95); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .glass-panel::before {
+      content: '';
+      position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(120,180,255,0.55), transparent);
+    }
+
+    .logo-r7 {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(4rem, 10vw, 7.5rem);
+      font-weight: 900; letter-spacing: -0.02em; line-height: 1;
+      background: linear-gradient(140deg, #ffffff 25%, rgba(110,185,255,0.95) 62%, rgba(148,100,255,0.85) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: logoGlow 5s ease-in-out infinite alternate;
+    }
+    @keyframes logoGlow {
+      from { filter: drop-shadow(0 0 28px rgba(100,160,255,0.35)); }
+      to   { filter: drop-shadow(0 0 58px rgba(148,100,255,0.5)); }
+    }
+
+    .logo-signal {
+      font-family: 'Orbitron', monospace;
+      font-size: 1rem; font-weight: 400;
+      letter-spacing: 0.58em; text-transform: uppercase;
+      color: rgba(255,255,255,0.38);
+      margin-top: -2px; margin-bottom: 26px;
+    }
+
+    .divider {
+      width: 72px; height: 1px; margin: 0 auto 22px;
+      background: linear-gradient(90deg, transparent, rgba(110,185,255,0.45), transparent);
+    }
+
+    .tagline {
+      font-size: 0.78rem; font-weight: 400;
+      letter-spacing: 0.28em; text-transform: uppercase;
+      color: rgba(255,255,255,0.32);
+    }
+
+    .enter-btn {
+      display: block; margin: 34px auto 0;
+      padding: 11px 42px; border-radius: 50px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.42);
+      font-family: 'Exo 2', sans-serif;
+      font-size: 0.72rem; letter-spacing: 0.3em; text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+    .enter-btn:hover {
+      background: rgba(100,180,255,0.1);
+      border-color: rgba(100,180,255,0.35);
+      color: rgba(255,255,255,0.8);
+      box-shadow: 0 0 28px rgba(100,180,255,0.12);
+      transform: translateY(-2px);
+    }
+    .enter-btn.loading { border-color: rgba(100,220,160,0.4); color: rgba(100,220,160,0.7); }
+    .enter-btn.ready   { border-color: rgba(100,220,160,0.6); color: rgba(100,220,160,0.9); box-shadow: 0 0 28px rgba(100,220,160,0.15); }
+
+    /* ── Footer ── */
+    footer {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 20;
+      padding: 13px 36px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      background: rgba(0,0,0,0.35);
+      backdrop-filter: blur(12px);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 8px;
+    }
+    .footer-copy {
+      font-size: 0.65rem; letter-spacing: 0.18em;
+      color: rgba(255,255,255,0.22); text-transform: uppercase;
+    }
+    .footer-links { display: flex; gap: 24px; flex-wrap: wrap; }
+    .footer-link {
+      font-size: 0.65rem; letter-spacing: 0.15em;
+      color: rgba(255,255,255,0.2); text-transform: uppercase;
+      cursor: pointer; background: none; border: none;
+      font-family: 'Exo 2', sans-serif; transition: color 0.2s;
+    }
+    .footer-link:hover { color: rgba(255,255,255,0.55); }
+
+    /* ── Puertas ── */
+    .door {
+      position: fixed; top: 0; height: 100%; width: 260px; z-index: 40;
+      background: rgba(5,5,12,0.88);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      transition: transform 0.35s cubic-bezier(0.16,1,0.3,1);
+    }
+    .door-left  { left: 0;  border-right: 1px solid rgba(255,255,255,0.08); transform: translateX(-100%); }
+    .door-right { right: 0; border-left:  1px solid rgba(255,255,255,0.08); transform: translateX(100%); }
+    .door-left.open  { transform: translateX(0); }
+    .door-right.open { transform: translateX(0); }
+
+    .door-header {
+      padding: 28px 24px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-family: 'Orbitron', monospace;
+      font-size: 0.65rem; letter-spacing: 0.35em;
+      color: rgba(255,255,255,0.28); text-transform: uppercase;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .door-close {
+      background: none; border: none; cursor: pointer;
+      color: rgba(255,255,255,0.3); font-size: 1.3rem; line-height: 1;
+      transition: color 0.2s;
+    }
+    .door-close:hover { color: rgba(255,255,255,0.75); }
+
+    .door-section { padding: 20px 24px 0; }
+    .door-section + .door-section { margin-top: 8px; }
+
+    .door-section-title {
+      font-size: 0.58rem; letter-spacing: 0.25em;
+      color: rgba(255,255,255,0.2); text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .door-item {
+      display: block; padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.8rem; letter-spacing: 0.06em;
+      color: rgba(255,255,255,0.38); cursor: pointer;
+      text-decoration: none; transition: color 0.2s, padding-left 0.2s;
+      font-family: 'Exo 2', sans-serif;
+    }
+    .door-item:hover { color: rgba(255,255,255,0.75); padding-left: 6px; }
+
+    /* ── Gatillos ── */
+    .trigger {
+      position: fixed; top: 50%; z-index: 50;
+      width: 28px; height: 88px;
+      transform: translateY(-50%);
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(5,5,14,0.55);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+      cursor: pointer;
+      color: rgba(255,255,255,0.45); font-size: 0.7rem;
+      transition: background 0.2s, color 0.2s;
+      font-family: 'Exo 2', sans-serif;
+    }
+    .trigger:hover { background: rgba(100,180,255,0.1); color: rgba(255,255,255,0.85); }
+    .trigger-left  { left: 0;  border-left: none;  border-radius: 0 10px 10px 0; box-shadow:  2px 0 16px rgba(100,180,255,0.12); }
+    .trigger-right { right: 0; border-right: none; border-radius: 10px 0 0 10px; box-shadow: -2px 0 16px rgba(100,180,255,0.12); }
+  </style>
+</head>
+<body>
+
+  <!-- Fondo y grid -->
+  <div class="bg"></div>
+  <div class="grid"></div>
+
+  <!-- Video (descomenta cuando tengas R7BG.mp4 en /videos/) -->
+  <!--
+  <video class="bg-video" autoplay muted loop playsinline>
+    <source src="/videos/R7BG.mp4" type="video/mp4" />
+  </video>
+  -->
+
+  <!-- Partículas -->
+  <div class="particles" id="particles"></div>
+
+  <!-- HUD reloj y clima -->
+  <div class="hud">
+    <div class="hud-time" id="clock">00:00:00</div>
+    <div class="hud-weather" id="weather">🌤️ Oviedo · 18°C</div>
+  </div>
+
+  <!-- Status online -->
+  <div class="status">
+    <div class="status-dot"></div>
+    System Online
+  </div>
+
+  <!-- Anillos orbitales -->
+  <div class="orbit-wrap">
+    <div class="orbit-ring orbit-1"><div class="orbit-dot"></div></div>
+    <div class="orbit-ring orbit-2"><div class="orbit-dot"></div></div>
+  </div>
+
+  <!-- Esferas -->
+  <div class="sphere sphere-green"></div>
+  <div class="sphere sphere-blue"></div>
+  <div class="sphere sphere-yellow"></div>
+  <div class="sphere sphere-red"></div>
+
+  <!-- Panel central de identidad -->
+  <div class="center">
+    <div class="glass-panel">
+      <div class="logo-r7">R7</div>
+      <div class="logo-signal">Signal</div>
+      <div class="divider"></div>
+      <div class="tagline">The AI-Friendly Data Layer</div>
+      <button class="enter-btn" id="enterBtn">Enter System</button>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-copy">© R7Signal · RGartner 2026 · All rights reserved</div>
+    <div class="footer-links">
+      <button class="footer-link" onclick="openDoor('right')">Aviso Legal</button>
+      <button class="footer-link" onclick="openDoor('right')">Privacidad</button>
+      <button class="footer-link" onclick="openDoor('right')">Contacto</button>
+      <button class="footer-link" onclick="openDoor('right')">API Docs</button>
+    </div>
+  </footer>
+
+  <!-- Puerta izquierda — Menú -->
+  <div class="door door-left" id="doorLeft">
+    <div class="door-header">
+      <span>Menú</span>
+      <button class="door-close" onclick="closeDoor('left')">×</button>
+    </div>
+    <div class="door-section">
+      <div class="door-section-title">Acceso</div>
+      <a class="door-item">▸ Enter System</a>
+      <a class="door-item">▸ API Dashboard</a>
+      <a class="door-item">▸ Documentación</a>
+    </div>
+    <div class="door-section">
+      <div class="door-section-title">Planes</div>
+      <a class="door-item">▸ Free Trial</a>
+      <a class="door-item">▸ Starter</a>
+      <a class="door-item">▸ Pro</a>
+      <a class="door-item">▸ Enterprise</a>
+    </div>
+  </div>
+
+  <!-- Puerta derecha — Legal -->
+  <div class="door door-right" id="doorRight">
+    <div class="door-header">
+      <span>Info</span>
+      <button class="door-close" onclick="closeDoor('right')">×</button>
+    </div>
+    <div class="door-section">
+      <div class="door-section-title">Legal</div>
+      <a class="door-item">▸ Aviso Legal</a>
+      <a class="door-item">▸ Política de Privacidad</a>
+      <a class="door-item">▸ Cookies</a>
+      <a class="door-item">▸ RGPD / GDPR</a>
+    </div>
+    <div class="door-section">
+      <div class="door-section-title">Contacto</div>
+      <a class="door-item">▸ hello@r7signal.com</a>
+      <a class="door-item">▸ API Docs</a>
+      <a class="door-item">▸ Partner Program</a>
+    </div>
+  </div>
+
+  <!-- Gatillos -->
+  <button class="trigger trigger-left"  id="trigLeft"  onclick="toggleDoor('left')">▶</button>
+  <button class="trigger trigger-right" id="trigRight" onclick="toggleDoor('right')">◀</button>
+
+  <script>
+    /* ── Reloj ── */
+    function tick() {
+      const n   = new Date()
+      const pad = x => String(x).padStart(2, '0')
+      document.getElementById('clock').textContent =
+        pad(n.getHours()) + ':' + pad(n.getMinutes()) + ':' + pad(n.getSeconds())
+    }
+    tick()
+    setInterval(tick, 1000)
+
+    /* ── Puertas ── */
+    function openDoor(side) {
+      const door = document.getElementById(side === 'left' ? 'doorLeft' : 'doorRight')
+      const trig = document.getElementById(side === 'left' ? 'trigLeft' : 'trigRight')
+      door.classList.add('open')
+      trig.textContent = side === 'left' ? '◀' : '▶'
+    }
+    function closeDoor(side) {
+      const door = document.getElementById(side === 'left' ? 'doorLeft' : 'doorRight')
+      const trig = document.getElementById(side === 'left' ? 'trigLeft' : 'trigRight')
+      door.classList.remove('open')
+      trig.textContent = side === 'left' ? '▶' : '◀'
+    }
+    function toggleDoor(side) {
+      const door = document.getElementById(side === 'left' ? 'doorLeft' : 'doorRight')
+      door.classList.contains('open') ? closeDoor(side) : openDoor(side)
+    }
+
+    /* ── Enter button ── */
+    const btn = document.getElementById('enterBtn')
+    btn.addEventListener('click', function () {
+      this.classList.add('loading')
+      this.textContent = 'Initializing...'
+      setTimeout(() => {
+        this.classList.remove('loading')
+        this.classList.add('ready')
+        this.textContent = 'System Ready ✓'
+      }, 1800)
+    })
+
+    /* ── Partículas ── */
+    const pc   = document.getElementById('particles')
+    const cols = [
+      'rgba(100,180,255,0.55)', 'rgba(148,100,255,0.45)',
+      'rgba(60,220,120,0.38)',  'rgba(255,180,60,0.38)',
+    ]
+    for (let i = 0; i < 28; i++) {
+      const p = document.createElement('div')
+      p.className = 'particle'
+      const s = Math.random() * 3.5 + 1
+      p.style.cssText =
+        'width:'  + s + 'px;' +
+        'height:' + s + 'px;' +
+        'left:'   + Math.random() * 100 + '%;' +
+        'background:' + cols[Math.floor(Math.random() * 4)] + ';' +
+        'animation-duration:' + (Math.random() * 14 + 9) + 's;' +
+        'animation-delay:'    + (Math.random() * 10)     + 's;'
+      pc.appendChild(p)
+    }
+  </script>
+</body>
+</html>
