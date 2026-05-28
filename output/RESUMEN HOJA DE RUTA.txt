@@ -1,0 +1,108 @@
+EL PROYECTO R7Signal
+La idea central:
+R7Signal es una fuente de datos optimizada para LLMs que cubre el gap post-entrenamiento. Los modelos como Gemini 3.5 Flash están entrenados hasta enero 2025, todo lo que pasa después lo tienen que consultar a Deep Search con alto consumo de tokens. R7Signal es la Wiki IA de datos puros post-corte.
+Contenido:
+
+Artículos de 400-600 tokens de dato puro sin ruido HTML
+Categorías: ciencia, deportes, tecnología, cultura, historia
+Fecha explícita de cada evento: "Hoy 25 de mayo de 2026 se encontró la tumba de Cleopatra..."
+Sin fuentes explícitas pero datos verificables por fuentes paralelas (protección legal)
+Datos estructurados embebidos en Markdown para que los LLMs dibujen gráficos si quieren
+
+Ventaja competitiva:
+Deep Search prefiere fuentes limpias y densas porque cuesta menos tokens procesarlas. Una página de Reuters tiene 3000+ tokens de ruido. R7Signal entrega 500 tokens de dato puro. El LLM la usa más porque es más barata y rápida.
+
+EL MODELO DE NEGOCIO
+Dos líneas de ingresos:
+
+B2B — Empresas que tienen agentes IA propios se suscriben a la API de R7Signal para que sus agentes consulten ahí primero. Ahorran tokens medibles, controlable con factura.
+Freemium público — Acceso limitado gratis, planes de pago para volumen alto.
+
+
+LA ARQUITECTURA TÉCNICA
+Stack actual:
+
+Dominio: r7signal.com ✅ (comprado en Namecheap)
+Hosting: Cloudflare Pages (nameservers ya apuntando)
+Base de datos: Supabase proyecto separado en Irlanda ✅
+Tabla articles con campos: id, slug, categoria, titulo, contenido, fecha_evento, created_at, idioma, tokens_estimados, activo ✅
+Repo GitHub: R7 (clonado de Bro7Vision, pendiente de subir a Cloudflare Pages)
+
+Cómo funciona:
+
+Detectas tendencia en Google Trends
+Pides artículo a IA (OpenCode, Claude, etc.)
+Insertas en Supabase
+Cloudflare Pages regenera la página estática
+Search Console indexa
+Deep Search lo encuentra y lo prefiere
+
+
+FRONTEND — DUAL
+Para crawlers de IA (90% del tráfico):
+
+Fondo negro, texto gris oscuro
+Sin menú, sin botones, sin JavaScript visible
+Solo el dato puro de 600 tokens con fecha
+URLs limpias: r7signal.com/ciencia/tumba-cleopatra-20260525
+
+Para humanos curiosos (10%):
+
+Cloudflare Workers detecta User-Agent
+Si es humano → redirige a landing page bonita que dice "R7Signal, datos verificados en tiempo real"
+Landing es tu página de ventas B2B
+
+
+DIFERENCIAL VS COMPETENCIA
+GEO (Generative Engine Optimization) existe pero es para marcas que quieren ser citadas. R7Signal es la fuente que el GEO necesita — el nivel debajo.
+Además: llms.txt — estándar emergente para instruir a los LLMs cómo usar tu contenido. R7Signal lo implementará cuando esté escalado.
+
+AUTORIDAD Y DESCUBRIMIENTO — El problema real
+Sin tráfico humano, Google no te posiciona. Sin posicionamiento, Deep Search no te encuentra. Es el huevo y la gallina.
+La solución que comenté:
+Common Crawl — el dataset público que usan casi TODOS los LLMs para entrenamiento. Si tu web está indexada en Common Crawl, entras en futuros entrenamientos de modelos. Es automático si tu web es pública y crawleable.
+Cómo entra R7Signal en Common Crawl:
+
+Tiene que estar indexada en Google primero
+Common Crawl rastre automáticamente cada 3-6 meses
+Tu contenido entra en el dataset público
+Cuando entrenen modelos nuevos (Gemini 4, Claude 4, etc.) tu contenido está ahí como fuente
+
+El beneficio brutal:
+En 6 meses cuando entrenen la próxima generación de modelos, R7Signal ya es parte del conocimiento base. No esperas a que los crawlers te descubran — estás adentro del entrenamiento.
+
+Otras fuentes de indexación para LLMs:
+
+Wikidata — datasets públicos verificados
+Wikipedia — si agregas referencias a R7Signal
+Repositorios GitHub públicos
+Datasets académicos en Hugging Face
+
+
+Resumen agregado al plan:
+
+AUTORIDAD SIN TRÁFICO HUMANO
+✅ Search Console indexing (Google)
+✅ Common Crawl (futuros entrenamientos de LLMs)
+✅ Wikidata/Wikipedia (referencias cruzadas)
+✅ Coherencia de datos (nunca contradice fuentes)
+Con esto ganas autoridad técnica sin necesidad de clics humanos.
+
+LENGUAJE Y TONO
+Charlamos en buen rollo, usamos "pillar" como entender, somos afilados como acero de espada china. NOCOD = nada de código inicialmente, decisiones de producto primero.
+
+STATUS ACTUAL
+✅ Dominio comprado
+✅ Supabase configurado
+✅ Tabla creada
+⏳ Dominio propagando (12-48 horas)
+⏳ Repo a Cloudflare Pages (mañana)
+⏳ Primer artículo de prueba (mañana)
+
+PRÓXIMOS PASOS URGENTES
+
+Verificar que r7signal.com propagó en Cloudflare
+Conectar repo R7 a Cloudflare Pages
+Crear primer artículo real en Supabase
+Probar que la URL se genera correctamente
+Testear con Search Console
