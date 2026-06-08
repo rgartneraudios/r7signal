@@ -163,38 +163,101 @@ const GEOS = [
 ]
 
 const AVATAR_COLORS = {
-  purple: { bg:THEME.pink12, color:THEME.pinkMarble },
+  purple: { bg:THEME.pink12,    color:THEME.pinkMarble },
   blue:   { bg:THEME.celeste12, color:THEME.celesteBright },
-  amber:  { bg:THEME.gold12, color:THEME.goldBright },
+  amber:  { bg:THEME.gold12,    color:THEME.goldBright },
   teal:   { bg:THEME.celeste12, color:THEME.celesteBright },
 }
 
 const BADGE_STYLES = {
   tech: { bg:THEME.celeste15, color:THEME.celesteBright, border:THEME.celeste35 },
-  ia:   { bg:THEME.gold15,  color:THEME.goldBright,  border:THEME.gold35 },
-  gov:  { bg:THEME.pink15, color:THEME.pinkBright,  border:THEME.pink35 },
+  ia:   { bg:THEME.gold15,    color:THEME.goldBright,    border:THEME.gold35 },
+  gov:  { bg:THEME.pink15,    color:THEME.pinkBright,    border:THEME.pink35 },
   sci:  { bg:THEME.celeste15, color:THEME.celesteBright, border:THEME.celeste25 },
-  intl: { bg:THEME.bgFeedSolid, color:THEME.textMed, border:THEME.borderSubtle },
+  intl: { bg:THEME.bgFeedSolid, color:THEME.textMed,    border:THEME.borderSubtle },
 }
 
-/* ─── Esfera ─── */
-function Sphere({ color, style, className }) {
-  const gradients = {
-    blue:   `radial-gradient(circle at 34% 34%, ${THEME.celesteBr50}, ${THEME.celesteBright}, ${THEME.bgMain})`,
-    green:  `radial-gradient(circle at 34% 34%, ${THEME.pinkBright}, ${THEME.pinkMarble}, ${THEME.bgMain})`,
-    red:    `radial-gradient(circle at 34% 34%, ${THEME.goldBright}, ${THEME.gold}, ${THEME.bgMain})`,
-    yellow: `radial-gradient(circle at 34% 34%, ${THEME.goldBright}, ${THEME.gold60}, ${THEME.bgMain})`,
+/* ─── MEJORA 1: Mapa de hover categórico ─── */
+const CATEGORY_HOVER = {
+  tech:   { bg:'rgba(85,145,155,0.45)', border:THEME.celeste60,   shadow:`0 4px 24px ${THEME.celeste}30, inset 0 1px 0 ${THEME.celeste}25`,   tokenColor: THEME.celeste80   },
+  ia:     { bg:'rgba(120,98,42,0.45)',  border:THEME.gold60,      shadow:`0 4px 24px ${THEME.gold}30, inset 0 1px 0 ${THEME.gold}25`,         tokenColor: THEME.goldBright  },
+  gov:    { bg:'rgba(110,72,80,0.45)',  border:THEME.pink60,      shadow:`0 4px 24px rgba(214,180,188,0.3), inset 0 1px 0 rgba(214,180,188,0.2)`, tokenColor: THEME.pinkBright },
+  social: { bg:'rgba(110,72,80,0.40)',  border:THEME.pink45,      shadow:`0 4px 24px rgba(214,180,188,0.25), inset 0 1px 0 rgba(214,180,188,0.15)`, tokenColor: THEME.pinkMarble },
+  intl:   { bg:'rgba(85,145,155,0.45)', border:THEME.celeste60,   shadow:`0 4px 24px ${THEME.celeste}30, inset 0 1px 0 ${THEME.celeste}25`,   tokenColor: THEME.celeste80   },
+  es:     { bg:'rgba(110,72,80,0.45)',  border:THEME.pink45,      shadow:`0 4px 24px rgba(214,180,188,0.25), inset 0 1px 0 rgba(214,180,188,0.15)`, tokenColor: THEME.pinkBright },
+}
+
+function getCategoryHover(cats) {
+  for (const c of ['ia','gov','social','es','tech']) {
+    if (cats.includes(c)) return CATEGORY_HOVER[c]
   }
-  const glows   = { blue:THEME.celesteBr35,  green:THEME.pinkBr35,    red:THEME.goldBr35,     yellow:THEME.goldBr35 }
-  const borders = { blue:THEME.celesteBr35,  green:THEME.pinkBr35,    red:THEME.goldBr35,     yellow:THEME.goldBr35 }
+  return CATEGORY_HOVER['intl']
+}
+
+/* ─── MEJORA 2: Esfera con especular de vidrio/mármol ─── */
+function Sphere({ color, style, className }) {
+  const configs = {
+    blue: {
+      gradient: `radial-gradient(circle at 34% 34%, ${THEME.celesteBr50}, ${THEME.celesteBright}, ${THEME.bgMain})`,
+      specular: 'rgba(255,255,255,0.60)',
+      specular2: 'rgba(200,240,248,0.25)',
+      glow: THEME.celesteBr35,
+      border: THEME.celesteBr35,
+    },
+    green: {
+      gradient: `radial-gradient(circle at 34% 34%, ${THEME.pinkBright}, ${THEME.pinkMarble}, ${THEME.bgMain})`,
+      specular: 'rgba(255,245,248,0.65)',
+      specular2: 'rgba(232,200,208,0.28)',
+      glow: THEME.pinkBr35,
+      border: THEME.pinkBr35,
+    },
+    red: {
+      gradient: `radial-gradient(circle at 34% 34%, ${THEME.goldBright}, ${THEME.gold}, ${THEME.bgMain})`,
+      specular: 'rgba(255,250,220,0.60)',
+      specular2: 'rgba(230,200,120,0.25)',
+      glow: THEME.goldBr35,
+      border: THEME.goldBr35,
+    },
+    yellow: {
+      gradient: `radial-gradient(circle at 34% 34%, ${THEME.goldBright}, ${THEME.gold60}, ${THEME.bgMain})`,
+      specular: 'rgba(255,248,200,0.55)',
+      specular2: 'rgba(212,185,110,0.22)',
+      glow: THEME.goldBr35,
+      border: THEME.goldBr35,
+    },
+  }
+  const cfg = configs[color] || configs.blue
+
   return (
     <div className={className} style={{
       position: 'absolute', borderRadius: '50%',
-      background: gradients[color],
-      border: `1px solid ${borders[color]}`,
-      boxShadow: `0 0 38px ${glows[color]}, inset 0 0 18px rgba(120,105,75,0.14)`,
+      background: cfg.gradient,
+      border: `1px solid ${cfg.border}`,
+      boxShadow: `0 0 38px ${cfg.glow}, inset 0 0 18px rgba(120,105,75,0.14)`,
+      overflow: 'hidden',
       ...style,
-    }} />
+    }}>
+      {/* Especular principal — punto de luz duro */}
+      <div style={{
+        position: 'absolute',
+        top: '12%', left: '18%',
+        width: '38%', height: '32%',
+        borderRadius: '50%',
+        background: `radial-gradient(ellipse at 40% 40%, ${cfg.specular} 0%, transparent 75%)`,
+        filter: 'blur(2px)',
+        pointerEvents: 'none',
+      }} />
+      {/* Especular secundario — reflejo suave inferior */}
+      <div style={{
+        position: 'absolute',
+        bottom: '14%', right: '16%',
+        width: '28%', height: '22%',
+        borderRadius: '50%',
+        background: `radial-gradient(ellipse, ${cfg.specular2} 0%, transparent 70%)`,
+        filter: 'blur(3px)',
+        pointerEvents: 'none',
+      }} />
+    </div>
   )
 }
 
@@ -219,15 +282,12 @@ function LeftDoor({ isOpen, onClose, signals }) {
       transition: 'transform 0.35s cubic-bezier(0.16,1,0.3,1)',
       display:'flex', flexDirection:'column',
     }}>
-      {/* Header */}
       <div style={{ padding:'28px 22px 16px', borderBottom:`1px solid ${THEME.borderSubtle}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <span style={{ fontFamily:"'Orbitron',monospace", fontSize:'0.6rem', letterSpacing:'0.35em', color:THEME.textLow, textTransform:'uppercase' }}>Sistema</span>
         <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:THEME.textLow, fontSize:'1.3rem', lineHeight:1 }}>×</button>
       </div>
 
       <div style={{ padding:'20px 22px', flex:1, overflowY:'auto' }}>
-
-        {/* Estado Supabase */}
         <div style={{ marginBottom:20 }}>
           <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:10 }}>Conexión</div>
           <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'rgba(72,130,139,0.08)', border:`1px solid rgba(72,130,139,0.20)`, borderRadius:8 }}>
@@ -236,7 +296,6 @@ function LeftDoor({ isOpen, onClose, signals }) {
           </div>
         </div>
 
-        {/* Stats */}
         <div style={{ marginBottom:20 }}>
           <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:4 }}>Actividad hoy</div>
           {statRow('Señales publicadas', todaySignals, THEME.celeste)}
@@ -245,7 +304,6 @@ function LeftDoor({ isOpen, onClose, signals }) {
           {statRow('Versión', 'v0.1.0-alpha', THEME.textMed)}
         </div>
 
-        {/* Categorías breakdown */}
         <div style={{ marginBottom:20 }}>
           <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:10 }}>Distribución</div>
           {[
@@ -266,7 +324,6 @@ function LeftDoor({ isOpen, onClose, signals }) {
           ))}
         </div>
 
-        {/* Legal */}
         <div>
           <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:8 }}>Legal</div>
           {['Aviso Legal', 'Privacidad', 'Cookies', 'API Docs'].map(item => (
@@ -313,7 +370,6 @@ function RightDoor({ isOpen, onClose, user, onLogin, onLogout }) {
       transition:'transform 0.35s cubic-bezier(0.16,1,0.3,1)',
       display:'flex', flexDirection:'column',
     }}>
-      {/* Header */}
       <div style={{ padding:'28px 22px 16px', borderBottom:`1px solid ${THEME.borderSubtle}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <span style={{ fontFamily:"'Orbitron',monospace", fontSize:'0.6rem', letterSpacing:'0.35em', color:THEME.textLow, textTransform:'uppercase' }}>Acceso</span>
         <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:THEME.textLow, fontSize:'1.3rem', lineHeight:1 }}>×</button>
@@ -322,7 +378,6 @@ function RightDoor({ isOpen, onClose, user, onLogin, onLogout }) {
       <div style={{ padding:'22px', flex:1, display:'flex', flexDirection:'column', gap:16 }}>
         {!user ? (
           <>
-            {/* Sin sesión */}
             <div style={{ textAlign:'center', padding:'12px 0 8px' }}>
               <div style={{ fontSize:'0.72rem', color:THEME.textLow, letterSpacing:'0.12em', fontFamily:"'Exo 2',sans-serif" }}>Identifícate para acceder</div>
             </div>
@@ -362,7 +417,6 @@ function RightDoor({ isOpen, onClose, user, onLogin, onLogout }) {
           </>
         ) : (
           <>
-            {/* Con sesión */}
             <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px', background:`${THEME.bgFeed}CC`, border:`1px solid ${THEME.borderSubtle}`, borderRadius:10 }}>
               <div style={{ width:42, height:42, borderRadius:'50%', background:THEME.gold15, border:`1px solid ${THEME.gold40}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.75rem', fontWeight:700, color:THEME.gold, flexShrink:0 }}>{user.initials}</div>
               <div>
@@ -426,17 +480,75 @@ function Trigger({ side, isOpen, onClick }) {
   )
 }
 
-/* ─── Tarjeta señal ─── */
+/* ─── MEJORA 3: Tarjeta señal con hover categórico + textura metálica ─── */
 function SignalCard({ signal, visible }) {
   const av = AVATAR_COLORS[signal.color] || AVATAR_COLORS.blue
+  const hoverCfg = getCategoryHover(signal.cats)
   if (!visible) return null
+
+  /* Textura metálica sutil en el fondo de la card */
+  const metalTexture = `
+    repeating-linear-gradient(
+      125deg,
+      rgba(255,255,255,0.012) 0px,
+      rgba(255,255,255,0.012) 1px,
+      transparent 1px,
+      transparent 6px
+    ),
+    repeating-linear-gradient(
+      215deg,
+      rgba(255,255,255,0.008) 0px,
+      rgba(255,255,255,0.008) 1px,
+      transparent 1px,
+      transparent 8px
+    )
+  `
+
   return (
-    <div style={{ background:THEME.bgFeedSolid, border:`1px solid ${THEME.borderSubtle}`, borderRadius:12, padding:'14px 16px', cursor:'pointer', transition:'all 0.25s ease', boxShadow:`0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 ${THEME.celeste}10` }}
-      onMouseEnter={e=>{e.currentTarget.style.borderColor=THEME.celeste60;e.currentTarget.style.background=`rgba(85,145,155,0.45)`;e.currentTarget.style.boxShadow=`0 4px 24px ${THEME.celeste}30, inset 0 1px 0 ${THEME.celeste}25`}}
-      onMouseLeave={e=>{e.currentTarget.style.borderColor=THEME.borderSubtle;e.currentTarget.style.background=THEME.bgFeedSolid;e.currentTarget.style.boxShadow=`0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 ${THEME.celeste}10`}}
+    <div
+      style={{
+        background: THEME.bgFeedSolid,
+        backgroundImage: metalTexture,
+        border:`1px solid ${THEME.borderSubtle}`,
+        borderRadius:12, padding:'14px 16px', cursor:'pointer',
+        transition:'all 0.28s ease',
+        boxShadow:`0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 ${THEME.celeste}10`,
+      }}
+      onMouseEnter={e=>{
+        e.currentTarget.style.borderColor = hoverCfg.border
+        e.currentTarget.style.background  = hoverCfg.bg
+        e.currentTarget.style.boxShadow   = hoverCfg.shadow
+        /* color del token en hover */
+        const tok = e.currentTarget.querySelector('[data-tokens]')
+        if (tok) tok.style.color = hoverCfg.tokenColor
+      }}
+      onMouseLeave={e=>{
+        e.currentTarget.style.borderColor = THEME.borderSubtle
+        e.currentTarget.style.background  = THEME.bgFeedSolid
+        e.currentTarget.style.boxShadow   = `0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 ${THEME.celeste}10`
+        const tok = e.currentTarget.querySelector('[data-tokens]')
+        if (tok) tok.style.color = THEME.celeste80
+      }}
     >
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
-        <div style={{ width:32, height:32, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.62rem', fontWeight:700, flexShrink:0, background:av.bg, color:av.color, border:`1px solid ${THEME.borderSubtle}` }}>{signal.initials}</div>
+        {/* Avatar con especular mínimo */}
+        <div style={{
+          width:32, height:32, borderRadius:'50%',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          fontSize:'0.62rem', fontWeight:700, flexShrink:0,
+          background: av.bg, color: av.color,
+          border:`1px solid ${THEME.borderSubtle}`,
+          position:'relative', overflow:'hidden',
+        }}>
+          {signal.initials}
+          <div style={{
+            position:'absolute', top:'8%', left:'15%',
+            width:'45%', height:'38%', borderRadius:'50%',
+            background:'rgba(255,255,255,0.18)',
+            filter:'blur(1px)',
+            pointerEvents:'none',
+          }} />
+        </div>
         <div>
           <div style={{ fontSize:'0.78rem', color:THEME.textHigh, fontWeight:600 }}>{signal.author}</div>
           <div style={{ fontSize:'0.66rem', color:THEME.textMed, marginTop:1 }}>{signal.role}</div>
@@ -451,7 +563,7 @@ function SignalCard({ signal, visible }) {
       <div style={{ fontSize:'0.83rem', lineHeight:1.6, color:THEME.textHigh, letterSpacing:'0.01em' }}>{signal.text}</div>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10, paddingTop:8, borderTop:`1px solid ${THEME.metallicGray}` }}>
         <span style={{ fontSize:'0.63rem', color:THEME.textLow, letterSpacing:'0.06em' }}>{signal.date}</span>
-        <span style={{ fontSize:'0.6rem', color:THEME.celeste80, fontFamily:"'Orbitron',monospace", letterSpacing:'0.1em' }}>{signal.tokens} tokens</span>
+        <span data-tokens="1" style={{ fontSize:'0.6rem', color:THEME.celeste80, fontFamily:"'Orbitron',monospace", letterSpacing:'0.1em', transition:'color 0.28s' }}>{signal.tokens} tokens</span>
       </div>
     </div>
   )
@@ -521,7 +633,7 @@ function AdminPanel({ onPublish }) {
   const blur  = e => e.target.style.borderColor = THEME.borderSubtle
   const btnColors = {
     idle:   { bg:THEME.pink60,  border:THEME.pinkMarble,  color:THEME.textHigh },
-    saving: { bg:THEME.gold10,  border:THEME.gold30,  color:THEME.goldBright },
+    saving: { bg:THEME.gold10,  border:THEME.gold30,      color:THEME.goldBright },
     ok:     { bg:THEME.celeste10, border:THEME.celeste30, color:THEME.celesteBright },
     error:  { bg:'rgba(255,80,60,0.1)', border:'rgba(255,80,60,0.3)', color:'rgba(255,80,60,0.85)' },
   }
@@ -641,6 +753,25 @@ function InteriorView({ onBack, user }) {
 
   const visibleCount = signals.filter(s=>isVisible(s)).length
 
+  /* MEJORA 3: Textura metálica para el panel del feed */
+  const feedMetalBg = `
+    repeating-linear-gradient(
+      118deg,
+      rgba(255,255,255,0.018) 0px,
+      rgba(255,255,255,0.018) 1px,
+      transparent 1px,
+      transparent 5px
+    ),
+    repeating-linear-gradient(
+      208deg,
+      rgba(255,255,255,0.010) 0px,
+      rgba(255,255,255,0.010) 1px,
+      transparent 1px,
+      transparent 7px
+    ),
+    rgba(20,25,30,0.65)
+  `
+
   return (
     <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
       <style>{`
@@ -659,7 +790,7 @@ function InteriorView({ onBack, user }) {
       `}</style>
 
       <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
-      <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste04} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste04} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
+      <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
 
       {/* HUD */}
       <div style={{ position:'fixed', top:18, left:28, zIndex:30 }}>
@@ -667,13 +798,11 @@ function InteriorView({ onBack, user }) {
         <div style={{ fontSize:'0.75rem', color:THEME.textMed, marginTop:2, letterSpacing:'0.12em' }}>{WEATHER.emoji} {WEATHER.city} · {WEATHER.temp}</div>
       </div>
 
-       {/* Exit */}
-       <button onClick={onBack} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Orbitron',monospace", textTransform:'uppercase', transition:'all 0.2s' }}
-         onMouseEnter={e=>{e.currentTarget.style.color=THEME.textHigh;e.currentTarget.style.borderColor=THEME.textMed}}
-         onMouseLeave={e=>{e.currentTarget.style.color=THEME.textMed;e.currentTarget.style.borderColor=THEME.borderSubtle}}
-       >◀ Exit</button>
+      <button onClick={onBack} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Orbitron',monospace", textTransform:'uppercase', transition:'all 0.2s' }}
+        onMouseEnter={e=>{e.currentTarget.style.color=THEME.textHigh;e.currentTarget.style.borderColor=THEME.textMed}}
+        onMouseLeave={e=>{e.currentTarget.style.color=THEME.textMed;e.currentTarget.style.borderColor=THEME.borderSubtle}}
+      >◀ Exit</button>
 
-      {/* Status */}
       <div style={{ position:'fixed', bottom:18, right:28, zIndex:30, display:'flex', alignItems:'center', gap:6, fontSize:'0.63rem', letterSpacing:'0.18em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Exo 2',sans-serif" }}>
         <div className='int-pulse' style={{ width:5, height:5, borderRadius:'50%', background:THEME.celeste, boxShadow:`0 0 7px ${THEME.celeste}BF` }} />
         System Online
@@ -692,7 +821,8 @@ function InteriorView({ onBack, user }) {
 
         <div className='int-panel' style={{ animationDelay:'0.05s' }}><FilterPanel activeCats={activeCats} activeGeos={activeGeos} toggleCat={toggleCat} toggleGeo={toggleGeo} /></div>
 
-        <div className='int-panel' style={{ animationDelay:'0.12s', background:`rgba(20,25,30,0.65)`, border:`1px solid ${THEME.borderSubtle}`, backdropFilter:'blur(14px)', borderRadius:14, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+        {/* MEJORA 3: Panel feed con textura metálica */}
+        <div className='int-panel' style={{ animationDelay:'0.12s', background: feedMetalBg, border:`1px solid ${THEME.borderSubtle}`, backdropFilter:'blur(14px)', borderRadius:14, overflow:'hidden', display:'flex', flexDirection:'column' }}>
           <div style={{ padding:'10px 14px', borderBottom:`1px solid ${THEME.metallicGray}`, fontFamily:"'Orbitron',monospace", fontSize:'0.55rem', letterSpacing:'0.3em', color:THEME.textLow, textTransform:'uppercase', display:'flex', justifyContent:'space-between' }}>
             <span>Señales · Feed</span>
             <span style={{ color:THEME.celeste }}>{visibleCount} activas</span>
@@ -763,8 +893,8 @@ export default function App() {
         .footer-link:hover { color:${THEME.textMed}; }
       `}</style>
 
-      <div className="r7-bg" style={{ position:'absolute', inset:0, background:`radial-gradient(ellipse 70% 55% at 20% 40%, ${THEME.celeste14} 0%, transparent 60%), radial-gradient(ellipse 55% 45% at 80% 65%, ${THEME.gold11} 0%, transparent 55%), radial-gradient(ellipse 45% 38% at 58% 18%, ${THEME.pink08} 0%, transparent 50%), ${THEME.bgMain}` }} />
-      <div className="r7-grid" style={{ position:'absolute', inset:0, backgroundImage:`linear-gradient(${THEME.celeste05} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste05} 1px, transparent 1px)`, backgroundSize:'60px 60px' }} />
+      <div className="r7-bg" style={{ position:'absolute', inset:0, background:`radial-gradient(ellipse 70% 55% at 20% 40%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 55% 45% at 80% 65%, ${THEME.gold10} 0%, transparent 55%), radial-gradient(ellipse 45% 38% at 58% 18%, ${THEME.pink08} 0%, transparent 50%), ${THEME.bgMain}` }} />
+      <div className="r7-grid" style={{ position:'absolute', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'60px 60px' }} />
 
       {/* HUD */}
       <div style={{ position:'absolute', top:28, left:36, zIndex:20 }}>
@@ -778,14 +908,14 @@ export default function App() {
         System Online
       </div>
 
-      {/* Anillos */}
+      {/* Anillos orbitales */}
       {[{cls:'r7-orbit1',size:560},{cls:'r7-orbit2',size:760}].map(({cls,size})=>(
-          <div key={size} className={cls} style={{ position:'absolute', width:size, height:size, top:'50%', left:'50%', marginTop:-size/2, marginLeft:-size/2, borderRadius:'50%', border:`1px solid ${THEME.gold09}`, pointerEvents:'none' }}>
+        <div key={size} className={cls} style={{ position:'absolute', width:size, height:size, top:'50%', left:'50%', marginTop:-size/2, marginLeft:-size/2, borderRadius:'50%', border:`1px solid ${THEME.gold09}`, pointerEvents:'none' }}>
           <div style={{ position:'absolute', width:5, height:5, borderRadius:'50%', background:THEME.celeste, top:-2.5, left:'50%', marginLeft:-2.5, boxShadow:`0 0 10px ${THEME.celeste90}` }} />
         </div>
       ))}
 
-      {/* Esferas */}
+      {/* Esferas con especular */}
       <Sphere color="green"  className="sphere-green"  style={{ width:80, height:80,  left:'13%',  top:'40%' }} />
       <Sphere color="blue"   className="sphere-blue"   style={{ width:92, height:92,  left:'10%',  top:'62%' }} />
       <Sphere color="yellow" className="sphere-yellow" style={{ width:68, height:68,  right:'12%', top:'42%' }} />
@@ -821,7 +951,7 @@ export default function App() {
       <LeftDoor  isOpen={isLeftOpen}  onClose={()=>setIsLeftOpen(false)}  signals={SAMPLE_SIGNALS} />
       <RightDoor isOpen={isRightOpen} onClose={()=>setIsRightOpen(false)} user={user} onLogin={handleLogin} onLogout={handleLogout} />
 
-      {/* Gatillos — se mueven con la puerta */}
+      {/* Gatillos */}
       <Trigger side="left"  isOpen={isLeftOpen}  onClick={()=>setIsLeftOpen(v=>!v)} />
       <Trigger side="right" isOpen={isRightOpen} onClick={()=>setIsRightOpen(v=>!v)} />
     </div>
