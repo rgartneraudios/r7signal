@@ -1,0 +1,9 @@
+name = "r7signal"
+type = "pages"
+
+[build]
+command = "npm run build"
+destination = "./dist"
+
+[deploy]
+workers_dev = true
