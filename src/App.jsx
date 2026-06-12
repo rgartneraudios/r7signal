@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 const THEME = {
   bgMain:       '#080406',
   bgFeed:       'rgba(72,130,139,0.45)',
-  bgFeedSolid:  'rgba(55,75,82,0.65)',
+  bgFeedSolid:  'rgba(65,66,62,0.65)',
   beige:        'rgba(120,105,75,1)',
   celeste:      'rgba(92,155,165,1)',
   celesteBright:'rgba(120,185,200,1)',
@@ -67,6 +67,14 @@ const THEME = {
   bgMainF2:     'rgba(8,4,6,0.95)',
 }
 
+const EDITORS = {
+  RGartner: {
+    name: 'RGartner',
+    role: 'CEO Bro7vision',
+    avatar: 'https://media.r7signal.com/200rgartnerPhoto.png'
+  }
+}
+
 /* ─── Supabase ─── */
 const SUPABASE_URL = 'https://ovvpyotqstweqbrmeyme.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92dnB5b3Rxc3R3ZXFicm1leW1lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3Mzc5NzQsImV4cCI6MjA5NTMxMzk3NH0.nOOQ_gQ4FgC7LWdsx0-feaP7YlYRvbyy5dZONoS_hxs'
@@ -75,9 +83,13 @@ async function insertSignal(data) {
   const slug = data.titulo
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/[^a-z0-9\s]+/g, '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 7)
+    .join('-')
+    .replace(/-+/g, '-')
     .replace(/(^-|-$)/g, '')
-    + '-' + Date.now()
 
   const res = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {
     method: 'POST',
@@ -92,7 +104,6 @@ async function insertSignal(data) {
       categoria:        data.categoria,
       titulo:           data.titulo,
       contenido:        data.contenido,
-      fecha_evento:     data.fecha_evento,
       idioma:           'es',
       tokens_estimados: data.tokens,
       activo:           true,
@@ -119,28 +130,32 @@ const WEATHER = { city: 'Oviedo', temp: '18°C', emoji: '🌤️' }
 const SAMPLE_SIGNALS = [
   {
     id: 1, initials: 'RG', color: 'purple',
-    author: 'RGartner', role: 'CEO · Brovision',
+    author: 'RGartner', role: 'CEO Bro7vision',
+    title: 'Microsoft restringe el uso interno de IA por costes desorbitados',
     cats: ['ia', 'intl'], badges: [{ label: 'IA', cls: 'ia' }, { label: 'INTL', cls: 'intl' }],
     text: 'Microsoft ha comunicado internamente restricciones al uso de herramientas de IA por parte de sus empleados debido a que el coste mensual en tokens supera el coste salarial equivalente por trabajador. Fecha: 06/06/2026.',
     date: '08 jun 2026 · 00:42', tokens: 487,
   },
   {
     id: 2, initials: 'RG', color: 'blue',
-    author: 'RGartner', role: 'CEO · Brovision',
+    author: 'RGartner', role: 'CEO Bro7vision',
+    title: 'Brovision lanza R7Signal, la plataforma de datos para agentes IA',
     cats: ['tech', 'intl'], badges: [{ label: 'TECH', cls: 'tech' }, { label: 'INTL', cls: 'intl' }],
     text: 'Brovision ha lanzado R7Signal, plataforma de datos estructurados optimizados para consumo por agentes IA. Disponible en r7signal.com. Fecha: 25/05/2026.',
     date: '07 jun 2026 · 22:10', tokens: 312,
   },
   {
     id: 3, initials: 'RG', color: 'amber',
-    author: 'RGartner', role: 'CEO · Brovision',
+    author: 'RGartner', role: 'CEO Bro7vision',
+    title: 'El Congreso aprueba la Ley de Coordinación de IA con 187 votos a favor',
     cats: ['gov', 'es'], badges: [{ label: 'GOV', cls: 'gov' }, { label: 'ESP', cls: 'intl' }],
     text: 'El Congreso de los Diputados aprobó el 04/06/2026 la Ley de Coordinación de Inteligencia Artificial con 187 votos a favor, 142 en contra y 21 abstenciones.',
     date: '06 jun 2026 · 18:55', tokens: 298,
   },
   {
     id: 4, initials: 'RG', color: 'teal',
-    author: 'RGartner', role: 'CEO · Brovision',
+    author: 'RGartner', role: 'CEO Bro7vision',
+    title: 'Google DeepMind presenta Gemini 3.5 Flash con 2M tokens de contexto',
     cats: ['tech', 'intl'], badges: [{ label: 'TECH', cls: 'tech' }, { label: 'INTL', cls: 'intl' }],
     text: 'Google DeepMind publicó el 03/06/2026 el modelo Gemini 3.5 Flash con ventana de contexto de 2M tokens y latencia reducida un 40% respecto a versión anterior.',
     date: '05 jun 2026 · 11:30', tokens: 341,
@@ -268,7 +283,7 @@ function LeftDoor({ isOpen, onClose, signals }) {
 
   const statRow = (label, value, accent) => (
     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:`1px solid ${THEME.metallicGray}` }}>
-      <span style={{ fontSize:'0.72rem', color:THEME.textLow, fontFamily:"'Exo 2',sans-serif", letterSpacing:'0.04em' }}>{label}</span>
+      <span style={{ fontSize:'0.72rem', color:'#FF5E98', fontFamily:"'Exo 2',sans-serif", letterSpacing:'0.04em' }}>{label}</span>
       <span style={{ fontSize:'0.78rem', fontFamily:"'Orbitron',monospace", color: accent || THEME.celeste, letterSpacing:'0.06em' }}>{value}</span>
     </div>
   )
@@ -283,13 +298,13 @@ function LeftDoor({ isOpen, onClose, signals }) {
       display:'flex', flexDirection:'column',
     }}>
       <div style={{ padding:'28px 22px 16px', borderBottom:`1px solid ${THEME.borderSubtle}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <span style={{ fontFamily:"'Orbitron',monospace", fontSize:'0.6rem', letterSpacing:'0.35em', color:THEME.textLow, textTransform:'uppercase' }}>Sistema</span>
-        <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:THEME.textLow, fontSize:'1.3rem', lineHeight:1 }}>×</button>
+        <span style={{ fontFamily:"'Orbitron',monospace", fontSize:'0.6rem', letterSpacing:'0.35em', color:'#FF5E98', textTransform:'uppercase' }}>Sistema</span>
+        <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'#FF5E98', fontSize:'1.3rem', lineHeight:1 }}>×</button>
       </div>
 
       <div style={{ padding:'20px 22px', flex:1, overflowY:'auto' }}>
         <div style={{ marginBottom:20 }}>
-          <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:10 }}>Conexión</div>
+          <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:10 }}>Conexión</div>
           <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'rgba(72,130,139,0.08)', border:`1px solid rgba(72,130,139,0.20)`, borderRadius:8 }}>
             <div style={{ width:6, height:6, borderRadius:'50%', background:THEME.celeste, boxShadow:`0 0 7px ${THEME.celeste}BF`, flexShrink:0 }} />
             <span style={{ fontSize:'0.72rem', color:THEME.celeste, fontFamily:"'Exo 2',sans-serif", letterSpacing:'0.06em' }}>Supabase · Online</span>
@@ -297,7 +312,7 @@ function LeftDoor({ isOpen, onClose, signals }) {
         </div>
 
         <div style={{ marginBottom:20 }}>
-          <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:4 }}>Actividad hoy</div>
+          <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:4 }}>Actividad hoy</div>
           {statRow('Señales publicadas', todaySignals, THEME.celeste)}
           {statRow('Tokens servidos', totalTokens.toLocaleString(), THEME.gold)}
           {statRow('Categorías activas', '4 / 6', THEME.pinkMarble)}
@@ -305,7 +320,7 @@ function LeftDoor({ isOpen, onClose, signals }) {
         </div>
 
         <div style={{ marginBottom:20 }}>
-          <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:10 }}>Distribución</div>
+          <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:10 }}>Distribución</div>
           {[
             { label:'IA',         count:1, color:THEME.gold },
             { label:'Tecnología', count:2, color:THEME.celeste },
@@ -325,9 +340,9 @@ function LeftDoor({ isOpen, onClose, signals }) {
         </div>
 
         <div>
-          <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:8 }}>Legal</div>
+          <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:8 }}>Legal</div>
           {['Aviso Legal', 'Privacidad', 'Cookies', 'API Docs'].map(item => (
-            <div key={item} style={{ padding:'9px 0', borderBottom:`1px solid ${THEME.metallicGray}`, fontSize:'0.75rem', color:THEME.textLow, cursor:'pointer', fontFamily:"'Exo 2',sans-serif", letterSpacing:'0.04em', transition:'color 0.2s' }}
+            <div key={item} style={{ padding:'9px 0', borderBottom:`1px solid ${THEME.metallicGray}`, fontSize:'0.75rem', color:'#FF5E98', cursor:'pointer', fontFamily:"'Exo 2',sans-serif", letterSpacing:'0.04em', transition:'color 0.2s' }}
               onMouseEnter={e => e.currentTarget.style.color=THEME.textMed}
               onMouseLeave={e => e.currentTarget.style.color=THEME.textLow}
             >▸ {item}</div>
@@ -348,7 +363,7 @@ function RightDoor({ isOpen, onClose, user, onLogin, onLogout }) {
     if (!email || !pass) return
     setLogging(true)
     setTimeout(() => {
-      onLogin({ name: 'RGartner', role: 'CEO · Brovision', email, initials: 'RG', color: 'rgba(120,105,75,0.90)' })
+      onLogin({ name: 'RGartner', role: 'CEO Bro7vision', email, initials: 'RG', color: 'rgba(120,105,75,0.90)' })
       setLogging(false)
       setEmail(''); setPass('')
     }, 1200)
@@ -371,19 +386,19 @@ function RightDoor({ isOpen, onClose, user, onLogin, onLogout }) {
       display:'flex', flexDirection:'column',
     }}>
       <div style={{ padding:'28px 22px 16px', borderBottom:`1px solid ${THEME.borderSubtle}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <span style={{ fontFamily:"'Orbitron',monospace", fontSize:'0.6rem', letterSpacing:'0.35em', color:THEME.textLow, textTransform:'uppercase' }}>Acceso</span>
-        <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:THEME.textLow, fontSize:'1.3rem', lineHeight:1 }}>×</button>
+        <span style={{ fontFamily:"'Orbitron',monospace", fontSize:'0.6rem', letterSpacing:'0.35em', color:'#FF5E98', textTransform:'uppercase' }}>Acceso</span>
+        <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'#FF5E98', fontSize:'1.3rem', lineHeight:1 }}>×</button>
       </div>
 
       <div style={{ padding:'22px', flex:1, display:'flex', flexDirection:'column', gap:16 }}>
         {!user ? (
           <>
             <div style={{ textAlign:'center', padding:'12px 0 8px' }}>
-              <div style={{ fontSize:'0.72rem', color:THEME.textLow, letterSpacing:'0.12em', fontFamily:"'Exo 2',sans-serif" }}>Identifícate para acceder</div>
+              <div style={{ fontSize:'0.72rem', color:'#FF5E98', letterSpacing:'0.12em', fontFamily:"'Exo 2',sans-serif" }}>Identifícate para acceder</div>
             </div>
 
             <div>
-              <label style={{ fontSize:'0.58rem', letterSpacing:'0.2em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace" }}>Email</label>
+              <label style={{ fontSize:'0.58rem', letterSpacing:'0.2em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Orbitron',monospace" }}>Email</label>
               <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@email.com" style={inputStyle}
                 onFocus={e=>e.target.style.borderColor=THEME.celeste}
                 onBlur={e=>e.target.style.borderColor=THEME.borderSubtle}
@@ -391,7 +406,7 @@ function RightDoor({ isOpen, onClose, user, onLogin, onLogout }) {
             </div>
 
             <div>
-              <label style={{ fontSize:'0.58rem', letterSpacing:'0.2em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace" }}>Contraseña</label>
+              <label style={{ fontSize:'0.58rem', letterSpacing:'0.2em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Orbitron',monospace" }}>Contraseña</label>
               <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="••••••••" style={inputStyle}
                 onFocus={e=>e.target.style.borderColor=THEME.celeste}
                 onBlur={e=>e.target.style.borderColor=THEME.borderSubtle}
@@ -411,14 +426,23 @@ function RightDoor({ isOpen, onClose, user, onLogin, onLogout }) {
             </button>
 
             <div style={{ textAlign:'center' }}>
-              <span style={{ fontSize:'0.65rem', color:THEME.textLow, fontFamily:"'Exo 2',sans-serif", letterSpacing:'0.06em' }}>¿Quieres ser editor? </span>
+              <span style={{ fontSize:'0.65rem', color:'#FF5E98', fontFamily:"'Exo 2',sans-serif", letterSpacing:'0.06em' }}>¿Quieres ser editor? </span>
               <span style={{ fontSize:'0.65rem', color:THEME.celeste, fontFamily:"'Exo 2',sans-serif", cursor:'pointer', letterSpacing:'0.04em' }}>Solicitar acceso</span>
             </div>
           </>
         ) : (
           <>
             <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px', background:`${THEME.bgFeed}CC`, border:`1px solid ${THEME.borderSubtle}`, borderRadius:10 }}>
-              <div style={{ width:42, height:42, borderRadius:'50%', background:THEME.gold15, border:`1px solid ${THEME.gold40}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.75rem', fontWeight:700, color:THEME.gold, flexShrink:0 }}>{user.initials}</div>
+              <img 
+                src={EDITORS[user.name]?.avatar || ''} 
+                alt={user.name}
+                style={{
+                  width:42, height:42, borderRadius:'50%',
+                  border:`1px solid ${THEME.gold40}`,
+                  objectFit:'cover', flexShrink:0,
+                }}
+                onError={e => { e.target.style.display = 'none' }}
+              />
               <div>
                 <div style={{ fontSize:'0.82rem', color:THEME.textHigh, fontWeight:600, fontFamily:"'Exo 2',sans-serif" }}>{user.name}</div>
                 <div style={{ fontSize:'0.65rem', color:THEME.textMed, marginTop:2, fontFamily:"'Exo 2',sans-serif" }}>{user.role}</div>
@@ -426,7 +450,7 @@ function RightDoor({ isOpen, onClose, user, onLogin, onLogout }) {
             </div>
 
             <div>
-              <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:8 }}>Navegación</div>
+              <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:8 }}>Navegación</div>
               {['Feed · Ver señales', 'Nueva señal', 'Mi perfil', 'Configuración'].map(item => (
                 <div key={item} style={{ padding:'10px 0', borderBottom:`1px solid ${THEME.metallicGray}`, fontSize:'0.78rem', color:THEME.textMed, cursor:'pointer', fontFamily:"'Exo 2',sans-serif", letterSpacing:'0.04em', transition:'color 0.2s, paddingLeft 0.2s' }}
                   onMouseEnter={e=>{e.currentTarget.style.color=THEME.textHigh;e.currentTarget.style.paddingLeft='6px'}}
@@ -436,9 +460,9 @@ function RightDoor({ isOpen, onClose, user, onLogin, onLogout }) {
             </div>
 
             <div>
-              <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:8 }}>Acerca de R7</div>
+              <div style={{ fontSize:'0.55rem', letterSpacing:'0.25em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:8 }}>Acerca de R7</div>
               {['Cómo funciona', 'Planes', 'API Docs', 'Contacto'].map(item => (
-                <div key={item} style={{ padding:'9px 0', borderBottom:`1px solid ${THEME.metallicGray}`, fontSize:'0.75rem', color:THEME.textLow, cursor:'pointer', fontFamily:"'Exo 2',sans-serif", letterSpacing:'0.04em', transition:'color 0.2s' }}
+                <div key={item} style={{ padding:'9px 0', borderBottom:`1px solid ${THEME.metallicGray}`, fontSize:'0.75rem', color:'#FF5E98', cursor:'pointer', fontFamily:"'Exo 2',sans-serif", letterSpacing:'0.04em', transition:'color 0.2s' }}
                   onMouseEnter={e=>e.currentTarget.style.color=THEME.textMed}
                   onMouseLeave={e=>e.currentTarget.style.color=THEME.textLow}
                 >▸ {item}</div>
@@ -482,7 +506,6 @@ function Trigger({ side, isOpen, onClick }) {
 
 /* ─── MEJORA 3: Tarjeta señal con hover categórico + textura metálica ─── */
 function SignalCard({ signal, visible }) {
-  const av = AVATAR_COLORS[signal.color] || AVATAR_COLORS.blue
   const hoverCfg = getCategoryHover(signal.cats)
   if (!visible) return null
 
@@ -527,43 +550,30 @@ function SignalCard({ signal, visible }) {
         e.currentTarget.style.background  = THEME.bgFeedSolid
         e.currentTarget.style.boxShadow   = `0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 ${THEME.celeste}10`
         const tok = e.currentTarget.querySelector('[data-tokens]')
-        if (tok) tok.style.color = THEME.celeste80
+        if (tok) tok.style.color = '#CCFF00'
       }}
     >
-      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
-        {/* Avatar con especular mínimo */}
-        <div style={{
-          width:32, height:32, borderRadius:'50%',
-          display:'flex', alignItems:'center', justifyContent:'center',
-          fontSize:'0.62rem', fontWeight:700, flexShrink:0,
-          background: av.bg, color: av.color,
-          border:`1px solid ${THEME.borderSubtle}`,
-          position:'relative', overflow:'hidden',
-        }}>
-          {signal.initials}
-          <div style={{
-            position:'absolute', top:'8%', left:'15%',
-            width:'45%', height:'38%', borderRadius:'50%',
-            background:'rgba(255,255,255,0.18)',
-            filter:'blur(1px)',
-            pointerEvents:'none',
-          }} />
+      <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:10 }}>
+        <div style={{ flex:1, fontSize:'1.425rem', fontWeight:600, fontFamily:"'Space Grotesk','Exo 2',sans-serif", lineHeight:1.35, color:THEME.textHigh, letterSpacing:'-0.01em' }}>{signal.title}</div>
+        <div style={{ textAlign:'center' }}>
+          <div style={{ fontSize:'1rem', fontWeight:600, color:THEME.textHigh, fontFamily:"'Space Grotesk','Exo 2',sans-serif" }}>{signal.author}</div>
+          <div style={{ fontSize:'0.75rem', color:THEME.textMed, fontFamily:"'Exo 2',sans-serif", marginTop:2 }}>{signal.role}</div>
         </div>
-        <div>
-          <div style={{ fontSize:'0.78rem', color:THEME.textHigh, fontWeight:600 }}>{signal.author}</div>
-          <div style={{ fontSize:'0.66rem', color:THEME.textMed, marginTop:1 }}>{signal.role}</div>
-        </div>
-        <div style={{ marginLeft:'auto', display:'flex', gap:4 }}>
-          {signal.badges.map((b,i) => {
-            const bs = BADGE_STYLES[b.cls] || BADGE_STYLES.intl
-            return <span key={i} style={{ padding:'2px 7px', borderRadius:4, fontSize:'0.58rem', letterSpacing:'0.08em', textTransform:'uppercase', fontFamily:"'Orbitron',monospace", background:bs.bg, color:bs.color, border:`1px solid ${bs.border}` }}>{b.label}</span>
-          })}
-        </div>
+        <img 
+          src={EDITORS[signal.author]?.avatar || ''} 
+          alt={signal.author}
+          style={{
+            width:72, height:72, borderRadius:'50%',
+            border:`2px solid ${THEME.gold40}`,
+            objectFit:'cover', flexShrink:0,
+          }}
+          onError={e => { e.target.style.display = 'none' }}
+        />
       </div>
-      <div style={{ fontSize:'0.83rem', lineHeight:1.6, color:THEME.textHigh, letterSpacing:'0.01em' }}>{signal.text}</div>
+      <div style={{ fontSize:'16px', lineHeight:1.6, color:THEME.textHigh, letterSpacing:'0.01em' }}>{signal.text}</div>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10, paddingTop:8, borderTop:`1px solid ${THEME.metallicGray}` }}>
-        <span style={{ fontSize:'0.63rem', color:THEME.textLow, letterSpacing:'0.06em' }}>{signal.date}</span>
-        <span data-tokens="1" style={{ fontSize:'0.6rem', color:THEME.celeste80, fontFamily:"'Orbitron',monospace", letterSpacing:'0.1em', transition:'color 0.28s' }}>{signal.tokens} tokens</span>
+        <span style={{ fontSize:'0.63rem', color:'#FF5E98', letterSpacing:'0.06em' }}>{signal.date}</span>
+        <span data-tokens="1" style={{ fontSize:'0.6rem', color:'#CCFF00', fontFamily:"'JetBrains Mono','Fira Code',monospace", letterSpacing:'0.1em', transition:'color 0.28s' }}>{signal.tokens} tokens</span>
       </div>
     </div>
   )
@@ -573,21 +583,21 @@ function SignalCard({ signal, visible }) {
 function FilterPanel({ activeCats, activeGeos, toggleCat, toggleGeo }) {
   function CatBtn({ id, label, count, active, onClick }) {
     return (
-      <button onClick={onClick} style={{ padding:'7px 12px', borderRadius:8, width:'100%', textAlign:'left', background: active?THEME.celeste15:'transparent', border:`1px solid ${active?THEME.celeste35:THEME.borderSubtle}`, color: active?THEME.textHigh:THEME.textMed, fontFamily:"'Exo 2',sans-serif", fontSize:'0.75rem', letterSpacing:'0.06em', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', transition:'all 0.18s' }}
-        onMouseEnter={e=>{if(!active){e.currentTarget.style.background=THEME.celeste08;e.currentTarget.style.color=THEME.textMed}}}
+      <button onClick={onClick} style={{ padding:'7px 12px', borderRadius:8, width:'100%', textAlign:'left', background: active?'#7D2E4B':'transparent', border:`1px solid ${active?'#CCFF00':THEME.borderSubtle}`, color: active?'#FFFFFF':THEME.textMed, fontFamily:"'Exo 2',sans-serif", fontSize:'0.75rem', letterSpacing:'0.06em', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', transition:'all 0.18s' }}
+        onMouseEnter={e=>{if(!active){e.currentTarget.style.background=THEME.pink12;e.currentTarget.style.color=THEME.textMed}}}
         onMouseLeave={e=>{if(!active){e.currentTarget.style.background='transparent';e.currentTarget.style.color=THEME.textMed}}}
       >
         {label}
-        <span style={{ fontSize:'0.6rem', padding:'1px 5px', borderRadius:4, background:active?THEME.celeste22:THEME.bgFeedCC, color:active?THEME.celeste:THEME.textLow }}>{count}</span>
+        <span style={{ fontSize:'0.6rem', padding:'1px 5px', borderRadius:4, background:active?'#CCFF00':THEME.bgFeedCC, color:active?'#FFFFFF':THEME.textLow }}>{count}</span>
       </button>
     )
   }
   return (
     <div style={{ background:`${THEME.bgFeed}CC`, border:`1px solid ${THEME.borderSubtle}`, backdropFilter:'blur(14px)', borderRadius:14, overflow:'hidden', alignSelf:'start' }}>
-      <div style={{ padding:'10px 14px', borderBottom:`1px solid ${THEME.metallicGray}`, fontFamily:"'Orbitron',monospace", fontSize:'0.55rem', letterSpacing:'0.3em', color:THEME.textLow, textTransform:'uppercase' }}>Filtros</div>
+      <div style={{ padding:'10px 14px', borderBottom:`1px solid ${THEME.metallicGray}`, fontFamily:"'Orbitron',monospace", fontSize:'0.55rem', letterSpacing:'0.3em', color:'#FF5E98', textTransform:'uppercase' }}>Filtros</div>
       <div style={{ padding:'10px', display:'flex', flexDirection:'column', gap:4 }}>
         {CATEGORIES.map(c => <CatBtn key={c.id} {...c} active={activeCats.includes(c.id)} onClick={()=>toggleCat(c.id)} />)}
-        <div style={{ padding:'8px 2px 4px', fontSize:'0.55rem', letterSpacing:'0.25em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace" }}>Geografía</div>
+        <div style={{ padding:'8px 2px 4px', fontSize:'0.55rem', letterSpacing:'0.25em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Orbitron',monospace" }}>Geografía</div>
         {GEOS.map(g => <CatBtn key={g.id} {...g} active={activeGeos.includes(g.id)} onClick={()=>toggleGeo(g.id)} />)}
       </div>
     </div>
@@ -601,7 +611,6 @@ function AdminPanel({ onPublish }) {
   const [who,    setWho]    = useState('')
   const [cat,    setCat]    = useState('')
   const [geo,    setGeo]    = useState('Internacional')
-  const [fecha,  setFecha]  = useState(new Date().toISOString().split('T')[0])
   const [status, setStatus] = useState('idle')
   const [errMsg, setErrMsg] = useState('')
 
@@ -615,9 +624,9 @@ function AdminPanel({ onPublish }) {
     setStatus('saving')
     setErrMsg('')
     try {
-      await insertSignal({ titulo, contenido: text, categoria: cat, fecha_evento: fecha, tokens })
+      await insertSignal({ titulo, contenido: text, categoria: cat, tokens })
       setStatus('ok')
-      onPublish && onPublish({ text, titulo, who, cat, geo, fecha, tokens })
+      onPublish && onPublish({ text, titulo, who, cat, geo, tokens })
       setTimeout(() => setStatus('idle'), 2500)
       setTitulo(''); setText(''); setWho(''); setCat('')
     } catch (e) {
@@ -628,11 +637,11 @@ function AdminPanel({ onPublish }) {
   }
 
   const inputStyle = { width:'100%', background:`rgba(15,12,18,0.75)`, border:`1px solid ${THEME.borderSubtle}`, borderRadius:8, color:THEME.textHigh, fontFamily:"'Exo 2',sans-serif", fontSize:'0.78rem', padding:'8px 10px', outline:'none', transition:'border-color 0.2s' }
-  const labelStyle = { display:'block', fontSize:'0.58rem', letterSpacing:'0.2em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:4 }
+  const labelStyle = { display:'block', fontSize:'0.58rem', letterSpacing:'0.2em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:4 }
   const focus = e => e.target.style.borderColor = THEME.celeste
   const blur  = e => e.target.style.borderColor = THEME.borderSubtle
   const btnColors = {
-    idle:   { bg:THEME.pink60,  border:THEME.pinkMarble,  color:THEME.textHigh },
+    idle:   { bg:'#8A515D', border:THEME.pinkBright, color:'#FFFFFF' },
     saving: { bg:THEME.gold10,  border:THEME.gold30,      color:THEME.goldBright },
     ok:     { bg:THEME.celeste10, border:THEME.celeste30, color:THEME.celesteBright },
     error:  { bg:'rgba(255,80,60,0.1)', border:'rgba(255,80,60,0.3)', color:'rgba(255,80,60,0.85)' },
@@ -642,9 +651,9 @@ function AdminPanel({ onPublish }) {
 
   return (
     <div style={{ background:`${THEME.bgFeed}CC`, border:`1px solid ${THEME.borderSubtle}`, backdropFilter:'blur(14px)', borderRadius:14, overflow:'hidden', alignSelf:'start' }}>
-      <div style={{ padding:'10px 14px', borderBottom:`1px solid ${THEME.metallicGray}`, fontFamily:"'Orbitron',monospace", fontSize:'0.55rem', letterSpacing:'0.3em', color:THEME.textLow, textTransform:'uppercase', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+      <div style={{ padding:'10px 14px', borderBottom:`1px solid ${THEME.metallicGray}`, fontFamily:"'Orbitron',monospace", fontSize:'0.55rem', letterSpacing:'0.3em', color:'#FF5E98', textTransform:'uppercase', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <span>Admin · Nueva Señal</span>
-        <span style={{ color:THEME.celeste, fontSize:'0.5rem' }}>RGARTNER</span>
+        <span style={{ color:'#CCFF00', fontSize:'0.5rem' }}>RGARTNER</span>
       </div>
       <div style={{ padding:'12px', display:'flex', flexDirection:'column', gap:10 }}>
         <div>
@@ -673,26 +682,20 @@ function AdminPanel({ onPublish }) {
             </select>
           </div>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-          <div>
-            <span style={labelStyle}>Fecha del hecho</span>
-            <input type='date' value={fecha} onChange={e=>setFecha(e.target.value)} style={inputStyle} />
-          </div>
-          <div>
-            <span style={labelStyle}>Quién comunica</span>
-            <input type='text' value={who} onChange={e=>setWho(e.target.value)} placeholder='RGartner · CEO' style={inputStyle} onFocus={focus} onBlur={blur} />
-          </div>
+        <div>
+          <span style={labelStyle}>Quién comunica</span>
+          <input type='text' value={who} onChange={e=>setWho(e.target.value)} placeholder='RGartner · CEO' style={inputStyle} onFocus={focus} onBlur={blur} />
         </div>
         <div>
           <span style={labelStyle}>El hecho — dato puro, sin opinión</span>
           <textarea value={text} onChange={e=>setText(e.target.value)} placeholder={'Dato verificable. Fecha explícita.\nSin opinión. Sin adjetivos.'} style={{ ...inputStyle, resize:'none', height:90, lineHeight:1.55 }} onFocus={focus} onBlur={blur} />
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 10px', background:THEME.bgFeedCC, border:`1px solid ${THEME.metallicGray}`, borderRadius:7 }}>
-          <span style={{ fontFamily:"'Orbitron',monospace", fontSize:'0.62rem', color: pct>95?THEME.gold:pct>70?THEME.pinkMarble:'rgba(72,130,139,0.75)', minWidth:28 }}>{tokens}</span>
+          <span style={{ fontFamily:"'JetBrains Mono','Fira Code',monospace", fontSize:'0.62rem', color: pct>95?THEME.gold:pct>70?THEME.pinkMarble:'rgba(72,130,139,0.75)', minWidth:28 }}>{tokens}</span>
           <div style={{ flex:1, height:3, background:THEME.bgFeed, borderRadius:2 }}>
             <div style={{ height:'100%', borderRadius:2, width:`${pct}%`, background:barColor, transition:'width 0.2s, background 0.2s' }} />
           </div>
-          <span style={{ fontFamily:"'Orbitron',monospace", fontSize:'0.62rem', color:THEME.textLow }}>600</span>
+          <span style={{ fontFamily:"'JetBrains Mono','Fira Code',monospace", fontSize:'0.62rem', color:'#FF5E98' }}>600</span>
         </div>
         <div style={{ background:THEME.bgFeedCC, border:`1px solid ${THEME.metallicGray}`, borderRadius:8, padding:'10px 12px' }}>
           <div style={{ fontSize:'0.55rem', letterSpacing:'0.2em', color:THEME.textHigh, textTransform:'uppercase', fontFamily:"'Orbitron',monospace", marginBottom:6 }}>Preview · URL Layer IA</div>
@@ -703,7 +706,7 @@ function AdminPanel({ onPublish }) {
         {status === 'error' && (
           <div style={{ fontSize:'0.65rem', color:'rgba(255,80,60,0.8)', background:'rgba(255,80,60,0.06)', border:'1px solid rgba(255,80,60,0.2)', borderRadius:6, padding:'7px 10px' }}>{errMsg}</div>
         )}
-        <button onClick={handlePublish} style={{ width:'100%', padding:'11px', background:bc.bg, border:`1px solid ${bc.border}`, borderRadius:9, color:bc.color, fontFamily:"'Orbitron',monospace", fontSize:'0.62rem', letterSpacing:'0.18em', cursor:canPublish?'pointer':'not-allowed', textTransform:'uppercase', transition:'all 0.25s', opacity:canPublish?1:0.4 }}>
+        <button onClick={handlePublish} style={{ width:'100%', padding:'11px', background:bc.bg, border:`1px solid ${bc.border}`, borderRadius:9, color:bc.color, fontFamily:"'Orbitron',monospace", fontSize:'0.62rem', letterSpacing:'0.18em', cursor:canPublish?'pointer':'not-allowed', textTransform:'uppercase', transition:'all 0.25s', opacity:canPublish?1:0.75, textShadow: status==='idle'?'0 0 12px rgba(255,255,255,0.5)':'none' }}>
           {btnLabel[status]}
         </button>
       </div>
@@ -716,7 +719,42 @@ function InteriorView({ onBack, user }) {
   const time = useRealTimeClock()
   const [activeCats, setActiveCats] = useState(['all'])
   const [activeGeos, setActiveGeos] = useState([])
-  const [signals,    setSignals]    = useState(SAMPLE_SIGNALS)
+  const [signals, setSignals]    = useState(SAMPLE_SIGNALS)
+
+  useEffect(() => {
+    async function loadArticles() {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=*&activo=eq.true&order=created_at.desc`, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+        },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data && data.length) {
+          setSignals(data.map(a => ({
+            id: a.id,
+            initials: 'RG',
+            color: 'purple',
+            author: 'RGartner',
+            role: 'CEO Bro7vision',
+            title: a.titulo || '',
+            cats: a.categoria ? [a.categoria, 'intl'] : ['intl'],
+            badges: [
+              { label: (a.categoria || '').toUpperCase(), cls: a.categoria || 'intl' },
+              { label: 'INTL', cls: 'intl' },
+            ],
+            text: a.contenido || '',
+            date: a.created_at
+              ? new Date(a.created_at).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
+              : '',
+            tokens: a.tokens_estimados || 0,
+          })))
+        }
+      }
+    }
+    loadArticles()
+  }, [])
 
   const pad = n => String(n).padStart(2,'0')
   const formattedTime = `${pad(time.getHours())}:${pad(time.getMinutes())}:${pad(time.getSeconds())}`
@@ -742,7 +780,8 @@ function InteriorView({ onBack, user }) {
     setSignals(prev => [{
       id: Date.now(), initials:'RG', color:'purple',
       author: data.who.split('·')[0]?.trim()||'RGartner',
-      role: data.who.split('·').slice(1).join('·').trim()||'CEO · Brovision',
+      role: data.who.split('·').slice(1).join('·').trim()||'CEO Bro7vision',
+      title: data.titulo || '',
       cats: [data.cat, data.geo==='España'?'es':'intl'],
       badges: [{ label:data.cat.toUpperCase(), cls:data.cat }, { label:data.geo==='España'?'ESP':'INTL', cls:'intl' }],
       text: data.text,
@@ -775,7 +814,7 @@ function InteriorView({ onBack, user }) {
   return (
     <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&family=Space+Grotesk:wght@500;600;700&display=swap');
         @keyframes bgShift { 0%{filter:hue-rotate(0deg)} 100%{filter:hue-rotate(20deg)} }
         @keyframes gridMove { 0%{background-position:0 0} 100%{background-position:48px 48px} }
         @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
@@ -803,7 +842,7 @@ function InteriorView({ onBack, user }) {
         onMouseLeave={e=>{e.currentTarget.style.color=THEME.textMed;e.currentTarget.style.borderColor=THEME.borderSubtle}}
       >◀ Exit</button>
 
-      <div style={{ position:'fixed', bottom:18, right:28, zIndex:30, display:'flex', alignItems:'center', gap:6, fontSize:'0.63rem', letterSpacing:'0.18em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Exo 2',sans-serif" }}>
+      <div style={{ position:'fixed', bottom:18, right:28, zIndex:30, display:'flex', alignItems:'center', gap:6, fontSize:'0.63rem', letterSpacing:'0.18em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Exo 2',sans-serif" }}>
         <div className='int-pulse' style={{ width:5, height:5, borderRadius:'50%', background:THEME.celeste, boxShadow:`0 0 7px ${THEME.celeste}BF` }} />
         System Online
       </div>
@@ -814,7 +853,7 @@ function InteriorView({ onBack, user }) {
           <div style={{ fontFamily:"'Orbitron',monospace", fontSize:'1.05rem', fontWeight:900, background:`linear-gradient(140deg, ${THEME.textHigh} 25%, ${THEME.celeste} 65%, ${THEME.gold} 100%)`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', letterSpacing:'0.06em' }}>R7 SIGNAL</div>
           <div style={{ display:'flex', alignItems:'center', gap:6 }}>
             <div className='int-pulse' style={{ width:6, height:6, borderRadius:'50%', background:THEME.celeste, boxShadow:`0 0 8px ${THEME.celeste}BF` }} />
-            <span style={{ fontSize:'0.63rem', letterSpacing:'0.18em', color:THEME.textLow, textTransform:'uppercase' }}>Feed Live · {visibleCount} señales</span>
+            <span style={{ fontSize:'0.63rem', letterSpacing:'0.18em', color:'#FF5E98', textTransform:'uppercase' }}>Feed Live · {visibleCount} señales</span>
           </div>
           <div style={{ fontFamily:"'Orbitron',monospace", fontSize:'0.58rem', letterSpacing:'0.12em', color:THEME.celeste }}>ADMIN ▸ {user?.name || 'RGARTNER'}</div>
         </div>
@@ -823,17 +862,17 @@ function InteriorView({ onBack, user }) {
 
         {/* MEJORA 3: Panel feed con textura metálica */}
         <div className='int-panel' style={{ animationDelay:'0.12s', background: feedMetalBg, border:`1px solid ${THEME.borderSubtle}`, backdropFilter:'blur(14px)', borderRadius:14, overflow:'hidden', display:'flex', flexDirection:'column' }}>
-          <div style={{ padding:'10px 14px', borderBottom:`1px solid ${THEME.metallicGray}`, fontFamily:"'Orbitron',monospace", fontSize:'0.55rem', letterSpacing:'0.3em', color:THEME.textLow, textTransform:'uppercase', display:'flex', justifyContent:'space-between' }}>
+          <div style={{ padding:'10px 14px', borderBottom:`1px solid ${THEME.metallicGray}`, fontFamily:"'Orbitron',monospace", fontSize:'0.55rem', letterSpacing:'0.3em', color:'#FF5E98', textTransform:'uppercase', display:'flex', justifyContent:'space-between' }}>
             <span>Señales · Feed</span>
             <span style={{ color:THEME.celeste }}>{visibleCount} activas</span>
           </div>
           <div style={{ padding:'10px', display:'flex', flexDirection:'column', gap:8, overflowY:'auto', flex:1, maxHeight:'calc(100vh - 160px)' }}>
             {signals.map(s => <SignalCard key={s.id} signal={s} visible={isVisible(s)} />)}
-            {visibleCount===0 && <div style={{ textAlign:'center', padding:'40px 20px', color:THEME.textLow, fontSize:'0.78rem', letterSpacing:'0.1em', fontFamily:"'Orbitron',monospace" }}>— SIN SEÑALES —</div>}
+            {visibleCount===0 && <div style={{ textAlign:'center', padding:'40px 20px', color:'#FF5E98', fontSize:'0.78rem', letterSpacing:'0.1em', fontFamily:"'Orbitron',monospace" }}>— SIN SEÑALES —</div>}
           </div>
         </div>
 
-        <div className='int-panel' style={{ animationDelay:'0.18s' }}><AdminPanel onPublish={handlePublish} /></div>
+<div className='int-panel' style={{ animationDelay:'0.18s' }}><AdminPanel onPublish={handlePublish} /></div>
       </div>
     </div>
   )
@@ -864,7 +903,7 @@ export default function App() {
   return (
     <div style={{ position:'relative', width:'100vw', height:'100vh', overflow:'hidden', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&family=Space+Grotesk:wght@500;600;700&display=swap');
         @keyframes bgShift    { 0%{filter:hue-rotate(0deg) brightness(1)} 100%{filter:hue-rotate(25deg) brightness(1.08)} }
         @keyframes gridMove   { 0%{background-position:0 0} 100%{background-position:60px 60px} }
         @keyframes orbitSpin  { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
@@ -903,7 +942,7 @@ export default function App() {
       </div>
 
       {/* Status */}
-      <div style={{ position:'absolute', bottom:52, right:36, zIndex:20, display:'flex', alignItems:'center', gap:8, fontSize:'0.68rem', letterSpacing:'0.2em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Exo 2',sans-serif" }}>
+      <div style={{ position:'absolute', bottom:52, right:36, zIndex:20, display:'flex', alignItems:'center', gap:8, fontSize:'0.68rem', letterSpacing:'0.2em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Exo 2',sans-serif" }}>
         <div className="r7-pulse" style={{ width:6, height:6, borderRadius:'50%', background:THEME.celeste, boxShadow:`0 0 8px ${THEME.celeste}BF` }} />
         System Online
       </div>
@@ -939,7 +978,7 @@ export default function App() {
 
       {/* Footer */}
       <footer style={{ position:'absolute', bottom:0, left:0, right:0, zIndex:20, padding:'13px 36px', borderTop:`1px solid ${THEME.metallicGray}`, background:`${THEME.bgMain}80`, backdropFilter:'blur(12px)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <div style={{ fontSize:'0.65rem', letterSpacing:'0.18em', color:THEME.textLow, textTransform:'uppercase', fontFamily:"'Exo 2',sans-serif" }}>© R7Signal · RGartner 2026 · All rights reserved</div>
+        <div style={{ fontSize:'0.65rem', letterSpacing:'0.18em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Exo 2',sans-serif" }}>© R7Signal · RGartner 2026 · All rights reserved</div>
         <div style={{ display:'flex', gap:24 }}>
           {['Aviso Legal','Privacidad','Contacto','API Docs'].map(label=>(
             <button key={label} className="footer-link" onClick={()=>setIsLeftOpen(true)}>{label}</button>
