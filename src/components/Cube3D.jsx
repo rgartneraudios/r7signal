@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { THEME } from '../theme'
 
-export default function Cube3D({ children, color = 'celeste', style = {}, className = '', delay = 0, onClick }) {
+export default function Cube3D({ children, color = 'celeste', style = {}, className = '', delay = 0, onClick, rotateY = 0, minHeight = 500 }) {
   const [isHovered, setIsHovered] = useState(false)
 
   const colors = {
@@ -47,8 +47,8 @@ export default function Cube3D({ children, color = 'celeste', style = {}, classN
         <div style={{
           position: 'relative',
           transform: isHovered
-            ? 'rotateX(2deg) rotateY(-22deg) translateY(-12px) scale(1.02)'
-            : 'rotateX(4deg) rotateY(-18deg)',
+            ? `rotateX(2deg) rotateY(${rotateY}deg) translateY(-12px) scale(1.02)`
+            : `rotateX(2deg) rotateY(${rotateY}deg)`,
           transformStyle: 'preserve-3d',
           transition: 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
         }}>
@@ -64,7 +64,7 @@ export default function Cube3D({ children, color = 'celeste', style = {}, classN
               inset 0 1px 0 rgba(255,255,255,0.08)
             `,
             position: 'relative',
-            minHeight: 500,
+            minHeight,
           }}>
             {children}
           </div>

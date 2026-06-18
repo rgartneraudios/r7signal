@@ -174,49 +174,53 @@ export default function MenuSystem({ onBack, user }) {
           <div className='menu-pulse' style={{ width:5, height:5, borderRadius:'50%', background:THEME.celeste, boxShadow:`0 0 7px ${THEME.celeste}BF` }} />
           System Online
         </div>
-        <div style={{ position:'relative', zIndex:10, maxWidth:1200, margin:'0 auto', padding:'100px 24px 24px' }}>
-          <div style={{ textAlign:'center', marginBottom:48 }}>
-            <div style={{ fontFamily:"'Orbitron',monospace", fontSize:'2.5rem', fontWeight:900, background:`linear-gradient(140deg, ${THEME.textHigh} 25%, ${THEME.celeste} 65%, ${THEME.gold} 100%)`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', letterSpacing:'0.06em' }}>
+        <div style={{ position:'relative', zIndex:10, maxWidth:1400, margin:'0 auto', padding:'100px 24px 24px' }}>
+          <div style={{ textAlign:'center', marginBottom:64 }}>
+            <div style={{ fontFamily:"'Orbitron',monospace", fontSize:'3rem', fontWeight:900, background:`linear-gradient(140deg, ${THEME.textHigh} 25%, ${THEME.celeste} 65%, ${THEME.gold} 100%)`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', letterSpacing:'0.06em' }}>
               R7 SIGNAL
             </div>
-            <div style={{ fontSize:'0.85rem', color:THEME.textMed, marginTop:8, letterSpacing:'0.2em' }}>
-              Selecciona una categoría para comenzar
+            <div style={{ fontSize:'1.1rem', color:THEME.textMed, marginTop:10, letterSpacing:'0.25em', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600 }}>
+              ELIGE TU ÁREA
             </div>
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:16, maxWidth:1000, margin:'0 auto' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:48, maxWidth:1400, margin:'0 auto' }}>
             {categorias.map(cat => (
-              <button key={cat.id} onClick={() => seleccionarCategoria(cat)} style={{
-                background: THEME.bgFeedSolid,
-                border: `1px solid ${THEME.borderSubtle}`,
-                borderRadius: 14,
-                padding: '24px 20px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                boxShadow: `0 20px 40px rgba(0,0,0,0.4), 0 0 60px ${THEME.celeste10}, inset 0 1px 0 rgba(255,255,255,0.08)`,
-                transform: 'perspective(1000px) rotateX(2deg)',
-                transition: 'all 0.4s cubic-bezier(0.16,1,0.3,1)',
-              }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.borderColor = THEME.celeste60
-                  e.currentTarget.style.transform = 'perspective(1000px) rotateX(0deg) translateY(-8px) scale(1.02)'
-                  e.currentTarget.style.boxShadow = `0 30px 60px rgba(0,0,0,0.5), 0 0 80px ${THEME.celeste20}, inset 0 1px 0 rgba(255,255,255,0.12)`
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.borderColor = THEME.borderSubtle
-                  e.currentTarget.style.transform = 'perspective(1000px) rotateX(2deg)'
-                  e.currentTarget.style.boxShadow = `0 20px 40px rgba(0,0,0,0.4), 0 0 60px ${THEME.celeste10}, inset 0 1px 0 rgba(255,255,255,0.08)`
+              <button
+                key={cat.id}
+                onClick={() => seleccionarCategoria(cat)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  textAlign: 'center',
                 }}
               >
-                <div style={{ fontSize:'2.5rem', marginBottom:12 }}>{cat.icono}</div>
-                <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.15rem', fontWeight:600, color:THEME.textHigh, marginBottom:6 }}>
+                <Cube3D color="celeste" delay={0} rotateY={0}>
+                  <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', borderRadius:18 }}>
+                    <img
+                      src={`/assets/${cat.icono}`}
+                      alt={cat.nombre}
+                      style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+                    />
+                  </div>
+                </Cube3D>
+                <h3 style={{
+                  marginTop: 28,
+                  fontFamily:"'Space Grotesk',sans-serif",
+                  fontSize: '2rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  color: THEME.textHigh,
+                  transition: 'color 0.3s ease',
+                  marginBottom: 0,
+                }}
+                  onMouseEnter={e => e.currentTarget.style.color = THEME.gold}
+                  onMouseLeave={e => e.currentTarget.style.color = THEME.textHigh}
+                >
                   {cat.nombre}
-                </div>
-                <div style={{ fontSize:'0.78rem', color:THEME.textMed, marginBottom:12 }}>
-                  {cat.descripcion}
-                </div>
-                <div style={{ fontSize:'0.65rem', color:THEME.celeste, letterSpacing:'0.15em', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase' }}>
-                  Comenzar →
-                </div>
+                </h3>
               </button>
             ))}
           </div>
@@ -261,25 +265,31 @@ export default function MenuSystem({ onBack, user }) {
                 key={menu.menu_numero}
                 color={menu.menu_numero === 0 ? 'pink' : menu.menu_numero === 1 ? 'celeste' : 'gold'}
                 delay={i * 0.8}
+                rotateY={i === 0 ? 16 : i === 1 ? 0 : -16}
                 onClick={() => seleccionarMenu(menu)}
               >
                 <div style={{ textAlign:'center', display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100%' }}>
                   <div>
-                    <div style={{ fontSize:'4.5rem', marginBottom:20 }}>
-                      {menu.menu_numero === 0 ? '🆓' : menu.menu_numero === 1 ? '👨‍🍳' : '👩‍🍳'}
+                    <div style={{ marginBottom:20 }}>
+                      {menu.menu_numero === 0
+                        ? <img src="/assets/menu_free.webp" alt="Free" style={{ width: 120, height: 120 }} />
+                        : menu.menu_numero === 1
+                          ? <img src="/assets/menu_1.webp" alt="Chef" style={{ width: 120, height: 120 }} />
+                          : <img src="/assets/menu_2.webp" alt="Chef" style={{ width: 120, height: 120 }} />
+                      }
                     </div>
-                    <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.8rem', fontWeight:700, color:THEME.textHigh, marginBottom:12 }}>
+                    <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'3.6rem', fontWeight:700, color:THEME.textHigh, marginBottom:12 }}>
                       {menu.menu_nombre}
                     </div>
-                    <div style={{ fontSize:'0.88rem', color:THEME.textMed, lineHeight:1.5, marginBottom:24 }}>
+                    <div style={{ fontSize:'1.2rem', color:THEME.textMed, lineHeight:1.5, marginBottom:24 }}>
                       {menu.menu_numero === 0 ? 'Modelos de prueba · sin coste' : 'Combinación curada por el Chef'}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize:'0.75rem', color: menu.menu_numero === 0 ? THEME.pinkMarble : menu.menu_numero === 1 ? THEME.celeste : THEME.gold, letterSpacing:'0.18em', textTransform:'uppercase', marginBottom:16 }}>
+                    <div style={{ fontSize:'1rem', color: menu.menu_numero === 0 ? THEME.pinkMarble : menu.menu_numero === 1 ? THEME.celeste : THEME.gold, letterSpacing:'0.18em', textTransform:'uppercase', marginBottom:16 }}>
                       {modulos.length} módulos · {menu.items.length} modelos
                     </div>
-                    <div style={{ fontSize:'0.85rem', color:THEME.textHigh, letterSpacing:'0.15em', textTransform:'uppercase', padding:'12px 24px', background: menu.menu_numero === 0 ? THEME.pink10 : menu.menu_numero === 1 ? THEME.celeste10 : THEME.gold10, border: `1px solid ${menu.menu_numero === 0 ? THEME.pink30 : menu.menu_numero === 1 ? THEME.celeste30 : THEME.gold30}`, borderRadius:10, display:'inline-block' }}>
+                    <div style={{ fontSize:'1.2rem', color:THEME.textHigh, letterSpacing:'0.15em', textTransform:'uppercase', padding:'14px 28px', background: menu.menu_numero === 0 ? THEME.pink10 : menu.menu_numero === 1 ? THEME.celeste10 : THEME.gold10, border: `1px solid ${menu.menu_numero === 0 ? THEME.pink30 : menu.menu_numero === 1 ? THEME.celeste30 : THEME.gold30}`, borderRadius:10, display:'inline-block' }}>
                       ▶ ENTRAR AL MENÚ
                     </div>
                   </div>
@@ -310,77 +320,81 @@ export default function MenuSystem({ onBack, user }) {
         <button onClick={volverACategorias} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Orbitron',monospace", textTransform:'uppercase' }}>
           ◀ Volver
         </button>
-        <div style={{ position:'relative', zIndex:10, maxWidth:1400, margin:'0 auto', padding:'100px 24px 24px' }}>
-          <div style={{ textAlign:'center', marginBottom:64 }}>
-            <div style={{ fontSize:'3rem', marginBottom:12 }}>{categoriaActiva.icono}</div>
-            <div style={{ fontFamily:"'Orbitron',monospace", fontSize:'2.2rem', fontWeight:700, color:THEME.textHigh, marginBottom:8 }}>
-              {categoriaActiva.nombre}
-            </div>
-            <div style={{ fontSize:'0.95rem', color:THEME.textMed, letterSpacing:'0.12em' }}>
-              {menuActivo?.menu_nombre} · Selecciona el módulo inicial
-            </div>
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(380px, 1fr))', gap:48, maxWidth:1300, margin:'0 auto' }}>
+        <div style={{ position:'relative', zIndex:10, maxWidth:1280, margin:'0 auto', padding:'100px 32px 64px' }}>
+          <h2 style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'3rem', fontWeight:700, textAlign:'center', marginBottom:8, color:THEME.textHigh, textTransform:'uppercase', letterSpacing:'0.08em' }}>
+            {categoriaActiva.nombre}
+          </h2>
+          <p style={{ fontSize:'1.1rem', color:THEME.textLow, textAlign:'center', marginBottom:64, fontFamily:"'Exo 2',sans-serif" }}>
+            Selecciona un módulo para comenzar
+          </p>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(340px, 1fr))', gap:48, maxWidth:1280, margin:'0 auto 64px' }}>
             {modulos.map((modulo, i) => {
               const modelos = modelosModulo(modulo.id)
               const mb = modelos.find(m => m.tipo === 'mb')
               const pro = modelos.find(m => m.tipo === 'pro')
+              const colorMap = ['pink', 'celeste', 'gold']
+              const c = colorMap[i % colorMap.length]
               return (
                 <Cube3D
                   key={modulo.id}
-                  color={i === 0 ? 'pink' : i === 1 ? 'celeste' : 'gold'}
+                  color={c}
                   delay={i * 0.8}
+                  rotateY={i === 0 ? 16 : i === 1 ? 0 : -16}
                   onClick={() => seleccionarModulo(modulo)}
+                  minHeight={340}
                 >
-                  <div style={{ fontFamily:"'Exo 2',sans-serif", fontSize:'3.5rem', fontWeight:700, color: i === 0 ? THEME.pinkMarble : i === 1 ? THEME.celeste : THEME.gold, marginBottom:12, lineHeight:1 }}>
-                    Módulo {String(modulo.orden).padStart(2, '0')}
-                  </div>
-                  <div style={{ fontFamily:"'Exo 2',sans-serif", fontSize:'1.5rem', fontWeight:600, color:THEME.textHigh, marginBottom:16, lineHeight:1.3 }}>
-                    {modulo.nombre}
-                  </div>
-                  {mb && (
-                    <div style={{ background:THEME.celeste10, border:`1px solid ${THEME.celeste30}`, borderRadius:12, padding:'18px 20px', marginBottom:16 }}>
-                      <div style={{ fontSize:'0.72rem', color:THEME.celeste, letterSpacing:'0.18em', textTransform:'uppercase', marginBottom:10, fontWeight:600 }}>
-                        MB · Basic Model
-                      </div>
-                      <div style={{ fontFamily:"'Exo 2',sans-serif", fontSize:'1.4rem', fontWeight:600, color:THEME.textHigh, marginBottom:12 }}>
-                        {mb.modelo_id}
-                      </div>
-                      <div style={{ display:'flex', gap:20, fontFamily:"'Exo 2',sans-serif", fontSize:'1.2rem', fontWeight:600 }}>
-                        <div>
-                          <span style={{ color:THEME.celeste, fontSize:'0.85rem' }}>IN </span>
-                          <span style={{ color:THEME.textHigh }}>${mb.precio_input}</span>
+                  <div style={{ padding:'20px', textAlign:'left', display:'flex', flexDirection:'column', height:'100%' }}>
+                    <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'2.4rem', fontWeight:700, color:THEME.textHigh, letterSpacing:'0.06em', marginBottom:6, textTransform:'uppercase' }}>
+                      MÓDULO {String(modulo.orden).padStart(2, '0')} (M{modulo.orden})
+                    </div>
+                    <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'2rem', fontWeight:700, color:THEME.textMed, textTransform:'uppercase', letterSpacing:'0.04em', marginBottom:16 }}>
+                      {modulo.nombre}
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:20, marginBottom:16 }}>
+                      {mb && (
+                        <div style={{ borderLeft:`4px solid ${THEME.gold}`, padding:'14px 16px', background:'rgba(212,185,110,0.05)', borderRadius:'0 12px 12px 0' }}>
+                          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.gold, marginBottom:4 }}>
+                            MODELO BASE (MB)
+                          </div>
+                          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
+                            {mb.modelo_id}
+                          </div>
+                          <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
+                            IN: ${mb.precio_input} | OUT: ${mb.precio_output}
+                          </div>
                         </div>
-                        <div>
-                          <span style={{ color:THEME.celeste, fontSize:'0.85rem' }}>OUT </span>
-                          <span style={{ color:THEME.textHigh }}>${mb.precio_output}</span>
+                      )}
+                      {pro && (
+                        <div style={{ borderLeft:`4px solid ${THEME.pinkMarble}`, padding:'14px 16px', background:'rgba(232,165,176,0.05)', borderRadius:'0 12px 12px 0' }}>
+                          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.pinkMarble, marginBottom:4 }}>
+                            MODELO PRO
+                          </div>
+                          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
+                            {pro.modelo_id}
+                          </div>
+                          <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
+                            IN: ${pro.precio_input} | OUT: ${pro.precio_output}
+                          </div>
                         </div>
+                      )}
+                    </div>
+                    <div style={{ marginTop:'auto', paddingTop:16, borderTop:`2px solid ${THEME.metallicGray}` }}>
+                      <div style={{ background:'rgba(65,66,62,0.5)', borderRadius:10, padding:'12px 16px' }}>
+                        <p style={{ fontSize:'0.95rem', color:'rgba(255,250,240,0.78)', lineHeight:1.6, fontFamily:"'Exo 2',sans-serif" }}>
+                          {modulo.descripcion}
+                        </p>
                       </div>
                     </div>
-                  )}
-                  {pro && (
-                    <div style={{ background:THEME.gold10, border:`1px solid ${THEME.gold30}`, borderRadius:12, padding:'18px 20px' }}>
-                      <div style={{ fontSize:'0.72rem', color:THEME.gold, letterSpacing:'0.18em', textTransform:'uppercase', marginBottom:10, fontWeight:600 }}>
-                        PRO · Professional
-                      </div>
-                      <div style={{ fontFamily:"'Exo 2',sans-serif", fontSize:'1.4rem', fontWeight:600, color:THEME.textHigh, marginBottom:12 }}>
-                        {pro.modelo_id}
-                      </div>
-                      <div style={{ display:'flex', gap:20, fontFamily:"'Exo 2',sans-serif", fontSize:'1.2rem', fontWeight:600 }}>
-                        <div>
-                          <span style={{ color:THEME.gold, fontSize:'0.85rem' }}>IN </span>
-                          <span style={{ color:THEME.textHigh }}>${pro.precio_input}</span>
-                        </div>
-                        <div>
-                          <span style={{ color:THEME.gold, fontSize:'0.85rem' }}>OUT </span>
-                          <span style={{ color:THEME.textHigh }}>${pro.precio_output}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </Cube3D>
               )
             })}
+          </div>
+          <div style={{ textAlign:'center', maxWidth:720, margin:'0 auto' }}>
+            <p style={{ fontSize:'1.1rem', color:THEME.textLow, fontFamily:"'Exo 2',sans-serif", lineHeight:1.7, borderTop:`1px solid rgba(72,130,139,0.30)`, paddingTop:32 }}>
+              <span style={{ color:THEME.textHigh, fontWeight:700 }}>Puedes utilizar los módulos independientemente.</span>{' '}
+              Si quieres el <span style={{ color:THEME.gold, fontWeight:700 }}>R7 Contexto acumulado</span>, usa un M1 o un M2 al menos.
+            </p>
           </div>
         </div>
       </div>
