@@ -50,32 +50,59 @@ export default function MenuSystem({ onBack, user }) {
   async function seleccionarCategoria(cat) {
     setCategoriaActiva(cat)
     setCargandoMenu(true)
-    const { data: modulosData } = await supabase
+    setError(null)
+
+    console.log('🎯 Categoría pulsada:', cat.id, cat.nombre)
+
+    const { data: modulosData, error: errMod } = await supabase
       .from('modulos')
       .select('*')
       .eq('categoria_id', cat.id)
       .order('orden')
+
+    console.log('📦 Módulos encontrados:', modulosData?.length ?? 0, modulosData)
+    if (errMod) console.error('❌ Error módulos:', errMod)
+
     setModulos(modulosData || [])
-    if (modulosData && modulosData.length > 0) {
-      const moduloIds = modulosData.map(m => m.id)
-      const { data: itemsData } = await supabase
-        .from('menu_items')
-        .select('*')
-        .in('modulo_id', moduloIds)
-        .order('menu_numero, modulo_id, tipo')
-      const menusPorNumero = {}
-      itemsData?.forEach(item => {
-        if (!menusPorNumero[item.menu_numero]) {
-          menusPorNumero[item.menu_numero] = {
-            menu_numero: item.menu_numero,
-            menu_nombre: item.menu_nombre,
-            items: []
-          }
-        }
-        menusPorNumero[item.menu_numero].items.push(item)
-      })
-      setMenus(Object.values(menusPorNumero))
+    setMenus([])
+
+    if (!modulosData || modulosData.length === 0) {
+      setError(`⚠️ No hay módulos para "${cat.nombre}". Verificá categoria_id en Supabase.`)
+      setCargandoMenu(false)
+      setVista('menus')
+      return
     }
+
+    const moduloIds = modulosData.map(m => m.id)
+    const { data: itemsData, error: errItems } = await supabase
+      .from('menu_items')
+      .select('*')
+      .in('modulo_id', moduloIds)
+      .order('menu_numero, modulo_id, tipo')
+
+    console.log('🍽️ Menu items encontrados:', itemsData?.length ?? 0, itemsData)
+    if (errItems) console.error('❌ Error items:', errItems)
+
+    const menusPorNumero = {}
+    itemsData?.forEach(item => {
+      if (!menusPorNumero[item.menu_numero]) {
+        menusPorNumero[item.menu_numero] = {
+          menu_numero: item.menu_numero,
+          menu_nombre: item.menu_nombre,
+          items: []
+        }
+      }
+      menusPorNumero[item.menu_numero].items.push(item)
+    })
+
+    const menusFinales = Object.values(menusPorNumero)
+    console.log('📋 Menús armados:', menusFinales.length, menusFinales)
+
+    if (menusFinales.length === 0) {
+      setError(`⚠️ Hay ${modulosData.length} módulos pero 0 menu_items. Verificá modulo_id en Supabase.`)
+    }
+
+    setMenus(menusFinales)
     setCargandoMenu(false)
     setVista('menus')
   }
@@ -259,6 +286,21 @@ export default function MenuSystem({ onBack, user }) {
               Selecciona un menú para comenzar
             </div>
           </div>
+          {error && (
+            <div style={{
+              maxWidth: 900, margin: '0 auto 32px',
+              background: 'rgba(255,94,152,0.08)',
+              border: '1px solid rgba(255,94,152,0.4)',
+              borderRadius: 12, padding: '16px 20px',
+              color: '#FF5E98', fontFamily: "'JetBrains Mono',monospace",
+              fontSize: '0.85rem', lineHeight: 1.6
+            }}>
+              {error}
+              <div style={{ marginTop: 8, fontSize: '0.75rem', color: THEME.textLow }}>
+                Abrí la consola del navegador (F12) para ver el detalle completo.
+              </div>
+            </div>
+          )}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(380px, 1fr))', gap:48, maxWidth:1300, margin:'0 auto' }}>
             {menus.map((menu, i) => (
               <Cube3D
@@ -324,10 +366,17 @@ export default function MenuSystem({ onBack, user }) {
           <h2 style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'3rem', fontWeight:700, textAlign:'center', marginBottom:8, color:THEME.textHigh, textTransform:'uppercase', letterSpacing:'0.08em' }}>
             {categoriaActiva.nombre}
           </h2>
-          <p style={{ fontSize:'1.1rem', color:THEME.textLow, textAlign:'center', marginBottom:64, fontFamily:"'Exo 2',sans-serif" }}>
+          <p style={{ fontSize:'1.1rem', color:'#FFF8DC', textAlign:'center', marginBottom:24, fontFamily:"'Exo 2',sans-serif" }}>
             Selecciona un módulo para comenzar
           </p>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(340px, 1fr))', gap:48, maxWidth:1280, margin:'0 auto 64px' }}>
+          <div style={{ textAlign:'center', maxWidth:960, margin:'0 auto 48px' }}>
+            <p style={{ fontSize:'1.15rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", lineHeight:1.7 }}>
+              Los módulos funcionan como chats independientes.<br />
+              El <span style={{ color:THEME.gold, fontWeight:700 }}>R7</span> guarda el contexto acumulado de tu conversación, y el <span style={{ color:THEME.gold, fontWeight:700 }}>R7 Bridge</span> actúa como puente para traspasarlo al siguiente módulo. Generas un R7 Bridge con el botón que tienes arriba a la derecha, dentro de los chats.<br /><br />
+              Puedes usar cualquier módulo de forma aislada. Para aprovechar el contexto acumulado, inicia desde el M1 o M2.
+            </p>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:48, maxWidth:1400, margin:'0 auto 64px' }}>
             {modulos.map((modulo, i) => {
               const modelos = modelosModulo(modulo.id)
               const mb = modelos.find(m => m.tipo === 'mb')
@@ -345,56 +394,52 @@ export default function MenuSystem({ onBack, user }) {
                 >
                   <div style={{ padding:'20px', textAlign:'left', display:'flex', flexDirection:'column', height:'100%' }}>
                     <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'2.4rem', fontWeight:700, color:THEME.textHigh, letterSpacing:'0.06em', marginBottom:6, textTransform:'uppercase' }}>
-                      MÓDULO {String(modulo.orden).padStart(2, '0')} (M{modulo.orden})
+                      MÓDULO {String(modulo.orden).padStart(2, '0')}
                     </div>
-                    <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'2rem', fontWeight:700, color:THEME.textMed, textTransform:'uppercase', letterSpacing:'0.04em', marginBottom:16 }}>
+                    <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'2rem', fontWeight:700, color:THEME.textMed, textTransform:'uppercase', letterSpacing:'0.04em', marginBottom:8 }}>
                       {modulo.nombre}
                     </div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:20, marginBottom:16 }}>
-                      {mb && (
+                    <div style={{ fontFamily:"'Exo 2',sans-serif", fontSize:'0.95rem', color:'#FFF8DC', background:'rgba(156,39,176,0.15)', border:'1px solid rgba(156,39,176,0.4)', borderRadius:10, padding:'10px 14px', lineHeight:1.5, marginBottom:16, fontWeight:500 }}>
+                      {modulo.descripcion}
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:20, marginBottom:0 }}>
+                      {pro && (
                         <div style={{ borderLeft:`4px solid ${THEME.gold}`, padding:'14px 16px', background:'rgba(212,185,110,0.05)', borderRadius:'0 12px 12px 0' }}>
                           <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.gold, marginBottom:4 }}>
-                            MODELO BASE (MB)
-                          </div>
-                          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
-                            {mb.modelo_id}
-                          </div>
-                          <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
-                            IN: ${mb.precio_input} | OUT: ${mb.precio_output}
-                          </div>
-                        </div>
-                      )}
-                      {pro && (
-                        <div style={{ borderLeft:`4px solid ${THEME.pinkMarble}`, padding:'14px 16px', background:'rgba(232,165,176,0.05)', borderRadius:'0 12px 12px 0' }}>
-                          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.pinkMarble, marginBottom:4 }}>
                             MODELO PRO
                           </div>
                           <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
                             {pro.modelo_id}
                           </div>
+                          <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
+                            Por millón de tokens
+                          </div>
                           <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
-                            IN: ${pro.precio_input} | OUT: ${pro.precio_output}
+                            IN: {pro.precio_input} | OUT: {pro.precio_output}
                           </div>
                         </div>
                       )}
-                    </div>
-                    <div style={{ marginTop:'auto', paddingTop:16, borderTop:`2px solid ${THEME.metallicGray}` }}>
-                      <div style={{ background:'rgba(65,66,62,0.5)', borderRadius:10, padding:'12px 16px' }}>
-                        <p style={{ fontSize:'0.95rem', color:'rgba(255,250,240,0.78)', lineHeight:1.6, fontFamily:"'Exo 2',sans-serif" }}>
-                          {modulo.descripcion}
-                        </p>
-                      </div>
+                      {mb && (
+                        <div style={{ borderLeft:`4px solid ${THEME.pinkMarble}`, padding:'14px 16px', background:'rgba(232,165,176,0.05)', borderRadius:'0 12px 12px 0' }}>
+                          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.pinkMarble, marginBottom:4 }}>
+                            MODELO BASE (BM)
+                          </div>
+                          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
+                            {mb.modelo_id}
+                          </div>
+                          <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
+                            Por millón de tokens
+                          </div>
+                          <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
+                            IN: {mb.precio_input} | OUT: {mb.precio_output}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Cube3D>
               )
             })}
-          </div>
-          <div style={{ textAlign:'center', maxWidth:720, margin:'0 auto' }}>
-            <p style={{ fontSize:'1.1rem', color:THEME.textLow, fontFamily:"'Exo 2',sans-serif", lineHeight:1.7, borderTop:`1px solid rgba(72,130,139,0.30)`, paddingTop:32 }}>
-              <span style={{ color:THEME.textHigh, fontWeight:700 }}>Puedes utilizar los módulos independientemente.</span>{' '}
-              Si quieres el <span style={{ color:THEME.gold, fontWeight:700 }}>R7 Contexto acumulado</span>, usa un M1 o un M2 al menos.
-            </p>
           </div>
         </div>
       </div>
@@ -411,7 +456,7 @@ export default function MenuSystem({ onBack, user }) {
         <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
         <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
         <div style={{ position:'fixed', top:18, left:28, zIndex:30 }}>
-          <div className='menu-clock' style={{ fontFamily:"'Exo 2',sans-serif", fontSize:'1.4rem', fontWeight:600, color:THEME.textHigh }}>{formattedTime}</div>
+          <div className='menu-clock' style={{ fontFamily:"'Exo 2',sans-serif", fontSize:'4rem', fontWeight:600, color:THEME.textHigh }}>{formattedTime}</div>
           <div style={{ fontSize:'0.7rem', color:THEME.textMed, marginTop:4 }}>
             {categoriaActiva.icono} {categoriaActiva.nombre} → {moduloActivo.nombre}
           </div>
