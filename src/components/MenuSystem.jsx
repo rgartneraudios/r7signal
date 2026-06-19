@@ -21,12 +21,18 @@ export default function MenuSystem({ onBack, user }) {
   const [r7Contexto, setR7Contexto] = useState('')
   const [cargando, setCargando] = useState(false)
   const [r7Bridge, setR7Bridge] = useState(null)
+  const [totalTokens, setTotalTokens] = useState(0)
   const [categorias, setCategorias] = useState([])
   const [modulos, setModulos] = useState([])
   const [menus, setMenus] = useState([])
   const [menuActivo, setMenuActivo] = useState(null)
   const [cargandoMenu, setCargandoMenu] = useState(true)
   const [error, setError] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [proyectos, setProyectos] = useState([])
+  const [proyectoActivo, setProyectoActivo] = useState(null)
+  const [nuevoProyectoNombre, setNuevoProyectoNombre] = useState('')
+  const [mostrarCrearProyecto, setMostrarCrearProyecto] = useState(false)
 
   const pad = n => String(n).padStart(2, '0')
   const formattedTime = `${pad(time.getHours())}:${pad(time.getMinutes())}:${pad(time.getSeconds())}`
@@ -131,6 +137,9 @@ export default function MenuSystem({ onBack, user }) {
       const r1 = `[R1] Resumen: ${input.substring(0, 50)}...`
       const r3 = `[R3] Respuesta completa del modelo para: "${input}"\n\nEsta es una respuesta simulada. En producción, aquí vendría la respuesta real del modelo barato o PRO según el routing.`
       const r2 = `[R2] Resumen de respuesta: ${r3.substring(0, 80)}...`
+      const tokensInput = Math.ceil(input.length / 4)
+      const tokensOutput = Math.ceil(r3.length / 4)
+      setTotalTokens(prev => prev + tokensInput + tokensOutput)
       setMensajes(prev => [...prev, {
         rol: 'asistente',
         contenido: r3,
@@ -161,6 +170,155 @@ export default function MenuSystem({ onBack, user }) {
     setMensajes([])
     setR7Contexto('')
     setR7Bridge(null)
+    setTotalTokens(0)
+  }
+
+  // ─ Historial / Proyectos ──────────────────────────────────────
+  async function cargarProyectos() {
+    const { data, error } = await supabase
+      .from('proyectos')
+      .select('*')
+      .order('updated_at', { ascending: false })
+
+    if (!error && data) setProyectos(data)
+  }
+
+  async function crearProyecto() {
+    if (!nuevoProyectoNombre.trim()) return
+    const { data, error } = await supabase
+      .from('proyectos')
+      .insert([{
+        nombre: nuevoProyectoNombre.trim(),
+        descripcion: `Proyecto creado el ${new Date().toLocaleDateString()}`
+      }])
+      .select()
+      .single()
+
+    if (!error && data) {
+      setProyectos(prev => [data, ...prev])
+      setProyectoActivo(data)
+      setNuevoProyectoNombre('')
+      setMostrarCrearProyecto(false)
+    }
+  }
+
+  function toggleSidebar() {
+    setSidebarOpen(prev => !prev)
+    if (!sidebarOpen && proyectos.length === 0) cargarProyectos()
+  }
+
+  function seleccionarProyecto(proyecto) {
+    setProyectoActivo(proyecto)
+    setSidebarOpen(false)
+  }
+
+  function renderSidebarPanel() {
+    if (!sidebarOpen) return null
+    return (
+      <>
+        <div
+          onClick={toggleSidebar}
+          style={{ position:'fixed', inset:0, background:'rgba(8,4,6,0.6)', backdropFilter:'blur(4px)', zIndex:30, transition:'opacity 0.3s ease' }}
+        />
+        <div style={{
+          position:'fixed', top:0, left:0, width:340, height:'100vh',
+          background:`linear-gradient(180deg, ${THEME.bgFeedSolid} 0%, ${THEME.bgMain} 100%)`,
+          borderRight:`1px solid ${THEME.celeste20}`, zIndex:31, padding:'24px 20px', overflowY:'auto',
+          boxShadow:'8px 0 40px rgba(0,0,0,0.5)',
+          animation:'slideInLeft 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}>
+          <style>{`@keyframes slideInLeft{from{transform:translateX(-100%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:28, paddingBottom:16, borderBottom:`1px solid ${THEME.metallicGray}` }}>
+            <div>
+              <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.1rem', fontWeight:700, color:THEME.textHigh, letterSpacing:'0.1em', textTransform:'uppercase' }}>📁 Historial</div>
+              <div style={{ fontSize:'0.7rem', color:THEME.textLow, marginTop:4, fontFamily:"'JetBrains Mono',monospace" }}>{proyectos.length} proyectos</div>
+            </div>
+            <button onClick={toggleSidebar} style={{ background:'transparent', border:`1px solid ${THEME.borderSubtle}`, borderRadius:8, width:32, height:32, color:THEME.textMed, cursor:'pointer', fontSize:'1rem', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.2s ease' }}
+              onMouseEnter={e => { e.currentTarget.style.color = THEME.celeste; e.currentTarget.style.borderColor = THEME.celeste35 }}
+              onMouseLeave={e => { e.currentTarget.style.color = THEME.textMed; e.currentTarget.style.borderColor = THEME.borderSubtle }}
+            ></button>
+          </div>
+          <button onClick={() => setMostrarCrearProyecto(!mostrarCrearProyecto)} style={{ width:'100%', background:THEME.celeste10, border:`1px dashed ${THEME.celeste35}`, borderRadius:10, padding:'12px 16px', color:THEME.celeste, fontSize:'0.8rem', fontWeight:600, letterSpacing:'0.1em', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", textTransform:'uppercase', marginBottom:20, transition:'all 0.2s ease' }}
+            onMouseEnter={e => { e.currentTarget.style.background = THEME.celeste15; e.currentTarget.style.borderColor = THEME.celeste50 }}
+            onMouseLeave={e => { e.currentTarget.style.background = THEME.celeste10; e.currentTarget.style.borderColor = THEME.celeste35 }}
+          >+ Nuevo Proyecto</button>
+          {mostrarCrearProyecto && (
+            <div style={{ background:THEME.bgFeedCC, border:`1px solid ${THEME.gold20}`, borderRadius:10, padding:14, marginBottom:20 }}>
+              <input type="text" value={nuevoProyectoNombre} onChange={e => setNuevoProyectoNombre(e.target.value)} onKeyDown={e => e.key === 'Enter' && crearProyecto()} placeholder="Nombre del proyecto..." style={{ width:'100%', background:'transparent', border:'none', borderBottom:`1px solid ${THEME.metallicGray}`, color:THEME.textHigh, fontSize:'0.9rem', padding:'8px 0', outline:'none', fontFamily:"'Exo 2',sans-serif", marginBottom:12 }} />
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={crearProyecto} style={{ flex:1, background:THEME.gold10, border:`1px solid ${THEME.gold40}`, borderRadius:8, padding:'8px 12px', color:THEME.gold, fontSize:'0.75rem', fontWeight:700, cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", textTransform:'uppercase', letterSpacing:'0.1em' }}>Crear</button>
+                <button onClick={() => { setMostrarCrearProyecto(false); setNuevoProyectoNombre('') }} style={{ flex:1, background:'transparent', border:`1px solid ${THEME.borderSubtle}`, borderRadius:8, padding:'8px 12px', color:THEME.textMed, fontSize:'0.75rem', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", textTransform:'uppercase', letterSpacing:'0.1em' }}>Cancelar</button>
+              </div>
+            </div>
+          )}
+          <div style={{ fontSize:'0.7rem', color:THEME.textLow, letterSpacing:'0.15em', textTransform:'uppercase', fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, marginBottom:12 }}>Mis Proyectos</div>
+          {proyectos.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'40px 20px', color:THEME.textLow, fontSize:'0.85rem', fontStyle:'italic' }}>Aún no tenés proyectos.<br />Creá el primero para empezar.</div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {proyectos.map(proy => (
+                <button key={proy.id} onClick={() => seleccionarProyecto(proy)} style={{ background: proyectoActivo?.id === proy.id ? THEME.celeste10 : 'transparent', border:`1px solid ${proyectoActivo?.id === proy.id ? THEME.celeste35 : THEME.borderSubtle}`, borderRadius:10, padding:'12px 14px', color:THEME.textHigh, cursor:'pointer', textAlign:'left', transition:'all 0.2s ease', fontFamily:"'Exo 2',sans-serif" }}
+                  onMouseEnter={e => { if (proyectoActivo?.id !== proy.id) { e.currentTarget.style.borderColor = THEME.celeste25; e.currentTarget.style.background = THEME.celeste05 } }}
+                  onMouseLeave={e => { if (proyectoActivo?.id !== proy.id) { e.currentTarget.style.borderColor = THEME.borderSubtle; e.currentTarget.style.background = 'transparent' } }}
+                >
+                  <div style={{ fontSize:'0.9rem', fontWeight:600, color:THEME.textHigh, marginBottom:4 }}>{proy.nombre}</div>
+                  <div style={{ fontSize:'0.7rem', color:THEME.textLow, fontFamily:"'JetBrains Mono',monospace" }}>{new Date(proy.created_at).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })}</div>
+                </button>
+              ))}
+            </div>
+          )}
+          <div style={{ marginTop:32, paddingTop:16, borderTop:`1px solid ${THEME.metallicGray}`, display:'flex', flexDirection:'column', gap:8 }}>
+            <button style={{ background:'transparent', border:'none', color:THEME.textMed, fontSize:'0.8rem', cursor:'pointer', textAlign:'left', padding:'8px 0', fontFamily:"'Space Grotesk',sans-serif", letterSpacing:'0.05em' }}>⚙️ Configuración</button>
+            <button style={{ background:'transparent', border:'none', color:THEME.textMed, fontSize:'0.8rem', cursor:'pointer', textAlign:'left', padding:'8px 0', fontFamily:"'Space Grotesk',sans-serif", letterSpacing:'0.05em' }}>💳 Billing</button>
+            <button onClick={onBack} style={{ background:'transparent', border:'none', color:THEME.pinkMarble, fontSize:'0.8rem', cursor:'pointer', textAlign:'left', padding:'8px 0', fontFamily:"'Space Grotesk',sans-serif", letterSpacing:'0.05em' }}> Salir</button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  function renderSidebarTrigger() {
+    return (
+      <button
+        onClick={toggleSidebar}
+        title="Abrir historial"
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: sidebarOpen ? 340 : 0,
+          transform: 'translateY(-50%)',
+          zIndex: 30,
+          background: THEME.bgFeedCC,
+          border: `1px solid ${THEME.borderSubtle}`,
+          borderLeft: 'none',
+          borderRadius: '0 10px 10px 0',
+          width: 22,
+          height: 80,
+          color: THEME.celeste,
+          fontSize: '0.85rem',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all 0.3s ease',
+          fontFamily: "'Space Grotesk',sans-serif"
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.color = THEME.gold
+          e.currentTarget.style.borderColor = THEME.celeste35
+          e.currentTarget.style.boxShadow = `4px 0 12px ${THEME.celeste15}`
+          e.currentTarget.style.width = 26
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.color = THEME.celeste
+          e.currentTarget.style.borderColor = THEME.borderSubtle
+          e.currentTarget.style.boxShadow = 'none'
+          e.currentTarget.style.width = 22
+        }}
+      >
+        ▶
+      </button>
+    )
   }
 
   if (cargandoMenu) {
@@ -179,6 +337,7 @@ export default function MenuSystem({ onBack, user }) {
 
   if (vista === 'categorias') {
     return (
+      <>
       <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&family=Space+Grotesk:wght@500;600;700&display=swap');
@@ -194,6 +353,7 @@ export default function MenuSystem({ onBack, user }) {
         <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
         <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
         <HUD formattedTime={formattedTime} weather={WEATHER} />
+        {renderSidebarTrigger()}
         <button onClick={onBack} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase' }}>
           ◀ Exit
         </button>
@@ -253,11 +413,14 @@ export default function MenuSystem({ onBack, user }) {
           </div>
         </div>
       </div>
+      {renderSidebarPanel()}
+      </>
     )
   }
 
   if (vista === 'menus') {
     return (
+      <>
       <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&family=Space+Grotesk:wght@500;600;700&display=swap');
@@ -273,12 +436,12 @@ export default function MenuSystem({ onBack, user }) {
         <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
         <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
         <HUD formattedTime={formattedTime} weather={WEATHER} />
+        {renderSidebarTrigger()}
         <button onClick={volverACategorias} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Orbitron',monospace", textTransform:'uppercase' }}>
           ◀ Volver
         </button>
         <div style={{ position:'relative', zIndex:10, maxWidth:1400, margin:'0 auto', padding:'100px 24px 24px' }}>
           <div style={{ textAlign:'center', marginBottom:64 }}>
-            <div style={{ fontSize:'3rem', marginBottom:12 }}>{categoriaActiva.icono}</div>
             <div style={{ fontFamily:"'Orbitron',monospace", fontSize:'2.2rem', fontWeight:700, color:THEME.textHigh, marginBottom:8 }}>
               {categoriaActiva.nombre}
             </div>
@@ -341,6 +504,8 @@ export default function MenuSystem({ onBack, user }) {
           </div>
         </div>
       </div>
+      {renderSidebarPanel()}
+      </>
     )
   }
 
@@ -349,6 +514,7 @@ export default function MenuSystem({ onBack, user }) {
       return menuActivo?.items.filter(i => i.modulo_id === moduloId) || []
     }
     return (
+      <>
       <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
         <style>{`
           @keyframes cubeFloat {
@@ -359,6 +525,7 @@ export default function MenuSystem({ onBack, user }) {
         <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
         <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
         <HUD formattedTime={formattedTime} weather={WEATHER} />
+        {renderSidebarTrigger()}
         <button onClick={volverACategorias} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Orbitron',monospace", textTransform:'uppercase' }}>
           ◀ Volver
         </button>
@@ -436,121 +603,312 @@ export default function MenuSystem({ onBack, user }) {
                         </div>
                       )}
                     </div>
-                  </div>
+</div>
                 </Cube3D>
               )
             })}
           </div>
         </div>
       </div>
+      {renderSidebarPanel()}
+      </>
     )
   }
 
   if (vista === 'chat') {
     return (
-      <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
+      <>
+      <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily: "'Exo 2',sans-serif" }}>
         <style>{`
-          @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
-          .menu-pulse { animation: pulse-dot 2s ease-in-out infinite; }
+          @keyframes pulse-dot { 
+            0%,100%{opacity:1;transform:scale(1)} 
+            50%{opacity:.4;transform:scale(.75)} 
+          } 
+          .menu-pulse { 
+            animation: pulse-dot 2s ease-in-out infinite; 
+          }
+          @keyframes textGlow {
+            0% { text-shadow: 0 0 10px rgba(92,155,165,0.5); }
+            100% { text-shadow: 0 0 20px rgba(92,155,165,0.8), 0 0 30px rgba(212,185,110,0.4); }
+          }
+          .chat-input-glow {
+            animation: textGlow 3s ease-in-out infinite alternate;
+          }
+          @keyframes messageSlide {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .message-enter {
+            animation: messageSlide 0.4s ease-out;
+          }
+          ::-webkit-scrollbar { width:4px; }
+          ::-webkit-scrollbar-track { background:transparent; }
+          ::-webkit-scrollbar-thumb { background:${THEME.celeste25}; border-radius:3px; }
+          ::-webkit-scrollbar-thumb:hover { background:${THEME.celeste40}; }
         `}</style>
-        <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
-        <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
+        
+        <div style={{ position:'fixed', inset:0, background: `radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}` , zIndex:0 }} />
+        <div style={{ position:'fixed', inset:0, backgroundImage: `linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)` , backgroundSize:'48px 48px', zIndex:0 }} />
+        
+        {/* Header */}
+        {renderSidebarTrigger()}
         <div style={{ position:'fixed', top:18, left:28, zIndex:30 }}>
-          <div className='menu-clock' style={{ fontFamily:"'Exo 2',sans-serif", fontSize:'4rem', fontWeight:600, color:THEME.textHigh }}>{formattedTime}</div>
-          <div style={{ fontSize:'0.7rem', color:THEME.textMed, marginTop:4 }}>
-            {categoriaActiva.icono} {categoriaActiva.nombre} → {moduloActivo.nombre}
+          <div className='menu-clock' style={{ fontFamily: "'JetBrains Mono',monospace", fontSize:'2.4rem', fontWeight:700, color:THEME.textHigh }} >{formattedTime}</div>
+          <div style={{ fontSize:'0.95rem', color:THEME.textMed, marginTop:4, letterSpacing:'0.12em' }}>
+            {WEATHER.emoji} {WEATHER.city} · {WEATHER.temp}
           </div>
         </div>
+        
         <div style={{ position:'fixed', top:22, right:28, zIndex:30, display:'flex', gap:12 }}>
-          <button onClick={exportarR7} style={{ background:THEME.gold10, border:`1px solid ${THEME.gold40}`, borderRadius:20, padding:'6px 16px', color:THEME.gold, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase' }}>
-            🌉 Generar R7 Bridge
+          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem', fontWeight:600, color:THEME.gold, letterSpacing:'0.1em', display:'flex', alignItems:'center' }}>
+            MÓDULO {String(moduloActivo.orden).padStart(2, '0')}
+          </div>
+          <button onClick={exportarR7} style={{ 
+            background:THEME.gold10, 
+            border: `1px solid ${THEME.gold40}`, 
+            borderRadius:20, 
+            padding:'8px 20px', 
+            color:THEME.gold, 
+            fontSize:'0.75rem', 
+            letterSpacing:'0.15em', 
+            cursor:'pointer', 
+            fontFamily: "'Space Grotesk',sans-serif", 
+            fontWeight:700, 
+            textTransform:'uppercase',
+            transition:'all 0.3s ease',
+            boxShadow: `0 0 15px ${THEME.gold10}`
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = THEME.gold20
+            e.currentTarget.style.boxShadow = `0 0 25px ${THEME.gold25}`
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = THEME.gold10
+            e.currentTarget.style.boxShadow = `0 0 15px ${THEME.gold10}`
+          }}
+          >
+            🌉 R7 Bridge
           </button>
-          <button onClick={volverACategorias} style={{ background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase' }}>
+          <button onClick={volverACategorias} style={{ 
+            background:THEME.bgFeedCC, 
+            border: `1px solid ${THEME.borderSubtle}`, 
+            borderRadius:20, 
+            padding:'8px 20px', 
+            color:THEME.textMed, 
+            fontSize:'0.75rem', 
+            letterSpacing:'0.15em', 
+            cursor:'pointer', 
+            fontFamily: "'Space Grotesk',sans-serif", 
+            fontWeight:700, 
+            textTransform:'uppercase',
+            transition:'all 0.3s ease'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.color = THEME.textHigh
+            e.currentTarget.style.borderColor = THEME.celeste35
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.color = THEME.textMed
+            e.currentTarget.style.borderColor = THEME.borderSubtle
+          }}
+          >
             ◀ Salir
           </button>
         </div>
-        <div style={{ position:'relative', zIndex:10, maxWidth:900, margin:'0 auto', padding:'100px 24px 24px', display:'flex', flexDirection:'column', height:'100vh' }}>
-          <div style={{ flex:1, overflowY:'auto', marginBottom:16, display:'flex', flexDirection:'column', gap:12 }}>
+        
+        {/* Chat centrado - SIN panel lateral */}
+        <div style={{ position:'relative', zIndex:10, maxWidth:'65%', margin:'100px auto 0', padding:'0 24px 24px', display:'flex', flexDirection:'column', height:'calc(100vh - 100px)' }}>
+          <div style={{ flex:1, overflowY:'auto', marginBottom:20, display:'flex', flexDirection:'column', gap:16, paddingRight:20 }}>
             {mensajes.length === 0 && (
-              <div style={{ textAlign:'center', padding:'60px 20px', color:THEME.textMed }}>
-                <div style={{ fontSize:'1.2rem', marginBottom:12 }}>🚀</div>
-                <div style={{ fontSize:'0.85rem' }}>Comienza a chatear para iniciar el flujo R7</div>
+              <div style={{ textAlign:'center', padding:'80px 20px', color:THEME.textMed }}>
+                <div style={{ fontSize:'4rem', marginBottom:20, opacity:0.6 }}>🚀</div>
+                <div style={{ fontSize:'1.3rem', color:THEME.celeste, marginBottom:12, fontFamily: "'Space Grotesk',sans-serif", fontWeight:700, letterSpacing:'0.05em' }}>
+                  INICIÁ EL FLUJO R7
+                </div>
+                <div style={{ fontSize:'0.95rem', color:THEME.textLow, lineHeight:1.7 }}>
+                  Escribí tu primer input. El sistema detectará automáticamente<br />
+                  el skill adecuado y acumulará el contexto internamente.
+                </div>
               </div>
             )}
+            
             {mensajes.map((msg, i) => (
-              <div key={i} style={{
-                background: msg.rol === 'usuario' ? THEME.celeste10 : THEME.bgFeedSolid,
-                border: `1px solid ${msg.rol === 'usuario' ? THEME.celeste30 : THEME.borderSubtle}`,
-                borderRadius: 12,
-                padding: '14px 18px',
+              <div key={i} className="message-enter" style={{
+                background: msg.rol === 'usuario' ? 
+                  `linear-gradient(135deg, ${THEME.celeste15} 0%, ${THEME.celeste08} 100%)` : 
+                  'rgba(65,66,62,0.25)',
+                border: msg.rol === 'usuario' ? 
+                  `2px solid ${THEME.celeste40}` : 
+                  `1px solid ${THEME.borderSubtle}`,
+                borderRadius: 16,
+                padding: msg.rol === 'usuario' ? '18px 24px' : '20px 26px',
                 alignSelf: msg.rol === 'usuario' ? 'flex-end' : 'flex-start',
-                maxWidth: '80%',
+                maxWidth: '85%',
+                boxShadow: msg.rol === 'usuario' ? 
+                  `0 4px 20px ${THEME.celeste10}` : 
+                  `0 2px 12px rgba(0,0,0,0.3)`
               }}>
-                <div style={{ fontSize:'0.65rem', color: msg.rol === 'usuario' ? THEME.celeste : THEME.gold, marginBottom:6, letterSpacing:'0.15em', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase' }}>
-                  {msg.rol === 'usuario' ? 'TÚ' : `R3 · ${msg.modelo || 'modelo'}`}
+                <div style={{ 
+                  fontSize:'0.75rem', 
+                  color: msg.rol === 'usuario' ? THEME.celeste : THEME.gold, 
+                  marginBottom:10, 
+                  letterSpacing:'0.18em', 
+                  fontFamily: "'Space Grotesk',sans-serif", 
+                  fontWeight:700, 
+                  textTransform:'uppercase',
+                  textShadow: msg.rol === 'usuario' ? 
+                    `0 0 10px ${THEME.celeste30}` : 
+                    `0 0 10px ${THEME.gold20}`
+                }}>
+                  {msg.rol === 'usuario' ? '👤 TU INPUT' : `🎯 RESPUESTA`}
                 </div>
-                <div style={{ fontSize:'0.88rem', color:THEME.textHigh, lineHeight:1.6, whiteSpace:'pre-wrap' }}>
+                <div style={{ 
+                  fontSize:'1.05rem', 
+                  color:THEME.textHigh, 
+                  lineHeight:1.7, 
+                  whiteSpace:'pre-wrap',
+                  fontFamily: "'Exo 2',sans-serif",
+                  fontWeight:400
+                }}>
                   {msg.contenido}
                 </div>
-                {msg.r1 && (
-                  <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${THEME.metallicGray}`, fontSize:'0.68rem', color:THEME.textLow }}>
-                    <div style={{ color:THEME.celeste, marginBottom:4 }}>R1: {msg.r1}</div>
-                    <div style={{ color:THEME.gold }}>R2: {msg.r2}</div>
-                  </div>
-                )}
               </div>
             ))}
+            
             {cargando && (
-              <div style={{ textAlign:'center', padding:'20px', color:THEME.celeste }}>
-                <div className='menu-pulse' style={{ display:'inline-block' }}>Procesando R1-R2-R3...</div>
+              <div style={{ textAlign:'center', padding:'30px', color:THEME.celeste }}>
+                <div className='menu-pulse' style={{ 
+                  display:'inline-block',
+                  fontSize:'1.1rem',
+                  fontWeight:700,
+                  letterSpacing:'0.15em',
+                  textTransform:'uppercase',
+                  textShadow: `0 0 20px ${THEME.celeste40}`
+                }}>
+                  Procesando...
+                </div>
               </div>
             )}
           </div>
-          <div style={{ display:'flex', gap:12, background:THEME.bgFeedSolid, border:`1px solid ${THEME.borderSubtle}`, borderRadius:14, padding:12 }}>
-            <input
-              type='text'
-              value={inputUsuario}
-              onChange={e => setInputUsuario(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && enviarMensaje()}
-              placeholder='Escribe tu mensaje...'
-              style={{
-                flex:1,
-                background:'transparent',
-                border:'none',
-                color:THEME.textHigh,
-                fontSize:'0.88rem',
-                outline:'none',
-                fontFamily:"'Exo 2',sans-serif",
-              }}
-            />
-            <button
-              onClick={enviarMensaje}
-              disabled={cargando || !inputUsuario.trim()}
-              style={{
-                background: THEME.celeste10,
-                border: `1px solid ${THEME.celeste35}`,
-                borderRadius: 8,
-                padding: '8px 20px',
-                color: THEME.celeste,
-                fontSize:'0.72rem',
-                letterSpacing:'0.15em',
-                cursor: cargando || !inputUsuario.trim() ? 'not-allowed' : 'pointer',
-                fontFamily:"'Space Grotesk',sans-serif",
-                fontWeight:600,
-                textTransform:'uppercase',
-                opacity: cargando || !inputUsuario.trim() ? 0.5 : 1,
-              }}
-            >
-              ▶ Enviar
-            </button>
-          </div>
+          
+          {/* Input field */}
+          <div style={{ 
+            background:'rgba(65,66,62,0.35)', 
+            border: `2px solid ${THEME.celeste25}`, 
+            borderRadius:20, 
+            padding:'12px 16px',
+            boxShadow: `0 4px 20px ${THEME.celeste08}`,
+            transition:'all 0.3s ease'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = THEME.celeste40
+            e.currentTarget.style.boxShadow = `0 6px 30px ${THEME.celeste12}`
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = THEME.celeste25
+            e.currentTarget.style.boxShadow = `0 4px 20px ${THEME.celeste08}`
+          }}
+          >
+            <div style={{ display:'flex', gap:12 }}>
+              <textarea
+                value={inputUsuario}
+                onChange={e => setInputUsuario(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    enviarMensaje()
+                  }
+                }}
+                placeholder='Escribí tu input para iniciar el flujo R7...'
+                className="chat-input-glow"
+                rows={2}
+                style={{
+                  flex:1,
+                  background:'transparent',
+                  border:'none',
+                  color:THEME.textHigh,
+                  fontSize:'1.15rem',
+                  fontWeight:500,
+                  outline:'none',
+                  fontFamily: "'Exo 2',sans-serif",
+                  letterSpacing:'0.02em',
+                  resize:'none',
+                  overflow:'hidden',
+                  lineHeight:1.5
+                }}
+              />
+              <button
+                onClick={enviarMensaje}
+                disabled={cargando || !inputUsuario.trim()}
+                style={{
+                  background: THEME.celeste20,
+                  border: `2px solid ${THEME.celeste40}`,
+                  borderRadius: 10,
+                  padding: '8px 18px',
+                  color: THEME.celeste,
+                  fontSize:'0.75rem',
+                  fontWeight:700,
+                  letterSpacing:'0.15em',
+                  cursor: cargando || !inputUsuario.trim() ? 'not-allowed' : 'pointer',
+                  fontFamily: "'Space Grotesk',sans-serif",
+                  textTransform:'uppercase',
+                  opacity: cargando || !inputUsuario.trim() ? 0.5 : 1,
+                  transition:'all 0.3s ease',
+                  whiteSpace:'nowrap',
+                  boxShadow: `0 0 15px ${THEME.celeste15}`
+                }}
+                onMouseEnter={e => {
+                  if (!cargando && inputUsuario.trim()) {
+                    e.currentTarget.style.background = THEME.celeste30
+                    e.currentTarget.style.boxShadow = `0 0 25px ${THEME.celeste25}`
+                  }
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = THEME.celeste20
+                  e.currentTarget.style.boxShadow = `0 0 15px ${THEME.celeste15}`
+                }}
+              >
+                ▶ Enviar
+              </button>
+            </div>
+            
+            {/* Footer */}
+            <div style={{ 
+              display:'flex', 
+              justifyContent:'space-between', 
+              alignItems:'center',
+              paddingTop:10,
+              marginTop:10,
+              borderTop: `1px solid ${THEME.metallicGray}`
+            }}>
+              <div style={{ 
+                fontSize:'0.7rem', 
+                color:THEME.celeste, 
+                fontFamily: "'JetBrains Mono',monospace",
+                letterSpacing:'0.05em'
+              }}>
+                🤖 {menuActivo?.items.find(i => i.modulo_id === moduloActivo.id && i.tipo === 'mb')?.modelo_id || 'N/A'}
+              </div>
+              <div style={{ 
+                fontSize:'0.7rem', 
+                color:THEME.gold, 
+fontFamily: "'JetBrains Mono',monospace",
+                letterSpacing:'0.05em'
+              }}>
+                ⚡ {totalTokens} tokens
+              </div>
+</div>
         </div>
+</div>
       </div>
+      {renderSidebarPanel()}
+      </>
     )
   }
 
-  if (vista === 'r7-bridge' && r7Bridge) {
+    if (vista === 'r7-bridge' && r7Bridge) {
     return (
+      <>
       <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
         <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
         <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
@@ -590,6 +948,8 @@ export default function MenuSystem({ onBack, user }) {
           </div>
         </div>
       </div>
+      {renderSidebarPanel()}
+      </>
     )
   }
 
