@@ -546,8 +546,13 @@ export default function MenuSystem({ onBack, user }) {
           <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:48, maxWidth:1400, margin:'0 auto 64px' }}>
             {modulos.map((modulo, i) => {
               const modelos = modelosModulo(modulo.id)
+              const tieneSubTipo = modelos.some(m => m.sub_tipo != null)
               const mb = modelos.find(m => m.tipo === 'mb')
               const superior = modelos.find(m => m.tipo === 'plus')
+              const mbMusic = modelos.find(m => m.tipo === 'mb' && m.sub_tipo === 'music')
+              const plusMusic = modelos.find(m => m.tipo === 'plus' && m.sub_tipo === 'music')
+              const mbVoice = modelos.find(m => m.tipo === 'mb' && m.sub_tipo === 'voice')
+              const plusVoice = modelos.find(m => m.tipo === 'plus' && m.sub_tipo === 'voice')
               const colorMap = ['pink', 'celeste', 'gold']
               const c = colorMap[i % colorMap.length]
               return (
@@ -570,37 +575,118 @@ export default function MenuSystem({ onBack, user }) {
                       {modulo.descripcion}
                     </div>
                     <div style={{ display:'flex', flexDirection:'column', gap:20, marginBottom:0 }}>
-                      {superior && (
-                        <div style={{ borderLeft:`4px solid ${THEME.gold}`, padding:'14px 16px', background:'rgba(212,185,110,0.05)', borderRadius:'0 12px 12px 0' }}>
-                          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.gold, marginBottom:4 }}>
-                            MODELO SUPERIOR
+                      {tieneSubTipo ? (
+                        <>
+                          <div style={{ borderLeft:`4px solid ${THEME.gold}`, padding:'14px 16px', background:'rgba(212,185,110,0.05)', borderRadius:'0 12px 12px 0' }}>
+                            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'0.85rem', fontWeight:700, color:THEME.gold, marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>
+                              🎵 MÚSICA
+                            </div>
+                            {plusMusic && (
+                              <div style={{ marginBottom:12 }}>
+                                <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.gold, marginBottom:4 }}>
+                                  MODELO SUPERIOR MÚSICA
+                                </div>
+                                <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
+                                  {plusMusic.modelo_id}
+                                </div>
+                                <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
+                                  Por millón de tokens
+                                </div>
+                                <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
+                                  IN: {plusMusic.precio_input} | OUT: {plusMusic.precio_output}
+                                </div>
+                              </div>
+                            )}
+                            {mbMusic && (
+                              <div>
+                                <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.pinkMarble, marginBottom:4 }}>
+                                  MODELO BASE MÚSICA
+                                </div>
+                                <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
+                                  {mbMusic.modelo_id}
+                                </div>
+                                <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
+                                  Por millón de tokens
+                                </div>
+                                <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
+                                  IN: {mbMusic.precio_input} | OUT: {mbMusic.precio_output}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
-                            {superior.modelo_id}
+                          <div style={{ borderLeft:`4px solid ${THEME.gold}`, padding:'14px 16px', background:'rgba(212,185,110,0.05)', borderRadius:'0 12px 12px 0' }}>
+                            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'0.85rem', fontWeight:700, color:THEME.gold, marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>
+                              🎙️ VOZ
+                            </div>
+                            {plusVoice && (
+                              <div style={{ marginBottom:12 }}>
+                                <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.gold, marginBottom:4 }}>
+                                  MODELO SUPERIOR VOZ
+                                </div>
+                                <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
+                                  {plusVoice.modelo_id}
+                                </div>
+                                <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
+                                  Por millón de tokens
+                                </div>
+                                <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
+                                  IN: {plusVoice.precio_input} | OUT: {plusVoice.precio_output}
+                                </div>
+                              </div>
+                            )}
+                            {mbVoice && (
+                              <div>
+                                <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.pinkMarble, marginBottom:4 }}>
+                                  MODELO BASE VOZ
+                                </div>
+                                <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
+                                  {mbVoice.modelo_id}
+                                </div>
+                                <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
+                                  Por millón de tokens
+                                </div>
+                                <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
+                                  IN: {mbVoice.precio_input} | OUT: {mbVoice.precio_output}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
-                            Por millón de tokens
-                          </div>
-                          <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
-                            IN: {superior.precio_input} | OUT: {superior.precio_output}
-                          </div>
-                        </div>
-                      )}
-                      {mb && (
-                        <div style={{ borderLeft:`4px solid ${THEME.pinkMarble}`, padding:'14px 16px', background:'rgba(232,165,176,0.05)', borderRadius:'0 12px 12px 0' }}>
-                          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.pinkMarble, marginBottom:4 }}>
-                            MODELO BASE
-                          </div>
-                          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
-                            {mb.modelo_id}
-                          </div>
-                          <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
-                            Por millón de tokens
-                          </div>
-                          <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
-                            IN: {mb.precio_input} | OUT: {mb.precio_output}
-                          </div>
-                        </div>
+                        </>
+                      ) : (
+                        <>
+                          {superior && (
+                            <div style={{ borderLeft:`4px solid ${THEME.gold}`, padding:'14px 16px', background:'rgba(212,185,110,0.05)', borderRadius:'0 12px 12px 0' }}>
+                              <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.gold, marginBottom:4 }}>
+                                MODELO SUPERIOR
+                              </div>
+                              <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
+                                {superior.modelo_id}
+                              </div>
+                              <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
+                                Por millón de tokens
+                              </div>
+                              <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
+                                IN: {superior.precio_input} | OUT: {superior.precio_output}
+                              </div>
+                            </div>
+                          )}
+                          {mb && (
+                            <div style={{ borderLeft:`4px solid ${THEME.pinkMarble}`, padding:'14px 16px', background:'rgba(232,165,176,0.05)', borderRadius:'0 12px 12px 0' }}>
+                              <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.pinkMarble, marginBottom:4 }}>
+                                MODELO BASE
+                              </div>
+                              <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
+                                {mb.modelo_id}
+                              </div>
+                              <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
+                                Por millón de tokens
+                              </div>
+                              <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
+                                IN: {mb.precio_input} | OUT: {mb.precio_output}
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
 </div>
@@ -887,7 +973,14 @@ export default function MenuSystem({ onBack, user }) {
                 fontFamily: "'JetBrains Mono',monospace",
                 letterSpacing:'0.05em'
               }}>
-                🤖 {menuActivo?.items.find(i => i.modulo_id === moduloActivo.id && i.tipo === 'mb')?.modelo_id || 'N/A'}
+                {(() => {
+  const items = menuActivo?.items.filter(i => i.modulo_id === moduloActivo.id && i.tipo === 'mb') || []
+  const hasSubTipo = items.some(i => i.sub_tipo)
+  if (!hasSubTipo) return items[0]?.modelo_id || 'N/A'
+  const music = items.find(i => i.sub_tipo === 'music')?.modelo_id
+  const voice = items.find(i => i.sub_tipo === 'voice')?.modelo_id
+  return `🎵 ${music || 'N/A'} | 🎙️ ${voice || 'N/A'}`
+})()}
               </div>
               <div style={{ 
                 fontSize:'0.7rem', 
