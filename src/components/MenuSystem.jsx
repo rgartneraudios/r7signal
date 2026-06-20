@@ -135,7 +135,7 @@ export default function MenuSystem({ onBack, user }) {
     setMensajes(prev => [...prev, { rol: 'usuario', contenido: input }])
     setTimeout(() => {
       const r1 = `[R1] Resumen: ${input.substring(0, 50)}...`
-      const r3 = `[R3] Respuesta completa del modelo para: "${input}"\n\nEsta es una respuesta simulada. En producción, aquí vendría la respuesta real del modelo barato o PRO según el routing.`
+      const r3 = `[R3] Respuesta completa del modelo para: "${input}"\n\nEsta es una respuesta simulada. En producción, aquí vendría la respuesta real del modelo base o superior según el routing.`
       const r2 = `[R2] Resumen de respuesta: ${r3.substring(0, 80)}...`
       const tokensInput = Math.ceil(input.length / 4)
       const tokensOutput = Math.ceil(r3.length / 4)
@@ -547,7 +547,7 @@ export default function MenuSystem({ onBack, user }) {
             {modulos.map((modulo, i) => {
               const modelos = modelosModulo(modulo.id)
               const mb = modelos.find(m => m.tipo === 'mb')
-              const pro = modelos.find(m => m.tipo === 'pro')
+              const superior = modelos.find(m => m.tipo === 'plus')
               const colorMap = ['pink', 'celeste', 'gold']
               const c = colorMap[i % colorMap.length]
               return (
@@ -570,26 +570,26 @@ export default function MenuSystem({ onBack, user }) {
                       {modulo.descripcion}
                     </div>
                     <div style={{ display:'flex', flexDirection:'column', gap:20, marginBottom:0 }}>
-                      {pro && (
+                      {superior && (
                         <div style={{ borderLeft:`4px solid ${THEME.gold}`, padding:'14px 16px', background:'rgba(212,185,110,0.05)', borderRadius:'0 12px 12px 0' }}>
                           <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.gold, marginBottom:4 }}>
-                            MODELO PRO
+                            MODELO SUPERIOR
                           </div>
                           <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
-                            {pro.modelo_id}
+                            {superior.modelo_id}
                           </div>
                           <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
                             Por millón de tokens
                           </div>
                           <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
-                            IN: {pro.precio_input} | OUT: {pro.precio_output}
+                            IN: {superior.precio_input} | OUT: {superior.precio_output}
                           </div>
                         </div>
                       )}
                       {mb && (
                         <div style={{ borderLeft:`4px solid ${THEME.pinkMarble}`, padding:'14px 16px', background:'rgba(232,165,176,0.05)', borderRadius:'0 12px 12px 0' }}>
                           <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.pinkMarble, marginBottom:4 }}>
-                            MODELO BASE (BM)
+                            MODELO BASE
                           </div>
                           <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
                             {mb.modelo_id}
