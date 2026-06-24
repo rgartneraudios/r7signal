@@ -16,12 +16,18 @@ export default function MenuSystem({ onBack, user }) {
   const [categoriaActiva, setCategoriaActiva] = useState(null)
   const [moduloActivo, setModuloActivo] = useState(null)
   const [sesionId, setSesionId] = useState(null)
-  const [mensajes, setMensajes] = useState([])
-  const [inputUsuario, setInputUsuario] = useState('')
+  const [mensajesM01, setMensajesM01] = useState([])
+  const [mensajesM02, setMensajesM02] = useState([])
+  const [inputM01, setInputM01] = useState('')
+  const [inputM02, setInputM02] = useState('')
   const [r7Contexto, setR7Contexto] = useState('')
-  const [cargando, setCargando] = useState(false)
+  const [cargandoM01, setCargandoM01] = useState(false)
+  const [cargandoM02, setCargandoM02] = useState(false)
   const [r7Bridge, setR7Bridge] = useState(null)
-  const [totalTokens, setTotalTokens] = useState(0)
+  const [tokensM01, setTokensM01] = useState(0)
+  const [tokensM02, setTokensM02] = useState(0)
+  const [routingMode, setRoutingMode] = useState('auto')
+  const [bridgeToast, setBridgeToast] = useState(false)
   const [categorias, setCategorias] = useState([])
   const [modulos, setModulos] = useState([])
   const [menus, setMenus] = useState([])
@@ -115,49 +121,86 @@ export default function MenuSystem({ onBack, user }) {
 
   function seleccionarMenu(menu) {
     setMenuActivo(menu)
-    setVista('modulos')
-  }
-
-  function seleccionarModulo(modulo) {
-    setModuloActivo(modulo)
-    setSesionId(`sesion_${Date.now()}_menu${menuActivo.menu_numero}`)
-    setMensajes([])
+    const sorted = [...modulos].sort((a, b) => a.orden - b.orden)
+    const m01 = sorted[0] || null
+    setModuloActivo(m01)
+    setSesionId(`sesion_${Date.now()}_menu${menu.menu_numero}`)
+    setMensajesM01([])
+    setMensajesM02([])
     setR7Contexto('')
     setR7Bridge(null)
+    setTokensM01(0)
+    setTokensM02(0)
+    setInputM01('')
+    setInputM02('')
     setVista('chat')
   }
 
-  async function enviarMensaje() {
-    if (!inputUsuario.trim() || cargando) return
-    const input = inputUsuario.trim()
-    setInputUsuario('')
-    setCargando(true)
-    setMensajes(prev => [...prev, { rol: 'usuario', contenido: input }])
+  async function enviarMensajeM01() {
+    if (!inputM01.trim() || cargandoM01) return
+    const input = inputM01.trim()
+
+    const mb = menuActivo?.items
+      .filter(i => i.modulo_id === moduloActivo.id && i.tipo === 'mb')[0]?.modelo_id || 'N/A'
+    const ms = menuActivo?.items
+      .filter(i => i.modulo_id === moduloActivo.id && i.tipo === 'plus')[0]?.modelo_id || 'N/A'
+    let modeloUsado
+    if (routingMode === 'mb') {
+      modeloUsado = mb
+    } else if (routingMode === 'ms') {
+      modeloUsado = ms
+    } else {
+      const palabras = input.trim().split(/\s+/).filter(w => w).length
+      modeloUsado = palabras > 100 ? ms : mb
+    }
+
+    setInputM01('')
+    setCargandoM01(true)
+    setMensajesM01(prev => [...prev, { rol: 'usuario', contenido: input }])
+    setTimeout(() => {
+      const r1 = `[R1] Resumen: ${input.substring(0, 50)}...`
+      const r3 = `[R3 · ${modeloUsado}] Respuesta completa del modelo para: "${input}"\n\nRouting: ${routingMode.toUpperCase()} → ${modeloUsado}`
+      const r2 = `[R2] Resumen de respuesta: ${r3.substring(0, 80)}...`
+      const tokensInput = Math.ceil(input.length / 4)
+      const tokensOutput = Math.ceil(r3.length / 4)
+      setTokensM01(prev => prev + tokensInput + tokensOutput)
+      setMensajesM01(prev => [...prev, {
+        rol: 'asistente',
+        contenido: r3,
+        r1, r2,
+        modelo: modeloUsado
+      }])
+      setR7Contexto(prev => prev + '\n' + r1 + '\n' + r2)
+      setCargandoM01(false)
+    }, 1500)
+  }
+
+  async function enviarMensajeM02() {
+    if (!inputM02.trim() || cargandoM02) return
+    const input = inputM02.trim()
+    setInputM02('')
+    setCargandoM02(true)
+    setMensajesM02(prev => [...prev, { rol: 'usuario', contenido: input }])
     setTimeout(() => {
       const r1 = `[R1] Resumen: ${input.substring(0, 50)}...`
       const r3 = `[R3] Respuesta completa del modelo para: "${input}"\n\nEsta es una respuesta simulada. En producción, aquí vendría la respuesta real del modelo base o superior según el routing.`
       const r2 = `[R2] Resumen de respuesta: ${r3.substring(0, 80)}...`
       const tokensInput = Math.ceil(input.length / 4)
       const tokensOutput = Math.ceil(r3.length / 4)
-      setTotalTokens(prev => prev + tokensInput + tokensOutput)
-      setMensajes(prev => [...prev, {
+      setTokensM02(prev => prev + tokensInput + tokensOutput)
+      setMensajesM02(prev => [...prev, {
         rol: 'asistente',
         contenido: r3,
         r1, r2,
-        modelo: 'deepseek-4-flash'
+        modelo: 'cochi'
       }])
-      setR7Contexto(prev => prev + '\n' + r1 + '\n' + r2)
-      setCargando(false)
+      setCargandoM02(false)
     }, 1500)
   }
 
-  function exportarR7() {
-    const bridgeContent = `🌉 BRIDGE: ${categoriaActiva.nombre} → Siguiente Módulo\n\n` +
-      `## Contexto acumulado (R7):\n${r7Contexto}\n\n` +
-      `## Decisiones tomadas:\n- [Se listarán aquí]\n\n` +
-      `## Siguiente módulo debe resolver:\n- [Pendiente]`
-    setR7Bridge(bridgeContent)
-    setVista('r7-bridge')
+  function handleBridgeClick() {
+    setBridgeToast(true)
+    setTimeout(() => setBridgeToast(false), 2000)
   }
 
   function volverACategorias() {
@@ -167,10 +210,12 @@ export default function MenuSystem({ onBack, user }) {
     setModuloActivo(null)
     setMenus([])
     setModulos([])
-    setMensajes([])
+    setMensajesM01([])
+    setMensajesM02([])
     setR7Contexto('')
     setR7Bridge(null)
-    setTotalTokens(0)
+    setTokensM01(0)
+    setTokensM02(0)
   }
 
   // ─ Historial / Proyectos ──────────────────────────────────────
@@ -361,8 +406,8 @@ export default function MenuSystem({ onBack, user }) {
           <div className='menu-pulse' style={{ width:5, height:5, borderRadius:'50%', background:THEME.celeste, boxShadow:`0 0 7px ${THEME.celeste}BF` }} />
           System Online
         </div>
-        <div style={{ position:'relative', zIndex:10, maxWidth:1400, margin:'0 auto', padding:'100px 24px 24px' }}>
-          <div style={{ textAlign:'center', marginBottom:64 }}>
+        <div style={{ position:'relative', zIndex:10, maxWidth:'100%', minHeight:'100vh', margin:'0 auto', padding:'80px 40px 24px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
+          <div style={{ textAlign:'center', marginBottom:48 }}>
             <div style={{ fontFamily:"'Orbitron',monospace", fontSize:'3rem', fontWeight:900, background:`linear-gradient(140deg, ${THEME.textHigh} 25%, ${THEME.celeste} 65%, ${THEME.gold} 100%)`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', letterSpacing:'0.06em' }}>
               R7 SIGNAL
             </div>
@@ -370,8 +415,18 @@ export default function MenuSystem({ onBack, user }) {
               ELIGE TU ÁREA
             </div>
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:48, maxWidth:1400, margin:'0 auto' }}>
-            {categorias.map(cat => (
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:36, maxWidth:'100%', margin:'0 auto' }}>
+            {categorias.map(cat => {
+              const iconMap = {
+                'codigo': '/assets/codigo.webp',
+                'imagen': '/assets/imagen.webp',
+                'musica': '/assets/musica.webp',
+                'música': '/assets/musica.webp',
+                'texto': '/assets/texto.webp',
+                'voces': '/assets/voces.webp',
+              }
+              const iconSrc = iconMap[cat.nombre.toLowerCase()] || `/assets/${cat.icono}`
+              return (
               <button
                 key={cat.id}
                 onClick={() => seleccionarCategoria(cat)}
@@ -383,10 +438,10 @@ export default function MenuSystem({ onBack, user }) {
                   textAlign: 'center',
                 }}
               >
-                <Cube3D color="celeste" delay={0} rotateY={0}>
+                <Cube3D color="celeste" delay={0} rotateY={0} minHeight={340}>
                   <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', borderRadius:18 }}>
                     <img
-                      src={`/assets/${cat.icono}`}
+                      src={iconSrc}
                       alt={cat.nombre}
                       style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
                     />
@@ -395,7 +450,7 @@ export default function MenuSystem({ onBack, user }) {
                 <h3 style={{
                   marginTop: 28,
                   fontFamily:"'Space Grotesk',sans-serif",
-                  fontSize: '2rem',
+                  fontSize: '3.2rem',
                   fontWeight: 700,
                   letterSpacing: '0.12em',
                   textTransform: 'uppercase',
@@ -409,7 +464,8 @@ export default function MenuSystem({ onBack, user }) {
                   {cat.nombre}
                 </h3>
               </button>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>
@@ -509,202 +565,285 @@ export default function MenuSystem({ onBack, user }) {
     )
   }
 
-  if (vista === 'modulos') {
-    const modelosModulo = (moduloId) => {
-      return menuActivo?.items.filter(i => i.modulo_id === moduloId) || []
+if (vista === 'chat') {
+    const segundoModulo = modulos.length > 1 ? modulos[1] : modulos[0]
+    const modeloCochi = menuActivo?.items
+      .filter(i => i.modulo_id === segundoModulo?.id && i.tipo === 'mb')[0]?.modelo_id || 'Cochi'
+    const modeloMB = menuActivo?.items
+      .filter(i => i.modulo_id === moduloActivo.id && i.tipo === 'mb')[0]?.modelo_id || 'N/A'
+    const modeloMS = menuActivo?.items
+      .filter(i => i.modulo_id === moduloActivo.id && i.tipo === 'plus')[0]?.modelo_id || 'N/A'
+
+    const getModeloSeleccionado = (inputLength) => {
+      if (routingMode === 'mb') return modeloMB
+      if (routingMode === 'ms') return modeloMS
+      const palabras = inputLength.trim().split(/\s+/).filter(w => w).length
+      return palabras > 100 ? modeloMS : modeloMB
     }
-    return (
-      <>
-      <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
-        <style>{`
-          @keyframes cubeFloat {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-15px); }
-          }
-        `}</style>
-        <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
-        <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
-        <HUD formattedTime={formattedTime} weather={WEATHER} />
-        {renderSidebarTrigger()}
-        <button onClick={volverACategorias} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Orbitron',monospace", textTransform:'uppercase' }}>
-          ◀ Volver
-        </button>
-        <div style={{ position:'relative', zIndex:10, maxWidth:1280, margin:'0 auto', padding:'100px 32px 64px' }}>
-          <h2 style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'3rem', fontWeight:700, textAlign:'center', marginBottom:8, color:THEME.textHigh, textTransform:'uppercase', letterSpacing:'0.08em' }}>
-            {categoriaActiva.nombre}
-          </h2>
-          <p style={{ fontSize:'1.1rem', color:'#FFF8DC', textAlign:'center', marginBottom:24, fontFamily:"'Exo 2',sans-serif" }}>
-            Selecciona un módulo para comenzar
-          </p>
-          <div style={{ textAlign:'center', maxWidth:960, margin:'0 auto 48px' }}>
-            <p style={{ fontSize:'1.15rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", lineHeight:1.7 }}>
-              Los módulos funcionan como chats independientes.<br />
-              El <span style={{ color:THEME.gold, fontWeight:700 }}>R7</span> guarda el contexto acumulado de tu conversación, y el <span style={{ color:THEME.gold, fontWeight:700 }}>R7 Bridge</span> actúa como puente para traspasarlo al siguiente módulo. Generas un R7 Bridge con el botón que tienes arriba a la derecha, dentro de los chats.<br /><br />
-              Puedes usar cualquier módulo de forma aislada. Para aprovechar el contexto acumulado, inicia desde el M1 o M2.
-            </p>
+
+    const modeloSeleccionado = getModeloSeleccionado(inputM01)
+
+    const renderPanel = (titulo, mensajes, setMensajes, input, setInput, enviar, cargando, tokens, esM01) => (
+      <div style={{
+        flex:1, display:'flex', flexDirection:'column',
+        background:'linear-gradient(160deg, rgba(65,66,62,0.4) 0%, rgba(8,4,6,0.6) 100%)',
+        border:`1px solid ${THEME.celeste20}`,
+        borderRadius:18,
+        padding:'16px 18px',
+        boxShadow:`0 8px 32px rgba(0,0,0,0.4)`,
+        backdropFilter:'blur(8px)',
+        minHeight:0,
+      }}>
+        <div style={{
+          display:'flex', justifyContent:'space-between', alignItems:'center',
+          marginBottom:12, paddingBottom:10,
+          borderBottom:`1px solid ${THEME.metallicGray}`
+        }}>
+          <div>
+            <div style={{
+              fontFamily:"'Orbitron',monospace",
+              fontSize:'1.4rem', fontWeight:700,
+              color:THEME.textHigh, letterSpacing:'0.06em'
+            }}>
+              {titulo}
+            </div>
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:48, maxWidth:1400, margin:'0 auto 64px' }}>
-            {modulos.map((modulo, i) => {
-              const modelos = modelosModulo(modulo.id)
-              const tieneSubTipo = modelos.some(m => m.sub_tipo != null)
-              const mb = modelos.find(m => m.tipo === 'mb')
-              const superior = modelos.find(m => m.tipo === 'plus')
-              const mbMusic = modelos.find(m => m.tipo === 'mb' && m.sub_tipo === 'music')
-              const plusMusic = modelos.find(m => m.tipo === 'plus' && m.sub_tipo === 'music')
-              const mbVoice = modelos.find(m => m.tipo === 'mb' && m.sub_tipo === 'voice')
-              const plusVoice = modelos.find(m => m.tipo === 'plus' && m.sub_tipo === 'voice')
-              const colorMap = ['pink', 'celeste', 'gold']
-              const c = colorMap[i % colorMap.length]
-              return (
-                <Cube3D
-                  key={modulo.id}
-                  color={c}
-                  delay={i * 0.8}
-                  rotateY={i === 0 ? 16 : i === 1 ? 0 : -16}
-                  onClick={() => seleccionarModulo(modulo)}
-                  minHeight={340}
-                >
-                  <div style={{ padding:'20px', textAlign:'left', display:'flex', flexDirection:'column', height:'100%' }}>
-                    <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'2.4rem', fontWeight:700, color:THEME.textHigh, letterSpacing:'0.06em', marginBottom:6, textTransform:'uppercase' }}>
-                      MÓDULO {String(modulo.orden).padStart(2, '0')}
-                    </div>
-                    <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'2rem', fontWeight:700, color:THEME.textMed, textTransform:'uppercase', letterSpacing:'0.04em', marginBottom:8 }}>
-                      {modulo.nombre}
-                    </div>
-                    <div style={{ fontFamily:"'Exo 2',sans-serif", fontSize:'0.95rem', color:'#FFF8DC', background:'rgba(156,39,176,0.15)', border:'1px solid rgba(156,39,176,0.4)', borderRadius:10, padding:'10px 14px', lineHeight:1.5, marginBottom:16, fontWeight:500 }}>
-                      {modulo.descripcion}
-                    </div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:20, marginBottom:0 }}>
-                      {tieneSubTipo ? (
-                        <>
-                          <div style={{ borderLeft:`4px solid ${THEME.gold}`, padding:'14px 16px', background:'rgba(212,185,110,0.05)', borderRadius:'0 12px 12px 0' }}>
-                            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'0.85rem', fontWeight:700, color:THEME.gold, marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>
-                              🎵 MÚSICA
-                            </div>
-                            {plusMusic && (
-                              <div style={{ marginBottom:12 }}>
-                                <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.gold, marginBottom:4 }}>
-                                  MODELO SUPERIOR MÚSICA
-                                </div>
-                                <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
-                                  {plusMusic.modelo_id}
-                                </div>
-                                <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
-                                  Por millón de tokens
-                                </div>
-                                <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
-                                  IN: {plusMusic.precio_input} | OUT: {plusMusic.precio_output}
-                                </div>
-                              </div>
-                            )}
-                            {mbMusic && (
-                              <div>
-                                <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.pinkMarble, marginBottom:4 }}>
-                                  MODELO BASE MÚSICA
-                                </div>
-                                <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
-                                  {mbMusic.modelo_id}
-                                </div>
-                                <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
-                                  Por millón de tokens
-                                </div>
-                                <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
-                                  IN: {mbMusic.precio_input} | OUT: {mbMusic.precio_output}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          <div style={{ borderLeft:`4px solid ${THEME.gold}`, padding:'14px 16px', background:'rgba(212,185,110,0.05)', borderRadius:'0 12px 12px 0' }}>
-                            <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'0.85rem', fontWeight:700, color:THEME.gold, marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>
-                              🎙️ VOZ
-                            </div>
-                            {plusVoice && (
-                              <div style={{ marginBottom:12 }}>
-                                <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.gold, marginBottom:4 }}>
-                                  MODELO SUPERIOR VOZ
-                                </div>
-                                <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
-                                  {plusVoice.modelo_id}
-                                </div>
-                                <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
-                                  Por millón de tokens
-                                </div>
-                                <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
-                                  IN: {plusVoice.precio_input} | OUT: {plusVoice.precio_output}
-                                </div>
-                              </div>
-                            )}
-                            {mbVoice && (
-                              <div>
-                                <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.pinkMarble, marginBottom:4 }}>
-                                  MODELO BASE VOZ
-                                </div>
-                                <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
-                                  {mbVoice.modelo_id}
-                                </div>
-                                <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
-                                  Por millón de tokens
-                                </div>
-                                <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
-                                  IN: {mbVoice.precio_input} | OUT: {mbVoice.precio_output}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          {superior && (
-                            <div style={{ borderLeft:`4px solid ${THEME.gold}`, padding:'14px 16px', background:'rgba(212,185,110,0.05)', borderRadius:'0 12px 12px 0' }}>
-                              <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.gold, marginBottom:4 }}>
-                                MODELO SUPERIOR
-                              </div>
-                              <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
-                                {superior.modelo_id}
-                              </div>
-                              <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
-                                Por millón de tokens
-                              </div>
-                              <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
-                                IN: {superior.precio_input} | OUT: {superior.precio_output}
-                              </div>
-                            </div>
-                          )}
-                          {mb && (
-                            <div style={{ borderLeft:`4px solid ${THEME.pinkMarble}`, padding:'14px 16px', background:'rgba(232,165,176,0.05)', borderRadius:'0 12px 12px 0' }}>
-                              <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.25rem', fontWeight:700, color:THEME.pinkMarble, marginBottom:4 }}>
-                                MODELO BASE
-                              </div>
-                              <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'1.1rem', color:THEME.textHigh, marginBottom:6 }}>
-                                {mb.modelo_id}
-                              </div>
-                              <div style={{ fontSize:'0.75rem', color:'#FFF8DC', fontFamily:"'Exo 2',sans-serif", marginBottom:2 }}>
-                                Por millón de tokens
-                              </div>
-                              <div style={{ fontSize:'0.95rem', color:'#00D4FF', fontFamily:"'Exo 2',sans-serif", fontWeight:600 }}>
-                                IN: {mb.precio_input} | OUT: {mb.precio_output}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-</div>
-                </Cube3D>
-              )
-            })}
+          {esM01 && (
+            <button onClick={handleBridgeClick} style={{
+              background:THEME.gold10,
+              border:`1px solid ${THEME.gold40}`,
+              borderRadius:20,
+              padding:'6px 16px',
+              color:THEME.gold,
+              fontSize:'0.7rem',
+              letterSpacing:'0.12em',
+              cursor:'pointer',
+              fontFamily:"'Space Grotesk',sans-serif",
+              fontWeight:700,
+              textTransform:'uppercase',
+              boxShadow:`0 0 12px ${THEME.gold10}`,
+              transition:'all 0.3s ease'
+            }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = THEME.gold20
+                e.currentTarget.style.boxShadow = `0 0 20px ${THEME.gold25}`
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = THEME.gold10
+                e.currentTarget.style.boxShadow = `0 0 12px ${THEME.gold10}`
+              }}
+            >
+              ⟶ R7 BRIDGE
+            </button>
+          )}
+        </div>
+
+        <div style={{
+          flex:1, overflowY:'auto', marginBottom:12,
+          display:'flex', flexDirection:'column', gap:12,
+          paddingRight:8
+        }}>
+          {mensajes.length === 0 && (
+            <div style={{ textAlign:'center', padding:'40px 20px', color:THEME.textMed }}>
+              <div style={{ fontSize:'2.5rem', marginBottom:16, opacity:0.5 }}>💬</div>
+              <div style={{ fontSize:'1.1rem', color:THEME.celeste, marginBottom:8, fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, letterSpacing:'0.05em' }}>
+                INICIÁ EL FLUJO R7
+              </div>
+              <div style={{ fontSize:'0.95rem', color:THEME.textLow, lineHeight:1.6 }}>
+                {esM01 ? 'M01 — Memoria R7 activa (eficiencia en Tokens)' : 'M02 — Sin memoria (ahorro tokens)'}
+              </div>
+            </div>
+          )}
+
+          {mensajes.map((msg, i) => (
+            <div key={i} className="message-enter" style={{
+              background: msg.rol === 'usuario'
+                ? `linear-gradient(135deg, ${THEME.celeste15} 0%, ${THEME.celeste08} 100%)`
+                : 'rgba(65,66,62,0.25)',
+              border: msg.rol === 'usuario'
+                ? `2px solid ${THEME.celeste40}`
+                : `1px solid ${THEME.borderSubtle}`,
+              borderRadius: 12,
+              padding: msg.rol === 'usuario' ? '12px 18px' : '14px 20px',
+              alignSelf: msg.rol === 'usuario' ? 'flex-end' : 'flex-start',
+              maxWidth: '90%',
+              boxShadow: msg.rol === 'usuario'
+                ? `0 4px 20px ${THEME.celeste10}`
+                : `0 2px 12px rgba(0,0,0,0.3)`
+            }}>
+              <div style={{
+                fontSize:'0.8rem',
+                color: msg.rol === 'usuario' ? THEME.celeste : THEME.gold,
+                marginBottom:8,
+                letterSpacing:'0.18em',
+                fontFamily:"'Space Grotesk',sans-serif",
+                fontWeight:700,
+                textTransform:'uppercase',
+                textShadow: msg.rol === 'usuario'
+                  ? `0 0 10px ${THEME.celeste30}`
+                  : `0 0 10px ${THEME.gold20}`
+              }}>
+                {msg.rol === 'usuario' ? '👤 INPUT' : '🎯 RESPUESTA'}
+              </div>
+              <div style={{
+                fontSize:'1.1rem',
+                color:THEME.textHigh,
+                lineHeight:1.6,
+                whiteSpace:'pre-wrap',
+                fontFamily:"'Exo 2',sans-serif",
+                fontWeight:400
+              }}>
+                {msg.contenido}
+              </div>
+            </div>
+          ))}
+
+          {cargando && (
+            <div style={{ textAlign:'center', padding:'20px', color:THEME.celeste }}>
+              <div className='menu-pulse' style={{
+                display:'inline-block',
+                fontSize:'1.1rem',
+                fontWeight:700,
+                letterSpacing:'0.15em',
+                textTransform:'uppercase',
+                textShadow:`0 0 20px ${THEME.celeste40}`
+              }}>
+                Procesando...
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{
+          background:'rgba(65,66,62,0.35)',
+          border:`2px solid ${THEME.celeste25}`,
+          borderRadius:14,
+          padding:'8px 12px',
+          boxShadow:`0 4px 20px ${THEME.celeste08}`,
+          transition:'all 0.3s ease'
+        }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = THEME.celeste40
+            e.currentTarget.style.boxShadow = `0 6px 30px ${THEME.celeste12}`
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = THEME.celeste25
+            e.currentTarget.style.boxShadow = `0 4px 20px ${THEME.celeste08}`
+          }}
+        >
+          <div style={{ display:'flex', gap:8 }}>
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  enviar()
+                }
+              }}
+              placeholder={esM01 ? 'Input para M01...' : 'Input para M02...'}
+              className="chat-input-glow"
+              rows={1}
+              style={{
+                flex:1,
+                background:'transparent',
+                border:'none',
+                color:THEME.textHigh,
+                fontSize:'1.15rem',
+                fontWeight:500,
+                outline:'none',
+                fontFamily:"'Exo 2',sans-serif",
+                letterSpacing:'0.02em',
+                resize:'none',
+                overflow:'hidden',
+                lineHeight:1.5
+              }}
+            />
+            <button
+              onClick={enviar}
+              disabled={cargando || !input.trim()}
+              style={{
+                background: THEME.celeste20,
+                border: `2px solid ${THEME.celeste40}`,
+                borderRadius: 8,
+                padding: '6px 14px',
+                color: THEME.celeste,
+                fontSize:'0.8rem',
+                fontWeight:700,
+                letterSpacing:'0.15em',
+                cursor: cargando || !input.trim() ? 'not-allowed' : 'pointer',
+                fontFamily:"'Space Grotesk',sans-serif",
+                textTransform:'uppercase',
+                opacity: cargando || !input.trim() ? 0.5 : 1,
+                transition:'all 0.3s ease',
+                whiteSpace:'nowrap',
+                boxShadow: `0 0 15px ${THEME.celeste15}`
+              }}
+              onMouseEnter={e => {
+                if (!cargando && input.trim()) {
+                  e.currentTarget.style.background = THEME.celeste30
+                  e.currentTarget.style.boxShadow = `0 0 25px ${THEME.celeste25}`
+                }
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = THEME.celeste20
+                e.currentTarget.style.boxShadow = `0 0 15px ${THEME.celeste15}`
+              }}
+            >
+              ▶
+            </button>
+          </div>
+
+          <div style={{
+            display:'flex',
+            justifyContent:'space-between',
+            alignItems:'center',
+            paddingTop:8,
+            marginTop:8,
+            borderTop:`1px solid ${THEME.metallicGray}`
+          }}>
+            <div style={{
+              display:'flex', gap:8, alignItems:'center',
+              fontSize:'0.8rem',
+              fontFamily:"'JetBrains Mono',monospace",
+              color:THEME.celeste,
+              letterSpacing:'0.05em'
+            }}>
+              <span>{esM01 ? modeloSeleccionado : modeloCochi}</span>
+              {esM01 && (
+                <select value={routingMode} onChange={e => setRoutingMode(e.target.value)} style={{
+                  background:THEME.bgFeedCC,
+                  border:`1px solid ${THEME.celeste25}`,
+                  borderRadius:6,
+                  color:THEME.celeste,
+                  fontSize:'0.8rem',
+                  padding:'2px 6px',
+                  fontFamily:"'JetBrains Mono',monospace",
+                  cursor:'pointer',
+                  outline:'none'
+                }}>
+                  <option value="auto">AUTO</option>
+                  <option value="mb">MB</option>
+                  <option value="ms">MS</option>
+                </select>
+              )}
+            </div>
+            <div style={{
+              fontSize:'0.8rem',
+              color:THEME.gold,
+              fontFamily:"'JetBrains Mono',monospace",
+              letterSpacing:'0.05em'
+            }}>
+              ⚡ {tokens} tokens
+            </div>
           </div>
         </div>
       </div>
-      {renderSidebarPanel()}
-      </>
     )
-  }
 
-  if (vista === 'chat') {
     return (
       <>
-      <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily: "'Exo 2',sans-serif" }}>
+      <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
         <style>{`
           @keyframes pulse-dot { 
             0%,100%{opacity:1;transform:scale(1)} 
@@ -731,64 +870,37 @@ export default function MenuSystem({ onBack, user }) {
           ::-webkit-scrollbar-track { background:transparent; }
           ::-webkit-scrollbar-thumb { background:${THEME.celeste25}; border-radius:3px; }
           ::-webkit-scrollbar-thumb:hover { background:${THEME.celeste40}; }
+          @media (max-width: 768px) {
+            .chat-panels { flex-direction: column !important; }
+          }
         `}</style>
-        
-        <div style={{ position:'fixed', inset:0, background: `radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}` , zIndex:0 }} />
-        <div style={{ position:'fixed', inset:0, backgroundImage: `linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)` , backgroundSize:'48px 48px', zIndex:0 }} />
-        
-        {/* Header */}
+
+        <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
+        <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
+
         {renderSidebarTrigger()}
         <div style={{ position:'fixed', top:18, left:28, zIndex:30 }}>
-          <div className='menu-clock' style={{ fontFamily: "'JetBrains Mono',monospace", fontSize:'2.4rem', fontWeight:700, color:THEME.textHigh }} >{formattedTime}</div>
-          <div style={{ fontSize:'0.95rem', color:THEME.textMed, marginTop:4, letterSpacing:'0.12em' }}>
+          <div className='menu-clock' style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'3rem', fontWeight:700, color:THEME.textHigh }}>{formattedTime}</div>
+          <div style={{ fontSize:'1.15rem', color:THEME.textMed, marginTop:6, letterSpacing:'0.12em' }}>
             {WEATHER.emoji} {WEATHER.city} · {WEATHER.temp}
           </div>
         </div>
-        
-        <div style={{ position:'fixed', top:22, right:28, zIndex:30, display:'flex', gap:12 }}>
-          <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem', fontWeight:600, color:THEME.gold, letterSpacing:'0.1em', display:'flex', alignItems:'center' }}>
-            MÓDULO {String(moduloActivo.orden).padStart(2, '0')}
-          </div>
-          <button onClick={exportarR7} style={{ 
-            background:THEME.gold10, 
-            border: `1px solid ${THEME.gold40}`, 
-            borderRadius:20, 
-            padding:'8px 20px', 
-            color:THEME.gold, 
-            fontSize:'0.75rem', 
-            letterSpacing:'0.15em', 
-            cursor:'pointer', 
-            fontFamily: "'Space Grotesk',sans-serif", 
-            fontWeight:700, 
-            textTransform:'uppercase',
-            transition:'all 0.3s ease',
-            boxShadow: `0 0 15px ${THEME.gold10}`
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = THEME.gold20
-            e.currentTarget.style.boxShadow = `0 0 25px ${THEME.gold25}`
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = THEME.gold10
-            e.currentTarget.style.boxShadow = `0 0 15px ${THEME.gold10}`
-          }}
-          >
-            🌉 R7 Bridge
-          </button>
-          <button onClick={volverACategorias} style={{ 
-            background:THEME.bgFeedCC, 
-            border: `1px solid ${THEME.borderSubtle}`, 
-            borderRadius:20, 
-            padding:'8px 20px', 
-            color:THEME.textMed, 
-            fontSize:'0.75rem', 
-            letterSpacing:'0.15em', 
-            cursor:'pointer', 
-            fontFamily: "'Space Grotesk',sans-serif", 
-            fontWeight:700, 
-            textTransform:'uppercase',
-            transition:'all 0.3s ease'
-          }}
+
+        <button onClick={volverACategorias} style={{
+          position:'fixed', top:22, right:28, zIndex:30,
+          background:THEME.bgFeedCC,
+          border:`1px solid ${THEME.borderSubtle}`,
+          borderRadius:20,
+          padding:'6px 16px',
+          color:THEME.textMed,
+          fontSize:'0.65rem',
+          letterSpacing:'0.2em',
+          cursor:'pointer',
+          fontFamily:"'Space Grotesk',sans-serif",
+          fontWeight:600,
+          textTransform:'uppercase',
+          transition:'all 0.3s ease'
+        }}
           onMouseEnter={e => {
             e.currentTarget.style.color = THEME.textHigh
             e.currentTarget.style.borderColor = THEME.celeste35
@@ -797,202 +909,90 @@ export default function MenuSystem({ onBack, user }) {
             e.currentTarget.style.color = THEME.textMed
             e.currentTarget.style.borderColor = THEME.borderSubtle
           }}
-          >
-            ◀ Salir
-          </button>
-        </div>
-        
-        {/* Chat centrado - SIN panel lateral */}
-        <div style={{ position:'relative', zIndex:10, maxWidth:'65%', margin:'100px auto 0', padding:'0 24px 24px', display:'flex', flexDirection:'column', height:'calc(100vh - 100px)' }}>
-          <div style={{ flex:1, overflowY:'auto', marginBottom:20, display:'flex', flexDirection:'column', gap:16, paddingRight:20 }}>
-            {mensajes.length === 0 && (
-              <div style={{ textAlign:'center', padding:'80px 20px', color:THEME.textMed }}>
-                <div style={{ fontSize:'4rem', marginBottom:20, opacity:0.6 }}>🚀</div>
-                <div style={{ fontSize:'1.3rem', color:THEME.celeste, marginBottom:12, fontFamily: "'Space Grotesk',sans-serif", fontWeight:700, letterSpacing:'0.05em' }}>
-                  INICIÁ EL FLUJO R7
-                </div>
-                <div style={{ fontSize:'0.95rem', color:THEME.textLow, lineHeight:1.7 }}>
-                  Escribí tu primer input. El sistema detectará automáticamente<br />
-                  el skill adecuado y acumulará el contexto internamente.
-                </div>
-              </div>
-            )}
-            
-            {mensajes.map((msg, i) => (
-              <div key={i} className="message-enter" style={{
-                background: msg.rol === 'usuario' ? 
-                  `linear-gradient(135deg, ${THEME.celeste15} 0%, ${THEME.celeste08} 100%)` : 
-                  'rgba(65,66,62,0.25)',
-                border: msg.rol === 'usuario' ? 
-                  `2px solid ${THEME.celeste40}` : 
-                  `1px solid ${THEME.borderSubtle}`,
-                borderRadius: 16,
-                padding: msg.rol === 'usuario' ? '18px 24px' : '20px 26px',
-                alignSelf: msg.rol === 'usuario' ? 'flex-end' : 'flex-start',
-                maxWidth: '85%',
-                boxShadow: msg.rol === 'usuario' ? 
-                  `0 4px 20px ${THEME.celeste10}` : 
-                  `0 2px 12px rgba(0,0,0,0.3)`
-              }}>
-                <div style={{ 
-                  fontSize:'0.75rem', 
-                  color: msg.rol === 'usuario' ? THEME.celeste : THEME.gold, 
-                  marginBottom:10, 
-                  letterSpacing:'0.18em', 
-                  fontFamily: "'Space Grotesk',sans-serif", 
-                  fontWeight:700, 
-                  textTransform:'uppercase',
-                  textShadow: msg.rol === 'usuario' ? 
-                    `0 0 10px ${THEME.celeste30}` : 
-                    `0 0 10px ${THEME.gold20}`
-                }}>
-                  {msg.rol === 'usuario' ? '👤 TU INPUT' : `🎯 RESPUESTA`}
-                </div>
-                <div style={{ 
-                  fontSize:'1.05rem', 
-                  color:THEME.textHigh, 
-                  lineHeight:1.7, 
-                  whiteSpace:'pre-wrap',
-                  fontFamily: "'Exo 2',sans-serif",
-                  fontWeight:400
-                }}>
-                  {msg.contenido}
-                </div>
-              </div>
-            ))}
-            
-            {cargando && (
-              <div style={{ textAlign:'center', padding:'30px', color:THEME.celeste }}>
-                <div className='menu-pulse' style={{ 
-                  display:'inline-block',
-                  fontSize:'1.1rem',
-                  fontWeight:700,
-                  letterSpacing:'0.15em',
-                  textTransform:'uppercase',
-                  textShadow: `0 0 20px ${THEME.celeste40}`
-                }}>
-                  Procesando...
-                </div>
-              </div>
-            )}
+        >
+          ◀ Salir
+        </button>
+
+        <div style={{
+          position:'relative', zIndex:10,
+          textAlign:'center',
+          padding:'120px 24px 12px',
+          maxWidth:'95%',
+          margin:'0 auto'
+        }}>
+          <div style={{
+            fontFamily:"'Space Grotesk',sans-serif",
+            fontSize:'1.8rem',
+            fontWeight:700,
+            letterSpacing:'0.15em',
+            textTransform:'uppercase',
+            color:THEME.textHigh,
+            marginBottom:8,
+            textShadow:`0 0 20px ${THEME.celeste30}`
+          }}>
+            CÓDIGO
           </div>
-          
-          {/* Input field */}
-          <div style={{ 
-            background:'rgba(65,66,62,0.35)', 
-            border: `2px solid ${THEME.celeste25}`, 
-            borderRadius:20, 
-            padding:'12px 16px',
-            boxShadow: `0 4px 20px ${THEME.celeste08}`,
-            transition:'all 0.3s ease'
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.borderColor = THEME.celeste40
-            e.currentTarget.style.boxShadow = `0 6px 30px ${THEME.celeste12}`
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.borderColor = THEME.celeste25
-            e.currentTarget.style.boxShadow = `0 4px 20px ${THEME.celeste08}`
-          }}
-          >
-            <div style={{ display:'flex', gap:12 }}>
-              <textarea
-                value={inputUsuario}
-                onChange={e => setInputUsuario(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    enviarMensaje()
-                  }
-                }}
-                placeholder='Escribí tu input para iniciar el flujo R7...'
-                className="chat-input-glow"
-                rows={2}
-                style={{
-                  flex:1,
-                  background:'transparent',
-                  border:'none',
-                  color:THEME.textHigh,
-                  fontSize:'1.15rem',
-                  fontWeight:500,
-                  outline:'none',
-                  fontFamily: "'Exo 2',sans-serif",
-                  letterSpacing:'0.02em',
-                  resize:'none',
-                  overflow:'hidden',
-                  lineHeight:1.5
-                }}
-              />
-              <button
-                onClick={enviarMensaje}
-                disabled={cargando || !inputUsuario.trim()}
-                style={{
-                  background: THEME.celeste20,
-                  border: `2px solid ${THEME.celeste40}`,
-                  borderRadius: 10,
-                  padding: '8px 18px',
-                  color: THEME.celeste,
-                  fontSize:'0.75rem',
-                  fontWeight:700,
-                  letterSpacing:'0.15em',
-                  cursor: cargando || !inputUsuario.trim() ? 'not-allowed' : 'pointer',
-                  fontFamily: "'Space Grotesk',sans-serif",
-                  textTransform:'uppercase',
-                  opacity: cargando || !inputUsuario.trim() ? 0.5 : 1,
-                  transition:'all 0.3s ease',
-                  whiteSpace:'nowrap',
-                  boxShadow: `0 0 15px ${THEME.celeste15}`
-                }}
-                onMouseEnter={e => {
-                  if (!cargando && inputUsuario.trim()) {
-                    e.currentTarget.style.background = THEME.celeste30
-                    e.currentTarget.style.boxShadow = `0 0 25px ${THEME.celeste25}`
-                  }
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = THEME.celeste20
-                  e.currentTarget.style.boxShadow = `0 0 15px ${THEME.celeste15}`
-                }}
-              >
-                ▶ Enviar
-              </button>
-            </div>
-            
-            {/* Footer */}
-            <div style={{ 
-              display:'flex', 
-              justifyContent:'space-between', 
-              alignItems:'center',
-              paddingTop:10,
-              marginTop:10,
-              borderTop: `1px solid ${THEME.metallicGray}`
-            }}>
-              <div style={{ 
-                fontSize:'0.7rem', 
-                color:THEME.celeste, 
-                fontFamily: "'JetBrains Mono',monospace",
-                letterSpacing:'0.05em'
-              }}>
-                {(() => {
-  const items = menuActivo?.items.filter(i => i.modulo_id === moduloActivo.id && i.tipo === 'mb') || []
-  const hasSubTipo = items.some(i => i.sub_tipo)
-  if (!hasSubTipo) return items[0]?.modelo_id || 'N/A'
-  const music = items.find(i => i.sub_tipo === 'music')?.modelo_id
-  const voice = items.find(i => i.sub_tipo === 'voice')?.modelo_id
-  return `🎵 ${music || 'N/A'} | 🎙️ ${voice || 'N/A'}`
-})()}
-              </div>
-              <div style={{ 
-                fontSize:'0.7rem', 
-                color:THEME.gold, 
-fontFamily: "'JetBrains Mono',monospace",
-                letterSpacing:'0.05em'
-              }}>
-                ⚡ {totalTokens} tokens
-              </div>
-</div>
+          <div style={{
+            fontSize:'0.85rem',
+            color:THEME.textMed,
+            letterSpacing:'0.08em',
+            lineHeight:1.5,
+            fontFamily:"'Exo 2',sans-serif"
+          }}>
+            Selecciona un módulo para comenzar
+          </div>
+          <div style={{
+            fontSize:'0.78rem',
+            color:THEME.celeste,
+            letterSpacing:'0.05em',
+            lineHeight:1.6,
+            marginTop:10,
+            fontFamily:"'Exo 2',sans-serif",
+            maxWidth:700,
+            margin:'10px auto 0'
+          }}>
+            Los módulos funcionan como chats complementarios.<br />
+            El Chat M01 tiene Modelos con Memoria R7 (eficiencia en Tokens) y el Chat M02 es Modelo sin memoria (ahorro tokens).
+          </div>
         </div>
-</div>
+
+        <div className="chat-panels" style={{
+          position:'relative', zIndex:10,
+          display:'flex', gap:20,
+          height:'calc(100vh - 250px)',
+          padding:'20px 24px 16px',
+          maxWidth:'95%',
+          margin:'0 auto'
+        }}>
+          {renderPanel('MÓDULO 01 · PLAN', mensajesM01, setMensajesM01, inputM01, setInputM01, enviarMensajeM01, cargandoM01, tokensM01, true)}
+          {renderPanel('MÓDULO 02 · BUILD', mensajesM02, setMensajesM02, inputM02, setInputM02, enviarMensajeM02, cargandoM02, tokensM02, false)}
+        </div>
+
+        {bridgeToast && (
+          <div style={{
+            position:'fixed', top:'50%', left:'50%', transform:'translate(-50%, -50%)',
+            zIndex:100,
+            background:`linear-gradient(135deg, ${THEME.gold20} 0%, ${THEME.bgFeedCC} 100%)`,
+            border:`1px solid ${THEME.gold40}`,
+            borderRadius:16,
+            padding:'24px 40px',
+            boxShadow:`0 0 60px ${THEME.gold15}`,
+            textAlign:'center',
+            animation:'messageSlide 0.3s ease-out'
+          }}>
+            <div style={{ fontSize:'2.5rem', marginBottom:12 }}>🌉</div>
+            <div style={{
+              fontFamily:"'Space Grotesk',sans-serif",
+              fontSize:'1.1rem',
+              fontWeight:700,
+              color:THEME.gold,
+              letterSpacing:'0.1em',
+              textTransform:'uppercase'
+            }}>
+              R7 Bridge generado
+            </div>
+          </div>
+        )}
       </div>
       {renderSidebarPanel()}
       </>
