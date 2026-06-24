@@ -11,7 +11,7 @@ export default function LoginModal({ onClose, onLogin, user, onLogout }) {
     if (!email || !pass) return
     setLogging(true)
     setTimeout(() => {
-      onLogin({ name: 'RGartner', role: 'CEO Bro7vision', email, initials: 'RG', color: 'rgba(120,105,75,0.90)' })
+      onLogin({ name: 'RGartner', role: 'CEO R7Signal', email, initials: 'RG', color: 'rgba(120,105,75,0.90)' })
       setLogging(false)
       setEmail(''); setPass('')
     }, 1200)
