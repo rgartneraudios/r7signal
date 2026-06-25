@@ -78,7 +78,7 @@ export default function App() {
       <button onClick={() => setShowLoginModal(true)} style={{ position:'absolute', top:24, right:36, zIndex:20, background:'transparent', border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'5px 14px', color:THEME.textLow, fontSize:'0.6rem', letterSpacing:'0.15em', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase', transition:'all 0.25s' }}
         onMouseEnter={e=>{e.currentTarget.style.color=THEME.textMed;e.currentTarget.style.borderColor=THEME.celeste35}}
         onMouseLeave={e=>{e.currentTarget.style.color=THEME.textLow;e.currentTarget.style.borderColor=THEME.borderSubtle}}
-      >🔐 Acceso</button>
+      >{user ? `👤 ${user.initials}` : '🔐 Acceso'}</button>
 
       <div style={{ position:'absolute', bottom:52, right:36, zIndex:20, display:'flex', alignItems:'center', gap:8, fontSize:'0.68rem', letterSpacing:'0.2em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600 }}>
         <div className="r7-pulse" style={{ width:6, height:6, borderRadius:'50%', background:THEME.celeste, boxShadow:`0 0 8px ${THEME.celeste}BF` }} />

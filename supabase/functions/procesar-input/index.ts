@@ -12,6 +12,8 @@ interface RequestBody {
   input_usuario: string
   modulo_id: string      // ✅ Corregido: string (UUID)
   categoria_id: string   // ✅ Corregido: string (UUID)
+  menu_numero: number
+  routing_mode: string
 }
 
 // Función auxiliar para parsear R1/R2/R3 (básica por ahora)
@@ -30,14 +32,14 @@ serve(async (req) => {
 
   try {
     // 1. PARSEAR INPUT
-    const { sesion_id, input_usuario, modulo_id, categoria_id }: RequestBody = await req.json()
+    const { sesion_id, input_usuario, modulo_id, categoria_id, menu_numero, routing_mode }: RequestBody = await req.json()
     console.log(`📨 Procesando input para sesión: ${sesion_id}`)
 
     // 2. INICIALIZAR SUPABASE CLIENT
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
-    )
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      )
 
     // 3. RECUPERAR SESIÓN
     const { data: sesion, error: sesionError } = await supabase
@@ -50,16 +52,8 @@ serve(async (req) => {
       throw new Error(`Sesión no encontrada: ${sesion_id}`)
     }
 
-    // 4. RECUPERAR R7 ACUMULADO (usando sesion_origen_id)
-    const { data: r7Bridge } = await supabase
-      .from('r7_bridge')
-      .select('contenido')
-      .eq('sesion_origen_id', sesion_id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    const r7Acumulado = r7Bridge?.contenido || ''
+    // 4. RECUPERAR R7 ACUMULADO (desde la sesión)
+    const r7Acumulado = sesion.r7_acumulado || ''
 
     // 5. RECUPERAR ORDEN DEL MÓDULO (Plan=1, Build=2)
     const { data: moduloInfo } = await supabase
@@ -85,7 +79,16 @@ serve(async (req) => {
     if (palabras > 100) puntosPLUS += 1
     else puntosMB += 1
 
-    const routingDecision = puntosPLUS >= puntosMB ? 'plus' : 'mb'
+    let routingDecision: string
+
+if (routing_mode === 'MB') {
+  routingDecision = 'mb'
+} else if (routing_mode === 'MS') {
+  routingDecision = 'plus'
+} else {
+  // AUTO — heurística decide
+  routingDecision = puntosPLUS >= puntosMB ? 'plus' : 'mb'
+}
     console.log(`⚖️ Routing: ${routingDecision.toUpperCase()}`)
 
     // 7. OBTENER MODELO DE LA BD (¡ESTO FALTABA!)
@@ -94,7 +97,7 @@ serve(async (req) => {
       .select('*')
       .eq('modulo_id', modulo_id)
       .eq('tipo', routingDecision)
-      .eq('menu_numero', 0) // Menu Free para pruebas
+      .eq('menu_numero', menu_numero)
       .single()
 
     if (menuItemError || !menuItem) {
@@ -136,10 +139,18 @@ serve(async (req) => {
     
     const { r1, r2 } = parsearR1R2R3(r3)
 
-    // 9. GUARDAR TURNO
+    // 9. CONSULTAR TURNO NÚMERO
+    const { count } = await supabase
+      .from('turnos')
+      .select('*', { count: 'exact', head: true })
+      .eq('sesion_id', sesion_id)
+
+    const turnoNumero = (count || 0) + 1
+
+    // 10. GUARDAR TURNO
     await supabase.from('turnos').insert({
       sesion_id,
-      turno_numero: 1, // TODO: Calcular dinámicamente
+      turno_numero: turnoNumero,
       input_usuario,
       r1, r2, r3,
       modelo_usado: routingDecision,
@@ -151,14 +162,12 @@ serve(async (req) => {
       categoria_id
     })
 
-    // 10. ACTUALIZAR R7 BRIDGE
+    // 11. ACTUALIZAR R7 ACUMULADO EN SESIÓN
     const nuevoR7 = `${r7Acumulado}\n${r1}\n${r2}`.trim()
-    await supabase.from('r7_bridge').insert({
-      sesion_origen_id: sesion_id,
-      sesion_destino_id: sesion_id,
-      contenido: nuevoR7,
-      tokens: nuevoR7.length
-    })
+    await supabase
+      .from('sesiones')
+      .update({ r7_acumulado: nuevoR7 })
+      .eq('id', sesion_id)
 
     // 11. RESPUESTA AL FRONTEND
     return new Response(
