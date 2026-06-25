@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { THEME } from '../theme'
 import { WEATHER } from '../constants'
 import { supabase } from '../supabaseClient'
@@ -39,6 +39,10 @@ export default function MenuSystem({ onBack, user }) {
   const [proyectoActivo, setProyectoActivo] = useState(null)
   const [nuevoProyectoNombre, setNuevoProyectoNombre] = useState('')
   const [mostrarCrearProyecto, setMostrarCrearProyecto] = useState(false)
+  const abortRefM01 = useRef(null)
+  const abortRefM02 = useRef(null)
+  const [canceladoM01, setCanceladoM01] = useState(false)
+  const [canceladoM02, setCanceladoM02] = useState(false)
 
   const pad = n => String(n).padStart(2, '0')
   const formattedTime = `${pad(time.getHours())}:${pad(time.getMinutes())}:${pad(time.getSeconds())}`
@@ -156,8 +160,14 @@ export default function MenuSystem({ onBack, user }) {
 
     setInputM01('')
     setCargandoM01(true)
+    setCanceladoM01(false)
     setMensajesM01(prev => [...prev, { rol: 'usuario', contenido: input }])
-    setTimeout(() => {
+
+    const controller = new AbortController()
+    abortRefM01.current = controller
+
+    const timeoutId = setTimeout(() => {
+      if (controller.signal.aborted) return
       const r1 = `[R1] Resumen: ${input.substring(0, 50)}...`
       const r3 = `[R3 · ${modeloUsado}] Respuesta completa del modelo para: "${input}"\n\nRouting: ${routingMode.toUpperCase()} → ${modeloUsado}`
       const r2 = `[R2] Resumen de respuesta: ${r3.substring(0, 80)}...`
@@ -172,7 +182,19 @@ export default function MenuSystem({ onBack, user }) {
       }])
       setR7Contexto(prev => prev + '\n' + r1 + '\n' + r2)
       setCargandoM01(false)
+      abortRefM01.current = null
     }, 1500)
+    controller._timeoutId = timeoutId
+  }
+
+  function cancelarM01() {
+    if (abortRefM01.current) {
+      clearTimeout(abortRefM01.current._timeoutId)
+      abortRefM01.current.abort()
+      abortRefM01.current = null
+    }
+    setCargandoM01(false)
+    setCanceladoM01(true)
   }
 
   async function enviarMensajeM02() {
@@ -180,8 +202,14 @@ export default function MenuSystem({ onBack, user }) {
     const input = inputM02.trim()
     setInputM02('')
     setCargandoM02(true)
+    setCanceladoM02(false)
     setMensajesM02(prev => [...prev, { rol: 'usuario', contenido: input }])
-    setTimeout(() => {
+
+    const controller = new AbortController()
+    abortRefM02.current = controller
+
+    const timeoutId = setTimeout(() => {
+      if (controller.signal.aborted) return
       const r1 = `[R1] Resumen: ${input.substring(0, 50)}...`
       const r3 = `[R3] Respuesta completa del modelo para: "${input}"\n\nEsta es una respuesta simulada. En producción, aquí vendría la respuesta real del modelo base o superior según el routing.`
       const r2 = `[R2] Resumen de respuesta: ${r3.substring(0, 80)}...`
@@ -195,7 +223,19 @@ export default function MenuSystem({ onBack, user }) {
         modelo: 'cochi'
       }])
       setCargandoM02(false)
+      abortRefM02.current = null
     }, 1500)
+    controller._timeoutId = timeoutId
+  }
+
+  function cancelarM02() {
+    if (abortRefM02.current) {
+      clearTimeout(abortRefM02.current._timeoutId)
+      abortRefM02.current.abort()
+      abortRefM02.current = null
+    }
+    setCargandoM02(false)
+    setCanceladoM02(true)
   }
 
   function handleBridgeClick() {
@@ -216,6 +256,28 @@ export default function MenuSystem({ onBack, user }) {
     setR7Bridge(null)
     setTokensM01(0)
     setTokensM02(0)
+    setCanceladoM01(false)
+    setCanceladoM02(false)
+    if (abortRefM01.current) { abortRefM01.current.abort(); abortRefM01.current = null }
+    if (abortRefM02.current) { abortRefM02.current.abort(); abortRefM02.current = null }
+  }
+
+  function volverAMenus() {
+    setMenuActivo(null)
+    setModuloActivo(null)
+    setMensajesM01([])
+    setMensajesM02([])
+    setR7Contexto('')
+    setR7Bridge(null)
+    setTokensM01(0)
+    setTokensM02(0)
+    setInputM01('')
+    setInputM02('')
+    setCanceladoM01(false)
+    setCanceladoM02(false)
+    if (abortRefM01.current) { abortRefM01.current.abort(); abortRefM01.current = null }
+    if (abortRefM02.current) { abortRefM02.current.abort(); abortRefM02.current = null }
+    setVista('menus')
   }
 
   // ─ Historial / Proyectos ──────────────────────────────────────
@@ -406,8 +468,8 @@ export default function MenuSystem({ onBack, user }) {
           <div className='menu-pulse' style={{ width:5, height:5, borderRadius:'50%', background:THEME.celeste, boxShadow:`0 0 7px ${THEME.celeste}BF` }} />
           System Online
         </div>
-        <div style={{ position:'relative', zIndex:10, maxWidth:'100%', minHeight:'100vh', margin:'0 auto', padding:'80px 40px 24px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
-          <div style={{ textAlign:'center', marginBottom:48 }}>
+        <div style={{ position:'relative', zIndex:10, maxWidth:'100%', minHeight:'100vh', margin:'0 auto', padding:'50px 40px 24px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
+          <div style={{ textAlign:'center', marginBottom:30 }}>
             <div style={{ fontFamily:"'Orbitron',monospace", fontSize:'3rem', fontWeight:900, background:`linear-gradient(140deg, ${THEME.textHigh} 25%, ${THEME.celeste} 65%, ${THEME.gold} 100%)`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', letterSpacing:'0.06em' }}>
               R7 SIGNAL
             </div>
@@ -498,10 +560,10 @@ export default function MenuSystem({ onBack, user }) {
         </button>
         <div style={{ position:'relative', zIndex:10, maxWidth:1400, margin:'0 auto', padding:'100px 24px 24px' }}>
           <div style={{ textAlign:'center', marginBottom:64 }}>
-            <div style={{ fontFamily:"'Orbitron',monospace", fontSize:'2.2rem', fontWeight:700, color:THEME.textHigh, marginBottom:8 }}>
+            <div style={{ fontFamily:"'Orbitron',monospace", fontSize:'2.5rem', fontWeight:700, color:THEME.textHigh, marginBottom:8 }}>
               {categoriaActiva.nombre}
             </div>
-            <div style={{ fontSize:'0.95rem', color:THEME.textMed, letterSpacing:'0.12em' }}>
+            <div style={{ fontSize:'1.05rem', color:THEME.textMed, letterSpacing:'0.12em' }}>
               Selecciona un menú para comenzar
             </div>
           </div>
@@ -547,8 +609,11 @@ export default function MenuSystem({ onBack, user }) {
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize:'1rem', color: menu.menu_numero === 0 ? THEME.pinkMarble : menu.menu_numero === 1 ? THEME.celeste : THEME.gold, letterSpacing:'0.18em', textTransform:'uppercase', marginBottom:16 }}>
-                      {modulos.length} módulos · {menu.items.length} modelos
+                    <div style={{ fontSize:'0.85rem', color: menu.menu_numero === 0 ? THEME.pinkMarble : menu.menu_numero === 1 ? THEME.celeste : THEME.gold, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:16 }}>
+                      {modulos.map(mod => {
+                        const modelos = [...new Set(menu.items.filter(i => i.modulo_id === mod.id).map(i => i.modelo_id))]
+                        return modelos.join(' · ')
+                      }).join(' | ')}
                     </div>
                     <div style={{ fontSize:'1.2rem', color:THEME.textHigh, letterSpacing:'0.15em', textTransform:'uppercase', padding:'14px 28px', background: menu.menu_numero === 0 ? THEME.pink10 : menu.menu_numero === 1 ? THEME.celeste10 : THEME.gold10, border: `1px solid ${menu.menu_numero === 0 ? THEME.pink30 : menu.menu_numero === 1 ? THEME.celeste30 : THEME.gold30}`, borderRadius:10, display:'inline-block' }}>
                       ▶ ENTRAR AL MENÚ
@@ -583,7 +648,7 @@ if (vista === 'chat') {
 
     const modeloSeleccionado = getModeloSeleccionado(inputM01)
 
-    const renderPanel = (titulo, mensajes, setMensajes, input, setInput, enviar, cargando, tokens, esM01) => (
+    const renderPanel = (titulo, mensajes, setMensajes, input, setInput, enviar, cargando, tokens, esM01, onCancel, cancelado) => (
       <div style={{
         flex:1, display:'flex', flexDirection:'column',
         background:'linear-gradient(160deg, rgba(65,66,62,0.4) 0%, rgba(8,4,6,0.6) 100%)',
@@ -647,7 +712,7 @@ if (vista === 'chat') {
             <div style={{ textAlign:'center', padding:'40px 20px', color:THEME.textMed }}>
               <div style={{ fontSize:'2.5rem', marginBottom:16, opacity:0.5 }}>💬</div>
               <div style={{ fontSize:'1.1rem', color:THEME.celeste, marginBottom:8, fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, letterSpacing:'0.05em' }}>
-                INICIÁ EL FLUJO R7
+                {esM01 ? 'INICIÁ EL FLUJO R7' : 'Modelo COCHI'}
               </div>
               <div style={{ fontSize:'0.95rem', color:THEME.textLow, lineHeight:1.6 }}>
                 {esM01 ? 'M01 — Memoria R7 activa (eficiencia en Tokens)' : 'M02 — Sin memoria (ahorro tokens)'}
@@ -709,6 +774,19 @@ if (vista === 'chat') {
                 textShadow:`0 0 20px ${THEME.celeste40}`
               }}>
                 Procesando...
+              </div>
+            </div>
+          )}
+          {cancelado && !cargando && (
+            <div style={{ textAlign:'center', padding:'16px', color:'#FF5E98' }}>
+              <div style={{
+                fontSize:'0.95rem',
+                fontWeight:700,
+                letterSpacing:'0.1em',
+                textTransform:'uppercase',
+                textShadow:'0 0 15px rgba(255,94,152,0.5)'
+              }}>
+                ■ Generación cancelada
               </div>
             </div>
           )}
@@ -792,6 +870,37 @@ if (vista === 'chat') {
             >
               ▶
             </button>
+            {cargando && (
+              <button
+                onClick={onCancel}
+                style={{
+                  background: 'rgba(255,30,30,0.2)',
+                  border: '2px solid #FF1E1E',
+                  borderRadius: 8,
+                  padding: '6px 14px',
+                  color: '#FF1E1E',
+                  fontSize:'0.8rem',
+                  fontWeight:700,
+                  letterSpacing:'0.15em',
+                  cursor:'pointer',
+                  fontFamily:"'Space Grotesk',sans-serif",
+                  textTransform:'uppercase',
+                  boxShadow: '0 0 20px rgba(255,30,30,0.4)',
+                  transition:'all 0.3s ease',
+                  whiteSpace:'nowrap'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(255,30,30,0.35)'
+                  e.currentTarget.style.boxShadow = '0 0 30px rgba(255,30,30,0.6)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(255,30,30,0.2)'
+                  e.currentTarget.style.boxShadow = '0 0 20px rgba(255,30,30,0.4)'
+                }}
+              >
+                ■ STOP
+              </button>
+            )}
           </div>
 
           <div style={{
@@ -886,7 +995,7 @@ if (vista === 'chat') {
           </div>
         </div>
 
-        <button onClick={volverACategorias} style={{
+        <button onClick={volverAMenus} style={{
           position:'fixed', top:22, right:28, zIndex:30,
           background:THEME.bgFeedCC,
           border:`1px solid ${THEME.borderSubtle}`,
@@ -917,42 +1026,33 @@ if (vista === 'chat') {
           position:'relative', zIndex:10,
           textAlign:'center',
           padding:'120px 24px 12px',
-          maxWidth:'95%',
+          maxWidth:'100%',
           margin:'0 auto'
         }}>
           <div style={{
             fontFamily:"'Space Grotesk',sans-serif",
-            fontSize:'1.8rem',
+            fontSize:'3.5rem',
             fontWeight:700,
             letterSpacing:'0.15em',
             textTransform:'uppercase',
             color:THEME.textHigh,
-            marginBottom:8,
-            textShadow:`0 0 20px ${THEME.celeste30}`
+            marginBottom:20,
+            textShadow:`0 0 30px ${THEME.celeste30}`
           }}>
-            CÓDIGO
+            {categoriaActiva.nombre}
           </div>
-          <div style={{
-            fontSize:'0.85rem',
-            color:THEME.textMed,
-            letterSpacing:'0.08em',
-            lineHeight:1.5,
-            fontFamily:"'Exo 2',sans-serif"
-          }}>
-            Selecciona un módulo para comenzar
-          </div>
-          <div style={{
-            fontSize:'0.78rem',
-            color:THEME.celeste,
+<div style={{
+            fontSize:'1.15rem',
+            color:THEME.textHigh,
             letterSpacing:'0.05em',
-            lineHeight:1.6,
-            marginTop:10,
+            lineHeight:2.2,
             fontFamily:"'Exo 2',sans-serif",
-            maxWidth:700,
-            margin:'10px auto 0'
+            width:'100%',
+            maxWidth:'100%',
+            textAlign:'center'
           }}>
-            Los módulos funcionan como chats complementarios.<br />
-            El Chat M01 tiene Modelos con Memoria R7 (eficiencia en Tokens) y el Chat M02 es Modelo sin memoria (ahorro tokens).
+            <span style={{ color: THEME.celeste, fontWeight: 600 }}>Los módulos funcionan como chats complementarios e independientes.</span> Si ya tienes instrucción técnica detallada, usa solo el <span style={{ color: THEME.gold, fontWeight: 700 }}>módulo 02</span>.<br />
+            El <span style={{ color: THEME.celeste, fontWeight: 700 }}>M01</span> es para conversar, planificar. Tiene <span style={{ color: THEME.celeste, fontWeight: 600 }}>memoria R7 selectiva</span> con contexto. El <span style={{ color: THEME.celeste, fontWeight: 700 }}>M02</span> es para ejecutar el R7 + instrucciones. Es modelo sin memoria. Ambos módulos <span style={{ color: THEME.gold, fontWeight: 600 }}>ahorran tokens</span>.
           </div>
         </div>
 
@@ -964,8 +1064,8 @@ if (vista === 'chat') {
           maxWidth:'95%',
           margin:'0 auto'
         }}>
-          {renderPanel('MÓDULO 01 · PLAN', mensajesM01, setMensajesM01, inputM01, setInputM01, enviarMensajeM01, cargandoM01, tokensM01, true)}
-          {renderPanel('MÓDULO 02 · BUILD', mensajesM02, setMensajesM02, inputM02, setInputM02, enviarMensajeM02, cargandoM02, tokensM02, false)}
+          {renderPanel('MÓDULO 01 · PLAN', mensajesM01, setMensajesM01, inputM01, setInputM01, enviarMensajeM01, cargandoM01, tokensM01, true, cancelarM01, canceladoM01)}
+          {renderPanel('MÓDULO 02 · BUILD', mensajesM02, setMensajesM02, inputM02, setInputM02, enviarMensajeM02, cargandoM02, tokensM02, false, cancelarM02, canceladoM02)}
         </div>
 
         {bridgeToast && (
