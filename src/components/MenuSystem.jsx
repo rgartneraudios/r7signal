@@ -123,12 +123,26 @@ export default function MenuSystem({ onBack, user }) {
     setVista('menus')
   }
 
-  function seleccionarMenu(menu) {
+  async function seleccionarMenu(menu) {
     setMenuActivo(menu)
     const sorted = [...modulos].sort((a, b) => a.orden - b.orden)
     const m01 = sorted[0] || null
     setModuloActivo(m01)
-    setSesionId(`sesion_${Date.now()}_menu${menu.menu_numero}`)
+
+    const { data: sesionData, error: sesionError } = await supabase
+      .from('sesiones')
+      .insert({
+        user_id: user.id,
+        r7_acumulado: ''
+      })
+      .select('id')
+      .single()
+
+    if (sesionError) {
+      console.error('Error creando sesión:', sesionError)
+      return
+    }
+    setSesionId(sesionData.id)
     setMensajesM01([])
     setMensajesM02([])
     setR7Contexto('')
@@ -143,21 +157,6 @@ export default function MenuSystem({ onBack, user }) {
   async function enviarMensajeM01() {
     if (!inputM01.trim() || cargandoM01) return
     const input = inputM01.trim()
-
-    const mb = menuActivo?.items
-      .filter(i => i.modulo_id === moduloActivo.id && i.tipo === 'mb')[0]?.modelo_id || 'N/A'
-    const ms = menuActivo?.items
-      .filter(i => i.modulo_id === moduloActivo.id && i.tipo === 'plus')[0]?.modelo_id || 'N/A'
-    let modeloUsado
-    if (routingMode === 'mb') {
-      modeloUsado = mb
-    } else if (routingMode === 'ms') {
-      modeloUsado = ms
-    } else {
-      const palabras = input.trim().split(/\s+/).filter(w => w).length
-      modeloUsado = palabras > 100 ? ms : mb
-    }
-
     setInputM01('')
     setCargandoM01(true)
     setCanceladoM01(false)
@@ -166,25 +165,49 @@ export default function MenuSystem({ onBack, user }) {
     const controller = new AbortController()
     abortRefM01.current = controller
 
-    const timeoutId = setTimeout(() => {
-      if (controller.signal.aborted) return
-      const r1 = `[R1] Resumen: ${input.substring(0, 50)}...`
-      const r3 = `[R3 · ${modeloUsado}] Respuesta completa del modelo para: "${input}"\n\nRouting: ${routingMode.toUpperCase()} → ${modeloUsado}`
-      const r2 = `[R2] Resumen de respuesta: ${r3.substring(0, 80)}...`
-      const tokensInput = Math.ceil(input.length / 4)
-      const tokensOutput = Math.ceil(r3.length / 4)
-      setTokensM01(prev => prev + tokensInput + tokensOutput)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+
+      const response = await fetch(
+        'https://ovvpyotqstweqbrmeyme.supabase.co/functions/v1/procesar-input',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            sesion_id: sesionId,
+            input_usuario: input,
+            modulo_id: moduloActivo.id,
+            categoria_id: categoriaActiva.id,
+            menu_numero: menuActivo.menu_numero,
+            routing_mode: routingMode.toUpperCase()
+          })
+        }
+      )
+
+      const data = await response.json()
+      if (!data.success) throw new Error(data.error)
+
+      setTokensM01(prev => prev + (data.metadata?.tokens_input || 0) + (data.metadata?.tokens_output || 0))
       setMensajesM01(prev => [...prev, {
         rol: 'asistente',
-        contenido: r3,
-        r1, r2,
-        modelo: modeloUsado
+        contenido: data.r3,
+        modelo: data.metadata?.modelo_id
       }])
-      setR7Contexto(prev => prev + '\n' + r1 + '\n' + r2)
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setCanceladoM01(true)
+      } else {
+        console.error('Error M01:', err)
+      }
+    } finally {
       setCargandoM01(false)
       abortRefM01.current = null
-    }, 1500)
-    controller._timeoutId = timeoutId
+    }
   }
 
   function cancelarM01() {

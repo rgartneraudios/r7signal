@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from '../supabaseClient'
 import { THEME } from '../theme'
 import { EDITORS } from '../constants'
 
@@ -7,14 +8,17 @@ export default function LoginModal({ onClose, onLogin, user, onLogout }) {
   const [pass, setPass] = useState('')
   const [logging, setLogging] = useState(false)
 
-  function handleLogin() {
+  async function handleLogin() {
     if (!email || !pass) return
     setLogging(true)
-    setTimeout(() => {
-      onLogin({ name: 'RGartner', role: 'CEO R7Signal', email, initials: 'RG', color: 'rgba(120,105,75,0.90)' })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass })
+    if (error) {
       setLogging(false)
-      setEmail(''); setPass('')
-    }, 1200)
+      return
+    }
+    onLogin({ id: data.user.id, name: data.user.email, role: 'Admin', email: data.user.email, initials: data.user.email[0].toUpperCase(), color: 'rgba(120,105,75,0.90)' })
+    setLogging(false)
+    setEmail(''); setPass('')
   }
 
   const inputStyle = {
