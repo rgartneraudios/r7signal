@@ -25,3 +25,22 @@ body {
   background: #000;
   -webkit-font-smoothing: antialiased;
 }
+
+.chat00-sidebar h3 {
+  color: var(--color-accent-cyan);
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cochi-tagline {
+  color: var(--color-accent-gold);
+  font-weight: 600;
+  margin: 1rem 0;
+}
+
+.cochi-keyword {
+  color: var(--color-accent-cyan);
+  font-weight: 700;
+}
