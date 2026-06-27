@@ -106,37 +106,47 @@ if (routing_mode === 'MB') {
 
     console.log(` Modelo seleccionado: ${menuItem.modelo_id}`)
 
-    // 8. LLAMADA A GOOGLE GEMINI
-    const apiKey = Deno.env.get('GOOGLE_API_KEY') // ✅ Corregido
-    if (!apiKey) throw new Error('Falta GOOGLE_API_KEY en secrets')
+    // 8. LLAMADA A OPENROUTER
+    const apiKey = Deno.env.get('OPENROUTER_API_KEY')
+    if (!apiKey) throw new Error('Falta OPENROUTER_API_KEY en secrets')
 
     const modeloId = menuItem.modelo_id
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modeloId}:generateContent?key=${apiKey}`
 
-    const response = await fetch(url, {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://r7signal.com',
+        'X-Title': 'R7Signal'
+      },
       body: JSON.stringify({
-        contents: [{ 
-          parts: [{ 
-            text: `${systemPrompt}\n\nContexto R7:\n${r7Acumulado}\n\nUsuario: ${input_usuario}` 
-          }] 
-        }],
-        generationConfig: {
-          temperature: menuItem.temperatura || 0.7,
-          maxOutputTokens: menuItem.max_tokens || 2048,
-        }
+        model: modeloId,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Contexto R7:\n${r7Acumulado}\n\nUsuario: ${input_usuario}` }
+        ],
+        temperature: menuItem.temperatura || 0.7,
+        max_tokens: menuItem.max_tokens || 2048,
       }),
     })
 
     if (!response.ok) {
       const errorText = await response.text()
-      throw new Error(`Error API: ${response.status} - ${errorText}`)
+      throw new Error(`Error OpenRouter: ${response.status} - ${errorText}`)
     }
 
     const data = await response.json()
-    const r3 = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta'
-    
+    const r3 = data.choices?.[0]?.message?.content || 'Sin respuesta'
+
+    const tokensInput = data.usage?.prompt_tokens || 0
+    const tokensOutput = data.usage?.completion_tokens || 0
+
+    // Calcular coste real
+    const precioInput = menuItem.precio_input || 0   // precio por millón de tokens
+    const precioOutput = menuItem.precio_output || 0
+    const costeReal = (tokensInput / 1_000_000) * precioInput + (tokensOutput / 1_000_000) * precioOutput
+
     const { r1, r2 } = parsearR1R2R3(r3)
 
     // 9. CONSULTAR TURNO NÚMERO
@@ -153,11 +163,11 @@ if (routing_mode === 'MB') {
       turno_numero: turnoNumero,
       input_usuario,
       r1, r2, r3,
-      modelo_usado: routingDecision,
+      modelo_usado: modeloId,
       routing_decision: routingDecision,
-      tokens_input: data.usageMetadata?.promptTokenCount || 0,
-      tokens_output: data.usageMetadata?.candidatesTokenCount || 0,
-      coste: 0,
+      tokens_input: tokensInput,
+      tokens_output: tokensOutput,
+      coste: costeReal,
       modulo_id,
       categoria_id
     })
@@ -169,7 +179,14 @@ if (routing_mode === 'MB') {
       .update({ r7_acumulado: nuevoR7 })
       .eq('id', sesion_id)
 
-    // 11. RESPUESTA AL FRONTEND
+    // 12. DESCONTAR BALANCE
+    await supabase.rpc('descontar_credito', {
+      p_user_id: sesion.user_id,
+      p_coste: costeReal,
+      p_tokens: tokensInput + tokensOutput
+    })
+
+    // 13. RESPUESTA AL FRONTEND
     return new Response(
       JSON.stringify({
         success: true,
@@ -177,8 +194,9 @@ if (routing_mode === 'MB') {
         metadata: { 
           modelo_usado: routingDecision, 
           modelo_id: modeloId,
-          tokens_input: data.usageMetadata?.promptTokenCount || 0,
-          tokens_output: data.usageMetadata?.candidatesTokenCount || 0
+          tokens_input: tokensInput,
+          tokens_output: tokensOutput,
+          coste: costeReal
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
