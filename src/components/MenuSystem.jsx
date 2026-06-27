@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient'
 import Cube3D from './Cube3D'
 import HUD from './HUD'
 import Chat00 from './Chat00'
+import Billing from '../pages/Billing'
 
 export default function MenuSystem({ onBack, user }) {
   const [time, setTime] = useState(new Date())
@@ -340,6 +341,11 @@ export default function MenuSystem({ onBack, user }) {
     if (!sidebarOpen && proyectos.length === 0) cargarProyectos()
   }
 
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    onBack()
+  }
+
   function seleccionarProyecto(proyecto) {
     setProyectoActivo(proyecto)
     setSidebarOpen(false)
@@ -354,13 +360,13 @@ export default function MenuSystem({ onBack, user }) {
           style={{ position:'fixed', inset:0, background:'rgba(8,4,6,0.6)', backdropFilter:'blur(4px)', zIndex:30, transition:'opacity 0.3s ease' }}
         />
         <div style={{
-          position:'fixed', top:0, left:0, width:340, height:'100vh',
+          position:'fixed', top:0, right:0, width:340, height:'100vh',
           background:`linear-gradient(180deg, ${THEME.bgFeedSolid} 0%, ${THEME.bgMain} 100%)`,
-          borderRight:`1px solid ${THEME.celeste20}`, zIndex:31, padding:'24px 20px', overflowY:'auto',
-          boxShadow:'8px 0 40px rgba(0,0,0,0.5)',
-          animation:'slideInLeft 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+          borderLeft:`1px solid ${THEME.celeste20}`, zIndex:31, padding:'24px 20px', overflowY:'auto',
+          boxShadow:'-8px 0 40px rgba(0,0,0,0.5)',
+          animation:'slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
         }}>
-          <style>{`@keyframes slideInLeft{from{transform:translateX(-100%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
+          <style>{`@keyframes slideInRight{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:28, paddingBottom:16, borderBottom:`1px solid ${THEME.metallicGray}` }}>
             <div>
               <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1.1rem', fontWeight:700, color:THEME.textHigh, letterSpacing:'0.1em', textTransform:'uppercase' }}>📁 Historial</div>
@@ -402,8 +408,8 @@ export default function MenuSystem({ onBack, user }) {
           )}
           <div style={{ marginTop:32, paddingTop:16, borderTop:`1px solid ${THEME.metallicGray}`, display:'flex', flexDirection:'column', gap:8 }}>
             <button style={{ background:'transparent', border:'none', color:THEME.textMed, fontSize:'0.8rem', cursor:'pointer', textAlign:'left', padding:'8px 0', fontFamily:"'Space Grotesk',sans-serif", letterSpacing:'0.05em' }}>⚙️ Configuración</button>
-            <button style={{ background:'transparent', border:'none', color:THEME.textMed, fontSize:'0.8rem', cursor:'pointer', textAlign:'left', padding:'8px 0', fontFamily:"'Space Grotesk',sans-serif", letterSpacing:'0.05em' }}>💳 Billing</button>
-            <button onClick={onBack} style={{ background:'transparent', border:'none', color:THEME.pinkMarble, fontSize:'0.8rem', cursor:'pointer', textAlign:'left', padding:'8px 0', fontFamily:"'Space Grotesk',sans-serif", letterSpacing:'0.05em' }}> Salir</button>
+            <button onClick={() => setVista('billing')} style={{ background:'transparent', border:'none', color:THEME.textMed, fontSize:'0.8rem', cursor:'pointer', textAlign:'left', padding:'8px 0', fontFamily:"'Space Grotesk',sans-serif", letterSpacing:'0.05em' }}>💳 Billing</button>
+            <button onClick={handleLogout} style={{ background:'transparent', border:'none', color:THEME.pinkMarble, fontSize:'0.8rem', cursor:'pointer', textAlign:'left', padding:'8px 0', fontFamily:"'Space Grotesk',sans-serif", letterSpacing:'0.05em' }}> Salir</button>
           </div>
         </div>
       </>
@@ -418,16 +424,16 @@ export default function MenuSystem({ onBack, user }) {
         style={{
           position: 'fixed',
           top: '50%',
-          left: sidebarOpen ? 340 : 0,
+          right: sidebarOpen ? 340 : 0,
           transform: 'translateY(-50%)',
           zIndex: 30,
-          background: THEME.bgFeedCC,
-          border: `1px solid ${THEME.borderSubtle}`,
-          borderLeft: 'none',
-          borderRadius: '0 10px 10px 0',
+          background: THEME.pinkMarble,
+          border: `2px solid ${THEME.pink60}`,
+          borderRight: 'none',
+          borderRadius: '10px 0 0 10px',
           width: 22,
           height: 80,
-          color: THEME.celeste,
+          color: THEME.bgMain,
           fontSize: '0.85rem',
           cursor: 'pointer',
           display: 'flex',
@@ -437,19 +443,19 @@ export default function MenuSystem({ onBack, user }) {
           fontFamily: "'Space Grotesk',sans-serif"
         }}
         onMouseEnter={e => {
-          e.currentTarget.style.color = THEME.gold
-          e.currentTarget.style.borderColor = THEME.celeste35
-          e.currentTarget.style.boxShadow = `4px 0 12px ${THEME.celeste15}`
+          e.currentTarget.style.background = THEME.pinkBright
+          e.currentTarget.style.borderColor = THEME.pink80
+          e.currentTarget.style.boxShadow = `-4px 0 12px ${THEME.pink35}`
           e.currentTarget.style.width = 26
         }}
         onMouseLeave={e => {
-          e.currentTarget.style.color = THEME.celeste
-          e.currentTarget.style.borderColor = THEME.borderSubtle
+          e.currentTarget.style.background = THEME.pinkMarble
+          e.currentTarget.style.borderColor = THEME.pink60
           e.currentTarget.style.boxShadow = 'none'
           e.currentTarget.style.width = 22
         }}
       >
-        ▶
+        ◀
       </button>
     )
   }
@@ -487,8 +493,8 @@ export default function MenuSystem({ onBack, user }) {
         <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
         <HUD formattedTime={formattedTime} weather={WEATHER} />
         {renderSidebarTrigger()}
-        <button onClick={onBack} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase' }}>
-          ◀ Exit
+        <button onClick={handleLogout} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase' }}>
+          ◀ Salir
         </button>
         <div style={{ position:'fixed', bottom:18, right:28, zIndex:30, display:'flex', alignItems:'center', gap:6, fontSize:'0.63rem', letterSpacing:'0.18em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600 }}>
           <div className='menu-pulse' style={{ width:5, height:5, borderRadius:'50%', background:THEME.celeste, boxShadow:`0 0 7px ${THEME.celeste}BF` }} />
@@ -1198,6 +1204,98 @@ if (vista === 'chat') {
         </div>
       </div>
       {renderSidebarPanel()}
+      </>
+    )
+  }
+
+  if (vista === 'billing') {
+    return (
+      <>
+        <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
+          <style>{`
+            @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&family=Space+Grotesk:wght@500;600;700&display=swap');
+            ::-webkit-scrollbar { width:3px; }
+            ::-webkit-scrollbar-thumb { background:${THEME.celeste25}; border-radius:2px; }
+
+            .billing-loading,
+            .billing-empty {
+              text-align: center; padding: 60px 20px;
+              color: ${THEME.textMed}; font-size: 1rem;
+              letter-spacing: 0.1em; font-family: 'Exo 2', sans-serif;
+            }
+            .billing-container {
+              position: relative; z-index: 10; max-width: 640px;
+              margin: 0 auto; padding: 80px 24px 40px;
+            }
+            .billing-title {
+              font-family: 'Orbitron', monospace; font-size: 1.8rem; font-weight: 700;
+              text-align: center; letter-spacing: 0.15em;
+              background: linear-gradient(140deg, ${THEME.textHigh} 25%, ${THEME.gold} 100%);
+              -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+              margin-bottom: 40px;
+            }
+            .billing-saldo-card {
+              background: linear-gradient(135deg, ${THEME.gold10} 0%, ${THEME.bgFeedCC} 100%);
+              border: 1px solid ${THEME.gold40}; border-radius: 18px;
+              padding: 32px 24px; text-align: center; margin-bottom: 28px;
+              box-shadow: 0 0 40px ${THEME.gold10};
+            }
+            .billing-saldo-amount {
+              display: block; font-family: 'Orbitron', monospace;
+              font-size: 2.6rem; font-weight: 900; color: ${THEME.gold};
+              letter-spacing: 0.05em; margin-bottom: 8px;
+            }
+            .billing-saldo-label {
+              font-family: 'Space Grotesk', sans-serif; font-size: 0.85rem;
+              letter-spacing: 0.18em; color: ${THEME.textMed}; text-transform: uppercase;
+            }
+            .billing-stats {
+              display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+              margin-bottom: 36px;
+            }
+            .billing-stat {
+              background: ${THEME.celeste08}; border: 1px solid ${THEME.celeste20};
+              border-radius: 14px; padding: 20px 16px; text-align: center;
+            }
+            .billing-stat-value {
+              display: block; font-family: 'Orbitron', monospace;
+              font-size: 1.4rem; font-weight: 700; color: ${THEME.textHigh};
+              margin-bottom: 6px;
+            }
+            .billing-stat-label {
+              font-family: 'Space Grotesk', sans-serif; font-size: 0.75rem;
+              letter-spacing: 0.15em; color: ${THEME.textMed}; text-transform: uppercase;
+            }
+            .billing-section-title {
+              font-family: 'Orbitron', monospace; font-size: 1.1rem; font-weight: 700;
+              letter-spacing: 0.15em; color: ${THEME.celeste}; margin-bottom: 18px;
+              padding-bottom: 10px; border-bottom: 1px solid ${THEME.metallicGray};
+            }
+            .billing-turnos { display: flex; flex-direction: column; gap: 6px; }
+            .billing-turno-row {
+              display: grid; grid-template-columns: 1fr 1.5fr 1fr 1.2fr; gap: 8px;
+              padding: 10px 14px; border-radius: 10px;
+              background: rgba(92,155,165,0.05); border: 1px solid ${THEME.celeste12};
+              font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+              align-items: center; transition: all 0.2s ease;
+            }
+            .billing-turno-row:hover {
+              background: ${THEME.celeste10}; border-color: ${THEME.celeste25};
+            }
+            .billing-turno-fecha { color: ${THEME.textMed}; }
+            .billing-turno-modelo { color: ${THEME.celeste}; }
+            .billing-turno-tokens { color: ${THEME.gold}; text-align: right; }
+            .billing-turno-coste { color: ${THEME.pinkMarble}; text-align: right; }
+          `}</style>
+          <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
+          <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
+          {renderSidebarTrigger()}
+          <button onClick={() => setVista('categorias')} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase' }}>
+            ◀ Volver
+          </button>
+          <Billing />
+        </div>
+        {renderSidebarPanel()}
       </>
     )
   }
