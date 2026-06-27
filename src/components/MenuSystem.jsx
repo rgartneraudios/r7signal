@@ -822,7 +822,7 @@ if (vista === 'chat') {
           background:'rgba(65,66,62,0.35)',
           border:`2px solid ${THEME.celeste25}`,
           borderRadius:14,
-          padding:'8px 12px',
+          padding:'12px 16px',
           boxShadow:`0 4px 20px ${THEME.celeste08}`,
           transition:'all 0.3s ease'
         }}
@@ -835,7 +835,7 @@ if (vista === 'chat') {
             e.currentTarget.style.boxShadow = `0 4px 20px ${THEME.celeste08}`
           }}
         >
-          <div style={{ display:'flex', gap:8 }}>
+          <div style={{ display:'flex', gap:10 }}>
             <textarea
               value={input}
               onChange={e => setInput(e.target.value)}
@@ -847,20 +847,20 @@ if (vista === 'chat') {
               }}
               placeholder={esM01 ? 'Input para M01...' : 'Input para M02...'}
               className="chat-input-glow"
-              rows={1}
+              rows={2}
               style={{
                 flex:1,
                 background:'transparent',
                 border:'none',
                 color:THEME.textHigh,
-                fontSize:'1.15rem',
+                fontSize:'1.25rem',
                 fontWeight:500,
                 outline:'none',
                 fontFamily:"'Exo 2',sans-serif",
                 letterSpacing:'0.02em',
                 resize:'none',
                 overflow:'hidden',
-                lineHeight:1.5
+                lineHeight:1.6
               }}
             />
             <button
@@ -1054,48 +1054,72 @@ if (vista === 'chat') {
           <>
           <div style={{
             position:'relative', zIndex:10,
-            textAlign:'center',
-            padding:'120px 24px 12px',
-            maxWidth:'100%',
-            margin:'0 auto'
+            maxWidth:1100, margin:'0 auto',
+            padding:'80px 24px 12px',
           }}>
-            <div style={{
+            <div className="sidebar-cochi" style={{
+              width:220,
+              padding:'1.5rem 1rem',
+              color:THEME.textLow,
               fontFamily:"'Space Grotesk',sans-serif",
-              fontSize:'3.5rem',
-              fontWeight:700,
-              letterSpacing:'0.15em',
-              textTransform:'uppercase',
-              color:THEME.textHigh,
-              marginBottom:20,
-              textShadow:`0 0 30px ${THEME.celeste30}`
+              fontSize:'1rem',
+              lineHeight:1.7,
+              position:'absolute', left:-260, top:280,
             }}>
-              {categoriaActiva.nombre}
+              <h3 style={{ color:THEME.celeste, fontSize:'1.15rem', marginBottom:'1rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                ¿Qué es Cochi?
+              </h3>
+              <p style={{ margin:'0 0 0.75rem' }}>
+                Cochi es tu <strong style={{ color:THEME.textHigh }}>Agente de Ejecución Local</strong> — vive en tu escritorio
+                y tiene acceso a tus archivos, proyectos y herramientas.
+              </p>
+              <p style={{ color:THEME.gold, fontWeight:600, margin:'0.75rem 0' }}>
+                Los Menús piensan. Cochi ejecuta.
+              </p>
+              <p style={{ margin:'0.75rem 0 0' }}>
+                Cuando escribas <span style={{ color:THEME.celeste, fontWeight:700 }}>/COCHI</span> en cualquier chat,
+                el modelo reformateará las instrucciones en modo ejecutable, listas para pegar
+                directamente en Cochi.
+              </p>
             </div>
-            <div style={{
-              fontSize:'1.15rem',
-              color:THEME.textHigh,
-              letterSpacing:'0.05em',
-              lineHeight:2.2,
-              fontFamily:"'Exo 2',sans-serif",
-              width:'100%',
-              maxWidth:'100%',
-              textAlign:'center'
-            }}>
-              <span style={{ color: THEME.celeste, fontWeight: 600 }}>Los módulos funcionan como chats complementarios e independientes.</span> Si ya tienes instrucción técnica detallada, usa solo el <span style={{ color: THEME.gold, fontWeight: 700 }}>módulo 02</span>.<br />
-              El <span style={{ color: THEME.celeste, fontWeight: 700 }}>M01</span> es para conversar, planificar. Tiene <span style={{ color: THEME.celeste, fontWeight: 600 }}>memoria R7 selectiva</span> con contexto. El <span style={{ color: THEME.celeste, fontWeight: 700 }}>M02</span> es para ejecutar el R7 + instrucciones. Es modelo sin memoria. Ambos módulos <span style={{ color: THEME.gold, fontWeight: 600 }}>ahorran tokens</span>.
+
+            <div className="menu-welcome-header" style={{ textAlign:'center', marginBottom:32 }}>
+              <h2 style={{
+                fontFamily:"'Orbitron',monospace",
+                fontSize:'2.8rem', fontWeight:900,
+                color:THEME.textHigh, letterSpacing:'0.08em',
+                marginBottom:20,
+                textShadow:`0 0 30px ${THEME.pink30}`
+              }}>
+                BIENVENIDO A R7
+              </h2>
+              <ul style={{
+                listStyle:'none', padding:0, margin:0,
+                display:'flex', flexDirection:'column', gap:14,
+                fontSize:'1.05rem',
+                color:THEME.textHigh,
+                lineHeight:1.5,
+                fontFamily:"'Exo 2',sans-serif",
+              }}>
+                <li>
+                  Si ya usas la App de escritorio con Cochi, la palabra clave es <span style={{ color:THEME.celeste, fontWeight:700 }}>/COCHI</span> en mayúsculas.
+                </li>
+                <li>
+                  Los chats de los menús son complementarios con Cochi e independientes. Puedes resolver cosas aquí o continuar con Cochi en tu escritorio.
+                </li>
+              </ul>
             </div>
           </div>
 
           <div className="chat-panels" style={{
             position:'relative', zIndex:10,
-            display:'flex', gap:20,
+            display:'flex',
             height:'calc(100vh - 250px)',
-            padding:'20px 24px 16px',
-            maxWidth:'95%',
+            padding:'0 24px 16px',
+            maxWidth:1100,
             margin:'0 auto'
           }}>
             {renderPanel('MÓDULO 01 · PLAN', mensajesM01, setMensajesM01, inputM01, setInputM01, enviarMensajeM01, cargandoM01, tokensM01, true, cancelarM01, canceladoM01)}
-            {renderPanel('MÓDULO 02 · BUILD', mensajesM02, setMensajesM02, inputM02, setInputM02, enviarMensajeM02, cargandoM02, tokensM02, false, cancelarM02, canceladoM02)}
           </div>
           </>
         )}

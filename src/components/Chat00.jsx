@@ -12,6 +12,8 @@ const AI_LINKS = [
   { img: 'gpt.webp', url: 'https://chatgpt.com' },
   { img: 'mistral.webp', url: 'https://chat.mistral.ai' },
   { img: 'copilot.webp', url: 'https://copilot.microsoft.com' },
+  { img: 'meta.webp', url: 'https://www.meta.ai/' },
+  { img: 'grok.webp', url: 'https://grok.com/' },
 ]
 
 const PROMPT_TEXT = `Has sido elegido como modelo para realizar tareas específicas. Procede según petición del usuario. El usuario lleva consigo una palabra clave /COCHI en mayúsculas. Cuando la escriba, empaqueta las instrucciones de las tareas encomendadas en formato ejecutable, dirigiéndote directamente al agente en segunda persona imperativa. Ejemplo: "Cochi, reemplaza en [archivo] esto: [código anterior] por esto: [código nuevo]". Sin explicaciones adicionales.`
@@ -33,14 +35,51 @@ export default function Chat00() {
       padding:'100px 24px 40px',
       fontFamily:"'Exo 2',sans-serif",
     }}>
-      <div style={{
-        background:`linear-gradient(160deg, ${THEME.bgFeedCC} 0%, rgba(8,4,6,0.7) 100%)`,
-        border:`1px solid ${THEME.pink35}`,
-        borderRadius:20,
-        padding:'40px 48px',
-        backdropFilter:'blur(8px)',
-        boxShadow:`0 8px 40px rgba(0,0,0,0.5), 0 0 60px ${THEME.pink08}`,
+      <div className="chat00-sidebar" style={{
+        width:220,
+        padding:'1.5rem 1rem',
+        color:THEME.textLow,
+        fontFamily:"'Space Grotesk',sans-serif",
+        fontSize:'1rem',
+        lineHeight:1.7,
+        position:'absolute', left:-260, top:140,
       }}>
+        <h3 style={{
+          color:THEME.celeste,
+          fontSize:'1.15rem',
+          marginBottom:'1rem',
+          textTransform:'uppercase',
+          letterSpacing:'0.05em',
+        }}>
+          ¿Qué es Cochi?
+        </h3>
+        <p style={{ margin:'0 0 0.75rem' }}>
+          Cochi es tu <strong style={{ color:THEME.textHigh }}>Agente de Ejecución Local</strong> — vive en tu escritorio
+          y tiene acceso a tus archivos, proyectos y herramientas.
+        </p>
+        <p style={{
+          color:THEME.gold,
+          fontWeight:600,
+          margin:'0.75rem 0',
+        }}>
+          Los Menús piensan. Cochi ejecuta.
+        </p>
+        <p style={{ margin:'0.75rem 0 0' }}>
+          Cuando escribas <span style={{ color:THEME.celeste, fontWeight:700 }}>/COCHI</span> en cualquier chat,
+          el modelo reformateará las instrucciones en modo ejecutable, listas para pegar
+          directamente en Cochi.
+        </p>
+      </div>
+
+      <div style={{ maxWidth:960, margin:'0 auto' }}>
+        <div style={{
+          background:`linear-gradient(160deg, ${THEME.bgFeedCC} 0%, rgba(8,4,6,0.7) 100%)`,
+          border:`1px solid ${THEME.pink35}`,
+          borderRadius:20,
+          padding:'40px 48px',
+          backdropFilter:'blur(8px)',
+          boxShadow:`0 8px 40px rgba(0,0,0,0.5), 0 0 60px ${THEME.pink08}`,
+        }}>
         <div style={{
           fontFamily:"'Orbitron',monospace",
           fontSize:'2.8rem',
@@ -185,6 +224,7 @@ export default function Chat00() {
               />
             </a>
           ))}
+          </div>
         </div>
       </div>
     </div>
