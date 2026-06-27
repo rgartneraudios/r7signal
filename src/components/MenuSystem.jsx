@@ -4,6 +4,7 @@ import { WEATHER } from '../constants'
 import { supabase } from '../supabaseClient'
 import Cube3D from './Cube3D'
 import HUD from './HUD'
+import Chat00 from './Chat00'
 
 export default function MenuSystem({ onBack, user }) {
   const [time, setTime] = useState(new Date())
@@ -114,9 +115,11 @@ export default function MenuSystem({ onBack, user }) {
     const menusFinales = Object.values(menusPorNumero)
     console.log('📋 Menús armados:', menusFinales.length, menusFinales)
 
-    if (menusFinales.length === 0) {
-      setError(`⚠️ Hay ${modulosData.length} módulos pero 0 menu_items. Verificá modulo_id en Supabase.`)
-    }
+    menusFinales.unshift({
+      menu_numero: 0,
+      menu_nombre: 'Chat 00',
+      items: []
+    })
 
     setMenus(menusFinales)
     setCargandoMenu(false)
@@ -1045,51 +1048,57 @@ if (vista === 'chat') {
           ◀ Salir
         </button>
 
-        <div style={{
-          position:'relative', zIndex:10,
-          textAlign:'center',
-          padding:'120px 24px 12px',
-          maxWidth:'100%',
-          margin:'0 auto'
-        }}>
+        {menuActivo?.menu_numero === 0 ? (
+          <Chat00 />
+        ) : (
+          <>
           <div style={{
-            fontFamily:"'Space Grotesk',sans-serif",
-            fontSize:'3.5rem',
-            fontWeight:700,
-            letterSpacing:'0.15em',
-            textTransform:'uppercase',
-            color:THEME.textHigh,
-            marginBottom:20,
-            textShadow:`0 0 30px ${THEME.celeste30}`
-          }}>
-            {categoriaActiva.nombre}
-          </div>
-<div style={{
-            fontSize:'1.15rem',
-            color:THEME.textHigh,
-            letterSpacing:'0.05em',
-            lineHeight:2.2,
-            fontFamily:"'Exo 2',sans-serif",
-            width:'100%',
+            position:'relative', zIndex:10,
+            textAlign:'center',
+            padding:'120px 24px 12px',
             maxWidth:'100%',
-            textAlign:'center'
+            margin:'0 auto'
           }}>
-            <span style={{ color: THEME.celeste, fontWeight: 600 }}>Los módulos funcionan como chats complementarios e independientes.</span> Si ya tienes instrucción técnica detallada, usa solo el <span style={{ color: THEME.gold, fontWeight: 700 }}>módulo 02</span>.<br />
-            El <span style={{ color: THEME.celeste, fontWeight: 700 }}>M01</span> es para conversar, planificar. Tiene <span style={{ color: THEME.celeste, fontWeight: 600 }}>memoria R7 selectiva</span> con contexto. El <span style={{ color: THEME.celeste, fontWeight: 700 }}>M02</span> es para ejecutar el R7 + instrucciones. Es modelo sin memoria. Ambos módulos <span style={{ color: THEME.gold, fontWeight: 600 }}>ahorran tokens</span>.
+            <div style={{
+              fontFamily:"'Space Grotesk',sans-serif",
+              fontSize:'3.5rem',
+              fontWeight:700,
+              letterSpacing:'0.15em',
+              textTransform:'uppercase',
+              color:THEME.textHigh,
+              marginBottom:20,
+              textShadow:`0 0 30px ${THEME.celeste30}`
+            }}>
+              {categoriaActiva.nombre}
+            </div>
+            <div style={{
+              fontSize:'1.15rem',
+              color:THEME.textHigh,
+              letterSpacing:'0.05em',
+              lineHeight:2.2,
+              fontFamily:"'Exo 2',sans-serif",
+              width:'100%',
+              maxWidth:'100%',
+              textAlign:'center'
+            }}>
+              <span style={{ color: THEME.celeste, fontWeight: 600 }}>Los módulos funcionan como chats complementarios e independientes.</span> Si ya tienes instrucción técnica detallada, usa solo el <span style={{ color: THEME.gold, fontWeight: 700 }}>módulo 02</span>.<br />
+              El <span style={{ color: THEME.celeste, fontWeight: 700 }}>M01</span> es para conversar, planificar. Tiene <span style={{ color: THEME.celeste, fontWeight: 600 }}>memoria R7 selectiva</span> con contexto. El <span style={{ color: THEME.celeste, fontWeight: 700 }}>M02</span> es para ejecutar el R7 + instrucciones. Es modelo sin memoria. Ambos módulos <span style={{ color: THEME.gold, fontWeight: 600 }}>ahorran tokens</span>.
+            </div>
           </div>
-        </div>
 
-        <div className="chat-panels" style={{
-          position:'relative', zIndex:10,
-          display:'flex', gap:20,
-          height:'calc(100vh - 250px)',
-          padding:'20px 24px 16px',
-          maxWidth:'95%',
-          margin:'0 auto'
-        }}>
-          {renderPanel('MÓDULO 01 · PLAN', mensajesM01, setMensajesM01, inputM01, setInputM01, enviarMensajeM01, cargandoM01, tokensM01, true, cancelarM01, canceladoM01)}
-          {renderPanel('MÓDULO 02 · BUILD', mensajesM02, setMensajesM02, inputM02, setInputM02, enviarMensajeM02, cargandoM02, tokensM02, false, cancelarM02, canceladoM02)}
-        </div>
+          <div className="chat-panels" style={{
+            position:'relative', zIndex:10,
+            display:'flex', gap:20,
+            height:'calc(100vh - 250px)',
+            padding:'20px 24px 16px',
+            maxWidth:'95%',
+            margin:'0 auto'
+          }}>
+            {renderPanel('MÓDULO 01 · PLAN', mensajesM01, setMensajesM01, inputM01, setInputM01, enviarMensajeM01, cargandoM01, tokensM01, true, cancelarM01, canceladoM01)}
+            {renderPanel('MÓDULO 02 · BUILD', mensajesM02, setMensajesM02, inputM02, setInputM02, enviarMensajeM02, cargandoM02, tokensM02, false, cancelarM02, canceladoM02)}
+          </div>
+          </>
+        )}
 
         {bridgeToast && (
           <div style={{
