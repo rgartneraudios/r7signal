@@ -460,6 +460,18 @@ export default function MenuSystem({ onBack, user }) {
       seleccionarMenu={seleccionarMenu}
       volverACategorias={volverACategorias}
       formattedTime={formattedTime}
+      sidebarOpen={sidebarOpen}
+      toggleSidebar={toggleSidebar}
+      proyectos={proyectos}
+      proyectoActivo={proyectoActivo}
+      mostrarCrearProyecto={mostrarCrearProyecto}
+      setMostrarCrearProyecto={setMostrarCrearProyecto}
+      nuevoProyectoNombre={nuevoProyectoNombre}
+      setNuevoProyectoNombre={setNuevoProyectoNombre}
+      crearProyecto={crearProyecto}
+      seleccionarProyecto={seleccionarProyecto}
+      setVista={setVista}
+      handleLogout={handleLogout}
     />
   }
 
@@ -483,6 +495,18 @@ if (vista === 'chat') {
       setRoutingMode={setRoutingMode}
       volverAMenus={volverAMenus}
       formattedTime={formattedTime}
+      sidebarOpen={sidebarOpen}
+      toggleSidebar={toggleSidebar}
+      proyectos={proyectos}
+      proyectoActivo={proyectoActivo}
+      mostrarCrearProyecto={mostrarCrearProyecto}
+      setMostrarCrearProyecto={setMostrarCrearProyecto}
+      nuevoProyectoNombre={nuevoProyectoNombre}
+      setNuevoProyectoNombre={setNuevoProyectoNombre}
+      crearProyecto={crearProyecto}
+      seleccionarProyecto={seleccionarProyecto}
+      setVista={setVista}
+      handleLogout={handleLogout}
     />
   }
 

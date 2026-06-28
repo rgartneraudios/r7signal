@@ -9,7 +9,11 @@ export default function ChatView({
   mensajesM01, setMensajesM01, inputM01, setInputM01,
   enviarMensajeM01, cargandoM01, tokensM01, cancelarM01, canceladoM01,
   routingMode, setRoutingMode,
-  volverAMenus, formattedTime
+  volverAMenus, formattedTime,
+  sidebarOpen, toggleSidebar, proyectos, proyectoActivo,
+  mostrarCrearProyecto, setMostrarCrearProyecto,
+  nuevoProyectoNombre, setNuevoProyectoNombre,
+  crearProyecto, seleccionarProyecto, setVista, handleLogout
 }) {
   const segundoModulo = modulos.length > 1 ? modulos[1] : modulos[0]
   const modeloCochi = menuActivo?.items
@@ -65,7 +69,20 @@ export default function ChatView({
         <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
         <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
 
-        <SidebarPanel />
+        <SidebarPanel
+          sidebarOpen={sidebarOpen}
+          toggleSidebar={toggleSidebar}
+          proyectos={proyectos}
+          proyectoActivo={proyectoActivo}
+          mostrarCrearProyecto={mostrarCrearProyecto}
+          setMostrarCrearProyecto={setMostrarCrearProyecto}
+          nuevoProyectoNombre={nuevoProyectoNombre}
+          setNuevoProyectoNombre={setNuevoProyectoNombre}
+          crearProyecto={crearProyecto}
+          seleccionarProyecto={seleccionarProyecto}
+          setVista={setVista}
+          handleLogout={handleLogout}
+        />
         <div style={{ position:'fixed', top:18, left:28, zIndex:30 }}>
           <div className='menu-clock' style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'3rem', fontWeight:700, color:THEME.textHigh }}>{formattedTime}</div>
           <div style={{ fontSize:'1.15rem', color:THEME.textMed, marginTop:6, letterSpacing:'0.12em' }}>
@@ -194,7 +211,6 @@ export default function ChatView({
         )}
 
       </div>
-      <SidebarPanel />
     </>
   )
 }
