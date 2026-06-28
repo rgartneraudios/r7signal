@@ -5,6 +5,7 @@ import MenuSystem from './components/MenuSystem'
 import Sphere from './components/Sphere'
 import LoginModal from './components/LoginModal'
 import Footer from './components/Footer'
+import CochiDesktop from './components/CochiDesktop'
 
 function useRealTimeClock() {
   const [time, setTime] = useState(new Date())
@@ -16,6 +17,7 @@ function useRealTimeClock() {
 }
 
 export default function App() {
+  if (window.__TAURI_INTERNALS__) return <CochiDesktop />
   const time = useRealTimeClock()
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [view, setView] = useState('landing')
