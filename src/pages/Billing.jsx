@@ -5,25 +5,48 @@ export default function Billing() {
   const [balance, setBalance] = useState(null)
   const [turnos, setTurnos] = useState([])
   const [loading, setLoading] = useState(true)
+  const [userId, setUserId] = useState(null)
 
   useEffect(() => {
-    cargarDatos()
+    let subscription
+
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      setUserId(user.id)
+      await cargarDatos(user.id)
+
+      subscription = supabase
+        .channel('billing-realtime')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'balances',
+          filter: `user_id=eq.${user.id}`
+        }, () => {
+          cargarDatos(user.id)
+        })
+        .subscribe()
+    }
+
+    init()
+
+    return () => {
+      if (subscription) supabase.removeChannel(subscription)
+    }
   }, [])
 
-  async function cargarDatos() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
+  async function cargarDatos(uid) {
     const { data: bal } = await supabase
       .from('balances')
       .select('credito, tokens_usados, ahorro_total, updated_at')
-      .eq('user_id', user.id)
+      .eq('user_id', uid)
       .single()
 
     const { data: turnosData } = await supabase
       .from('turnos')
       .select('coste, tokens_input, tokens_output, modelo_usado, created_at, sesiones!inner(user_id)')
-      .eq('sesiones.user_id', user.id)
+      .eq('sesiones.user_id', uid)
       .order('created_at', { ascending: false })
       .limit(20)
 
