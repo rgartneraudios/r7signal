@@ -31,19 +31,32 @@ function parsearR1R2R3(texto: string) {
 
 // System prompts por categoría
 const SYSTEM_PROMPTS: Record<string, string> = {
-  '74721199-5ee8-42b1-a1a5-e6203c3ff9bb': 'Eres un experto en desarrollo de software. Escribes código limpio, eficiente y bien comentado. Respondes siempre en español.',
-  'af3962bb-7a19-425c-882a-5301a837c7d7': 'Eres un experto en redacción y comunicación. Adaptas el tono y estilo según el contexto. Respondes siempre en español.',
-  'db79925b-c161-419e-bd94-460b3d43af8a': 'Eres un experto en diseño visual y generación de imágenes. Ayudas a construir prompts detallados y efectivos para generadores de imagen. Respondes siempre en español.',
-  '28e7ba28-b6be-4d59-9e0f-cdd55cf09124': 'Eres un experto en producción musical. Ayudas a construir prompts para generadores de música como Suno o Udio. Respondes siempre en español.',
-  'ba438025-4674-4fb8-8f5d-8d5269b13e03': 'Eres un experto en síntesis de voz y audio. Ayudas a construir prompts y scripts para generadores TTS. Respondes siempre en español.',
+  '74721199-5ee8-42b1-a1a5-e6203c3ff9bb': `[REDACTED PROMPT]`,
+
+  'af3962bb-7a19-425c-882a-5301a837c7d7': `[REDACTED PROMPT]`,
+
+  'db79925b-c161-419e-bd94-460b3d43af8a': `[REDACTED PROMPT]`,
+
+  '28e7ba28-b6be-4d59-9e0f-cdd55cf09124': `[REDACTED PROMPT]`,
+
+  'ba438025-4674-4fb8-8f5d-8d5269b13e03': `[REDACTED PROMPT]`,
 }
 
-const COCHI_SUFFIX = `\n\nCuando el usuario escriba /COCHI, reformatea las instrucciones acordadas en segunda persona imperativa dirigida al agente Cochi. Formato exacto: "Cochi, [acción] en [archivo/función]:\n[bloque exacto]". Sin explicaciones adicionales. Sin cambiar verbos.`
+const COCHI_SUFFIX = `\n\nWhen the user writes /COCHI:
+- Reformat the agreed instructions into second person imperative directed at the Cochi agent.
+- Exact format: "Cochi, [action] in [file/function]:\n[exact block]"
+- No additional explanations. Do not change verbs.
+- If the input is only "/COCHI" with no additional task: review the R7 history, extract the work from the previous turn and package it as executable instructions for Cochi.
+- If R7 indicates a code block was included ("Incluí código: [language] — [description]"): regenerate an equivalent code example in the same language and include it in the Cochi package.`
 
 const FORMATO_R7 = `\n\nIMPORTANTE: Estructura SIEMPRE tu respuesta exactamente así, sin excepción:
 R1: [resumen en 1-2 frases del input del usuario]
 R2: [resumen en 1-2 frases de tu propia respuesta]
-R3: [tu respuesta completa aquí]`
+R3: [tu respuesta completa aquí]
+
+Si tu respuesta (R3) contenía uno o más bloques de código, inclúyelo en R2 con este formato exacto:
+"Incluí código: [lenguaje] — [descripción funcional de una línea]"
+Ejemplo: "Incluí código: Python — función que filtra números pares de una lista"`
 
 function getSystemPrompt(categoria_id: string, esCochi: boolean): string {
   const base = SYSTEM_PROMPTS[categoria_id] || 'Eres un asistente útil.'

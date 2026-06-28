@@ -1,8 +1,88 @@
+import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { THEME } from '../theme'
+
+const r7SyntaxTheme = {
+  'code[class*="language-"]': {
+    color: THEME.textHigh,
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: '0.9rem',
+    textShadow: 'none',
+    direction: 'ltr',
+    textAlign: 'left',
+    whiteSpace: 'pre',
+    wordSpacing: 'normal',
+    wordBreak: 'normal',
+    lineHeight: 1.6,
+    tabSize: 2,
+    hyphens: 'none'
+  },
+  'pre[class*="language-"]': {
+    color: THEME.textHigh,
+    background: THEME.bgMain,
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: '0.9rem',
+    textShadow: 'none',
+    direction: 'ltr',
+    textAlign: 'left',
+    whiteSpace: 'pre',
+    wordSpacing: 'normal',
+    wordBreak: 'normal',
+    lineHeight: 1.6,
+    tabSize: 2,
+    hyphens: 'none',
+    padding: '1em',
+    margin: '0.5em 0',
+    overflow: 'auto',
+    borderRadius: 10,
+    border: `1px solid ${THEME.celeste15}`
+  },
+  'comment': { color: THEME.textLow, fontStyle: 'italic' },
+  'prolog': { color: THEME.textLow },
+  'doctype': { color: THEME.textLow },
+  'cdata': { color: THEME.textLow },
+  'punctuation': { color: THEME.textMed },
+  'property': { color: THEME.celesteBright },
+  'tag': { color: THEME.pinkMarble },
+  'boolean': { color: THEME.goldBright },
+  'number': { color: THEME.goldBright },
+  'constant': { color: THEME.goldBright },
+  'symbol': { color: THEME.gold },
+  'selector': { color: THEME.celeste },
+  'attr-name': { color: THEME.celeste },
+  'string': { color: THEME.gold },
+  'char': { color: THEME.gold },
+  'builtin': { color: THEME.celesteBright },
+  'inserted': { color: THEME.gold },
+  'operator': { color: THEME.celeste },
+  'entity': { color: THEME.celesteBright, cursor: 'help' },
+  'url': { color: THEME.celeste },
+  'variable': { color: THEME.pinkMarble },
+  'atrule': { color: THEME.celesteBright },
+  'attr-value': { color: THEME.gold },
+  'keyword': { color: THEME.pinkMarble },
+  'function': { color: THEME.celesteBright },
+  'class-name': { color: THEME.goldBright },
+  'regex': { color: THEME.gold },
+  'important': { color: THEME.goldBright, fontWeight: 'bold' },
+  'bold': { fontWeight: 'bold' },
+  'italic': { fontStyle: 'italic' },
+  'deleted': { color: THEME.pinkMarble }
+}
+
 export default function ChatPanel({
   titulo, mensajes, setMensajes, input, setInput,
   enviar, cargando, tokens, esM01, onCancel, cancelado,
   routingMode, setRoutingMode, modeloSeleccionado, modeloCochi, THEME
 }) {
+  const [copiadoIndex, setCopiadoIndex] = useState(null)
+
+  function handleCopy(contenido, index) {
+    navigator.clipboard.writeText(contenido)
+    setCopiadoIndex(index)
+    setTimeout(() => setCopiadoIndex(null), 2000)
+  }
   return (
     <div style={{
       flex:1, display:'flex', flexDirection:'column',
@@ -81,12 +161,71 @@ export default function ChatPanel({
               fontSize:'1.1rem',
               color:THEME.textHigh,
               lineHeight:1.6,
-              whiteSpace:'pre-wrap',
               fontFamily:"'Exo 2',sans-serif",
               fontWeight:400
             }}>
-              {msg.contenido}
+              <ReactMarkdown
+                components={{
+                  code({ node, inline, className, children, ...props }) {
+                    const match = /language-(\w+)/.exec(className || '')
+                    if (!inline && match) {
+                      return (
+                        <SyntaxHighlighter
+                          style={r7SyntaxTheme}
+                          language={match[1]}
+                          PreTag="div"
+                          customStyle={{ borderRadius: 10, fontSize: '0.9rem', margin: '10px 0' }}
+                        >
+                          {String(children).replace(/\n$/, '')}
+                        </SyntaxHighlighter>
+                      )
+                    }
+                    return (
+                      <code style={{ background: 'rgba(92,155,165,0.15)', padding: '2px 6px', borderRadius: 4, fontSize: '0.9em' }} {...props}>
+                        {children}
+                      </code>
+                    )
+                  }
+                }}
+              >
+                {msg.contenido}
+              </ReactMarkdown>
             </div>
+            {msg.rol === 'asistente' && i > 0 && mensajes[i-1]?.contenido?.includes('/COCHI') && (
+              <div style={{ textAlign: 'right', marginTop: 8 }}>
+                <button
+                  onClick={() => handleCopy(msg.contenido, i)}
+                  style={{
+                    background: copiadoIndex === i ? 'rgba(92,155,165,0.2)' : 'transparent',
+                    border: `1px solid ${copiadoIndex === i ? THEME.celeste : THEME.celeste25}`,
+                    borderRadius: 8,
+                    padding: '4px 12px',
+                    color: copiadoIndex === i ? THEME.celeste : THEME.textMed,
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.08em',
+                    cursor: 'pointer',
+                    fontFamily: "'Space Grotesk',sans-serif",
+                    transition: 'all 0.3s ease',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onMouseEnter={e => {
+                    if (copiadoIndex !== i) {
+                      e.currentTarget.style.color = THEME.textHigh
+                      e.currentTarget.style.borderColor = THEME.celeste
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (copiadoIndex !== i) {
+                      e.currentTarget.style.color = THEME.textMed
+                      e.currentTarget.style.borderColor = THEME.celeste25
+                    }
+                  }}
+                >
+                  {copiadoIndex === i ? '✅ ¡Copiado!' : '📋 COPIAR PARA COCHI'}
+                </button>
+              </div>
+            )}
           </div>
         ))}
 

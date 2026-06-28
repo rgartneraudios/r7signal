@@ -7,7 +7,11 @@ import SidebarPanel from './SidebarPanel'
 export default function MenuSelector({
   categoriaActiva, menus, modulos, error,
   seleccionarMenu, volverACategorias,
-  formattedTime
+  formattedTime,
+  sidebarOpen, toggleSidebar, proyectos, proyectoActivo,
+  mostrarCrearProyecto, setMostrarCrearProyecto,
+  nuevoProyectoNombre, setNuevoProyectoNombre,
+  crearProyecto, seleccionarProyecto, setVista, handleLogout
 }) {
   return (
     <>
@@ -26,7 +30,20 @@ export default function MenuSelector({
         <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
         <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
         <HUD formattedTime={formattedTime} weather={WEATHER} />
-        <SidebarPanel />
+        <SidebarPanel
+          sidebarOpen={sidebarOpen}
+          toggleSidebar={toggleSidebar}
+          proyectos={proyectos}
+          proyectoActivo={proyectoActivo}
+          mostrarCrearProyecto={mostrarCrearProyecto}
+          setMostrarCrearProyecto={setMostrarCrearProyecto}
+          nuevoProyectoNombre={nuevoProyectoNombre}
+          setNuevoProyectoNombre={setNuevoProyectoNombre}
+          crearProyecto={crearProyecto}
+          seleccionarProyecto={seleccionarProyecto}
+          setVista={setVista}
+          handleLogout={handleLogout}
+        />
         <button onClick={volverACategorias} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Orbitron',monospace", textTransform:'uppercase' }}>
           ◀ Volver
         </button>
@@ -100,7 +117,6 @@ export default function MenuSelector({
           </div>
         </div>
       </div>
-      <SidebarPanel />
     </>
   )
 }
