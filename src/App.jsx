@@ -75,10 +75,31 @@ export default function App() {
         <div style={{ fontSize:'0.9rem', fontWeight:300, letterSpacing:'0.15em', color:THEME.textMed, marginTop:6 }}>{WEATHER.emoji} {WEATHER.city} · {WEATHER.temp}</div>
       </div>
 
-      <button onClick={() => setShowLoginModal(true)} style={{ position:'absolute', top:24, right:36, zIndex:20, background:'transparent', border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'5px 14px', color:THEME.textLow, fontSize:'0.6rem', letterSpacing:'0.15em', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase', transition:'all 0.25s' }}
-        onMouseEnter={e=>{e.currentTarget.style.color=THEME.textMed;e.currentTarget.style.borderColor=THEME.celeste35}}
-        onMouseLeave={e=>{e.currentTarget.style.color=THEME.textLow;e.currentTarget.style.borderColor=THEME.borderSubtle}}
-      >{user ? `👤 ${user.initials}` : '🔐 Acceso'}</button>
+<button onClick={() => setShowLoginModal(true)} style={{ position:'absolute', top:24, right:36, zIndex:20,
+            background: user ? '#00CC44' : '#D32F2F',
+            border: user ? '2px solid #39FF14' : '2px solid #EF5350',
+            borderRadius:20, padding:'5px 14px',
+            color:'#FFFFFF', fontSize:'0.6rem', letterSpacing:'0.15em',
+            cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:700,
+            textTransform:'uppercase', transition:'all 0.25s',
+            boxShadow: user ? '0 0 20px #00CC44, 0 0 40px #00CC4440' : 'none' }}
+          onMouseEnter={e=>{
+            if (user) {
+              e.currentTarget.style.background='#00E64D';
+              e.currentTarget.style.boxShadow='0 0 30px #00CC44, 0 0 60px #00CC4460';
+            } else {
+              e.currentTarget.style.background='#EF5350';
+            }
+          }}
+          onMouseLeave={e=>{
+            if (user) {
+              e.currentTarget.style.background='#00CC44';
+              e.currentTarget.style.boxShadow='0 0 20px #00CC44, 0 0 40px #00CC4440';
+            } else {
+              e.currentTarget.style.background='#D32F2F';
+            }
+          }}
+        >{user ? `👤 ${user.initials}` : '🔐 Acceso'}</button>
 
       <div style={{ position:'absolute', bottom:52, right:36, zIndex:20, display:'flex', alignItems:'center', gap:8, fontSize:'0.68rem', letterSpacing:'0.2em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600 }}>
         <div className="r7-pulse" style={{ width:6, height:6, borderRadius:'50%', background:THEME.celeste, boxShadow:`0 0 8px ${THEME.celeste}BF` }} />
@@ -102,7 +123,7 @@ export default function App() {
           <div className="r7-logo" style={{ fontFamily:"'Orbitron',monospace", fontSize:'7.5rem', fontWeight:900, letterSpacing:'-0.02em', lineHeight:1, background:`linear-gradient(140deg, ${THEME.textHigh} 25%, ${THEME.celeste} 62%, ${THEME.gold} 100%)`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>R7</div>
           <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1rem', fontWeight:500, letterSpacing:'0.58em', color:THEME.textMed, marginTop:-2, marginBottom:26, textTransform:'uppercase' }}>Signal</div>
           <div style={{ width:72, height:1, margin:'0 auto 22px', background:`linear-gradient(90deg, transparent, ${THEME.celeste35}, transparent)` }} />
-          <div style={{ fontSize:'0.78rem', fontWeight:400, letterSpacing:'0.28em', color:THEME.textMed, textTransform:'uppercase', fontFamily:"'Exo 2',sans-serif" }}>Bridging Modular Contexts</div>
+          <div style={{ fontSize:'0.78rem', fontWeight:400, letterSpacing:'0.28em', color:THEME.textMed, textTransform:'uppercase', fontFamily:"'Exo 2',sans-serif" }}>Web Intelligence<br/>Cochi Local Execution</div>
           <button className={`enter-btn ${enterState!=='idle'?enterState:''}`} onClick={handleEnter} style={{ margin:'34px auto 0' }}>
             {enterState==='idle' && 'Enter System'}
             {enterState==='loading' && 'Initializing...'}

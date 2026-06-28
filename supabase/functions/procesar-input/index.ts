@@ -18,11 +18,36 @@ interface RequestBody {
 
 // Función auxiliar para parsear R1/R2/R3 (básica por ahora)
 function parsearR1R2R3(texto: string) {
+  const r1Match = texto.match(/R1:\s*([\s\S]*?)(?=R2:)/i)
+  const r2Match = texto.match(/R2:\s*([\s\S]*?)(?=R3:)/i)
+  const r3Match = texto.match(/R3:\s*([\s\S]*?)$/i)
+
   return {
-    r1: `R1: ${texto.substring(0, 100)}...`,
-    r2: `R2: Resumen de respuesta`,
-    r3: texto
+    r1: r1Match?.[1]?.trim() || '',
+    r2: r2Match?.[1]?.trim() || '',
+    r3: r3Match?.[1]?.trim() || texto
   }
+}
+
+// System prompts por categoría
+const SYSTEM_PROMPTS: Record<string, string> = {
+  '74721199-5ee8-42b1-a1a5-e6203c3ff9bb': 'Eres un experto en desarrollo de software. Escribes código limpio, eficiente y bien comentado. Respondes siempre en español.',
+  'af3962bb-7a19-425c-882a-5301a837c7d7': 'Eres un experto en redacción y comunicación. Adaptas el tono y estilo según el contexto. Respondes siempre en español.',
+  'db79925b-c161-419e-bd94-460b3d43af8a': 'Eres un experto en diseño visual y generación de imágenes. Ayudas a construir prompts detallados y efectivos para generadores de imagen. Respondes siempre en español.',
+  '28e7ba28-b6be-4d59-9e0f-cdd55cf09124': 'Eres un experto en producción musical. Ayudas a construir prompts para generadores de música como Suno o Udio. Respondes siempre en español.',
+  'ba438025-4674-4fb8-8f5d-8d5269b13e03': 'Eres un experto en síntesis de voz y audio. Ayudas a construir prompts y scripts para generadores TTS. Respondes siempre en español.',
+}
+
+const COCHI_SUFFIX = `\n\nCuando el usuario escriba /COCHI, reformatea las instrucciones acordadas en segunda persona imperativa dirigida al agente Cochi. Formato exacto: "Cochi, [acción] en [archivo/función]:\n[bloque exacto]". Sin explicaciones adicionales. Sin cambiar verbos.`
+
+const FORMATO_R7 = `\n\nIMPORTANTE: Estructura SIEMPRE tu respuesta exactamente así, sin excepción:
+R1: [resumen en 1-2 frases del input del usuario]
+R2: [resumen en 1-2 frases de tu propia respuesta]
+R3: [tu respuesta completa aquí]`
+
+function getSystemPrompt(categoria_id: string, esCochi: boolean): string {
+  const base = SYSTEM_PROMPTS[categoria_id] || 'Eres un asistente útil.'
+  return esCochi ? base + COCHI_SUFFIX : base + FORMATO_R7
 }
 
 serve(async (req) => {
@@ -63,7 +88,8 @@ serve(async (req) => {
       .single()
 
     const ordenModulo = moduloInfo?.orden || 1
-    const systemPrompt = moduloInfo?.system_prompt || 'Eres un asistente útil.'
+    const esCochi = input_usuario.includes('/COCHI')
+    const systemPrompt = getSystemPrompt(categoria_id, esCochi)
 
     // 6. ROUTING HEURÍSTICO (MB vs PLUS)
     let puntosMB = 0
@@ -147,7 +173,7 @@ if (routing_mode === 'MB') {
     const precioOutput = menuItem.precio_output || 0
     const costeReal = (tokensInput / 1_000_000) * precioInput + (tokensOutput / 1_000_000) * precioOutput
 
-    const { r1, r2 } = parsearR1R2R3(r3)
+    const { r1, r2, r3: r3Final } = parsearR1R2R3(r3)
 
     // 9. CONSULTAR TURNO NÚMERO
     const { count } = await supabase
@@ -162,7 +188,7 @@ if (routing_mode === 'MB') {
       sesion_id,
       turno_numero: turnoNumero,
       input_usuario,
-      r1, r2, r3,
+      r1, r2, r3: r3Final,
       modelo_usado: modeloId,
       routing_decision: routingDecision,
       tokens_input: tokensInput,
@@ -190,7 +216,7 @@ if (routing_mode === 'MB') {
     return new Response(
       JSON.stringify({
         success: true,
-        r3,
+        r3: r3Final,
         metadata: { 
           modelo_usado: routingDecision, 
           modelo_id: modeloId,
