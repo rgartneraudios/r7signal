@@ -2,14 +2,15 @@ import { useState, useEffect, useRef } from 'react'
 import { THEME } from '../theme'
 import { WEATHER } from '../constants'
 import { supabase } from '../supabaseClient'
-import Cube3D from './Cube3D'
-import HUD from './HUD'
+import { useAuth } from '../context/AuthContext'
+import AppHeader from './AppHeader'
 import Billing from '../pages/Billing'
 import SidebarPanel from './SidebarPanel'
 import MenuSelector from './MenuSelector'
 import ChatView from './ChatView'
 
-export default function MenuSystem({ onBack, user }) {
+export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClick }) {
+  const { setUser } = useAuth()
   const [time, setTime] = useState(new Date())
   useEffect(() => {
     const id = setInterval(() => setTime(new Date()), 1000)
@@ -47,7 +48,6 @@ export default function MenuSystem({ onBack, user }) {
   const [canceladoM02, setCanceladoM02] = useState(false)
 
   const pad = n => String(n).padStart(2, '0')
-  const formattedTime = `${pad(time.getHours())}:${pad(time.getMinutes())}:${pad(time.getSeconds())}`
 
   useEffect(() => {
     async function cargarCategorias() {
@@ -64,6 +64,15 @@ export default function MenuSystem({ onBack, user }) {
     }
     cargarCategorias()
   }, [])
+
+  useEffect(() => {
+    if (categoriaDirecta && categorias.length > 0) {
+      const cat = categorias.find(c => c.id === categoriaDirecta.id)
+      if (cat) {
+        setTimeout(() => seleccionarCategoria(cat), 0)
+      }
+    }
+  }, [categoriaDirecta, categorias.length])
 
   async function seleccionarCategoria(cat) {
     setCategoriaActiva(cat)
@@ -273,11 +282,7 @@ export default function MenuSystem({ onBack, user }) {
   }
 
   function volverACategorias() {
-    resetChatState()
-    setVista('categorias')
-    setCategoriaActiva(null)
-    setMenus([])
-    setModulos([])
+    onBack()
   }
 
   function volverAMenus() {
@@ -323,6 +328,7 @@ export default function MenuSystem({ onBack, user }) {
 
   async function handleLogout() {
     await supabase.auth.signOut()
+    setUser(null)
     onBack()
   }
 
@@ -334,6 +340,7 @@ export default function MenuSystem({ onBack, user }) {
   if (cargandoMenu) {
     return (
       <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
+        <AppHeader onLoginClick={onLoginClick} />
         <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
         <div style={{ position:'relative', zIndex:10, display:'flex', alignItems:'center', justifyContent:'center', height:'100vh' }}>
           <div style={{ textAlign:'center', color:THEME.celeste }}>
@@ -345,174 +352,74 @@ export default function MenuSystem({ onBack, user }) {
     )
   }
 
-  if (vista === 'categorias') {
-    return (
-      <>
-      <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&family=Space+Grotesk:wght@500;600;700&display=swap');
-          @keyframes gridMove { 0%{background-position:0 0} 100%{background-position:48px 48px} }
-          @keyframes clockGlow { from{text-shadow:0 0 20px ${THEME.celeste30}} to{text-shadow:0 0 40px ${THEME.gold45}} }
-          @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
-          @keyframes slideIn { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
-          .menu-clock { animation: clockGlow 3s ease-in-out infinite alternate; }
-          .menu-pulse { animation: pulse-dot 2s ease-in-out infinite; }
-          ::-webkit-scrollbar { width:3px; }
-          ::-webkit-scrollbar-thumb { background:${THEME.celeste25}; border-radius:2px; }
-        `}</style>
-        <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
-        <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
-        <HUD formattedTime={formattedTime} weather={WEATHER} />
-        <SidebarPanel
-          sidebarOpen={sidebarOpen}
-          toggleSidebar={toggleSidebar}
-          proyectos={proyectos}
-          proyectoActivo={proyectoActivo}
-          mostrarCrearProyecto={mostrarCrearProyecto}
-          setMostrarCrearProyecto={setMostrarCrearProyecto}
-          nuevoProyectoNombre={nuevoProyectoNombre}
-          setNuevoProyectoNombre={setNuevoProyectoNombre}
-          crearProyecto={crearProyecto}
-          seleccionarProyecto={seleccionarProyecto}
-          setVista={setVista}
-          handleLogout={handleLogout}
-        />
-        <button onClick={handleLogout} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase' }}>
-          ◀ Salir
-        </button>
-        <div style={{ position:'fixed', bottom:18, right:28, zIndex:30, display:'flex', alignItems:'center', gap:6, fontSize:'0.63rem', letterSpacing:'0.18em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600 }}>
-          <div className='menu-pulse' style={{ width:5, height:5, borderRadius:'50%', background:THEME.celeste, boxShadow:`0 0 7px ${THEME.celeste}BF` }} />
-          System Online
-        </div>
-        <div style={{ position:'relative', zIndex:10, maxWidth:'100%', minHeight:'100vh', margin:'0 auto', padding:'50px 40px 24px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
-          <div style={{ textAlign:'center', marginBottom:30 }}>
-            <div style={{ fontFamily:"'Orbitron',monospace", fontSize:'3rem', fontWeight:900, background:`linear-gradient(140deg, ${THEME.textHigh} 25%, ${THEME.celeste} 65%, ${THEME.gold} 100%)`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', letterSpacing:'0.06em' }}>
-              R7 SIGNAL
-            </div>
-            <div style={{ fontSize:'1.1rem', color:THEME.textMed, marginTop:10, letterSpacing:'0.25em', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600 }}>
-              ELIGE TU ÁREA
-            </div>
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:36, maxWidth:'100%', margin:'0 auto' }}>
-            {categorias.map(cat => {
-              const iconMap = {
-                'codigo': '/assets/codigo.webp',
-                'imagen': '/assets/imagen.webp',
-                'musica': '/assets/musica.webp',
-                'música': '/assets/musica.webp',
-                'texto': '/assets/texto.webp',
-                'voces': '/assets/voces.webp',
-              }
-              const iconSrc = iconMap[cat.nombre.toLowerCase()] || `/assets/${cat.icono}`
-              return (
-              <button
-                key={cat.id}
-                onClick={() => seleccionarCategoria(cat)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                  textAlign: 'center',
-                }}
-              >
-                <Cube3D color="celeste" delay={0} rotateY={0} minHeight={340}>
-                  <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', borderRadius:18 }}>
-                    <img
-                      src={iconSrc}
-                      alt={cat.nombre}
-                      style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
-                    />
-                  </div>
-                </Cube3D>
-                <h3 style={{
-                  marginTop: 28,
-                  fontFamily:"'Space Grotesk',sans-serif",
-                  fontSize: '3.2rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                  color: THEME.textHigh,
-                  transition: 'color 0.3s ease',
-                  marginBottom: 0,
-                }}
-                  onMouseEnter={e => e.currentTarget.style.color = THEME.gold}
-                  onMouseLeave={e => e.currentTarget.style.color = THEME.textHigh}
-                >
-                  {cat.nombre}
-                </h3>
-              </button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-      </>
-    )
-  }
 
   if (vista === 'menus') {
-    return <MenuSelector
-      categoriaActiva={categoriaActiva}
-      menus={menus}
-      modulos={modulos}
-      error={error}
-      seleccionarMenu={seleccionarMenu}
-      volverACategorias={volverACategorias}
-      formattedTime={formattedTime}
-      sidebarOpen={sidebarOpen}
-      toggleSidebar={toggleSidebar}
-      proyectos={proyectos}
-      proyectoActivo={proyectoActivo}
-      mostrarCrearProyecto={mostrarCrearProyecto}
-      setMostrarCrearProyecto={setMostrarCrearProyecto}
-      nuevoProyectoNombre={nuevoProyectoNombre}
-      setNuevoProyectoNombre={setNuevoProyectoNombre}
-      crearProyecto={crearProyecto}
-      seleccionarProyecto={seleccionarProyecto}
-      setVista={setVista}
-      handleLogout={handleLogout}
-    />
+    return <>
+      <AppHeader onLoginClick={onLoginClick} />
+      <MenuSelector
+        categoriaActiva={categoriaActiva}
+        menus={menus}
+        modulos={modulos}
+        error={error}
+        seleccionarMenu={seleccionarMenu}
+        volverACategorias={volverACategorias}
+        sidebarOpen={sidebarOpen}
+        toggleSidebar={toggleSidebar}
+        proyectos={proyectos}
+        proyectoActivo={proyectoActivo}
+        mostrarCrearProyecto={mostrarCrearProyecto}
+        setMostrarCrearProyecto={setMostrarCrearProyecto}
+        nuevoProyectoNombre={nuevoProyectoNombre}
+        setNuevoProyectoNombre={setNuevoProyectoNombre}
+        crearProyecto={crearProyecto}
+        seleccionarProyecto={seleccionarProyecto}
+        setVista={setVista}
+        handleLogout={handleLogout}
+      />
+    </>
   }
 
 if (vista === 'chat') {
-    return <ChatView
-      modulos={modulos}
-      moduloActivo={moduloActivo}
-      menuActivo={menuActivo}
-      categoriaActiva={categoriaActiva}
-      sesionId={sesionId}
-      mensajesM01={mensajesM01}
-      setMensajesM01={setMensajesM01}
-      inputM01={inputM01}
-      setInputM01={setInputM01}
-      enviarMensajeM01={enviarMensajeM01}
-      cargandoM01={cargandoM01}
-      tokensM01={tokensM01}
-      cancelarM01={cancelarM01}
-      canceladoM01={canceladoM01}
-      routingMode={routingMode}
-      setRoutingMode={setRoutingMode}
-      volverAMenus={volverAMenus}
-      formattedTime={formattedTime}
-      sidebarOpen={sidebarOpen}
-      toggleSidebar={toggleSidebar}
-      proyectos={proyectos}
-      proyectoActivo={proyectoActivo}
-      mostrarCrearProyecto={mostrarCrearProyecto}
-      setMostrarCrearProyecto={setMostrarCrearProyecto}
-      nuevoProyectoNombre={nuevoProyectoNombre}
-      setNuevoProyectoNombre={setNuevoProyectoNombre}
-      crearProyecto={crearProyecto}
-      seleccionarProyecto={seleccionarProyecto}
-      setVista={setVista}
-      handleLogout={handleLogout}
-    />
+    return <>
+      <AppHeader onLoginClick={onLoginClick} />
+      <ChatView
+        modulos={modulos}
+        moduloActivo={moduloActivo}
+        menuActivo={menuActivo}
+        categoriaActiva={categoriaActiva}
+        sesionId={sesionId}
+        mensajesM01={mensajesM01}
+        setMensajesM01={setMensajesM01}
+        inputM01={inputM01}
+        setInputM01={setInputM01}
+        enviarMensajeM01={enviarMensajeM01}
+        cargandoM01={cargandoM01}
+        tokensM01={tokensM01}
+        cancelarM01={cancelarM01}
+        canceladoM01={canceladoM01}
+        routingMode={routingMode}
+        setRoutingMode={setRoutingMode}
+        volverAMenus={volverAMenus}
+        sidebarOpen={sidebarOpen}
+        toggleSidebar={toggleSidebar}
+        proyectos={proyectos}
+        proyectoActivo={proyectoActivo}
+        mostrarCrearProyecto={mostrarCrearProyecto}
+        setMostrarCrearProyecto={setMostrarCrearProyecto}
+        nuevoProyectoNombre={nuevoProyectoNombre}
+        setNuevoProyectoNombre={setNuevoProyectoNombre}
+        crearProyecto={crearProyecto}
+        seleccionarProyecto={seleccionarProyecto}
+        setVista={setVista}
+        handleLogout={handleLogout}
+      />
+    </>
   }
 
   if (vista === 'billing') {
     return (
       <>
+        <AppHeader onLoginClick={onLoginClick} />
         <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
           <style>{`
             @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&family=Space+Grotesk:wght@500;600;700&display=swap');

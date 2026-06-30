@@ -1,5 +1,4 @@
 import { THEME } from '../theme'
-import { WEATHER } from '../constants'
 import Chat00 from './Chat00'
 import ChatPanel from './ChatPanel'
 import SidebarPanel from './SidebarPanel'
@@ -9,7 +8,7 @@ export default function ChatView({
   mensajesM01, setMensajesM01, inputM01, setInputM01,
   enviarMensajeM01, cargandoM01, tokensM01, cancelarM01, canceladoM01,
   routingMode, setRoutingMode,
-  volverAMenus, formattedTime,
+  volverAMenus,
   sidebarOpen, toggleSidebar, proyectos, proyectoActivo,
   mostrarCrearProyecto, setMostrarCrearProyecto,
   nuevoProyectoNombre, setNuevoProyectoNombre,
@@ -83,13 +82,6 @@ export default function ChatView({
           setVista={setVista}
           handleLogout={handleLogout}
         />
-        <div style={{ position:'fixed', top:18, left:28, zIndex:30 }}>
-          <div className='menu-clock' style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'3rem', fontWeight:700, color:THEME.textHigh }}>{formattedTime}</div>
-          <div style={{ fontSize:'1.15rem', color:THEME.textMed, marginTop:6, letterSpacing:'0.12em' }}>
-            {WEATHER.emoji} {WEATHER.city} · {WEATHER.temp}
-          </div>
-        </div>
-
         <button onClick={volverAMenus} style={{
           position:'fixed', top:22, right:28, zIndex:30,
           background:THEME.bgFeedCC,
