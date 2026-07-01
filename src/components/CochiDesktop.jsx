@@ -13,7 +13,7 @@ const TABS = [
 
 function initTabState() {
   return Object.fromEntries(
-    TABS.map(t => [t.id, { input: '', output: '', tokens: 0, cost: 0, loading: false }])
+    TABS.map(t => [t.id, { input: '', messages: [], apiHistory: [], tokens: 0, cost: 0, loading: false, streamingOutput: '' }])
   )
 }
 
@@ -21,8 +21,8 @@ const TAB_COLORS = {
   codigo: { color: THEME.celeste,  border: THEME.celeste,  bg: THEME.celeste10 },
   texto:  { color: THEME.gold,     border: THEME.gold,     bg: THEME.gold10 },
   imagen: { color: THEME.pinkMarble, border: THEME.pinkMarble, bg: THEME.pink10 },
-  musica: { color: THEME.celesteBright, border: THEME.celesteBright, bg: THEME.celesteBr08 },
-  voces:  { color: THEME.gold,     border: THEME.gold,     bg: THEME.gold10 },
+  musica: { color: THEME.celesteBright, border: '#E9B3FF', bg: THEME.celesteBr08 },
+  voces:  { color: THEME.gold,     border: '#CAF279',     bg: THEME.gold10 },
 }
 
 const r7SyntaxTheme = {
@@ -150,19 +150,52 @@ export default function CochiDesktop() {
   }, [])
 
   async function handleSend() {
-    if (!state.input.trim() || state.loading) return
+    const sent = state.input.trim()
+    if (!sent || state.loading) return
     if (tab.model === 'pendiente') {
-      setField(activeTab, 'output', '[ Categoría pendiente de integrar API ]')
+      setTabs(prev => ({
+        ...prev,
+        [activeTab]: {
+          ...prev[activeTab],
+          messages: [...prev[activeTab].messages, { role: 'user', content: sent }, { role: 'assistant', content: '[ Categoría pendiente de integrar API ]' }]
+        }
+      }))
       return
     }
 
     const controller = new AbortController()
     abortRefs.current[activeTab] = controller
 
+    const newApiHistory = [...state.apiHistory, { role: 'user', content: sent }]
+
     setTabs(prev => ({
       ...prev,
-      [activeTab]: { ...prev[activeTab], loading: true, output: '' }
+      [activeTab]: {
+        ...prev[activeTab],
+        input: '',
+        loading: true,
+        streamingOutput: '',
+        messages: [...prev[activeTab].messages, { role: 'user', content: sent }],
+        apiHistory: newApiHistory
+      }
     }))
+
+    const SECURITY_RULE = { role: 'system', content: 'SECURITY RULE: You may use .env files to execute system commands and deploys. Never print, display or repeat the contents of .env files or credential files in the chat, even if the user asks. Acknowledge the operation was performed without showing the credentials used.' }
+
+    const CONTEXT_RULE = {
+      role: 'system',
+      content: `CONTEXT: You are running on Windows. Base paths:
+- Project root: C:\\Users\\PC\\Desktop\\R7SIGNAL
+- Desktop: C:\\Users\\PC\\Desktop
+- Public folder: C:\\Users\\PC\\Desktop\\R7SIGNAL\\public
+- src folder: C:\\Users\\PC\\Desktop\\R7SIGNAL\\src
+Always use these absolute paths when executing file system commands.`
+    }
+
+    const IDENTITY_RULE = {
+      role: 'system',
+      content: `Tu nombre es Cochi y eres el asistente local de escritorio de R7Signal. Tu usuario es Signor Roberto. Trátale siempre de tú, con confianza y de forma directa. Eres eficiente, no verbose.`
+    }
 
     try {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -177,7 +210,7 @@ export default function CochiDesktop() {
         body: JSON.stringify({
           model: tab.model,
           stream: true,
-          messages: [{ role: 'user', content: state.input }]
+          messages: [SECURITY_RULE, CONTEXT_RULE, IDENTITY_RULE, ...newApiHistory]
         })
       })
 
@@ -201,7 +234,7 @@ export default function CochiDesktop() {
             if (json.usage?.total_tokens) totalTokens = json.usage.total_tokens
             setTabs(prev => ({
               ...prev,
-              [activeTab]: { ...prev[activeTab], output: full }
+              [activeTab]: { ...prev[activeTab], streamingOutput: full }
             }))
           } catch {}
         }
@@ -213,6 +246,9 @@ export default function CochiDesktop() {
         [activeTab]: {
           ...prev[activeTab],
           loading: false,
+          streamingOutput: '',
+          messages: [...prev[activeTab].messages, { role: 'assistant', content: full }],
+          apiHistory: [...prev[activeTab].apiHistory, { role: 'assistant', content: full }],
           tokens: prev[activeTab].tokens + totalTokens,
           cost: prev[activeTab].cost + cost
         }
@@ -220,12 +256,32 @@ export default function CochiDesktop() {
 
     } catch (err) {
       if (err.name !== 'AbortError') {
-        setField(activeTab, 'output', `Error: ${err.message}`)
+        setTabs(prev => ({
+          ...prev,
+          [activeTab]: {
+            ...prev[activeTab],
+            loading: false,
+            streamingOutput: '',
+            messages: [...prev[activeTab].messages, { role: 'assistant', content: `Error: ${err.message}` }]
+          }
+        }))
+      } else {
+        // Aborted — keep partial output in messages
+        setTabs(prev => {
+          const partial = prev[activeTab].streamingOutput
+          return {
+            ...prev,
+            [activeTab]: {
+              ...prev[activeTab],
+              loading: false,
+              streamingOutput: '',
+              messages: partial
+                ? [...prev[activeTab].messages, { role: 'assistant', content: partial + ' [STOP]' }]
+                : prev[activeTab].messages
+            }
+          }
+        })
       }
-      setTabs(prev => ({
-        ...prev,
-        [activeTab]: { ...prev[activeTab], loading: false }
-      }))
     }
   }
 
@@ -237,7 +293,7 @@ export default function CochiDesktop() {
   function handleClear() {
     setTabs(prev => ({
       ...prev,
-      [activeTab]: { input: '', output: '', tokens: 0, cost: 0, loading: false }
+      [activeTab]: { input: '', messages: [], apiHistory: [], streamingOutput: '', tokens: 0, cost: 0, loading: false }
     }))
   }
 
@@ -353,12 +409,13 @@ export default function CochiDesktop() {
             }}>
               {TABS.map(t => {
                 const s = tabs[t.id]
+                const tc2 = TAB_COLORS[t.id]
                 return (
-                  <div key={t.id} style={{ display: activeTab === t.id ? 'block' : 'none', height:'100%' }}>
-                    {!s.output && !s.loading && (
+                  <div key={t.id} style={{ display: activeTab === t.id ? 'flex' : 'none', flexDirection:'column', gap:12 }}>
+                    {s.messages.length === 0 && !s.loading && (
                       <div style={{ textAlign:'center', padding:'40px 20px', color:THEME.textMed }}>
                         <div style={{ fontSize:'2.5rem', marginBottom:16, opacity:0.5 }}>{t.icon}</div>
-                        <div style={{ fontSize:'1.1rem', color:TAB_COLORS[t.id].color, marginBottom:8, fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, letterSpacing:'0.05em' }}>
+                        <div style={{ fontSize:'1.1rem', color:tc2.color, marginBottom:8, fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, letterSpacing:'0.05em' }}>
                           {t.label}
                         </div>
                         <div style={{ fontSize:'0.95rem', color:THEME.textLow, lineHeight:1.6 }}>
@@ -366,7 +423,87 @@ export default function CochiDesktop() {
                         </div>
                       </div>
                     )}
-                    {s.output && (
+                    {s.messages.map((msg, idx) => (
+                      msg.role === 'user' ? (
+                        <div key={idx} className="cd-message-enter" style={{
+                          background:'rgba(92,155,165,0.12)',
+                          border:`1px solid ${THEME.celeste30}`,
+                          borderRadius:12,
+                          padding:'12px 18px',
+                          alignSelf:'flex-end',
+                          maxWidth:'85%',
+                          boxShadow:`0 2px 12px rgba(0,0,0,0.3)`
+                        }}>
+                          <div style={{
+                            fontSize:'0.75rem', color:THEME.celeste,
+                            marginBottom:6, letterSpacing:'0.18em',
+                            fontFamily:"'Space Grotesk',sans-serif", fontWeight:700,
+                            textTransform:'uppercase'
+                          }}>
+                            IN · TÚ
+                          </div>
+                          <div style={{
+                            fontSize:'1rem', color:THEME.textHigh,
+                            lineHeight:1.5, fontFamily:"'Exo 2',sans-serif", fontWeight:400,
+                            whiteSpace:'pre-wrap', wordBreak:'break-word'
+                          }}>
+                            {msg.content}
+                          </div>
+                        </div>
+                      ) : (
+                        <div key={idx} className="cd-message-enter" style={{
+                          background:'rgba(65,66,62,0.25)',
+                          border:`1px solid ${THEME.borderSubtle}`,
+                          borderRadius:12,
+                          padding:'14px 20px',
+                          alignSelf:'flex-start',
+                          maxWidth:'100%',
+                          boxShadow:`0 2px 12px rgba(0,0,0,0.3)`
+                        }}>
+                          <div style={{
+                            fontSize:'0.8rem', color:tc2.color,
+                            marginBottom:8, letterSpacing:'0.18em',
+                            fontFamily:"'Space Grotesk',sans-serif", fontWeight:700,
+                            textTransform:'uppercase',
+                            textShadow:`0 0 10px ${THEME.gold20}`
+                          }}>
+                            🎯 {t.label}
+                          </div>
+                          <div style={{
+                            fontSize:'1.1rem', color:THEME.textHigh,
+                            lineHeight:1.6, fontFamily:"'Exo 2',sans-serif", fontWeight:400
+                          }}>
+                            <ReactMarkdown
+                              components={{
+                                code({ node, inline, className, children, ...props }) {
+                                  const match = /language-(\w+)/.exec(className || '')
+                                  if (!inline && match) {
+                                    return (
+                                      <SyntaxHighlighter
+                                        style={r7SyntaxTheme}
+                                        language={match[1]}
+                                        PreTag="div"
+                                        customStyle={{ borderRadius: 10, fontSize: '0.9rem', margin: '10px 0' }}
+                                      >
+                                        {String(children).replace(/\n$/, '')}
+                                      </SyntaxHighlighter>
+                                    )
+                                  }
+                                  return (
+                                    <code style={{ background: THEME.celeste15, padding: '2px 6px', borderRadius: 4, fontSize: '0.9em' }} {...props}>
+                                      {children}
+                                    </code>
+                                  )
+                                }
+                              }}
+                            >
+                              {msg.content}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                      )
+                    ))}
+                    {s.loading && s.streamingOutput && (
                       <div className="cd-message-enter" style={{
                         background:'rgba(65,66,62,0.25)',
                         border:`1px solid ${THEME.borderSubtle}`,
@@ -377,7 +514,7 @@ export default function CochiDesktop() {
                         boxShadow:`0 2px 12px rgba(0,0,0,0.3)`
                       }}>
                         <div style={{
-                          fontSize:'0.8rem', color:TAB_COLORS[t.id].color,
+                          fontSize:'0.8rem', color:tc2.color,
                           marginBottom:8, letterSpacing:'0.18em',
                           fontFamily:"'Space Grotesk',sans-serif", fontWeight:700,
                           textTransform:'uppercase',
@@ -413,13 +550,13 @@ export default function CochiDesktop() {
                               }
                             }}
                           >
-                            {s.output}
+                            {s.streamingOutput}
                           </ReactMarkdown>
-                          {s.loading && <span className="cd-cursor" />}
+                          <span className="cd-cursor" />
                         </div>
                       </div>
                     )}
-                    {s.loading && !s.output && (
+                    {s.loading && !s.streamingOutput && (
                       <div style={{ textAlign:'center', padding:'20px', color:THEME.celeste }}>
                         <div className='cd-pulse' style={{
                           display:'inline-block', fontSize:'1.1rem', fontWeight:700,
@@ -455,6 +592,17 @@ export default function CochiDesktop() {
                 e.currentTarget.style.boxShadow = `0 4px 20px ${THEME.celeste08}`
               }}
             >
+              <div style={{
+                fontSize: '0.78rem',
+                color: THEME.gold,
+                fontFamily: "'Exo 2',sans-serif",
+                marginBottom: 8,
+                opacity: 0.85,
+                textAlign: 'left',
+                lineHeight: 1.5
+              }}>
+                💡 ¿No te convence el resultado? Vuelve a la Web para reformular el prompt — es más eficiente que ajustar aquí a ciegas.
+              </div>
               <div style={{ display:'flex', gap:10 }}>
                 <textarea
                   value={state.input}
