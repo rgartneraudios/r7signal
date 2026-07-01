@@ -2,12 +2,13 @@ import { THEME } from '../theme'
 import Chat00 from './Chat00'
 import ChatPanel from './ChatPanel'
 import SidebarPanel from './SidebarPanel'
+import Descargas from './Descargas'
 
 export default function ChatView({
   modulos, moduloActivo, menuActivo, categoriaActiva, sesionId,
   mensajesM01, setMensajesM01, inputM01, setInputM01,
   enviarMensajeM01, cargandoM01, tokensM01, cancelarM01, canceladoM01,
-  routingMode, setRoutingMode,
+  routingMode, setRoutingMode, routingState,
   volverAMenus,
   sidebarOpen, toggleSidebar, proyectos, proyectoActivo,
   mostrarCrearProyecto, setMostrarCrearProyecto,
@@ -139,9 +140,10 @@ export default function ChatView({
               </p>
               <p style={{ margin:'0.75rem 0 0' }}>
                 Cuando escribas <span style={{ color:THEME.celeste, fontWeight:700 }}>/COCHI</span> en cualquier chat,
-                el modelo reformateará las instrucciones en modo ejecutable, listas para pegar
+                los modelos web formularán las instrucciones en un botón para copiar y pegar
                 directamente en Cochi.
               </p>
+              <Descargas />
             </div>
 
             <div className="menu-welcome-header" style={{ textAlign:'center', marginBottom:32 }}>
@@ -194,6 +196,9 @@ export default function ChatView({
               cancelado={canceladoM01}
               routingMode={routingMode}
               setRoutingMode={setRoutingMode}
+              routingState={routingState}
+              modeloPeque={modeloMB}
+              modeloRoco={modeloMS}
               modeloSeleccionado={modeloSeleccionado}
               modeloCochi={modeloCochi}
               THEME={THEME}

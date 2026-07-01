@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { THEME } from '../theme'
+import Descargas from './Descargas'
 
 const AI_LINKS = [
   { img: 'claude.webp', url: 'https://claude.ai' },
@@ -66,9 +67,10 @@ export default function Chat00() {
         </p>
         <p style={{ margin:'0.75rem 0 0' }}>
           Cuando escribas <span style={{ color:THEME.celeste, fontWeight:700 }}>/COCHI</span> en cualquier chat,
-          el modelo reformateará las instrucciones en modo ejecutable, listas para pegar
+          los modelos web formularán las instrucciones en un botón para copiar y pegar
           directamente en Cochi.
         </p>
+        <Descargas />
       </div>
 
       <div style={{ maxWidth:960, margin:'0 auto' }}>
