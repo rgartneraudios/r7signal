@@ -1,4 +1,4 @@
-// Edge Function: procesar-input (Versión Corregida)
+// Edge Function: procesar-input
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -8,15 +8,14 @@ const corsHeaders = {
 }
 
 interface RequestBody {
-  sesion_id: string      // ✅ Corregido: string (UUID)
+  sesion_id: string
   input_usuario: string
-  modulo_id: string      // ✅ Corregido: string (UUID)
-  categoria_id: string   // ✅ Corregido: string (UUID)
+  modulo_id: string
+  categoria_id: string
   menu_numero: number
-  routing_mode: string
+  routing_override: 'peque' | 'roco' | 'peque_chain'  // reemplaza routing_mode
 }
 
-// Función auxiliar para parsear R1/R2/R3 (básica por ahora)
 function parsearR1R2R3(texto: string) {
   const r1Match = texto.match(/R1:\s*([\s\S]*?)(?=R2:)/i)
   const r2Match = texto.match(/R2:\s*([\s\S]*?)(?=R3:)/i)
@@ -29,7 +28,6 @@ function parsearR1R2R3(texto: string) {
   }
 }
 
-// System prompts por categoría
 const SYSTEM_PROMPTS: Record<string, string> = {
   '74721199-5ee8-42b1-a1a5-e6203c3ff9bb': `Your area: code and general info. Good vibes.
 You work from the web alongside Cochi.
@@ -93,6 +91,48 @@ function getSystemPrompt(categoria_id: string, esCochi: boolean): string {
   return esCochi ? base + COCHI_SUFFIX : base + FORMATO_R7
 }
 
+// ── Llamada a OpenRouter ────────────────────────────────────────────────────
+async function llamarModelo(
+  apiKey: string,
+  modeloId: string,
+  systemPrompt: string,
+  r7Acumulado: string,
+  inputUsuario: string,
+  temperatura: number,
+  maxTokens: number
+): Promise<{ raw: string; tokensInput: number; tokensOutput: number }> {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://r7signal.com',
+      'X-Title': 'R7Signal'
+    },
+    body: JSON.stringify({
+      model: modeloId,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Contexto R7:\n${r7Acumulado}\n\nUsuario: ${inputUsuario}` }
+      ],
+      temperature: temperatura,
+      max_tokens: maxTokens,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Error OpenRouter [${modeloId}]: ${response.status} - ${errorText}`)
+  }
+
+  const data = await response.json()
+  return {
+    raw: data.choices?.[0]?.message?.content || 'Sin respuesta',
+    tokensInput: data.usage?.prompt_tokens || 0,
+    tokensOutput: data.usage?.completion_tokens || 0,
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -100,16 +140,24 @@ serve(async (req) => {
 
   try {
     // 1. PARSEAR INPUT
-    const { sesion_id, input_usuario, modulo_id, categoria_id, menu_numero, routing_mode }: RequestBody = await req.json()
-    console.log(`📨 Procesando input para sesión: ${sesion_id}`)
+    const {
+      sesion_id,
+      input_usuario,
+      modulo_id,
+      categoria_id,
+      menu_numero,
+      routing_override  // 'peque' | 'roco' | 'peque_chain'
+    }: RequestBody = await req.json()
 
-    // 2. INICIALIZAR SUPABASE CLIENT
+    console.log(`📨 Sesión: ${sesion_id} | Routing: ${routing_override}`)
+
+    // 2. SUPABASE CLIENT
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      )
+    )
 
-    // 3. RECUPERAR SESIÓN
+    // 3. SESIÓN
     const { data: sesion, error: sesionError } = await supabase
       .from('sesiones')
       .select('*')
@@ -120,156 +168,219 @@ serve(async (req) => {
       throw new Error(`Sesión no encontrada: ${sesion_id}`)
     }
 
-    // 4. RECUPERAR R7 ACUMULADO (desde la sesión)
-    const r7Acumulado = sesion.r7_acumulado || ''
-
-    // 5. RECUPERAR ORDEN DEL MÓDULO (Plan=1, Build=2)
-    const { data: moduloInfo } = await supabase
-      .from('modulos')
-      .select('orden, system_prompt')
-      .eq('id', modulo_id)
-      .single()
-
-    const ordenModulo = moduloInfo?.orden || 1
+    let r7Acumulado = sesion.r7_acumulado || ''
     const esCochi = input_usuario.includes('/COCHI')
-    const systemPrompt = getSystemPrompt(categoria_id, esCochi)
-
-    // 6. ROUTING HEURÍSTICO (MB vs PLUS)
-    let puntosMB = 0
-    let puntosPLUS = 0
-    
-    if (ordenModulo === 2) {
-      puntosPLUS += 2 // Build siempre es complejo
-    } else {
-      puntosMB += 1
-    }
-
-    const palabras = input_usuario.trim().split(/\s+/).length
-    if (palabras > 100) puntosPLUS += 1
-    else puntosMB += 1
-
-    let routingDecision: string
-
-if (routing_mode === 'MB') {
-  routingDecision = 'mb'
-} else if (routing_mode === 'MS') {
-  routingDecision = 'plus'
-} else {
-  // AUTO — heurística decide
-  routingDecision = puntosPLUS >= puntosMB ? 'plus' : 'mb'
-}
-    console.log(`⚖️ Routing: ${routingDecision.toUpperCase()}`)
-
-    // 7. OBTENER MODELO DE LA BD (¡ESTO FALTABA!)
-    const { data: menuItem, error: menuItemError } = await supabase
-      .from('menu_items')
-      .select('*')
-      .eq('modulo_id', modulo_id)
-      .eq('tipo', routingDecision)
-      .eq('menu_numero', menu_numero)
-      .single()
-
-    if (menuItemError || !menuItem) {
-      throw new Error(`No se encontró modelo para módulo ${modulo_id} y tipo ${routingDecision}`)
-    }
-
-    console.log(` Modelo seleccionado: ${menuItem.modelo_id}`)
-
-    // 8. LLAMADA A OPENROUTER
     const apiKey = Deno.env.get('OPENROUTER_API_KEY')
     if (!apiKey) throw new Error('Falta OPENROUTER_API_KEY en secrets')
 
-    const modeloId = menuItem.modelo_id
+    // 4. OBTENER MODELOS DE LA BD
+    // MB (Peque)
+    const { data: itemPeque, error: errPeque } = await supabase
+      .from('menu_items')
+      .select('*')
+      .eq('modulo_id', modulo_id)
+      .eq('tipo', 'mb')
+      .eq('menu_numero', menu_numero)
+      .single()
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://r7signal.com',
-        'X-Title': 'R7Signal'
-      },
-      body: JSON.stringify({
-        model: modeloId,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Contexto R7:\n${r7Acumulado}\n\nUsuario: ${input_usuario}` }
-        ],
-        temperature: menuItem.temperatura || 0.7,
-        max_tokens: menuItem.max_tokens || 2048,
-      }),
-    })
+    // PLUS (Roco)
+    const { data: itemRoco, error: errRoco } = await supabase
+      .from('menu_items')
+      .select('*')
+      .eq('modulo_id', modulo_id)
+      .eq('tipo', 'plus')
+      .eq('menu_numero', menu_numero)
+      .single()
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Error OpenRouter: ${response.status} - ${errorText}`)
-    }
-
-    const data = await response.json()
-    const r3 = data.choices?.[0]?.message?.content || 'Sin respuesta'
-
-    const tokensInput = data.usage?.prompt_tokens || 0
-    const tokensOutput = data.usage?.completion_tokens || 0
-
-    // Calcular coste real
-    const precioInput = menuItem.precio_input || 0   // precio por millón de tokens
-    const precioOutput = menuItem.precio_output || 0
-    const costeReal = (tokensInput / 1_000_000) * precioInput + (tokensOutput / 1_000_000) * precioOutput
-
-    const { r1, r2, r3: r3Final } = parsearR1R2R3(r3)
-
-    // 9. CONSULTAR TURNO NÚMERO
-    const { count } = await supabase
+    // Helper: guardar turno y descontar balance
+    const { count: countTurnos } = await supabase
       .from('turnos')
       .select('*', { count: 'exact', head: true })
       .eq('sesion_id', sesion_id)
 
-    const turnoNumero = (count || 0) + 1
+    let turnoNumero = (countTurnos || 0) + 1
 
-    // 10. GUARDAR TURNO
-    await supabase.from('turnos').insert({
-      sesion_id,
-      turno_numero: turnoNumero,
-      input_usuario,
-      r1, r2, r3: r3Final,
-      modelo_usado: modeloId,
-      routing_decision: routingDecision,
-      tokens_input: tokensInput,
-      tokens_output: tokensOutput,
-      coste: costeReal,
-      modulo_id,
-      categoria_id
-    })
+    async function guardarTurno(
+      inputT: string, r1: string, r2: string, r3: string,
+      modeloId: string, tipoDecision: string,
+      tInput: number, tOutput: number, coste: number
+    ) {
+      await supabase.from('turnos').insert({
+        sesion_id,
+        turno_numero: turnoNumero++,
+        input_usuario: inputT,
+        r1, r2, r3,
+        modelo_usado: modeloId,
+        routing_decision: tipoDecision,
+        tokens_input: tInput,
+        tokens_output: tOutput,
+        coste,
+        modulo_id,
+        categoria_id
+      })
+    }
 
-    // 11. ACTUALIZAR R7 ACUMULADO EN SESIÓN
-    const nuevoR7 = `${r7Acumulado}\n${r1}\n${r2}`.trim()
-    await supabase
-      .from('sesiones')
-      .update({ r7_acumulado: nuevoR7 })
-      .eq('id', sesion_id)
+    async function actualizarR7(r1: string, r2: string) {
+      r7Acumulado = `${r7Acumulado}\n${r1}\n${r2}`.trim()
+      await supabase
+        .from('sesiones')
+        .update({ r7_acumulado: r7Acumulado })
+        .eq('id', sesion_id)
+    }
 
-    // 12. DESCONTAR BALANCE
-    await supabase.rpc('descontar_credito', {
-      p_user_id: sesion.user_id,
-      p_coste: costeReal,
-      p_tokens: tokensInput + tokensOutput
-    })
+    async function descontarBalance(tInput: number, tOutput: number, coste: number) {
+      await supabase.rpc('descontar_credito', {
+        p_user_id: sesion.user_id,
+        p_coste: coste,
+        p_tokens: tInput + tOutput
+      })
+    }
 
-    // 13. RESPUESTA AL FRONTEND
-    return new Response(
-      JSON.stringify({
+    function calcularCoste(item: any, tInput: number, tOutput: number): number {
+      const pInput = item.precio_input || 0
+      const pOutput = item.precio_output || 0
+      return (tInput / 1_000_000) * pInput + (tOutput / 1_000_000) * pOutput
+    }
+
+    // ── MODO PEQUE (MB solo) ─────────────────────────────────────────────
+    if (routing_override === 'peque') {
+      if (!itemPeque) throw new Error('No se encontró modelo Peque (mb) para este módulo')
+
+      const systemPrompt = getSystemPrompt(categoria_id, esCochi)
+      const { raw, tokensInput, tokensOutput } = await llamarModelo(
+        apiKey, itemPeque.modelo_id, systemPrompt,
+        r7Acumulado, input_usuario,
+        itemPeque.temperatura || 0.7, itemPeque.max_tokens || 2048
+      )
+
+      const { r1, r2, r3 } = parsearR1R2R3(raw)
+      const coste = calcularCoste(itemPeque, tokensInput, tokensOutput)
+
+      await guardarTurno(input_usuario, r1, r2, r3, itemPeque.modelo_id, 'mb', tokensInput, tokensOutput, coste)
+      await actualizarR7(r1, r2)
+      await descontarBalance(tokensInput, tokensOutput, coste)
+
+      console.log(`✅ Peque completado: ${itemPeque.modelo_id}`)
+
+      return new Response(JSON.stringify({
         success: true,
-        r3: r3Final,
-        metadata: { 
-          modelo_usado: routingDecision, 
-          modelo_id: modeloId,
+        r3,
+        metadata: {
+          routing: 'peque',
+          modelo_id: itemPeque.modelo_id,
           tokens_input: tokensInput,
           tokens_output: tokensOutput,
-          coste: costeReal
+          coste
         }
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-    )
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
+    }
+
+    // ── MODO ROCO (PLUS solo) ────────────────────────────────────────────
+    if (routing_override === 'roco') {
+      if (!itemRoco) throw new Error('No se encontró modelo Roco (plus) para este módulo')
+
+      const systemPrompt = getSystemPrompt(categoria_id, esCochi)
+      const { raw, tokensInput, tokensOutput } = await llamarModelo(
+        apiKey, itemRoco.modelo_id, systemPrompt,
+        r7Acumulado, input_usuario,
+        itemRoco.temperatura || 0.7, itemRoco.max_tokens || 4096
+      )
+
+      const { r1, r2, r3 } = parsearR1R2R3(raw)
+      const coste = calcularCoste(itemRoco, tokensInput, tokensOutput)
+
+      await guardarTurno(input_usuario, r1, r2, r3, itemRoco.modelo_id, 'plus', tokensInput, tokensOutput, coste)
+      await actualizarR7(r1, r2)
+      await descontarBalance(tokensInput, tokensOutput, coste)
+
+      console.log(`✅ Roco completado: ${itemRoco.modelo_id}`)
+
+      return new Response(JSON.stringify({
+        success: true,
+        r3,
+        metadata: {
+          routing: 'roco',
+          modelo_id: itemRoco.modelo_id,
+          tokens_input: tokensInput,
+          tokens_output: tokensOutput,
+          coste
+        }
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
+    }
+
+    // ── MODO PEQUE → ROCO (chain) ────────────────────────────────────────
+    if (routing_override === 'peque_chain') {
+      if (!itemPeque) throw new Error('No se encontró modelo Peque (mb) para el chain')
+      if (!itemRoco) throw new Error('No se encontró modelo Roco (plus) para el chain')
+
+      const systemPromptPeque = getSystemPrompt(categoria_id, false) // Peque no recibe /COCHI
+      const systemPromptRoco  = getSystemPrompt(categoria_id, esCochi)
+
+      // ── Turno 1: Peque ───────────────────────────────────────────────
+      console.log(`🔗 Chain — Turno Peque: ${itemPeque.modelo_id}`)
+      const peque = await llamarModelo(
+        apiKey, itemPeque.modelo_id, systemPromptPeque,
+        r7Acumulado, input_usuario,
+        itemPeque.temperatura || 0.7, itemPeque.max_tokens || 2048
+      )
+
+      const { r1: r1p, r2: r2p, r3: r3p } = parsearR1R2R3(peque.raw)
+      const costePeque = calcularCoste(itemPeque, peque.tokensInput, peque.tokensOutput)
+
+      // Guardar turno Peque
+      await guardarTurno(
+        input_usuario, r1p, r2p, r3p,
+        itemPeque.modelo_id, 'mb_chain',
+        peque.tokensInput, peque.tokensOutput, costePeque
+      )
+      // Acumular R7 con el turno de Peque
+      await actualizarR7(r1p, r2p)
+      await descontarBalance(peque.tokensInput, peque.tokensOutput, costePeque)
+
+      // ── Turno 2: Roco — recibe R3 de Peque como input ───────────────
+      // El R3 de Peque viaja silencioso como input a Roco
+      const inputParaRoco = r3p
+      console.log(`🔗 Chain — Turno Roco: ${itemRoco.modelo_id}`)
+
+      const roco = await llamarModelo(
+        apiKey, itemRoco.modelo_id, systemPromptRoco,
+        r7Acumulado,     // ya actualizado con el turno de Peque
+        inputParaRoco,   // R3 de Peque (silencioso para el usuario)
+        itemRoco.temperatura || 0.7, itemRoco.max_tokens || 4096
+      )
+
+      const { r1: r1r, r2: r2r, r3: r3r } = parsearR1R2R3(roco.raw)
+      const costeRoco = calcularCoste(itemRoco, roco.tokensInput, roco.tokensOutput)
+
+      // Guardar turno Roco
+      await guardarTurno(
+        inputParaRoco, r1r, r2r, r3r,
+        itemRoco.modelo_id, 'plus_chain',
+        roco.tokensInput, roco.tokensOutput, costeRoco
+      )
+      // Acumular R7 con el turno de Roco
+      await actualizarR7(r1r, r2r)
+      await descontarBalance(roco.tokensInput, roco.tokensOutput, costeRoco)
+
+      const costeTotal = costePeque + costeRoco
+
+      console.log(`✅ Chain completo | Peque: ${itemPeque.modelo_id} | Roco: ${itemRoco.modelo_id} | Coste total: ${costeTotal}`)
+
+      return new Response(JSON.stringify({
+        success: true,
+        r3: r3r,   // El usuario solo ve la respuesta final de Roco
+        metadata: {
+          routing: 'peque_chain',
+          modelo_peque: itemPeque.modelo_id,
+          modelo_roco: itemRoco.modelo_id,
+          tokens_input: peque.tokensInput + roco.tokensInput,
+          tokens_output: peque.tokensOutput + roco.tokensOutput,
+          coste: costeTotal
+        }
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
+    }
+
+    throw new Error(`routing_override inválido: ${routing_override}`)
 
   } catch (error: any) {
     console.error('❌ Error en Edge Function:', error)

@@ -1,0 +1,10 @@
+*.pem
+*.key
+*.p12
+*.pfx
+src-tauri/
+node_modules/
+.git/
+desktop.ini
+Thumbs.db
+.DS_Store

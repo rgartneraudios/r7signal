@@ -114,10 +114,10 @@ export default function App() {
           'voces':  '/assets/voces.webp',
         }
         const planetas = [
-          { key:0, cls:'planet-a', size:180, top:'18%', left:'13%' },
-          { key:1, cls:'planet-b', size:180, bottom:'18%', left:'5%' },
-          { key:2, cls:'planet-c', size:200, top:'8%', right:'13%' },
-          { key:3, cls:'planet-d', size:150, top:'44%', right:'10%' },
+          { key:0, cls:'planet-a', size:190, top:'18%', left:'14%' },
+          { key:1, cls:'planet-b', size:180, bottom:'18%', left:'16%' },
+          { key:2, cls:'planet-c', size:170, top:'8%', right:'18%' },
+          { key:3, cls:'planet-d', size:150, top:'40%', right:'10%' },
           { key:4, cls:'planet-e', size:190, bottom:'16%', right:'17%' },
         ]
         return categorias.map((cat, i) => {
