@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "r7signal",
   "version": "0.1.0",
-  "identifier": "com.cochi.app",
+  "identifier": "com.r7signal.cochi",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -20,7 +20,8 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": ["cochi-full-access"]
     }
   },
   "bundle": {

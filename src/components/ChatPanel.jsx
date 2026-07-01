@@ -71,18 +71,95 @@ const r7SyntaxTheme = {
   'deleted': { color: THEME.pinkMarble }
 }
 
+// Palabras clave que cuando van con prefijo Roco sugieren usar Peque primero
+const KEYWORDS_PEQUE = [
+  'resume', 'analiza', 'explica', 'describe', 'lista',
+  'compara', 'sintetiza', 'traduce', 'revisa', 'corrige',
+  'mejora', 'define'
+]
+
 export default function ChatPanel({
   titulo, mensajes, setMensajes, input, setInput,
   enviar, cargando, tokens, esM01, onCancel, cancelado,
-  routingMode, setRoutingMode, modeloSeleccionado, modeloCochi, THEME
+  modeloPeque, modeloRoco, routingState,
+  nombreMB, nombreMS,
+  THEME
 }) {
   const [copiadoIndex, setCopiadoIndex] = useState(null)
+  const [showDecision, setShowDecision] = useState(false)
+
+  // ── Detección de prefijo ──────────────────────────────────────────────────
+  const prefijoMatch = /^(Peque|Roco)\s/i.exec(input.trimStart())
+  const prefijo = prefijoMatch ? prefijoMatch[1].toLowerCase() : null
+
+  // Detección de keywords (solo relevante cuando prefijo === 'roco')
+  const inputLower = input.toLowerCase()
+  const tieneKeyword = prefijo === 'roco' &&
+    KEYWORDS_PEQUE.some(k => inputLower.includes(k))
+
+  // Resetear decisión si el usuario edita el input después de que apareciera
+  function handleInputChange(e) {
+    setInput(e.target.value)
+    if (showDecision) setShowDecision(false)
+  }
+
+  // ── Lógica de envío ───────────────────────────────────────────────────────
+  function handleEnviar() {
+    if (!prefijo || cargando || !input.trim()) return
+    // Si Roco + keyword → mostrar decisión en vez de enviar
+    if (tieneKeyword && !showDecision) {
+      setShowDecision(true)
+      return
+    }
+    // Envío normal
+    enviar(prefijo === 'peque' ? 'peque' : 'roco')
+    setShowDecision(false)
+  }
+
+  function handleUsarPeque() {
+    enviar('peque_chain')
+    setShowDecision(false)
+  }
+
+  function handleOmitir() {
+    enviar('roco')
+    setShowDecision(false)
+  }
+
+  // ── Footer: modelo activo ─────────────────────────────────────────────────
+  function renderFooterModelo() {
+    // Durante carga encadenada: Peque → Roco con blink
+    if (cargando && routingState === 'chaining') {
+      return (
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span className="menu-pulse" style={{ color: THEME.celeste }}>{modeloPeque}</span>
+          <span style={{ color: THEME.textLow }}>→</span>
+          <span className="menu-pulse" style={{ color: THEME.gold, animationDelay: '0.4s' }}>{modeloRoco}</span>
+        </span>
+      )
+    }
+    if (cargando && routingState === 'peque') {
+      return <span className="menu-pulse" style={{ color: THEME.celeste }}>{modeloPeque}</span>
+    }
+    if (cargando && routingState === 'roco') {
+      return <span className="menu-pulse" style={{ color: THEME.gold }}>{modeloRoco}</span>
+    }
+    // Idle: mostrar según prefijo detectado
+    if (prefijo === 'peque') {
+      return <span style={{ color: THEME.celeste }}>{modeloPeque}</span>
+    }
+    if (prefijo === 'roco') {
+      return <span style={{ color: THEME.gold }}>{modeloRoco}</span>
+    }
+    return <span style={{ color: THEME.textLow, opacity: 0.5 }}>Peque · Roco</span>
+  }
 
   function handleCopy(contenido, index) {
     navigator.clipboard.writeText(contenido)
     setCopiadoIndex(index)
     setTimeout(() => setCopiadoIndex(null), 2000)
   }
+
   return (
     <div style={{
       flex:1, display:'flex', flexDirection:'column',
@@ -105,7 +182,7 @@ export default function ChatPanel({
             fontSize:'1.4rem', fontWeight:700,
             color:THEME.textHigh, letterSpacing:'0.06em'
           }}>
-            {titulo}
+            MODELOS WEB: Base es {nombreMB || 'Peque'} · Superior es {nombreMS || 'Roco'} · PLAN Y/O EJECUCIÓN
           </div>
         </div>
       </div>
@@ -122,7 +199,7 @@ export default function ChatPanel({
               {esM01 ? 'INICIÁ EL FLUJO R7' : 'Modelo COCHI'}
             </div>
             <div style={{ fontSize:'0.95rem', color:THEME.textLow, lineHeight:1.6 }}>
-              {esM01 ? 'M01 — Memoria R7 activa (eficiencia en Tokens)' : 'M02 — Sin memoria (ahorro tokens)'}
+              {esM01 ? 'Empieza con "Peque " o "Roco "' : 'M02 — Sin memoria (ahorro tokens)'}
             </div>
           </div>
         )}
@@ -258,6 +335,7 @@ export default function ChatPanel({
         )}
       </div>
 
+      {/* ── Input area ───────────────────────────────────────────────────── */}
       <div style={{
         background:'rgba(65,66,62,0.35)',
         border:`2px solid ${THEME.celeste25}`,
@@ -275,17 +353,90 @@ export default function ChatPanel({
           e.currentTarget.style.boxShadow = `0 4px 20px ${THEME.celeste08}`
         }}
       >
+        {/* Aviso de prefijo faltante */}
+        {!prefijo && input.trim().length > 2 && (
+          <div style={{
+            fontSize: '0.72rem',
+            color: THEME.pinkMarble,
+            marginBottom: 6,
+            fontFamily: "'Space Grotesk',sans-serif",
+            letterSpacing: '0.06em',
+            opacity: 0.85
+          }}>
+            ⚠ Empieza con "{nombreMB || 'Peque'} " o "{nombreMS || 'Roco'} "
+          </div>
+        )}
+
+        {/* Pregunta Omitir / Usar Peque */}
+        {showDecision && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            marginBottom: 10,
+            padding: '8px 12px',
+            background: 'rgba(92,155,165,0.08)',
+            border: `1px solid ${THEME.celeste25}`,
+            borderRadius: 10,
+          }}>
+            <span style={{
+              fontSize: '0.8rem',
+              color: THEME.textMed,
+              fontFamily: "'Space Grotesk',sans-serif",
+              flex: 1
+            }}>
+              ¿Usar Peque para preparar el contexto antes de Roco?
+            </span>
+            <button
+              onClick={handleUsarPeque}
+              style={{
+                background: THEME.celeste20,
+                border: `1px solid ${THEME.celeste40}`,
+                borderRadius: 7,
+                padding: '4px 12px',
+                color: THEME.celeste,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                cursor: 'pointer',
+                fontFamily: "'Space Grotesk',sans-serif",
+                whiteSpace: 'nowrap'
+              }}
+            >
+              USAR PEQUE
+            </button>
+            <button
+              onClick={handleOmitir}
+              style={{
+                background: 'transparent',
+                border: `1px solid ${THEME.celeste25}`,
+                borderRadius: 7,
+                padding: '4px 12px',
+                color: THEME.textMed,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                cursor: 'pointer',
+                fontFamily: "'Space Grotesk',sans-serif",
+                whiteSpace: 'nowrap'
+              }}
+            >
+              OMITIR
+            </button>
+          </div>
+        )}
+
         <div style={{ display:'flex', gap:10 }}>
           <textarea
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
-                enviar()
+                handleEnviar()
               }
             }}
-            placeholder={esM01 ? 'Input para M01...' : 'Input para M02...'}
+            placeholder={`Soy ${nombreMB || 'Peque'}. Empieza con "${nombreMB || 'Peque'} " o "${nombreMS || 'Roco'} "...`}
             className="chat-input-glow"
             rows={2}
             style={{
@@ -303,39 +454,42 @@ export default function ChatPanel({
               lineHeight:1.6
             }}
           />
-          <button
-            onClick={enviar}
-            disabled={cargando || !input.trim()}
-            style={{
-              background: THEME.celeste20,
-              border: `2px solid ${THEME.celeste40}`,
-              borderRadius: 8,
-              padding: '6px 14px',
-              color: THEME.celeste,
-              fontSize:'0.8rem',
-              fontWeight:700,
-              letterSpacing:'0.15em',
-              cursor: cargando || !input.trim() ? 'not-allowed' : 'pointer',
-              fontFamily:"'Space Grotesk',sans-serif",
-              textTransform:'uppercase',
-              opacity: cargando || !input.trim() ? 0.5 : 1,
-              transition:'all 0.3s ease',
-              whiteSpace:'nowrap',
-              boxShadow: `0 0 15px ${THEME.celeste15}`
-            }}
-            onMouseEnter={e => {
-              if (!cargando && input.trim()) {
-                e.currentTarget.style.background = THEME.celeste30
-                e.currentTarget.style.boxShadow = `0 0 25px ${THEME.celeste25}`
-              }
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = THEME.celeste20
-              e.currentTarget.style.boxShadow = `0 0 15px ${THEME.celeste15}`
-            }}
-          >
-            ▶
-          </button>
+          {/* Botón envío — oculto si showDecision activo */}
+          {!showDecision && (
+            <button
+              onClick={handleEnviar}
+              disabled={cargando || !prefijo || !input.trim()}
+              style={{
+                background: prefijo ? THEME.celeste20 : 'rgba(65,66,62,0.2)',
+                border: `2px solid ${prefijo ? THEME.celeste40 : THEME.metallicGray}`,
+                borderRadius: 8,
+                padding: '6px 14px',
+                color: prefijo ? THEME.celeste : THEME.textLow,
+                fontSize:'0.8rem',
+                fontWeight:700,
+                letterSpacing:'0.15em',
+                cursor: (cargando || !prefijo || !input.trim()) ? 'not-allowed' : 'pointer',
+                fontFamily:"'Space Grotesk',sans-serif",
+                textTransform:'uppercase',
+                opacity: (cargando || !prefijo || !input.trim()) ? 0.4 : 1,
+                transition:'all 0.3s ease',
+                whiteSpace:'nowrap',
+                boxShadow: prefijo ? `0 0 15px ${THEME.celeste15}` : 'none'
+              }}
+              onMouseEnter={e => {
+                if (!cargando && prefijo && input.trim()) {
+                  e.currentTarget.style.background = THEME.celeste30
+                  e.currentTarget.style.boxShadow = `0 0 25px ${THEME.celeste25}`
+                }
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = prefijo ? THEME.celeste20 : 'rgba(65,66,62,0.2)'
+                e.currentTarget.style.boxShadow = prefijo ? `0 0 15px ${THEME.celeste15}` : 'none'
+              }}
+            >
+              ▶
+            </button>
+          )}
           {cargando && (
             <button
               onClick={onCancel}
@@ -369,6 +523,7 @@ export default function ChatPanel({
           )}
         </div>
 
+        {/* Footer */}
         <div style={{
           display:'flex',
           justifyContent:'space-between',
@@ -381,27 +536,9 @@ export default function ChatPanel({
             display:'flex', gap:8, alignItems:'center',
             fontSize:'0.8rem',
             fontFamily:"'JetBrains Mono',monospace",
-            color:THEME.celeste,
             letterSpacing:'0.05em'
           }}>
-            <span>{esM01 ? modeloSeleccionado : modeloCochi}</span>
-            {esM01 && (
-              <select value={routingMode} onChange={e => setRoutingMode(e.target.value)} style={{
-                background:THEME.bgFeedCC,
-                border:`1px solid ${THEME.celeste25}`,
-                borderRadius:6,
-                color:THEME.celeste,
-                fontSize:'0.8rem',
-                padding:'2px 6px',
-                fontFamily:"'JetBrains Mono',monospace",
-                cursor:'pointer',
-                outline:'none'
-              }}>
-                <option value="auto">AUTO</option>
-                <option value="mb">MB</option>
-                <option value="ms">MS</option>
-              </select>
-            )}
+            {renderFooterModelo()}
           </div>
           <div style={{
             fontSize:'0.8rem',

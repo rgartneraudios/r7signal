@@ -31,6 +31,7 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
   const [tokensM01, setTokensM01] = useState(0)
   const [tokensM02, setTokensM02] = useState(0)
   const [routingMode, setRoutingMode] = useState('auto')
+  const [routingState, setRoutingState] = useState(null)
   const [categorias, setCategorias] = useState([])
   const [modulos, setModulos] = useState([])
   const [menus, setMenus] = useState([])
@@ -166,12 +167,13 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
     setVista('chat')
   }
 
-  async function enviarMensajeM01() {
+  async function enviarMensajeM01(routingOverride) {
     if (!inputM01.trim() || cargandoM01) return
     const input = inputM01.trim()
     setInputM01('')
     setCargandoM01(true)
     setCanceladoM01(false)
+    setRoutingState(routingOverride)
     setMensajesM01(prev => [...prev, { rol: 'usuario', contenido: input }])
 
     const controller = new AbortController()
@@ -196,7 +198,7 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
             modulo_id: moduloActivo.id,
             categoria_id: categoriaActiva.id,
             menu_numero: menuActivo.menu_numero,
-            routing_mode: routingMode.toUpperCase()
+            routing_override: routingOverride
           })
         }
       )
@@ -218,6 +220,7 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
       }
     } finally {
       setCargandoM01(false)
+      setRoutingState(null)
       abortRefM01.current = null
     }
   }
@@ -399,6 +402,7 @@ if (vista === 'chat') {
         canceladoM01={canceladoM01}
         routingMode={routingMode}
         setRoutingMode={setRoutingMode}
+        routingState={routingState}
         volverAMenus={volverAMenus}
         sidebarOpen={sidebarOpen}
         toggleSidebar={toggleSidebar}
