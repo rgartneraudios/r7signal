@@ -6,6 +6,11 @@ import { Command } from '@tauri-apps/plugin-shell'
 import { THEME } from '../theme'
 import { supabase } from '../supabaseClient'
 
+const COCHI_MODELS = {
+  cochi01: 'deepseek/deepseek-v4-flash',
+  cochi02: 'google/gemini-3.1-flash-lite'
+}
+
 // ── Tabs ─────────────────────────────────────────────────────────────────────
 const TABS = [
   { id: 'codigo',  label: 'CÓDIGO',  icon: '</>',  model: 'deepseek/deepseek-v4-flash', pricePer1k: 0.00027, categoriaId: '74721199-5ee8-42b1-a1a5-e6203c3ff9bb' },
@@ -228,6 +233,7 @@ export default function CochiDesktop() {
   const abortRefs                   = useRef({})
 
   const [r9Sessions, setR9Sessions] = useState({})
+  const [cochiModel, setCochiModel] = useState('cochi01')
 
   function parseR1R2R3(content) {
     const r1Match = content.match(/\*\*R1:\*\*\s*([\s\S]*?)(?=\*\*R2:\*\*)/i)
@@ -407,7 +413,7 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
             'X-Title': 'R7Signal Cochi Desktop',
           },
           body: JSON.stringify({
-            model: tab.model,
+            model: COCHI_MODELS[cochiModel],
             stream: false,
             tools: COCHI_TOOLS,
             tool_choice: 'auto',
@@ -588,6 +594,44 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
                 COCHI ASISTENTE
               </span>
             </div>
+          </div>
+
+          {/* COCHI MODEL TOGGLE */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+            <button
+              onClick={() => setCochiModel('cochi01')}
+              style={{
+                background: cochiModel === 'cochi01' ? 'rgba(100,210,255,0.12)' : 'transparent',
+                border: `1px solid ${cochiModel === 'cochi01' ? 'rgba(100,210,255,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                borderRadius: 8,
+                padding: '5px 14px',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 2
+              }}
+            >
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: cochiModel === 'cochi01' ? 'rgba(100,210,255,1)' : 'rgba(255,255,255,0.4)', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.08em' }}>COCHI 01</span>
+              <span style={{ fontSize: '0.6rem', color: cochiModel === 'cochi01' ? 'rgba(100,210,255,0.6)' : 'rgba(255,255,255,0.2)', fontFamily: "'JetBrains Mono', monospace" }}>DeepSeek</span>
+            </button>
+            <button
+              onClick={() => setCochiModel('cochi02')}
+              style={{
+                background: cochiModel === 'cochi02' ? 'rgba(255,200,80,0.10)' : 'transparent',
+                border: `1px solid ${cochiModel === 'cochi02' ? 'rgba(255,200,80,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                borderRadius: 8,
+                padding: '5px 14px',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 2
+              }}
+            >
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: cochiModel === 'cochi02' ? 'rgba(255,200,80,1)' : 'rgba(255,255,255,0.4)', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.08em' }}>COCHI 02</span>
+              <span style={{ fontSize: '0.6rem', color: cochiModel === 'cochi02' ? 'rgba(255,200,80,0.6)' : 'rgba(255,255,255,0.2)', fontFamily: "'JetBrains Mono', monospace" }}>Gemini</span>
+            </button>
           </div>
 
           {/* Tabs */}
