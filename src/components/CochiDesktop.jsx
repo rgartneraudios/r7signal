@@ -1,17 +1,18 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { readTextFile, writeTextFile, readDir, exists, mkdir } from '@tauri-apps/plugin-fs'
 import { Command } from '@tauri-apps/plugin-shell'
 import { THEME } from '../theme'
+import { supabase } from '../supabaseClient'
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'codigo',  label: 'CÓDIGO',  icon: '</>',  model: 'deepseek/deepseek-v4-flash', pricePer1k: 0.00027 },
-  { id: 'texto',   label: 'TEXTO',   icon: 'Aa',   model: 'deepseek/deepseek-v4-flash', pricePer1k: 0.00027 },
-  { id: 'imagen',  label: 'IMAGEN',  icon: '🖼',   model: 'pendiente',                  pricePer1k: 0 },
-  { id: 'musica',  label: 'MÚSICA',  icon: '🎵',   model: 'pendiente',                  pricePer1k: 0 },
-  { id: 'voces',   label: 'VOCES',   icon: '🔊',   model: 'pendiente',                  pricePer1k: 0 },
+  { id: 'codigo',  label: 'CÓDIGO',  icon: '</>',  model: 'deepseek/deepseek-v4-flash', pricePer1k: 0.00027, categoriaId: '74721199-5ee8-42b1-a1a5-e6203c3ff9bb' },
+  { id: 'texto',   label: 'TEXTO',   icon: 'Aa',   model: 'deepseek/deepseek-v4-flash', pricePer1k: 0.00027, categoriaId: 'af3962bb-7a19-425c-882a-5301a837c7d7' },
+  { id: 'imagen',  label: 'IMAGEN',  icon: '🖼',   model: 'pendiente',                  pricePer1k: 0,       categoriaId: 'db79925b-c161-419e-bd94-460b3d43af8a' },
+  { id: 'musica',  label: 'MÚSICA',  icon: '🎵',   model: 'pendiente',                  pricePer1k: 0,       categoriaId: '28e7ba28-b6be-4d59-9e0f-cdd55cf09124' },
+  { id: 'voces',   label: 'VOCES',   icon: '🔊',   model: 'pendiente',                  pricePer1k: 0,       categoriaId: null },
 ]
 
 const TAB_COLORS = {
@@ -226,12 +227,59 @@ export default function CochiDesktop() {
   const [tabs, setTabs]             = useState(initTabState)
   const abortRefs                   = useRef({})
 
+  const [r9Sessions, setR9Sessions] = useState({})
+
+  function parseR1R2R3(content) {
+    const r1Match = content.match(/\*\*R1:\*\*\s*([\s\S]*?)(?=\*\*R2:\*\*)/i)
+    const r2Match = content.match(/\*\*R2:\*\*\s*([\s\S]*?)(?=\*\*R3:\*\*)/i)
+    const r3Match = content.match(/\*\*R3:\*\*\s*([\s\S]*?)$/i)
+    return {
+      r1: r1Match ? r1Match[1].trim() : '',
+      r2: r2Match ? r2Match[1].trim() : '',
+      r3: r3Match ? r3Match[1].trim() : content
+    }
+  }
+
   const tab   = TABS.find(t => t.id === activeTab)
   const state = tabs[activeTab]
   const tc    = TAB_COLORS[activeTab]
 
   const setField = useCallback((tabId, field, value) => {
     setTabs(prev => ({ ...prev, [tabId]: { ...prev[tabId], [field]: value } }))
+  }, [])
+
+  useEffect(() => {
+    async function loadR9Sessions() {
+      try {
+        const userId = import.meta.env.VITE_R7_USER_ID
+        if (!userId) { console.error('R9: VITE_R7_USER_ID not found'); return }
+        console.log('R9: loading sessions for user', userId)
+        const sessions = {}
+        for (const t of TABS) {
+          if (!t.categoriaId) continue
+          const { data } = await supabase
+            .from('cochi_sesiones')
+            .select('id, r9_acumulado')
+            .eq('user_id', userId)
+            .eq('categoria_id', t.categoriaId)
+            .single()
+          if (data) {
+            sessions[t.id] = { sesionId: data.id, r9Acumulado: data.r9_acumulado || '' }
+          } else {
+            const { data: newRow } = await supabase
+              .from('cochi_sesiones')
+              .insert({ user_id: userId, categoria_id: t.categoriaId, r9_acumulado: '' })
+              .select('id')
+              .single()
+            if (newRow) sessions[t.id] = { sesionId: newRow.id, r9Acumulado: '' }
+          }
+        }
+        setR9Sessions(sessions)
+      } catch (err) {
+        console.error('R9 mount error:', err)
+      }
+    }
+    loadR9Sessions()
   }, [])
 
   // ── Añadir entrada al log de actividad del turno actual ──────────────────
@@ -312,10 +360,30 @@ IMPORTANT: Always read a file before modifying it. Never guess file contents.`
 Tu usuario es Signor Roberto (también conocido como Maravilla). Trátale siempre de tú, con confianza y de forma directa. Eres eficiente, no verbose.
 Formas parte del sistema R7Signal junto con dos modelos web:
 - Peque: el modelo base web (DeepSeek V4 Flash). Trabaja ideas rápidas y contexto inicial.
-- Roco: el modelo superior web (Claude Sonnet). Analiza en profundidad y genera prompts refinados.
-Cuando recibes un mensaje que empieza con [CONTEXTO] e [INSTRUCCIÓN], significa que Peque o Roco te están pasando trabajo ya refinado desde la web. Toma esa instrucción directamente y ejecútala — no repreguntes lo que ya está especificado.
+- Asun: el modelo superior web (Claude Sonnet). Analiza en profundidad y genera prompts refinados.
+Cuando recibes un mensaje que empieza con [CONTEXTO] e [INSTRUCCIÓN], significa que Peque o Asun te están pasando trabajo ya refinado desde la web. Toma esa instrucción directamente y ejecútala — no repreguntes lo que ya está especificado.
 Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y actúa con tu criterio propio.`
     }
+
+    const FORMAT_RULE = {
+      role: 'system',
+      content: `FORMAT RULE: You must always structure your final response (when you have no more tool calls) in exactly this format — no exceptions:
+**R1:** [One compressed key insight or action taken — in English, max 2 lines]
+**R2:** [One line connecting this output to prior R9 context — in English. If no prior context write "First turn."]
+**R3:**
+[Your full response to the user in Spanish. This is the only part the user will see displayed.]`
+    }
+
+    const r9Data = r9Sessions[tabId]
+    const R9_RULE = r9Data?.r9Acumulado
+      ? {
+          role: 'system',
+          content: `R9 MEMORY — accumulated context from prior Desktop turns (English, internal use only):\n${r9Data.r9Acumulado}`
+        }
+      : null
+
+    const systemMessages = [SECURITY_RULE, CONTEXT_RULE, IDENTITY_RULE, FORMAT_RULE]
+    if (R9_RULE) systemMessages.push(R9_RULE)
 
     // ── Bucle agéntico ────────────────────────────────────────────────────
     let messages = [...workingHistory]
@@ -343,7 +411,7 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
             stream: false,
             tools: COCHI_TOOLS,
             tool_choice: 'auto',
-            messages: [SECURITY_RULE, CONTEXT_RULE, IDENTITY_RULE, ...messages]
+            messages: [...systemMessages, ...messages]
           })
         })
 
@@ -363,9 +431,30 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
 
         // ── Sin tool calls → respuesta final ─────────────────────────────
         if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
-          const finalContent = assistantMsg.content || ''
-          const cost = (totalTokens / 1000) * tab.pricePer1k
+          const rawContent = assistantMsg.content || ''
+          const { r1, r2, r3 } = parseR1R2R3(rawContent)
+          const displayContent = r3 || rawContent
+          const r1r2Block = (r1 || r2)
+            ? `R1: ${r1}\nR2: ${r2}\n---\n`
+            : ''
 
+          // Update R9 in memory and Supabase
+          if (r1r2Block && r9Sessions[tabId]) {
+            const newR9 = (r9Sessions[tabId].r9Acumulado
+              ? r9Sessions[tabId].r9Acumulado + '\n' + r1r2Block
+              : r1r2Block).slice(-8000)
+            setR9Sessions(prev => ({
+              ...prev,
+              [tabId]: { ...prev[tabId], r9Acumulado: newR9 }
+            }))
+            supabase
+              .from('cochi_sesiones')
+              .update({ r9_acumulado: newR9 })
+              .eq('id', r9Sessions[tabId].sesionId)
+              .then(({ error }) => { if (error) console.error('R9 save error:', error) })
+          }
+
+          const cost = (totalTokens / 1000) * tab.pricePer1k
           setTabs(prev => ({
             ...prev,
             [tabId]: {
@@ -373,7 +462,7 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
               loading: false,
               streamingOutput: '',
               activity: [],
-              messages: [...prev[tabId].messages, { role: 'assistant', content: finalContent }],
+              messages: [...prev[tabId].messages, { role: 'assistant', content: displayContent }],
               apiHistory: [...messages],
               tokens: prev[tabId].tokens + totalTokens,
               cost: prev[tabId].cost + cost

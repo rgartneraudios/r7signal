@@ -4,7 +4,8 @@ export default function SidebarPanel({
   sidebarOpen, toggleSidebar, proyectos, proyectoActivo,
   mostrarCrearProyecto, setMostrarCrearProyecto,
   nuevoProyectoNombre, setNuevoProyectoNombre,
-  crearProyecto, seleccionarProyecto, setVista, handleLogout
+  crearProyecto, seleccionarProyecto, setVista, handleLogout,
+  onOpenPreferences
 }) {
   return (
     <>
@@ -102,7 +103,7 @@ export default function SidebarPanel({
               </div>
             )}
             <div style={{ marginTop:32, paddingTop:16, borderTop:`1px solid ${THEME.metallicGray}`, display:'flex', flexDirection:'column', gap:8 }}>
-              <button style={{ background:'transparent', border:'none', color:THEME.textMed, fontSize:'0.8rem', cursor:'pointer', textAlign:'left', padding:'8px 0', fontFamily:"'Space Grotesk',sans-serif", letterSpacing:'0.05em' }}>⚙️ Configuración</button>
+              <button onClick={onOpenPreferences} style={{ background:'transparent', border:'none', color:THEME.textMed, fontSize:'0.8rem', cursor:'pointer', textAlign:'left', padding:'8px 0', fontFamily:"'Space Grotesk',sans-serif", letterSpacing:'0.05em' }}>⚙️ Configuración</button>
               <button onClick={() => setVista('billing')} style={{ background:'transparent', border:'none', color:THEME.textMed, fontSize:'0.8rem', cursor:'pointer', textAlign:'left', padding:'8px 0', fontFamily:"'Space Grotesk',sans-serif", letterSpacing:'0.05em' }}>💳 Billing</button>
               <button onClick={handleLogout} style={{ background:'transparent', border:'none', color:THEME.pinkMarble, fontSize:'0.8rem', cursor:'pointer', textAlign:'left', padding:'8px 0', fontFamily:"'Space Grotesk',sans-serif", letterSpacing:'0.05em' }}> Salir</button>
             </div>

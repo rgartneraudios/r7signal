@@ -8,7 +8,8 @@ export default function MenuSelector({
   sidebarOpen, toggleSidebar, proyectos, proyectoActivo,
   mostrarCrearProyecto, setMostrarCrearProyecto,
   nuevoProyectoNombre, setNuevoProyectoNombre,
-  crearProyecto, seleccionarProyecto, setVista, handleLogout
+  crearProyecto, seleccionarProyecto, setVista, handleLogout,
+  onOpenPreferences
 }) {
   return (
     <>
@@ -37,6 +38,7 @@ export default function MenuSelector({
           seleccionarProyecto={seleccionarProyecto}
           setVista={setVista}
           handleLogout={handleLogout}
+          onOpenPreferences={onOpenPreferences}
         />
         <button onClick={volverACategorias} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Orbitron',monospace", textTransform:'uppercase' }}>
           ◀ Volver
