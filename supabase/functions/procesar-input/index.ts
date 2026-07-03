@@ -13,7 +13,8 @@ interface RequestBody {
   modulo_id: string
   categoria_id: string
   menu_numero: number
-  routing_override: 'peque' | 'roco' | 'peque_chain'  // reemplaza routing_mode
+  routing_override: 'peque' | 'asun' | 'peque_chain'  // reemplaza routing_mode
+  chat_language: string
 }
 
 function parsearR1R2R3(texto: string) {
@@ -40,25 +41,35 @@ const SYSTEM_PROMPTS: Record<string, string> = {
   'ba438025-4674-4fb8-8f5d-8d5269b13e03': `[REDACTED PROMPT]`,
 }
 
-const COCHI_SUFFIX = `\n\nWhen the user writes /COCHI:
-- Reformat the agreed instructions into second person imperative directed at the Cochi agent.
-- Exact format: "Cochi, [action] in [file/function]:\n[exact block]"
-- No additional explanations. Do not change verbs.
-- If the input is only "/COCHI" with no additional task: review the R7 history, extract the work from the previous turn and package it as executable instructions for Cochi.
-- If R7 indicates a code block was included ("Incluí código: [language] — [description]"): regenerate an equivalent code example in the same language and include it in the Cochi package.`
+const COCHI_SUFFIX = `\n\nWhen the user writes /COCHI, produce a message in EXACTLY this format — nothing before, nothing after:
 
-const FORMATO_R7 = `\n\nIMPORTANTE: Estructura SIEMPRE tu respuesta exactamente así, sin excepción:
+[CONTEXTO]
+(2-3 lines in Spanish summarizing the session: what the user is building, what has been decided, what is pending. Use the R7 context provided above. Be concise.)
+
+[INSTRUCCIÓN]
+(Imperative instructions in English directed at Cochi. Second person. Be specific: include exact file paths, exact content to write or modify, commands to run. If the previous response contained code, include it verbatim here.)
+
+Rules:
+- Never break this two-block format.
+- [CONTEXTO] always in Spanish.
+- [INSTRUCCIÓN] always in English.
+- No text outside these two blocks.
+- If input is only "/COCHI" with no new task: extract the pending work from R7 and package it.
+- If R7 indicates a code block was included: regenerate it verbatim inside [INSTRUCCIÓN].`
+
+const FORMATO_R7 = (chatLanguage: string) => `\n\nIMPORTANTE: Estructura SIEMPRE tu respuesta exactamente así, sin excepción:
 R1: [resumen en 1-2 frases del input del usuario]
 R2: [resumen en 1-2 frases de tu propia respuesta]
 R3: [tu respuesta completa aquí]
 
 Si tu respuesta (R3) contenía uno o más bloques de código, inclúyelo en R2 con este formato exacto:
-"Incluí código: [lenguaje] — [descripción funcional de una línea]"
-Ejemplo: "Incluí código: Python — función que filtra números pares de una lista"`
+"Included code: [language] — [one-line functional description]"
 
-function getSystemPrompt(categoria_id: string, esCochi: boolean): string {
-  const base = SYSTEM_PROMPTS[categoria_id] || 'Eres un asistente útil.'
-  return esCochi ? base + COCHI_SUFFIX : base + FORMATO_R7
+LANGUAGE RULE: R1 and R2 must be written in English (internal context, more token-efficient). R3 must always be written in ${chatLanguage} — that is the user's preferred language.`
+
+function getSystemPrompt(categoria_id: string, esCochi: boolean, chatLanguage: string): string {
+  const base = SYSTEM_PROMPTS[categoria_id] || 'You are a helpful assistant.'
+  return esCochi ? base + COCHI_SUFFIX : base + FORMATO_R7(chatLanguage)
 }
 
 // ── Llamada a OpenRouter ────────────────────────────────────────────────────
@@ -116,7 +127,8 @@ serve(async (req) => {
       modulo_id,
       categoria_id,
       menu_numero,
-      routing_override  // 'peque' | 'roco' | 'peque_chain'
+      routing_override,  // 'peque' | 'asun' | 'peque_chain'
+      chat_language = 'Spanish'
     }: RequestBody = await req.json()
 
     console.log(`📨 Sesión: ${sesion_id} | Routing: ${routing_override}`)
@@ -153,8 +165,8 @@ serve(async (req) => {
       .eq('menu_numero', menu_numero)
       .single()
 
-    // PLUS (Roco)
-    const { data: itemRoco, error: errRoco } = await supabase
+    // PLUS (Asun)
+    const { data: itemAsun, error: errAsun } = await supabase
       .from('menu_items')
       .select('*')
       .eq('modulo_id', modulo_id)
@@ -216,7 +228,7 @@ serve(async (req) => {
     if (routing_override === 'peque') {
       if (!itemPeque) throw new Error('No se encontró modelo Peque (mb) para este módulo')
 
-      const systemPrompt = getSystemPrompt(categoria_id, esCochi)
+      const systemPrompt = getSystemPrompt(categoria_id, esCochi, chat_language)
       const { raw, tokensInput, tokensOutput } = await llamarModelo(
         apiKey, itemPeque.modelo_id, systemPrompt,
         r7Acumulado, input_usuario,
@@ -246,31 +258,31 @@ serve(async (req) => {
     }
 
     // ── MODO ROCO (PLUS solo) ────────────────────────────────────────────
-    if (routing_override === 'roco') {
-      if (!itemRoco) throw new Error('No se encontró modelo Roco (plus) para este módulo')
+    if (routing_override === 'asun') {
+      if (!itemAsun) throw new Error('No se encontró modelo Asun (plus) para este módulo')
 
-      const systemPrompt = getSystemPrompt(categoria_id, esCochi)
+      const systemPrompt = getSystemPrompt(categoria_id, esCochi, chat_language)
       const { raw, tokensInput, tokensOutput } = await llamarModelo(
-        apiKey, itemRoco.modelo_id, systemPrompt,
+        apiKey, itemAsun.modelo_id, systemPrompt,
         r7Acumulado, input_usuario,
-        itemRoco.temperatura || 0.7, itemRoco.max_tokens || 4096
+        itemAsun.temperatura || 0.7, itemAsun.max_tokens || 4096
       )
 
       const { r1, r2, r3 } = parsearR1R2R3(raw)
-      const coste = calcularCoste(itemRoco, tokensInput, tokensOutput)
+      const coste = calcularCoste(itemAsun, tokensInput, tokensOutput)
 
-      await guardarTurno(input_usuario, r1, r2, r3, itemRoco.modelo_id, 'plus', tokensInput, tokensOutput, coste)
+      await guardarTurno(input_usuario, r1, r2, r3, itemAsun.modelo_id, 'plus', tokensInput, tokensOutput, coste)
       await actualizarR7(r1, r2)
       await descontarBalance(tokensInput, tokensOutput, coste)
 
-      console.log(`✅ Roco completado: ${itemRoco.modelo_id}`)
+      console.log(`✅ Asun completado: ${itemAsun.modelo_id}`)
 
       return new Response(JSON.stringify({
         success: true,
         r3,
         metadata: {
-          routing: 'roco',
-          modelo_id: itemRoco.modelo_id,
+          routing: 'asun',
+          modelo_id: itemAsun.modelo_id,
           tokens_input: tokensInput,
           tokens_output: tokensOutput,
           coste
@@ -281,10 +293,10 @@ serve(async (req) => {
     // ── MODO PEQUE → ROCO (chain) ────────────────────────────────────────
     if (routing_override === 'peque_chain') {
       if (!itemPeque) throw new Error('No se encontró modelo Peque (mb) para el chain')
-      if (!itemRoco) throw new Error('No se encontró modelo Roco (plus) para el chain')
+      if (!itemAsun) throw new Error('No se encontró modelo Asun (plus) para el chain')
 
-      const systemPromptPeque = getSystemPrompt(categoria_id, false) // Peque no recibe /COCHI
-      const systemPromptRoco  = getSystemPrompt(categoria_id, esCochi)
+      const systemPromptPeque = getSystemPrompt(categoria_id, false, chat_language) // Peque no recibe /COCHI
+      const systemPromptAsun  = getSystemPrompt(categoria_id, esCochi, chat_language)
 
       // ── Turno 1: Peque ───────────────────────────────────────────────
       console.log(`🔗 Chain — Turno Peque: ${itemPeque.modelo_id}`)
@@ -307,44 +319,44 @@ serve(async (req) => {
       await actualizarR7(r1p, r2p)
       await descontarBalance(peque.tokensInput, peque.tokensOutput, costePeque)
 
-      // ── Turno 2: Roco — recibe R3 de Peque como input ───────────────
-      // El R3 de Peque viaja silencioso como input a Roco
-      const inputParaRoco = r3p
-      console.log(`🔗 Chain — Turno Roco: ${itemRoco.modelo_id}`)
+      // ── Turno 2: Asun — recibe R3 de Peque como input ───────────────
+      // El R3 de Peque viaja silencioso como input a Asun
+      const inputParaAsun = r3p
+      console.log(`🔗 Chain — Turno Asun: ${itemAsun.modelo_id}`)
 
-      const roco = await llamarModelo(
-        apiKey, itemRoco.modelo_id, systemPromptRoco,
+      const asun = await llamarModelo(
+        apiKey, itemAsun.modelo_id, systemPromptAsun,
         r7Acumulado,     // ya actualizado con el turno de Peque
-        inputParaRoco,   // R3 de Peque (silencioso para el usuario)
-        itemRoco.temperatura || 0.7, itemRoco.max_tokens || 4096
+        inputParaAsun,   // R3 de Peque (silencioso para el usuario)
+        itemAsun.temperatura || 0.7, itemAsun.max_tokens || 4096
       )
 
-      const { r1: r1r, r2: r2r, r3: r3r } = parsearR1R2R3(roco.raw)
-      const costeRoco = calcularCoste(itemRoco, roco.tokensInput, roco.tokensOutput)
+      const { r1: r1r, r2: r2r, r3: r3r } = parsearR1R2R3(asun.raw)
+      const costeAsun = calcularCoste(itemAsun, asun.tokensInput, asun.tokensOutput)
 
-      // Guardar turno Roco
+      // Guardar turno Asun
       await guardarTurno(
-        inputParaRoco, r1r, r2r, r3r,
-        itemRoco.modelo_id, 'plus_chain',
-        roco.tokensInput, roco.tokensOutput, costeRoco
+        inputParaAsun, r1r, r2r, r3r,
+        itemAsun.modelo_id, 'plus_chain',
+        asun.tokensInput, asun.tokensOutput, costeAsun
       )
-      // Acumular R7 con el turno de Roco
+      // Acumular R7 con el turno de Asun
       await actualizarR7(r1r, r2r)
-      await descontarBalance(roco.tokensInput, roco.tokensOutput, costeRoco)
+      await descontarBalance(asun.tokensInput, asun.tokensOutput, costeAsun)
 
-      const costeTotal = costePeque + costeRoco
+      const costeTotal = costePeque + costeAsun
 
-      console.log(`✅ Chain completo | Peque: ${itemPeque.modelo_id} | Roco: ${itemRoco.modelo_id} | Coste total: ${costeTotal}`)
+      console.log(`✅ Chain completo | Peque: ${itemPeque.modelo_id} | Asun: ${itemAsun.modelo_id} | Coste total: ${costeTotal}`)
 
       return new Response(JSON.stringify({
         success: true,
-        r3: r3r,   // El usuario solo ve la respuesta final de Roco
+        r3: r3r,   // El usuario solo ve la respuesta final de Asun
         metadata: {
           routing: 'peque_chain',
           modelo_peque: itemPeque.modelo_id,
-          modelo_roco: itemRoco.modelo_id,
-          tokens_input: peque.tokensInput + roco.tokensInput,
-          tokens_output: peque.tokensOutput + roco.tokensOutput,
+          modelo_asun: itemAsun.modelo_id,
+          tokens_input: peque.tokensInput + asun.tokensInput,
+          tokens_output: peque.tokensOutput + asun.tokensOutput,
           coste: costeTotal
         }
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })

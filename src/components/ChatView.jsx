@@ -13,7 +13,8 @@ export default function ChatView({
   sidebarOpen, toggleSidebar, proyectos, proyectoActivo,
   mostrarCrearProyecto, setMostrarCrearProyecto,
   nuevoProyectoNombre, setNuevoProyectoNombre,
-  crearProyecto, seleccionarProyecto, setVista, handleLogout
+  crearProyecto, seleccionarProyecto, setVista, handleLogout,
+  onOpenPreferences
 }) {
   const segundoModulo = modulos.length > 1 ? modulos[1] : modulos[0]
   const modeloCochi = menuActivo?.items
@@ -82,6 +83,7 @@ export default function ChatView({
           seleccionarProyecto={seleccionarProyecto}
           setVista={setVista}
           handleLogout={handleLogout}
+          onOpenPreferences={onOpenPreferences}
         />
         <button onClick={volverAMenus} style={{
           position:'fixed', top:22, right:28, zIndex:30,
@@ -198,7 +200,7 @@ export default function ChatView({
               setRoutingMode={setRoutingMode}
               routingState={routingState}
               modeloPeque={modeloMB}
-              modeloRoco={modeloMS}
+              modeloAsun={modeloMS}
               modeloSeleccionado={modeloSeleccionado}
               modeloCochi={modeloCochi}
               THEME={THEME}

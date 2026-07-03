@@ -71,7 +71,7 @@ const r7SyntaxTheme = {
   'deleted': { color: THEME.pinkMarble }
 }
 
-// Palabras clave que cuando van con prefijo Roco sugieren usar Peque primero
+// Palabras clave que cuando van con prefijo Asun sugieren usar Peque primero
 const KEYWORDS_PEQUE = [
   'resume', 'analiza', 'explica', 'describe', 'lista',
   'compara', 'sintetiza', 'traduce', 'revisa', 'corrige',
@@ -81,38 +81,29 @@ const KEYWORDS_PEQUE = [
 export default function ChatPanel({
   titulo, mensajes, setMensajes, input, setInput,
   enviar, cargando, tokens, esM01, onCancel, cancelado,
-  modeloPeque, modeloRoco, routingState,
+  modeloPeque, modeloAsun, routingState,
   nombreMB, nombreMS,
   THEME
 }) {
   const [copiadoIndex, setCopiadoIndex] = useState(null)
   const [showDecision, setShowDecision] = useState(false)
+  const [activeModel, setActiveModel] = useState('peque')
 
-  // ── Detección de prefijo ──────────────────────────────────────────────────
-  const prefijoMatch = /^(Peque|Roco)\s/i.exec(input.trimStart())
-  const prefijo = prefijoMatch ? prefijoMatch[1].toLowerCase() : null
-
-  // Detección de keywords (solo relevante cuando prefijo === 'roco')
-  const inputLower = input.toLowerCase()
-  const tieneKeyword = prefijo === 'roco' &&
-    KEYWORDS_PEQUE.some(k => inputLower.includes(k))
-
-  // Resetear decisión si el usuario edita el input después de que apareciera
   function handleInputChange(e) {
     setInput(e.target.value)
     if (showDecision) setShowDecision(false)
   }
 
-  // ── Lógica de envío ───────────────────────────────────────────────────────
   function handleEnviar() {
-    if (!prefijo || cargando || !input.trim()) return
-    // Si Roco + keyword → mostrar decisión en vez de enviar
+    if (cargando || !input.trim()) return
+    const inputLower = input.toLowerCase()
+    const tieneKeyword = activeModel === 'asun' &&
+      KEYWORDS_PEQUE.some(k => inputLower.includes(k))
     if (tieneKeyword && !showDecision) {
       setShowDecision(true)
       return
     }
-    // Envío normal
-    enviar(prefijo === 'peque' ? 'peque' : 'roco')
+    enviar(activeModel === 'peque' ? 'peque' : 'asun')
     setShowDecision(false)
   }
 
@@ -122,36 +113,65 @@ export default function ChatPanel({
   }
 
   function handleOmitir() {
-    enviar('roco')
+    enviar('asun')
     setShowDecision(false)
   }
 
   // ── Footer: modelo activo ─────────────────────────────────────────────────
   function renderFooterModelo() {
-    // Durante carga encadenada: Peque → Roco con blink
+    // Durante carga encadenada: Peque → Asun con blink
     if (cargando && routingState === 'chaining') {
       return (
         <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span className="menu-pulse" style={{ color: THEME.celeste }}>{modeloPeque}</span>
           <span style={{ color: THEME.textLow }}>→</span>
-          <span className="menu-pulse" style={{ color: THEME.gold, animationDelay: '0.4s' }}>{modeloRoco}</span>
+          <span className="menu-pulse" style={{ color: THEME.gold, animationDelay: '0.4s' }}>{modeloAsun}</span>
         </span>
       )
     }
     if (cargando && routingState === 'peque') {
       return <span className="menu-pulse" style={{ color: THEME.celeste }}>{modeloPeque}</span>
     }
-    if (cargando && routingState === 'roco') {
-      return <span className="menu-pulse" style={{ color: THEME.gold }}>{modeloRoco}</span>
+    if (cargando && routingState === 'asun') {
+      return <span className="menu-pulse" style={{ color: THEME.gold }}>{modeloAsun}</span>
     }
-    // Idle: mostrar según prefijo detectado
-    if (prefijo === 'peque') {
-      return <span style={{ color: THEME.celeste }}>{modeloPeque}</span>
-    }
-    if (prefijo === 'roco') {
-      return <span style={{ color: THEME.gold }}>{modeloRoco}</span>
-    }
-    return <span style={{ color: THEME.textLow, opacity: 0.5 }}>Peque · Roco</span>
+    // Idle: toggle buttons
+    return (
+      <span style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+        <button
+          onClick={() => { setActiveModel('peque'); setShowDecision(false) }}
+          style={{
+            background: activeModel === 'peque' ? THEME.celeste60 : 'rgba(50,51,48,0.4)',
+            border: `2px solid ${activeModel === 'peque' ? THEME.celesteBright : THEME.metallicGray}`,
+            borderRadius: 8, padding: '6px 20px',
+            color: activeModel === 'peque' ? '#fff' : THEME.textMed,
+            fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em',
+            cursor: 'pointer', fontFamily: "'Space Grotesk',sans-serif",
+            transition: 'all 0.2s ease',
+            boxShadow: activeModel === 'peque' ? `0 0 18px ${THEME.celeste40}` : 'none',
+            textShadow: activeModel === 'peque' ? `0 0 12px ${THEME.celeste60}` : 'none'
+          }}
+        >
+          Peque
+        </button>
+        <button
+          onClick={() => { setActiveModel('asun'); setShowDecision(false) }}
+          style={{
+            background: activeModel === 'asun' ? 'rgba(212,175,55,0.35)' : 'rgba(50,51,48,0.4)',
+            border: `2px solid ${activeModel === 'asun' ? '#f0d060' : THEME.metallicGray}`,
+            borderRadius: 8, padding: '6px 20px',
+            color: activeModel === 'asun' ? '#fff' : THEME.textMed,
+            fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em',
+            cursor: 'pointer', fontFamily: "'Space Grotesk',sans-serif",
+            transition: 'all 0.2s ease',
+            boxShadow: activeModel === 'asun' ? '0 0 18px rgba(212,175,55,0.4)' : 'none',
+            textShadow: activeModel === 'asun' ? '0 0 12px rgba(212,175,55,0.6)' : 'none'
+          }}
+        >
+          Asun
+        </button>
+      </span>
+    )
   }
 
   function handleCopy(contenido, index) {
@@ -182,7 +202,7 @@ export default function ChatPanel({
             fontSize:'1.4rem', fontWeight:700,
             color:THEME.textHigh, letterSpacing:'0.06em'
           }}>
-            MODELOS WEB: Base es {nombreMB || 'Peque'} · Superior es {nombreMS || 'Roco'} · PLAN Y/O EJECUCIÓN
+            MODELOS WEB: Base es {nombreMB || 'Peque'} · Superior es {nombreMS || 'Asun'} · PLAN Y/O EJECUCIÓN
           </div>
         </div>
       </div>
@@ -199,7 +219,7 @@ export default function ChatPanel({
               {esM01 ? 'INICIÁ EL FLUJO R7' : 'Modelo COCHI'}
             </div>
             <div style={{ fontSize:'0.95rem', color:THEME.textLow, lineHeight:1.6 }}>
-              {esM01 ? 'Empieza con "Peque " o "Roco "' : 'M02 — Sin memoria (ahorro tokens)'}
+              {esM01 ? 'Empieza con "Peque " o "Asun "' : 'M02 — Sin memoria (ahorro tokens)'}
             </div>
           </div>
         )}
@@ -353,21 +373,6 @@ export default function ChatPanel({
           e.currentTarget.style.boxShadow = `0 4px 20px ${THEME.celeste08}`
         }}
       >
-        {/* Aviso de prefijo faltante */}
-        {!prefijo && input.trim().length > 2 && (
-          <div style={{
-            fontSize: '0.72rem',
-            color: THEME.pinkMarble,
-            marginBottom: 6,
-            fontFamily: "'Space Grotesk',sans-serif",
-            letterSpacing: '0.06em',
-            opacity: 0.85
-          }}>
-            ⚠ Empieza con "{nombreMB || 'Peque'} " o "{nombreMS || 'Roco'} "
-          </div>
-        )}
-
-        {/* Pregunta Omitir / Usar Peque */}
         {showDecision && (
           <div style={{
             display: 'flex',
@@ -385,7 +390,7 @@ export default function ChatPanel({
               fontFamily: "'Space Grotesk',sans-serif",
               flex: 1
             }}>
-              ¿Usar Peque para preparar el contexto antes de Roco?
+              ¿Usar Peque para preparar el contexto antes de Asun?
             </span>
             <button
               onClick={handleUsarPeque}
@@ -436,7 +441,10 @@ export default function ChatPanel({
                 handleEnviar()
               }
             }}
-            placeholder={`Soy ${nombreMB || 'Peque'}. Empieza con "${nombreMB || 'Peque'} " o "${nombreMS || 'Roco'} "...`}
+            placeholder={activeModel === 'peque'
+              ? 'Peque escucha...'
+              : 'Asun escucha...'
+            }
             className="chat-input-glow"
             rows={2}
             style={{
@@ -458,33 +466,33 @@ export default function ChatPanel({
           {!showDecision && (
             <button
               onClick={handleEnviar}
-              disabled={cargando || !prefijo || !input.trim()}
+              disabled={cargando || !input.trim()}
               style={{
-                background: prefijo ? THEME.celeste20 : 'rgba(65,66,62,0.2)',
-                border: `2px solid ${prefijo ? THEME.celeste40 : THEME.metallicGray}`,
+                background: THEME.celeste20,
+                border: `2px solid ${THEME.celeste40}`,
                 borderRadius: 8,
                 padding: '6px 14px',
-                color: prefijo ? THEME.celeste : THEME.textLow,
+                color: THEME.celeste,
                 fontSize:'0.8rem',
                 fontWeight:700,
                 letterSpacing:'0.15em',
-                cursor: (cargando || !prefijo || !input.trim()) ? 'not-allowed' : 'pointer',
+                cursor: (cargando || !input.trim()) ? 'not-allowed' : 'pointer',
                 fontFamily:"'Space Grotesk',sans-serif",
                 textTransform:'uppercase',
-                opacity: (cargando || !prefijo || !input.trim()) ? 0.4 : 1,
+                opacity: (cargando || !input.trim()) ? 0.4 : 1,
                 transition:'all 0.3s ease',
                 whiteSpace:'nowrap',
-                boxShadow: prefijo ? `0 0 15px ${THEME.celeste15}` : 'none'
+                boxShadow: `0 0 15px ${THEME.celeste15}`
               }}
               onMouseEnter={e => {
-                if (!cargando && prefijo && input.trim()) {
+                if (!cargando && input.trim()) {
                   e.currentTarget.style.background = THEME.celeste30
                   e.currentTarget.style.boxShadow = `0 0 25px ${THEME.celeste25}`
                 }
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.background = prefijo ? THEME.celeste20 : 'rgba(65,66,62,0.2)'
-                e.currentTarget.style.boxShadow = prefijo ? `0 0 15px ${THEME.celeste15}` : 'none'
+                e.currentTarget.style.background = THEME.celeste20
+                e.currentTarget.style.boxShadow = `0 0 15px ${THEME.celeste15}`
               }}
             >
               ▶
@@ -526,27 +534,39 @@ export default function ChatPanel({
         {/* Footer */}
         <div style={{
           display:'flex',
-          justifyContent:'space-between',
           alignItems:'center',
           paddingTop:8,
           marginTop:8,
           borderTop:`1px solid ${THEME.metallicGray}`
         }}>
+          <div style={{ flex: '0 0 220px' }}>
+            <span style={{
+              fontSize:'0.7rem',
+              color: activeModel === 'peque' ? THEME.celeste : THEME.gold,
+              fontFamily:"'JetBrains Mono',monospace",
+              opacity: 0.85,
+              letterSpacing:'0.04em'
+            }}>
+              {activeModel === 'peque' ? modeloPeque : modeloAsun}
+            </span>
+          </div>
           <div style={{
-            display:'flex', gap:8, alignItems:'center',
+            flex:1, display:'flex', justifyContent:'center', alignItems:'center',
             fontSize:'0.8rem',
             fontFamily:"'JetBrains Mono',monospace",
             letterSpacing:'0.05em'
           }}>
             {renderFooterModelo()}
           </div>
-          <div style={{
-            fontSize:'0.8rem',
-            color:THEME.gold,
-            fontFamily:"'JetBrains Mono',monospace",
-            letterSpacing:'0.05em'
-          }}>
-            ⚡ {tokens} tokens
+          <div style={{ flex: '0 0 220px', textAlign:'right' }}>
+            <span style={{
+              fontSize:'0.8rem',
+              color:THEME.gold,
+              fontFamily:"'JetBrains Mono',monospace",
+              letterSpacing:'0.05em'
+            }}>
+              ⚡ {tokens} tokens
+            </span>
           </div>
         </div>
       </div>

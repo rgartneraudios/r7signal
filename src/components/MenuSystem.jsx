@@ -9,6 +9,8 @@ import SidebarPanel from './SidebarPanel'
 import MenuSelector from './MenuSelector'
 import ChatView from './ChatView'
 
+import PreferencesModal from './PreferencesModal'
+
 export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClick }) {
   const { setUser } = useAuth()
   const [time, setTime] = useState(new Date())
@@ -47,6 +49,8 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
   const abortRefM02 = useRef(null)
   const [canceladoM01, setCanceladoM01] = useState(false)
   const [canceladoM02, setCanceladoM02] = useState(false)
+  const [chatLanguage, setChatLanguage] = useState('Spanish')
+  const [showPreferences, setShowPreferences] = useState(false)
 
   const pad = n => String(n).padStart(2, '0')
 
@@ -74,6 +78,20 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
       }
     }
   }, [categoriaDirecta, categorias.length])
+
+  useEffect(() => {
+    async function loadPreferences() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase
+        .from('user_preferences')
+        .select('chat_language')
+        .eq('user_id', user.id)
+        .single()
+      if (data?.chat_language) setChatLanguage(data.chat_language)
+    }
+    loadPreferences()
+  }, [])
 
   async function seleccionarCategoria(cat) {
     setCategoriaActiva(cat)
@@ -198,12 +216,15 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
             modulo_id: moduloActivo.id,
             categoria_id: categoriaActiva.id,
             menu_numero: menuActivo.menu_numero,
-            routing_override: routingOverride
+            routing_override: routingOverride,
+            chat_language: chatLanguage,
           })
         }
       )
 
       const data = await response.json()
+      console.log('procesar-input response:', JSON.stringify(data))
+      if (!data.success) console.error('Edge Function error:', data.error)
       if (!data.success) throw new Error(data.error)
 
       setTokensM01(prev => prev + (data.metadata?.tokens_input || 0) + (data.metadata?.tokens_output || 0))
@@ -378,7 +399,15 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
         seleccionarProyecto={seleccionarProyecto}
         setVista={setVista}
         handleLogout={handleLogout}
+        onOpenPreferences={() => setShowPreferences(true)}
       />
+      {showPreferences && (
+        <PreferencesModal
+          onClose={() => setShowPreferences(false)}
+          userId={user?.id}
+          supabase={supabase}
+        />
+      )}
     </>
   }
 
@@ -416,7 +445,15 @@ if (vista === 'chat') {
         seleccionarProyecto={seleccionarProyecto}
         setVista={setVista}
         handleLogout={handleLogout}
+        onOpenPreferences={() => setShowPreferences(true)}
       />
+      {showPreferences && (
+        <PreferencesModal
+          onClose={() => setShowPreferences(false)}
+          userId={user?.id}
+          supabase={supabase}
+        />
+      )}
     </>
   }
 
@@ -515,11 +552,19 @@ if (vista === 'chat') {
             seleccionarProyecto={seleccionarProyecto}
             setVista={setVista}
             handleLogout={handleLogout}
+            onOpenPreferences={() => setShowPreferences(true)}
           />
           <button onClick={() => setVista('categorias')} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase' }}>
             ◀ Volver
           </button>
           <Billing />
+          {showPreferences && (
+            <PreferencesModal
+              onClose={() => setShowPreferences(false)}
+              userId={user?.id}
+              supabase={supabase}
+            />
+          )}
         </div>
       </>
     )
