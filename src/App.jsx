@@ -106,12 +106,12 @@ export default function App() {
 
       {(() => {
         const iconMap = {
-          'codigo': '/assets/codigo.webp',
-          'imagen': '/assets/imagen.webp',
-          'musica': '/assets/musica.webp',
-          'música': '/assets/musica.webp',
-          'texto':  '/assets/texto.webp',
-          'voces':  '/assets/voces.webp',
+          'codigo': '/assets/codigo1.webp',
+          'imagen': '/assets/imagen1.webp',
+          'musica': '/assets/musica1.webp',
+          'música': '/assets/musica1.webp',
+          'texto':  '/assets/texto1.webp',
+          'voces':  '/assets/voces1.webp',
         }
         const planetas = [
           { key:0, cls:'planet-a', size:190, top:'18%', left:'14%' },
