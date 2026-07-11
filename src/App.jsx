@@ -134,7 +134,7 @@ export default function App() {
               }}
             >
               <img
-                src={iconMap[cat.nombre.toLowerCase()] || `/assets/${cat.icono}`}
+                src={iconMap[cat.nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')] || `/assets/${cat.icono}`}
                 alt={cat.nombre}
                 style={{ width:'100%', height:'100%', borderRadius:'50%', objectFit:'cover', display:'block' }}
               />
