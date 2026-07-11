@@ -1,14 +1,54 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { readTextFile, writeTextFile, readDir, exists, mkdir } from '@tauri-apps/plugin-fs'
+import { readTextFile, writeTextFile, readDir, exists, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
 import { Command } from '@tauri-apps/plugin-shell'
 import { THEME } from '../theme'
 import { supabase } from '../supabaseClient'
 
+const getDateHeader = () => {
+  const d = new Date();
+  return `=== ${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ===`;
+};
+
+const getTimestamp = () => {
+  const d = new Date();
+  return `[${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}]`;
+};
+
+const appendToMemory = async (tabLabel, r1, r2, r3Save) => {
+  console.log('appendToMemory called', { tabLabel, r1, r2 });
+  try {
+    console.log('attempting mkdir...');
+    await mkdir('', { baseDir: BaseDirectory.AppLocalData, recursive: true });
+    console.log('mkdir ok');
+    
+    let memoryContent = '';
+    try { 
+      memoryContent = await readTextFile('cochi_memory.txt', { baseDir: BaseDirectory.AppLocalData });
+      console.log('existing file read ok');
+    } catch(e) { 
+      console.log('no existing file, starting fresh', e.message);
+    }
+
+    const dateHeader = getDateHeader();
+    const timestamp = getTimestamp();
+    if (!memoryContent.includes(dateHeader)) {
+      memoryContent += `\n${dateHeader}\n`;
+    }
+    memoryContent += `${timestamp} [${tabLabel}] R1: ${r1} | R2: ${r2}\n`;
+    
+    console.log('attempting writeTextFile...');
+    await writeTextFile('cochi_memory.txt', memoryContent, { baseDir: BaseDirectory.AppLocalData });
+    console.log('write ok');
+  } catch (err) {
+    console.error('Memory write error:', err);
+  }
+};
+
 const COCHI_MODELS = {
-  cochi01: 'deepseek/deepseek-v4-flash',
-  cochi02: 'google/gemini-3.1-flash-lite'
+  cochi01: 'google/gemini-3.1-flash-lite',
+  cochi02: 'deepseek/deepseek-v4-flash'
 }
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
@@ -16,16 +56,14 @@ const TABS = [
   { id: 'codigo',  label: 'CÓDIGO',  icon: '</>',  model: 'deepseek/deepseek-v4-flash', pricePer1k: 0.00027, categoriaId: '74721199-5ee8-42b1-a1a5-e6203c3ff9bb' },
   { id: 'texto',   label: 'TEXTO',   icon: 'Aa',   model: 'deepseek/deepseek-v4-flash', pricePer1k: 0.00027, categoriaId: 'af3962bb-7a19-425c-882a-5301a837c7d7' },
   { id: 'imagen',  label: 'IMAGEN',  icon: '🖼',   model: 'pendiente',                  pricePer1k: 0,       categoriaId: 'db79925b-c161-419e-bd94-460b3d43af8a' },
-  { id: 'musica',  label: 'MÚSICA',  icon: '🎵',   model: 'pendiente',                  pricePer1k: 0,       categoriaId: '28e7ba28-b6be-4d59-9e0f-cdd55cf09124' },
-  { id: 'voces',   label: 'VOCES',   icon: '🔊',   model: 'pendiente',                  pricePer1k: 0,       categoriaId: null },
+  { id: 'audio',   label: 'AUDIO',   icon: '🎧',   model: 'pendiente',                  pricePer1k: 0,       categoriaId: '28e7ba28-b6be-4d59-9e0f-cdd55cf09124' },
 ]
 
 const TAB_COLORS = {
-  codigo: { color: THEME.celeste,       border: THEME.celeste,       bg: THEME.celeste10 },
-  texto:  { color: THEME.gold,          border: THEME.gold,          bg: THEME.gold10 },
-  imagen: { color: THEME.pinkMarble,    border: THEME.pinkMarble,    bg: THEME.pink10 },
-  musica: { color: '#615FED',          border: '#615FED',          bg: 'rgba(97,95,237,0.12)' },
-  voces:  { color: '#F4FF91',          border: '#F4FF91',          bg: 'rgba(244,255,145,0.12)' },
+  codigo: { color: '#6680FF',          border: '#6680FF',          bg: 'rgba(102,128,255,0.12)', rgb: '102,128,255' },
+  texto:  { color: '#F4FF94',          border: '#F4FF94',          bg: 'rgba(244,255,148,0.12)', rgb: '244,255,148' },
+  imagen: { color: '#FF94F6',          border: '#FF94F6',          bg: 'rgba(255,148,246,0.12)', rgb: '255,148,246' },
+  audio:  { color: '#9994FF',          border: '#9994FF',          bg: 'rgba(153,148,255,0.12)', rgb: '153,148,255' },
 }
 
 function initTabState() {
@@ -33,7 +71,6 @@ function initTabState() {
     TABS.map(t => [t.id, {
       input: '',
       messages: [],      // visual: lo que ve el usuario
-      apiHistory: [],    // lo que va a OpenRouter (stateless: se limpia en handleClear)
       activity: [],      // log de herramientas ejecutadas en el turno actual
       tokens: 0,
       cost: 0,
@@ -232,19 +269,32 @@ export default function CochiDesktop() {
   const [tabs, setTabs]             = useState(initTabState)
   const abortRefs                   = useRef({})
 
-  const [r9Sessions, setR9Sessions] = useState({})
+  const [r9Sessions, setR9Sessions] = useState(Object.fromEntries(TABS.map(t => [t.id, ''])))
   const [cochiModel, setCochiModel] = useState('cochi01')
+  const [categoryPrompts, setCategoryPrompts] = useState({})
+  const [userName, setUserName] = useState('')
 
-  function parseR1R2R3(content) {
-    const r1Match = content.match(/\*\*R1:\*\*\s*([\s\S]*?)(?=\*\*R2:\*\*)/i)
-    const r2Match = content.match(/\*\*R2:\*\*\s*([\s\S]*?)(?=\*\*R3:\*\*)/i)
-    const r3Match = content.match(/\*\*R3:\*\*\s*([\s\S]*?)$/i)
-    return {
-      r1: r1Match ? r1Match[1].trim() : '',
-      r2: r2Match ? r2Match[1].trim() : '',
-      r3: r3Match ? r3Match[1].trim() : content
-    }
+const parseR1R2R3 = (content) => {
+  const r1Match = content.match(/\*{0,2}R1:\*{0,2}\s*([^\n]*?)(?=\s*\*{0,2}R2:|$)/m);
+  const r2Match = content.match(/\*{0,2}R2:\*{0,2}\s*([^\n]*)/m);
+  const r3Match = content.match(/\*{0,2}R3:\*{0,2}\s*([\s\S]*?)(?=\*{0,2}R3_SAVE:|$)/);
+  const r3SaveMatch = content.match(/\*{0,2}R3_SAVE:\*{0,2}\s*([\s\S]*?)$/);
+
+  const r1 = r1Match ? r1Match[1].trim() : '';
+  const r2 = r2Match ? r2Match[1].trim() : '';
+
+  let r3 = '';
+  if (r3Match) {
+    r3 = r3Match[1].trim();
+  } else if (r2Match) {
+    const r2LineEnd = content.indexOf(r2Match[0]) + r2Match[0].length;
+    r3 = content.slice(r2LineEnd).replace(/\*{0,2}R3_SAVE:\*{0,2}[\s\S]*$/, '').trim();
+  } else {
+    r3 = content;
   }
+
+  return { r1, r2, r3, r3Save: r3SaveMatch ? r3SaveMatch[1].trim() : null };
+};
 
   const tab   = TABS.find(t => t.id === activeTab)
   const state = tabs[activeTab]
@@ -255,37 +305,62 @@ export default function CochiDesktop() {
   }, [])
 
   useEffect(() => {
-    async function loadR9Sessions() {
+    async function loadR9() {
       try {
+        // Load r9_acumulado.json
+        try {
+          const raw = await readTextFile('r9_acumulado.json', { baseDir: BaseDirectory.AppLocalData });
+          const parsed = JSON.parse(raw);
+          setR9Sessions(prev => {
+            const updated = { ...prev };
+            TABS.forEach(t => {
+              if (parsed[t.label] !== undefined) {
+                updated[t.id] = parsed[t.label];
+              }
+            });
+            return updated;
+          });
+        } catch {
+          // file doesn't exist yet — start fresh
+        }
+
+        // ── Fetch user name from Supabase ──
+        try {
+          const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
+          if (serviceKey && userId) {
+            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+              headers: { Authorization: `Bearer ${serviceKey}`, apiKey: serviceKey }
+            })
+            if (res.ok) {
+              const userData = await res.json()
+              setUserName(userData?.email?.split('@')[0] || userData?.email || '')
+            }
+          }
+        } catch (e) {
+          console.error('Failed to fetch user name:', e)
+        }
+
+        // ── Load category system prompts ──
         const userId = import.meta.env.VITE_R7_USER_ID
         if (!userId) { console.error('R9: VITE_R7_USER_ID not found'); return }
-        console.log('R9: loading sessions for user', userId)
-        const sessions = {}
+        const prompts = {}
         for (const t of TABS) {
           if (!t.categoriaId) continue
-          const { data } = await supabase
-            .from('cochi_sesiones')
-            .select('id, r9_acumulado')
-            .eq('user_id', userId)
-            .eq('categoria_id', t.categoriaId)
+          const { data: catData } = await supabase
+            .from('categorias')
+            .select('cochi_system_prompt')
+            .eq('id', t.categoriaId)
             .single()
-          if (data) {
-            sessions[t.id] = { sesionId: data.id, r9Acumulado: data.r9_acumulado || '' }
-          } else {
-            const { data: newRow } = await supabase
-              .from('cochi_sesiones')
-              .insert({ user_id: userId, categoria_id: t.categoriaId, r9_acumulado: '' })
-              .select('id')
-              .single()
-            if (newRow) sessions[t.id] = { sesionId: newRow.id, r9Acumulado: '' }
+          if (catData?.cochi_system_prompt) {
+            prompts[t.id] = catData.cochi_system_prompt
           }
         }
-        setR9Sessions(sessions)
+        setCategoryPrompts(prompts)
       } catch (err) {
         console.error('R9 mount error:', err)
       }
     }
-    loadR9Sessions()
+    loadR9()
   }, [])
 
   // ── Añadir entrada al log de actividad del turno actual ──────────────────
@@ -324,12 +399,6 @@ export default function CochiDesktop() {
     abortRefs.current[activeTab] = controller
     const tabId = activeTab
 
-    // Construir historial para este turno
-    // Stateless: solo mandamos la conversación visual actual + el nuevo input
-    // (sin acumular apiHistory turno a turno — Cochi lee archivos si necesita contexto)
-    const newUserMsg = { role: 'user', content: sent }
-    const workingHistory = [...state.apiHistory, newUserMsg]
-
     setTabs(prev => ({
       ...prev,
       [tabId]: {
@@ -338,8 +407,7 @@ export default function CochiDesktop() {
         loading: true,
         streamingOutput: '',
         activity: [],
-        messages: [...prev[tabId].messages, { role: 'user', content: sent }],
-        apiHistory: workingHistory
+        messages: [...prev[tabId].messages, { role: 'user', content: sent }]
       }
     }))
 
@@ -350,14 +418,7 @@ export default function CochiDesktop() {
 
     const CONTEXT_RULE = {
       role: 'system',
-      content: `CONTEXT: You are running on Windows. Base paths:
-- Project root: C:\\Users\\PC\\Desktop\\R7SIGNAL
-- Desktop: C:\\Users\\PC\\Desktop
-- Public folder: C:\\Users\\PC\\Desktop\\R7SIGNAL\\public
-- src folder: C:\\Users\\PC\\Desktop\\R7SIGNAL\\src
-Always use these absolute paths when executing file system commands.
-You have tools to read files, write files, list directories and run PowerShell commands.
-IMPORTANT: Always read a file before modifying it. Never guess file contents.`
+      content: `You are operating on a Windows system. Use absolute paths only. Your memory files are in C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt. Read these files only when the user explicitly asks about past operations.`
     }
 
     const IDENTITY_RULE = {
@@ -373,26 +434,40 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
 
     const FORMAT_RULE = {
       role: 'system',
-      content: `FORMAT RULE: You must always structure your final response (when you have no more tool calls) in exactly this format — no exceptions:
-**R1:** [One compressed key insight or action taken — in English, max 2 lines]
-**R2:** [One line connecting this output to prior R9 context — in English. If no prior context write "First turn."]
-**R3:**
-[Your full response to the user in Spanish. This is the only part the user will see displayed.]`
+      content: `You must always respond using exactly this structure, each field on its own line:
+R1: [one sentence — what the user requested]
+R2: [one sentence — what was executed and the result, with full absolute Windows paths if files were involved]
+R3: [response to the user in their language]
+R3_SAVE: [optional — only if response contains working code, a document version 1, or an architectural decision. Omit entirely if nothing qualifies]
+Each label must be on its own line. Do not combine R1 and R2 on the same line. Do not omit R3: label.`
     }
 
-    const r9Data = r9Sessions[tabId]
-    const R9_RULE = r9Data?.r9Acumulado
+    const r9Accum = r9Sessions[tabId]
+    const R9_RULE = r9Accum
       ? {
           role: 'system',
-          content: `R9 MEMORY — accumulated context from prior Desktop turns (English, internal use only):\n${r9Data.r9Acumulado}`
+          content: `R9 MEMORY — accumulated context from prior Desktop turns (English, internal use only):\n${r9Accum}`
         }
       : null
 
-    const systemMessages = [SECURITY_RULE, CONTEXT_RULE, IDENTITY_RULE, FORMAT_RULE]
+    const systemMessages = [SECURITY_RULE, CONTEXT_RULE, IDENTITY_RULE]
+    if (categoryPrompts[tabId]) {
+      systemMessages.push({ role: 'system', content: categoryPrompts[tabId] })
+    }
+    systemMessages.push(FORMAT_RULE)
     if (R9_RULE) systemMessages.push(R9_RULE)
 
+    // ── R9: cada turno arranca limpio ──────────────────────────────────────
+    const turnMessages = [
+      ...systemMessages,
+      ...(r9Accum
+        ? [{ role: 'user', content: `[MEMORY]\n${r9Accum}` }]
+        : []),
+      { role: 'user', content: sent }
+    ]
+
     // ── Bucle agéntico ────────────────────────────────────────────────────
-    let messages = [...workingHistory]
+    let messages = [...turnMessages]
     let totalTokens = 0
     let iterations = 0
     const MAX_ITER = 12
@@ -417,7 +492,7 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
             stream: false,
             tools: COCHI_TOOLS,
             tool_choice: 'auto',
-            messages: [...systemMessages, ...messages]
+            messages: messages
           })
         })
 
@@ -438,27 +513,37 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
         // ── Sin tool calls → respuesta final ─────────────────────────────
         if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
           const rawContent = assistantMsg.content || ''
-          const { r1, r2, r3 } = parseR1R2R3(rawContent)
+          const { r1, r2, r3, r3Save } = parseR1R2R3(rawContent)
           const displayContent = r3 || rawContent
           const r1r2Block = (r1 || r2)
             ? `R1: ${r1}\nR2: ${r2}\n---\n`
             : ''
 
-          // Update R9 in memory and Supabase
-          if (r1r2Block && r9Sessions[tabId]) {
-            const newR9 = (r9Sessions[tabId].r9Acumulado
-              ? r9Sessions[tabId].r9Acumulado + '\n' + r1r2Block
+          // Update R9 in memory and persist to local JSON
+          if (r1r2Block) {
+            const current = r9Sessions[tabId] || ''
+            const newAccumulado = (current
+              ? current + '\n' + r1r2Block
               : r1r2Block).slice(-8000)
-            setR9Sessions(prev => ({
-              ...prev,
-              [tabId]: { ...prev[tabId], r9Acumulado: newR9 }
-            }))
-            supabase
-              .from('cochi_sesiones')
-              .update({ r9_acumulado: newR9 })
-              .eq('id', r9Sessions[tabId].sesionId)
-              .then(({ error }) => { if (error) console.error('R9 save error:', error) })
+            setR9Sessions(prev => ({ ...prev, [tabId]: newAccumulado }))
+
+            try {
+              const toWrite = {}
+              TABS.forEach(t => {
+                toWrite[t.label] = tabId === t.id ? newAccumulado : (r9Sessions[t.id] || '')
+              })
+              await writeTextFile(
+                'r9_acumulado.json',
+                JSON.stringify(toWrite, null, 2),
+                { baseDir: BaseDirectory.AppLocalData }
+              )
+            } catch(err) {
+              console.error('R9 write error:', err)
+            }
           }
+
+          const tabLabel = TABS.find(t => t.id === tabId)?.label || tabId
+          await appendToMemory(tabLabel, r1, r2, r3Save)
 
           const cost = (totalTokens / 1000) * tab.pricePer1k
           setTabs(prev => ({
@@ -469,7 +554,6 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
               streamingOutput: '',
               activity: [],
               messages: [...prev[tabId].messages, { role: 'assistant', content: displayContent }],
-              apiHistory: [...messages],
               tokens: prev[tabId].tokens + totalTokens,
               cost: prev[tabId].cost + cost
             }
@@ -558,7 +642,7 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
   function handleClear() {
     setTabs(prev => ({
       ...prev,
-      [activeTab]: { input: '', messages: [], apiHistory: [], activity: [], streamingOutput: '', tokens: 0, cost: 0, loading: false }
+      [activeTab]: { input: '', messages: [], activity: [], streamingOutput: '', tokens: 0, cost: 0, loading: false }
     }))
   }
 
@@ -566,7 +650,12 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
-  const modelShort = tab.model === 'pendiente' ? 'pendiente' : tab.model.split('/')[1] || tab.model
+  const activeModelSlug = COCHI_MODELS[cochiModel]
+  const modelShort = activeModelSlug === 'google/gemini-3.1-flash-lite'
+    ? 'Gemini 3.1 Flash Lite'
+    : activeModelSlug === 'deepseek/deepseek-v4-flash'
+      ? 'DeepSeek V4 Flash'
+      : activeModelSlug
   const costStr = state.cost < 0.001 ? '~0,00€' : `~${state.cost.toFixed(3).replace('.', ',')}€`
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -576,7 +665,7 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
       <div style={{
         display:'flex', flexDirection:'column', height:'100vh', width:'100vw',
         background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`,
-        fontFamily:"'Exo 2',sans-serif", color:THEME.textHigh, overflow:'hidden'
+        fontFamily:"'Inter',sans-serif", color:THEME.textHigh, overflow:'hidden'
       }}>
         <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
 
@@ -587,50 +676,55 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
             <div>
               <span style={{
                 fontFamily:"'Orbitron',monospace", fontSize:'1.8rem', fontWeight:900, letterSpacing:'0.06em',
-                background:`linear-gradient(135deg, ${THEME.pinkMarble} 25%, #FFFFFF 100%)`,
-                WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text'
+                background:'linear-gradient(135deg, #FFD470 0%, #FF6B35 50%, #FF0040 100%)',
+                WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
+                textShadow:'0 0 30px rgba(255,212,112,0.5), 0 0 60px rgba(255,107,53,0.3)'
               }}>R7SIGNAL</span>
-              <span style={{ fontSize:'1.2rem', letterSpacing:'0.22em', color:'#FFFFFF', textTransform:'uppercase', fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, marginLeft:14 }}>
+              <span style={{ fontSize:'1.2rem', letterSpacing:'0.22em', textTransform:'uppercase', fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, marginLeft:14,
+                color:'#00FFFF', textShadow:'0 0 20px rgba(255,0,128,0.6), 0 0 40px rgba(255,0,128,0.3)'
+              }}>
                 COCHI ASISTENTE
               </span>
             </div>
           </div>
 
           {/* COCHI MODEL TOGGLE */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 10 }}>
             <button
               onClick={() => setCochiModel('cochi01')}
               style={{
-                background: cochiModel === 'cochi01' ? 'rgba(100,210,255,0.12)' : 'transparent',
-                border: `1px solid ${cochiModel === 'cochi01' ? 'rgba(100,210,255,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                borderRadius: 8,
-                padding: '5px 14px',
+                background: cochiModel === 'cochi01' ? 'rgba(100,210,255,0.25)' : 'transparent',
+                border: `2px solid ${cochiModel === 'cochi01' ? 'rgba(100,210,255,0.8)' : 'rgba(255,255,255,0.15)'}`,
+                borderRadius: 12,
+                padding: '10px 36px',
                 cursor: 'pointer',
                 display: 'flex',
-                flexDirection: 'column',
+                flexDirection: 'row',
                 alignItems: 'center',
-                gap: 2
+                gap: 10,
+                boxShadow: cochiModel === 'cochi01' ? '0 0 30px rgba(100,210,255,0.4)' : 'none'
               }}
             >
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: cochiModel === 'cochi01' ? 'rgba(100,210,255,1)' : 'rgba(255,255,255,0.4)', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.08em' }}>COCHI 01</span>
-              <span style={{ fontSize: '0.6rem', color: cochiModel === 'cochi01' ? 'rgba(100,210,255,0.6)' : 'rgba(255,255,255,0.2)', fontFamily: "'JetBrains Mono', monospace" }}>DeepSeek</span>
+              <span style={{ fontSize: '1.3rem', fontWeight: 700, color: cochiModel === 'cochi01' ? 'rgba(100,210,255,1)' : 'rgba(255,255,255,0.5)', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.08em' }}>COCHI 01</span>
+              <span style={{ fontSize: '0.95rem', color: 'rgba(100,210,255,0.8)', fontFamily: "'JetBrains Mono', monospace" }}>Occidente</span>
             </button>
             <button
               onClick={() => setCochiModel('cochi02')}
               style={{
-                background: cochiModel === 'cochi02' ? 'rgba(255,200,80,0.10)' : 'transparent',
-                border: `1px solid ${cochiModel === 'cochi02' ? 'rgba(255,200,80,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                borderRadius: 8,
-                padding: '5px 14px',
+                background: cochiModel === 'cochi02' ? 'rgba(255,74,51,0.20)' : 'transparent',
+                border: `2px solid ${cochiModel === 'cochi02' ? 'rgba(255,74,51,0.8)' : 'rgba(255,255,255,0.15)'}`,
+                borderRadius: 12,
+                padding: '10px 36px',
                 cursor: 'pointer',
                 display: 'flex',
-                flexDirection: 'column',
+                flexDirection: 'row',
                 alignItems: 'center',
-                gap: 2
+                gap: 10,
+                boxShadow: cochiModel === 'cochi02' ? '0 0 30px rgba(255,74,51,0.4)' : 'none'
               }}
             >
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: cochiModel === 'cochi02' ? 'rgba(255,200,80,1)' : 'rgba(255,255,255,0.4)', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.08em' }}>COCHI 02</span>
-              <span style={{ fontSize: '0.6rem', color: cochiModel === 'cochi02' ? 'rgba(255,200,80,0.6)' : 'rgba(255,255,255,0.2)', fontFamily: "'JetBrains Mono', monospace" }}>Gemini</span>
+              <span style={{ fontSize: '1.3rem', fontWeight: 700, color: cochiModel === 'cochi02' ? 'rgba(255,74,51,1)' : 'rgba(255,255,255,0.5)', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.08em' }}>COCHI 02</span>
+              <span style={{ fontSize: '0.95rem', color: 'rgba(255,74,51,0.8)', fontFamily: "'JetBrains Mono', monospace" }}>Oriente</span>
             </button>
           </div>
 
@@ -642,16 +736,16 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
               return (
                 <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
                   flex:1, padding:'10px 6px', display:'flex', flexDirection:'column', alignItems:'center', gap:4,
-                  background: isActive ? `linear-gradient(160deg, rgba(65,66,62,0.5) 0%, ${THEME.bgMain} 100%)` : 'rgba(55,75,82,0.25)',
-                  border: isActive ? `2px solid ${c.border}` : `1px solid ${THEME.celeste20}`,
+                  background: isActive ? `rgba(${c.rgb},0.20)` : 'transparent',
+                  border: `2px solid ${isActive ? `rgba(${c.rgb},0.8)` : 'rgba(255,255,255,0.15)'}`,
                   borderRadius:12,
-                  color: isActive ? c.color : THEME.textLow,
+                  color: isActive ? `rgba(${c.rgb},1)` : 'rgba(255,255,255,0.5)',
                   cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif",
                   transition:'all 0.22s',
-                  boxShadow: isActive ? `0 4px 20px ${c.bg}` : 'none'
+                  boxShadow: isActive ? `0 0 30px rgba(${c.rgb},0.4)` : 'none'
                 }}
-                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.color = THEME.textMed; e.currentTarget.style.borderColor = THEME.celeste35 }}}
-                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.color = THEME.textLow; e.currentTarget.style.borderColor = THEME.celeste20 }}}
+                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.borderColor = `rgba(${c.rgb},0.5)`; e.currentTarget.style.color = `rgba(${c.rgb},0.7)` }}}
+                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}}
                 >
                   <span style={{ fontSize:'1.3rem', lineHeight:1 }}>{t.icon}</span>
                   <span style={{ fontSize:'0.7rem', fontWeight:700, letterSpacing:'0.18em', textTransform:'uppercase' }}>{t.label}</span>
@@ -694,8 +788,8 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
                           borderRadius:12, padding:'12px 18px', alignSelf:'flex-end', maxWidth:'85%',
                           boxShadow:`0 2px 12px rgba(0,0,0,0.3)`
                         }}>
-                          <div style={{ fontSize:'0.75rem', color:THEME.celeste, marginBottom:6, letterSpacing:'0.18em', fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, textTransform:'uppercase' }}>IN · TÚ</div>
-                          <div style={{ fontSize:'1rem', color:THEME.textHigh, lineHeight:1.5, fontFamily:"'Exo 2',sans-serif", whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{msg.content}</div>
+                          <div style={{ fontSize:'0.75rem', color:THEME.celeste, marginBottom:6, letterSpacing:'0.18em', fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, textTransform:'uppercase' }}>IN · {userName || 'TÚ'}</div>
+                          <div style={{ fontSize:'1rem', color:THEME.textHigh, lineHeight:1.5, fontFamily:"'Inter',sans-serif", whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{msg.content}</div>
                         </div>
                       ) : (
                         <div key={idx} className="cd-message-enter" style={{
@@ -704,9 +798,9 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
                           boxShadow:`0 2px 12px rgba(0,0,0,0.3)`
                         }}>
                           <div style={{ fontSize:'0.8rem', color:tc2.color, marginBottom:8, letterSpacing:'0.18em', fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, textTransform:'uppercase', textShadow:`0 0 10px ${THEME.gold20}` }}>
-                            🎯 {t.label}
+                            🎯 COCHI {t.label}
                           </div>
-                          <div style={{ fontSize:'1.1rem', color:THEME.textHigh, lineHeight:1.6, fontFamily:"'Exo 2',sans-serif" }}>
+                          <div style={{ fontSize:'1.1rem', color:THEME.textHigh, lineHeight:1.6, fontFamily:"'Inter',sans-serif" }}>
                             <ReactMarkdown components={{
                               code({ node, inline, className, children, ...props }) {
                                 const match = /language-(\w+)/.exec(className || '')
@@ -775,9 +869,9 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
               {/* Aviso Imagen/Música/Voces */}
               <div style={{
                 fontSize:'0.78rem',
-                color: ['imagen','musica','voces'].includes(activeTab) ? THEME.gold : THEME.textLow,
-                fontFamily:"'Exo 2',sans-serif", marginBottom:8,
-                opacity: ['imagen','musica','voces'].includes(activeTab) ? 0.85 : 0.6,
+                color: ['codigo','texto','imagen','audio'].includes(activeTab) ? THEME.gold : THEME.textLow,
+                fontFamily:"'Inter',sans-serif", marginBottom:8,
+                opacity: ['codigo','texto','imagen','audio'].includes(activeTab) ? 0.85 : 0.6,
                 lineHeight:1.5
               }}>
                 💡 ¿No te convence el resultado? Vuelve a la Web para reformular el prompt — es más eficiente que ajustar aquí a ciegas.
@@ -795,7 +889,7 @@ Cuando el usuario te habla directamente sin bloque [INSTRUCCIÓN], responde y ac
                   style={{
                     flex:1, background:'transparent', border:'none',
                     color:THEME.textHigh, fontSize:'1.25rem', fontWeight:500,
-                    outline:'none', fontFamily:"'Exo 2',sans-serif",
+                    outline:'none', fontFamily:"'Inter',sans-serif",
                     letterSpacing:'0.02em', resize:'none', overflow:'hidden', lineHeight:1.6
                   }}
                 />
