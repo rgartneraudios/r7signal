@@ -88,8 +88,13 @@ export default function App() {
         .planet-e  { animation: sphereFloat 7.0s ease-in-out 1.6s infinite alternate; }
       `}</style>
 
-      <div className="r7-bg" style={{ position:'absolute', inset:0, background:`radial-gradient(ellipse 70% 55% at 20% 40%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 55% 45% at 80% 65%, ${THEME.gold10} 0%, transparent 55%), radial-gradient(ellipse 45% 38% at 58% 18%, ${THEME.pink08} 0%, transparent 50%), ${THEME.bgMain}` }} />
-      <div className="r7-grid" style={{ position:'absolute', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'60px 60px' }} />
+      <div className="r7-bg" style={{ position:'absolute', inset:0, background:`
+  radial-gradient(ellipse 70% 55% at 0% 40%, ${THEME.radialOccidente} 0%, transparent 65%),
+  radial-gradient(ellipse 55% 45% at 100% 65%, ${THEME.radialOriente} 0%, transparent 60%),
+  radial-gradient(ellipse 40% 35% at 50% 50%, ${THEME.radialCenter} 0%, transparent 55%),
+  ${THEME.bgMainNeon}
+` }} />
+      <div className="r7-grid" style={{ position:'absolute', inset:0, backgroundImage:`linear-gradient(${THEME.gridAmber} 1px, transparent 1px), linear-gradient(90deg, ${THEME.gridAmber} 1px, transparent 1px)`, backgroundSize:'60px 60px' }} />
 
       <AppHeader onLoginClick={() => setShowLoginModal(true)} />
 
@@ -106,24 +111,24 @@ export default function App() {
 
       {(() => {
         const iconMap = {
-          'codigo': '/assets/codigo1.webp',
-          'imagen': '/assets/imagen1.webp',
-          'musica': '/assets/musica1.webp',
-          'música': '/assets/musica1.webp',
-          'texto':  '/assets/texto1.webp',
-          'voces':  '/assets/voces1.webp',
+          'codigo': '/assets/codigo.webp',
+          'imagen': '/assets/imagen.webp',
+          'musica': '/assets/musica.webp',
+          'texto':  '/assets/texto.webp',
+          'voces':  '/assets/voces.webp',
         }
         const planetas = [
-          { key:0, cls:'planet-a', size:190, top:'18%', left:'14%' },
-          { key:1, cls:'planet-b', size:180, bottom:'18%', left:'16%' },
-          { key:2, cls:'planet-c', size:170, top:'8%', right:'18%' },
-          { key:3, cls:'planet-d', size:150, top:'40%', right:'10%' },
-          { key:4, cls:'planet-e', size:190, bottom:'16%', right:'17%' },
+          { key:0, cls:'planet-a', size:360, top:'10%', left:'12%' },
+          { key:1, cls:'planet-b', size:340, bottom:'8%', left:'10%' },
+          { key:2, cls:'planet-c', size:320, top:'2%', right:'18%' },
+          { key:3, cls:'planet-d', size:300, top:'34%', right:'5%' },
+          { key:4, cls:'planet-e', size:380, bottom:'6%', right:'16%' },
         ]
         return categorias.map((cat, i) => {
           const p = planetas[i]
           if (!p) return null
-          return (
+          const catKey = cat.nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+              return (
             <div key={cat.id} className={p.cls}
               onClick={() => handleCategoryClick(cat)}
               style={{
@@ -134,29 +139,17 @@ export default function App() {
               }}
             >
               <img
-                src={iconMap[cat.nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')] || `/assets/${cat.icono}`}
+                src={iconMap[catKey] || `/assets/${cat.icono}`}
                 alt={cat.nombre}
                 style={{ width:'100%', height:'100%', borderRadius:'50%', objectFit:'cover', display:'block' }}
               />
-              <span style={{
-                position:'absolute', bottom:-18, left:'50%', transform:'translateX(-50%)',
-                fontSize:'0.50rem', letterSpacing:'0.18em', color:THEME.textHigh,
-                fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase',
-                whiteSpace:'nowrap', textShadow:'0 0 8px #000',
-              }}>{cat.nombre}</span>
-            </div>
+              </div>
           )
         })
       })()}
 
       <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
-        <div className="r7-panel" style={{ position:'relative', padding:'52px 68px 48px', borderRadius:28, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)', boxShadow:`0 0 90px ${THEME.celeste08}, 0 0 180px ${THEME.celeste08}, inset 0 1px 0 ${THEME.borderSubtle}`, textAlign:'center', pointerEvents:'none' }}>
-          <div style={{ position:'absolute', top:0, left:'12%', right:'12%', height:1, background:`linear-gradient(90deg, transparent, ${THEME.celeste45}, transparent)` }} />
-          <div className="r7-logo" style={{ fontFamily:"'Orbitron',monospace", fontSize:'7.5rem', fontWeight:900, letterSpacing:'-0.02em', lineHeight:1, background:`linear-gradient(140deg, ${THEME.textHigh} 25%, ${THEME.celeste} 62%, ${THEME.gold} 100%)`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>R7</div>
-          <div style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:'1rem', fontWeight:500, letterSpacing:'0.58em', color:THEME.textMed, marginTop:-2, marginBottom:26, textTransform:'uppercase' }}>Signal</div>
-          <div style={{ width:72, height:1, margin:'0 auto 22px', background:`linear-gradient(90deg, transparent, ${THEME.celeste35}, transparent)` }} />
-          <div style={{ fontSize:'0.78rem', fontWeight:400, letterSpacing:'0.28em', color:THEME.textMed, textTransform:'uppercase', fontFamily:"'Exo 2',sans-serif" }}>Web Intelligence<br/>Cochi Local Execution</div>
-        </div>
+        <img src="/assets/PlacaCentro.webp" alt="R7Signal" className="r7-panel" style={{ maxWidth:'90vw', maxHeight:'90vh', objectFit:'contain' }} />
       </div>
 
       <Footer />

@@ -60,10 +60,54 @@ const TABS = [
 ]
 
 const TAB_COLORS = {
-  codigo: { color: '#6680FF',          border: '#6680FF',          bg: 'rgba(102,128,255,0.12)', rgb: '102,128,255' },
-  texto:  { color: '#F4FF94',          border: '#F4FF94',          bg: 'rgba(244,255,148,0.12)', rgb: '244,255,148' },
-  imagen: { color: '#FF94F6',          border: '#FF94F6',          bg: 'rgba(255,148,246,0.12)', rgb: '255,148,246' },
-  audio:  { color: '#9994FF',          border: '#9994FF',          bg: 'rgba(153,148,255,0.12)', rgb: '153,148,255' },
+  codigo: {
+    rgb: '100,155,220',
+    border: 'rgba(100,155,220,0.85)',
+    bg: 'rgba(80,140,200,0.15)',
+    glow: 'rgba(100,155,220,0.45)',
+    glowSoft: 'rgba(100,155,220,0.2)',
+    gradient: 'linear-gradient(180deg,#3A6A9A 0%,#6A9FD4 35%,#C8D8E8 50%,#6A9FD4 65%,#3A6A9A 100%)',
+    gradientH: 'linear-gradient(90deg,#3A6A9A,#6A9FD4,#C8D8E8,#6A9FD4)',
+    dropGlow: 'drop-shadow(0 0 5px rgba(100,155,220,0.9))',
+    dropGlowSoft: 'drop-shadow(0 0 3px rgba(100,155,220,0.6))',
+    color: '#6A9FD4',
+  },
+  texto: {
+    rgb: '190,165,70',
+    border: 'rgba(190,165,70,0.85)',
+    bg: 'rgba(180,150,60,0.12)',
+    glow: 'rgba(190,165,70,0.4)',
+    glowSoft: 'rgba(190,165,70,0.2)',
+    gradient: 'linear-gradient(180deg,#8A7840 0%,#C8A850 35%,#E8E0C8 50%,#C8A850 65%,#8A7840 100%)',
+    gradientH: 'linear-gradient(90deg,#8A7840,#C8A850,#E8E0C8,#C8A850)',
+    dropGlow: 'drop-shadow(0 0 5px rgba(200,168,80,0.9))',
+    dropGlowSoft: 'drop-shadow(0 0 3px rgba(200,168,80,0.6))',
+    color: '#C8A850',
+  },
+  imagen: {
+    rgb: '210,110,155',
+    border: 'rgba(210,110,155,0.85)',
+    bg: 'rgba(200,100,140,0.12)',
+    glow: 'rgba(210,110,155,0.4)',
+    glowSoft: 'rgba(210,110,155,0.2)',
+    gradient: 'linear-gradient(180deg,#8A3058 0%,#D47098 35%,#D8C0D0 50%,#D47098 65%,#8A3058 100%)',
+    gradientH: 'linear-gradient(90deg,#8A3058,#D47098,#D8C0D0,#D47098)',
+    dropGlow: 'drop-shadow(0 0 5px rgba(212,112,152,0.9))',
+    dropGlowSoft: 'drop-shadow(0 0 3px rgba(212,112,152,0.6))',
+    color: '#D47098',
+  },
+  audio: {
+    rgb: '140,90,220',
+    border: 'rgba(140,90,220,0.85)',
+    bg: 'rgba(120,70,200,0.12)',
+    glow: 'rgba(140,90,220,0.4)',
+    glowSoft: 'rgba(140,90,220,0.2)',
+    gradient: 'linear-gradient(180deg,#4A2878 0%,#9070D4 35%,#C8C0E0 50%,#9070D4 65%,#4A2878 100%)',
+    gradientH: 'linear-gradient(90deg,#4A2878,#9070D4,#C8C0E0,#9070D4)',
+    dropGlow: 'drop-shadow(0 0 5px rgba(144,112,212,0.9))',
+    dropGlowSoft: 'drop-shadow(0 0 3px rgba(144,112,212,0.6))',
+    color: '#9070D4',
+  },
 }
 
 function initTabState() {
@@ -664,10 +708,15 @@ Each label must be on its own line. Do not combine R1 and R2 on the same line. D
       <style>{css}</style>
       <div style={{
         display:'flex', flexDirection:'column', height:'100vh', width:'100vw',
-        background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`,
+        background:`
+  radial-gradient(ellipse 70% 55% at 0% 40%, ${THEME.radialOccidente} 0%, transparent 65%),
+  radial-gradient(ellipse 55% 45% at 100% 65%, ${THEME.radialOriente} 0%, transparent 60%),
+  radial-gradient(ellipse 40% 35% at 50% 50%, ${THEME.radialCenter} 0%, transparent 55%),
+  ${THEME.bgMainNeon}
+`,
         fontFamily:"'Inter',sans-serif", color:THEME.textHigh, overflow:'hidden'
       }}>
-        <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
+        <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.gridAmber} 1px, transparent 1px), linear-gradient(90deg, ${THEME.gridAmber} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
 
         <div style={{ position:'relative', zIndex:10, display:'flex', flexDirection:'column', height:'100vh', padding:'16px 20px', gap:12 }}>
 
@@ -676,12 +725,12 @@ Each label must be on its own line. Do not combine R1 and R2 on the same line. D
             <div>
               <span style={{
                 fontFamily:"'Orbitron',monospace", fontSize:'1.8rem', fontWeight:900, letterSpacing:'0.06em',
-                background:'linear-gradient(135deg, #FFD470 0%, #FF6B35 50%, #FF0040 100%)',
+                backgroundImage:'linear-gradient(135deg, #E0C888 0%, #D08860 50%, #CC5070 100%)',
                 WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
-                textShadow:'0 0 30px rgba(255,212,112,0.5), 0 0 60px rgba(255,107,53,0.3)'
+                textShadow:'0 0 30px rgba(212,184,120,0.45), 0 0 60px rgba(208,136,96,0.25)'
               }}>R7SIGNAL</span>
               <span style={{ fontSize:'1.2rem', letterSpacing:'0.22em', textTransform:'uppercase', fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, marginLeft:14,
-                color:'#00FFFF', textShadow:'0 0 20px rgba(255,0,128,0.6), 0 0 40px rgba(255,0,128,0.3)'
+                color: cochiModel === 'cochi01' ? '#5CC8D4' : '#D45870', textShadow:'0 0 20px rgba(200,80,130,0.5), 0 0 40px rgba(200,80,130,0.25)'
               }}>
                 COCHI ASISTENTE
               </span>
@@ -689,44 +738,49 @@ Each label must be on its own line. Do not combine R1 and R2 on the same line. D
           </div>
 
           {/* COCHI MODEL TOGGLE */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0, border: '1px solid #1A2030', borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
             <button
               onClick={() => setCochiModel('cochi01')}
               style={{
-                background: cochiModel === 'cochi01' ? 'rgba(100,210,255,0.25)' : 'transparent',
-                border: `2px solid ${cochiModel === 'cochi01' ? 'rgba(100,210,255,0.8)' : 'rgba(255,255,255,0.15)'}`,
-                borderRadius: 12,
+                flex: 1,
+                background: cochiModel === 'cochi01' ? 'rgba(92, 200, 212, 0.08)' : 'transparent',
+                border: 'none',
+                borderBottom: cochiModel === 'cochi01' ? '2px solid #5CC8D4' : '2px solid transparent',
+                borderRadius: 0,
                 padding: '10px 36px',
                 cursor: 'pointer',
                 display: 'flex',
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 10,
-                boxShadow: cochiModel === 'cochi01' ? '0 0 30px rgba(100,210,255,0.4)' : 'none'
+                justifyContent: 'center',
+                gap: 10
               }}
             >
-              <span style={{ fontSize: '1.3rem', fontWeight: 700, color: cochiModel === 'cochi01' ? 'rgba(100,210,255,1)' : 'rgba(255,255,255,0.5)', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.08em' }}>COCHI 01</span>
-              <span style={{ fontSize: '0.95rem', color: 'rgba(100,210,255,0.8)', fontFamily: "'JetBrains Mono', monospace" }}>Occidente</span>
+              <span style={{ fontSize: '1.3rem', fontWeight: 700, color: cochiModel === 'cochi01' ? '#5CC8D4' : '#3A4A5A', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.08em' }}>COCHI 01</span>
+              <span style={{ fontSize: '0.95rem', color: cochiModel === 'cochi01' ? '#5CC8D4' : '#2A3040', fontFamily: "'JetBrains Mono', monospace" }}>Occidente</span>
             </button>
             <button
               onClick={() => setCochiModel('cochi02')}
               style={{
-                background: cochiModel === 'cochi02' ? 'rgba(255,74,51,0.20)' : 'transparent',
-                border: `2px solid ${cochiModel === 'cochi02' ? 'rgba(255,74,51,0.8)' : 'rgba(255,255,255,0.15)'}`,
-                borderRadius: 12,
+                flex: 1,
+                background: cochiModel === 'cochi02' ? 'rgba(212, 88, 112, 0.08)' : 'transparent',
+                border: 'none',
+                borderBottom: cochiModel === 'cochi02' ? '2px solid #D45870' : '2px solid transparent',
+                borderRadius: 0,
                 padding: '10px 36px',
                 cursor: 'pointer',
                 display: 'flex',
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 10,
-                boxShadow: cochiModel === 'cochi02' ? '0 0 30px rgba(255,74,51,0.4)' : 'none'
+                justifyContent: 'center',
+                gap: 10
               }}
             >
-              <span style={{ fontSize: '1.3rem', fontWeight: 700, color: cochiModel === 'cochi02' ? 'rgba(255,74,51,1)' : 'rgba(255,255,255,0.5)', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.08em' }}>COCHI 02</span>
-              <span style={{ fontSize: '0.95rem', color: 'rgba(255,74,51,0.8)', fontFamily: "'JetBrains Mono', monospace" }}>Oriente</span>
+              <span style={{ fontSize: '1.3rem', fontWeight: 700, color: cochiModel === 'cochi02' ? '#D45870' : '#3A4A5A', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.08em' }}>COCHI 02</span>
+              <span style={{ fontSize: '0.95rem', color: cochiModel === 'cochi02' ? '#D46880' : '#2A3040', fontFamily: "'JetBrains Mono', monospace" }}>Asia</span>
             </button>
           </div>
+          <div style={{ height: 2, background: 'linear-gradient(90deg, #5CC8D4 0%, #D4B850 30%, #CC8060 65%, #D45870 100%)', borderRadius: '0 0 4px 4px' }} />
 
           {/* Tabs */}
           <div style={{ display:'flex', gap:6, flexShrink:0 }}>
@@ -744,11 +798,25 @@ Each label must be on its own line. Do not combine R1 and R2 on the same line. D
                   transition:'all 0.22s',
                   boxShadow: isActive ? `0 0 30px rgba(${c.rgb},0.4)` : 'none'
                 }}
-                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.borderColor = `rgba(${c.rgb},0.5)`; e.currentTarget.style.color = `rgba(${c.rgb},0.7)` }}}
-                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}}
+                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.borderColor = `rgba(${c.rgb},0.5)` }}}
+                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)' }}}
                 >
-                  <span style={{ fontSize:'1.3rem', lineHeight:1 }}>{t.icon}</span>
-                  <span style={{ fontSize:'0.7rem', fontWeight:700, letterSpacing:'0.18em', textTransform:'uppercase' }}>{t.label}</span>
+                  <span style={{
+                    fontSize: '1.3rem', lineHeight: 1,
+                    backgroundImage: isActive ? c.gradient : 'none',
+                    WebkitBackgroundClip: isActive ? 'text' : 'unset',
+                    WebkitTextFillColor: isActive ? 'transparent' : 'rgba(255,255,255,0.35)',
+                    backgroundClip: isActive ? 'text' : 'unset',
+                    filter: isActive ? c.dropGlow : 'none',
+                  }}>{t.icon}</span>
+                  <span style={{
+                    fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase',
+                    backgroundImage: isActive ? c.gradient : 'none',
+                    WebkitBackgroundClip: isActive ? 'text' : 'unset',
+                    WebkitTextFillColor: isActive ? 'transparent' : 'rgba(255,255,255,0.35)',
+                    backgroundClip: isActive ? 'text' : 'unset',
+                    filter: isActive ? c.dropGlow : 'none',
+                  }}>{t.label}</span>
                 </button>
               )
             })}
@@ -859,8 +927,8 @@ Each label must be on its own line. Do not combine R1 and R2 on the same line. D
 
             {/* Input area */}
             <div style={{
-              background:'rgba(65,66,62,0.35)', border:`2px solid ${THEME.celeste25}`,
-              borderRadius:14, padding:'12px 16px', boxShadow:`0 4px 20px ${THEME.celeste08}`,
+              background:'rgba(65,66,62,0.35)', border:`2px solid ${tc.border}`,
+              borderRadius:14, padding:'12px 16px', boxShadow:`0 0 20px ${tc.glowSoft}, inset 0 0 12px rgba(${tc.rgb},0.06)`,
               transition:'all 0.3s ease', flexShrink:0
             }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = THEME.celeste40; e.currentTarget.style.boxShadow = `0 6px 30px ${THEME.celeste12}` }}
@@ -868,9 +936,12 @@ Each label must be on its own line. Do not combine R1 and R2 on the same line. D
             >
               {/* Aviso Imagen/Música/Voces */}
               <div style={{
-                fontSize:'0.78rem',
-                color: ['codigo','texto','imagen','audio'].includes(activeTab) ? THEME.gold : THEME.textLow,
+                backgroundImage: 'linear-gradient(90deg, #F0E8D8 0%, #FFE87C 50%, #FFD700 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
                 fontFamily:"'Inter',sans-serif", marginBottom:8,
+                fontSize:'0.78rem',
                 opacity: ['codigo','texto','imagen','audio'].includes(activeTab) ? 0.85 : 0.6,
                 lineHeight:1.5
               }}>
@@ -925,7 +996,12 @@ Each label must be on its own line. Do not combine R1 and R2 on the same line. D
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:8, marginTop:8, borderTop:`1px solid ${THEME.metallicGray}` }}>
                 <div style={{ display:'flex', gap:8, alignItems:'center', fontSize:'0.8rem', fontFamily:"'JetBrains Mono',monospace", color:tc.color, letterSpacing:'0.05em' }}>
                   {state.loading && <span className="cd-spinner" />}
-                  <span>⚡ {modelShort}</span>
+                  <span style={{
+                    backgroundImage: 'linear-gradient(90deg, #F0E8D8 0%, #FFE87C 50%, #FFD700 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}>⚡ {modelShort}</span>
                 </div>
                 <div style={{ display:'flex', gap:12, alignItems:'center', fontSize:'0.8rem', fontFamily:"'JetBrains Mono',monospace", letterSpacing:'0.05em' }}>
                   <span style={{ color:THEME.celeste }}>{state.tokens.toLocaleString('es')} tok</span>

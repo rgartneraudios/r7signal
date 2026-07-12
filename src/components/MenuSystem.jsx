@@ -365,7 +365,12 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
     return (
       <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
         <AppHeader onLoginClick={onLoginClick} />
-        <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
+        <div style={{ position:'fixed', inset:0, background:`
+  radial-gradient(ellipse 70% 55% at 0% 40%, ${THEME.radialOccidente} 0%, transparent 65%),
+  radial-gradient(ellipse 55% 45% at 100% 65%, ${THEME.radialOriente} 0%, transparent 60%),
+  radial-gradient(ellipse 40% 35% at 50% 50%, ${THEME.radialCenter} 0%, transparent 55%),
+  ${THEME.bgMainNeon}
+`, zIndex:0 }} />
         <div style={{ position:'relative', zIndex:10, display:'flex', alignItems:'center', justifyContent:'center', height:'100vh' }}>
           <div style={{ textAlign:'center', color:THEME.celeste }}>
             <div className='menu-pulse' style={{ fontSize:'1.2rem', marginBottom:12 }}>⏳</div>
@@ -413,7 +418,7 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
 
 if (vista === 'chat') {
     return <>
-      <AppHeader onLoginClick={onLoginClick} />
+      <AppHeader onLoginClick={onLoginClick} volverAMenus={volverAMenus} />
       <ChatView
         modulos={modulos}
         moduloActivo={moduloActivo}
@@ -460,7 +465,7 @@ if (vista === 'chat') {
   if (vista === 'billing') {
     return (
       <>
-        <AppHeader onLoginClick={onLoginClick} />
+        <AppHeader onLoginClick={onLoginClick} onVolver={() => setVista('categorias')} />
         <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
           <style>{`
             @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&family=Space+Grotesk:wght@500;600;700&display=swap');
@@ -537,8 +542,13 @@ if (vista === 'chat') {
             .billing-turno-tokens { color: ${THEME.gold}; text-align: right; }
             .billing-turno-coste { color: ${THEME.pinkMarble}; text-align: right; }
           `}</style>
-          <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
-          <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
+          <div style={{ position:'fixed', inset:0, background:`
+  radial-gradient(ellipse 70% 55% at 0% 40%, ${THEME.radialOccidente} 0%, transparent 65%),
+  radial-gradient(ellipse 55% 45% at 100% 65%, ${THEME.radialOriente} 0%, transparent 60%),
+  radial-gradient(ellipse 40% 35% at 50% 50%, ${THEME.radialCenter} 0%, transparent 55%),
+  ${THEME.bgMainNeon}
+`, zIndex:0 }} />
+          <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.gridAmber} 1px, transparent 1px), linear-gradient(90deg, ${THEME.gridAmber} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
           <SidebarPanel
             sidebarOpen={sidebarOpen}
             toggleSidebar={toggleSidebar}
@@ -554,9 +564,6 @@ if (vista === 'chat') {
             handleLogout={handleLogout}
             onOpenPreferences={() => setShowPreferences(true)}
           />
-          <button onClick={() => setVista('categorias')} style={{ position:'fixed', top:22, right:28, zIndex:30, background:THEME.bgFeedCC, border:`1px solid ${THEME.borderSubtle}`, borderRadius:20, padding:'6px 16px', color:THEME.textMed, fontSize:'0.65rem', letterSpacing:'0.2em', cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600, textTransform:'uppercase' }}>
-            ◀ Volver
-          </button>
           <Billing />
           {showPreferences && (
             <PreferencesModal
