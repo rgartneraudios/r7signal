@@ -12,7 +12,7 @@ function useRealTimeClock() {
   return time
 }
 
-export default function AppHeader({ onLoginClick }) {
+export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
   const { user } = useAuth()
   const time = useRealTimeClock()
   const pad = n => String(n).padStart(2, '0')
@@ -24,9 +24,11 @@ export default function AppHeader({ onLoginClick }) {
 
       <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
         <div style={{
-          fontFamily:"'JetBrains Mono',monospace", fontSize:'2.8rem', fontWeight:600,
-          letterSpacing:'0.08em', lineHeight:1, color:THEME.textHigh,
-          textShadow:`0 0 20px ${THEME.celeste30}`,
+          fontFamily:"'Chakra Petch',sans-serif", fontSize:'2.8rem', fontWeight:700,
+          letterSpacing:'0.08em', lineHeight:1,
+          background:'linear-gradient(to right, #5CC8D4, #D4C850, #CC9060, #CC5060)',
+          WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
+          backgroundClip:'text',
         }}>
           {formattedTime}
         </div>
@@ -40,9 +42,11 @@ export default function AppHeader({ onLoginClick }) {
 
       <div style={{ display:'flex', flexDirection:'column', gap:2, alignItems:'flex-end' }}>
         <div style={{
-          fontSize:'1.8rem', fontWeight:400, letterSpacing:'0.08em',
-          color:THEME.textHigh, lineHeight:1.1,
-          textShadow:`0 0 12px ${THEME.gold20}`,
+          fontFamily:"'Chakra Petch',sans-serif", fontSize:'1.8rem', fontWeight:500,
+          letterSpacing:'0.08em', lineHeight:1.1,
+          background:'linear-gradient(to right, #5CC8D4, #D4C850, #CC9060, #CC5060)',
+          WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
+          backgroundClip:'text',
         }}>
           {WEATHER.emoji} {WEATHER.temp}
         </div>
@@ -82,6 +86,64 @@ export default function AppHeader({ onLoginClick }) {
         >
           {user ? `👤 ${user.initials}` : '🔐 Acceso'}
         </button>
+        {volverAMenus && (
+          <button onClick={volverAMenus} style={{
+            marginTop:12,
+            background:'transparent',
+            border:`1px solid ${THEME.borderSubtle}`,
+            borderRadius:20,
+            padding:'4px 14px',
+            color:THEME.textMed,
+            fontSize:'0.65rem',
+            letterSpacing:'0.2em',
+            cursor:'pointer',
+            fontFamily:"'Space Grotesk',sans-serif",
+            fontWeight:600,
+            textTransform:'uppercase',
+            transition:'all 0.3s ease',
+            width:'fit-content',
+          }}
+            onMouseEnter={e => {
+              e.currentTarget.style.color = THEME.textHigh
+              e.currentTarget.style.borderColor = THEME.celeste35
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = THEME.textMed
+              e.currentTarget.style.borderColor = THEME.borderSubtle
+            }}
+          >
+            ◀ Salir
+          </button>
+        )}
+        {onVolver && (
+          <button onClick={onVolver} style={{
+            marginTop:8,
+            background:'transparent',
+            border:`1px solid ${THEME.borderSubtle}`,
+            borderRadius:20,
+            padding:'4px 14px',
+            color:THEME.textMed,
+            fontSize:'0.65rem',
+            letterSpacing:'0.2em',
+            cursor:'pointer',
+            fontFamily:"'Space Grotesk',sans-serif",
+            fontWeight:600,
+            textTransform:'uppercase',
+            transition:'all 0.3s ease',
+            width:'fit-content',
+          }}
+            onMouseEnter={e => {
+              e.currentTarget.style.color = THEME.textHigh
+              e.currentTarget.style.borderColor = THEME.celeste35
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = THEME.textMed
+              e.currentTarget.style.borderColor = THEME.borderSubtle
+            }}
+          >
+            ◀ Volver
+          </button>
+        )}
       </div>
 
     </div>

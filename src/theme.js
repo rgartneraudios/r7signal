@@ -62,4 +62,58 @@ export const THEME = {
   pinkBr50:      'rgba(244,184,196,0.50)',
   bgFeedCC:     'rgba(55,75,82,0.65)',
   bgMainF2:     'rgba(8,4,6,0.95)',
+
+  // ── Espectro Occidente→Oriente ──────────────────────────
+  spectrumCyan:      '#00E5FF',
+  spectrumYellow:    '#FFE000',
+  spectrumOrange:    '#FF8C00',
+  spectrumRed:       '#FF2244',
+
+  // ── Sapphire — CÓDIGO ───────────────────────────────────
+  sapphire:          '#3A8FFF',
+  sapphireDark:      '#1A5CAA',
+  sapphireLight:     '#C8DCFF',
+  sapphire08:        'rgba(58,143,255,0.08)',
+  sapphire12:        'rgba(58,143,255,0.12)',
+  sapphire15:        'rgba(58,143,255,0.15)',
+  sapphire20:        'rgba(58,143,255,0.20)',
+  sapphire30:        'rgba(58,143,255,0.30)',
+  sapphire45:        'rgba(58,143,255,0.45)',
+
+  // ── NeonGold — TEXTO ────────────────────────────────────
+  neonGold:          '#E8A800',
+  neonGoldDark:      '#7A5800',
+  neonGoldLight:     '#FFF5C8',
+  neonGold08:        'rgba(220,170,0,0.08)',
+  neonGold12:        'rgba(220,170,0,0.12)',
+  neonGold20:        'rgba(220,170,0,0.20)',
+  neonGold30:        'rgba(220,170,0,0.30)',
+  neonGold45:        'rgba(220,170,0,0.45)',
+
+  // ── RoseNeon — IMAGEN ───────────────────────────────────
+  roseNeon:          '#FF4499',
+  roseNeonDark:      '#8A1048',
+  roseNeonLight:     '#FFD0E8',
+  roseNeon08:        'rgba(255,68,153,0.08)',
+  roseNeon12:        'rgba(255,68,153,0.12)',
+  roseNeon20:        'rgba(255,68,153,0.20)',
+  roseNeon30:        'rgba(255,68,153,0.30)',
+  roseNeon45:        'rgba(255,68,153,0.45)',
+
+  // ── Indigo — AUDIO ──────────────────────────────────────
+  indigo:            '#7722FF',
+  indigoDark:        '#2A0870',
+  indigoLight:       '#D0C0FF',
+  indigo08:          'rgba(119,34,255,0.08)',
+  indigo12:          'rgba(119,34,255,0.12)',
+  indigo20:          'rgba(119,34,255,0.20)',
+  indigo30:          'rgba(119,34,255,0.30)',
+  indigo45:          'rgba(119,34,255,0.45)',
+
+  // ── Background Neon ─────────────────────────────────────
+  bgMainNeon:        '#060408',
+  gridAmber:         'rgba(180,150,90,0.04)',
+  radialOccidente:   'rgba(0,229,255,0.07)',
+  radialOriente:     'rgba(255,34,68,0.05)',
+  radialCenter:      'rgba(255,140,0,0.025)',
 }

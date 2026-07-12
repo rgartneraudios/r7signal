@@ -67,8 +67,13 @@ export default function ChatView({
           }
         `}</style>
 
-        <div style={{ position:'fixed', inset:0, background:`radial-gradient(ellipse 65% 50% at 15% 35%, ${THEME.celeste12} 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 70%, ${THEME.gold10} 0%, transparent 55%), ${THEME.bgMain}`, zIndex:0 }} />
-        <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.celeste08} 1px, transparent 1px), linear-gradient(90deg, ${THEME.celeste08} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
+        <div style={{ position:'fixed', inset:0, background:`
+  radial-gradient(ellipse 70% 55% at 0% 40%, ${THEME.radialOccidente} 0%, transparent 65%),
+  radial-gradient(ellipse 55% 45% at 100% 65%, ${THEME.radialOriente} 0%, transparent 60%),
+  radial-gradient(ellipse 40% 35% at 50% 50%, ${THEME.radialCenter} 0%, transparent 55%),
+  ${THEME.bgMainNeon}
+`, zIndex:0 }} />
+        <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.gridAmber} 1px, transparent 1px), linear-gradient(90deg, ${THEME.gridAmber} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
 
         <SidebarPanel
           sidebarOpen={sidebarOpen}
@@ -85,32 +90,7 @@ export default function ChatView({
           handleLogout={handleLogout}
           onOpenPreferences={onOpenPreferences}
         />
-        <button onClick={volverAMenus} style={{
-          position:'fixed', top:22, right:28, zIndex:30,
-          background:THEME.bgFeedCC,
-          border:`1px solid ${THEME.borderSubtle}`,
-          borderRadius:20,
-          padding:'6px 16px',
-          color:THEME.textMed,
-          fontSize:'0.65rem',
-          letterSpacing:'0.2em',
-          cursor:'pointer',
-          fontFamily:"'Space Grotesk',sans-serif",
-          fontWeight:600,
-          textTransform:'uppercase',
-          transition:'all 0.3s ease'
-        }}
-          onMouseEnter={e => {
-            e.currentTarget.style.color = THEME.textHigh
-            e.currentTarget.style.borderColor = THEME.celeste35
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.color = THEME.textMed
-            e.currentTarget.style.borderColor = THEME.borderSubtle
-          }}
-        >
-          ◀ Salir
-        </button>
+
 
         {menuActivo?.menu_numero === 0 ? (
           <Chat00 />
