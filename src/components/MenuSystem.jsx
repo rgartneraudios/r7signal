@@ -363,8 +363,8 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
 
   if (cargandoMenu) {
     return (
-      <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
-        <AppHeader onLoginClick={onLoginClick} />
+      <div style={{ position:'relative', width:'100%', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
+<AppHeader onLoginClick={onLoginClick} onVolver={volverACategorias} />
         <div style={{ position:'fixed', inset:0, background:`
   radial-gradient(ellipse 70% 55% at 0% 40%, ${THEME.radialOccidente} 0%, transparent 65%),
   radial-gradient(ellipse 55% 45% at 100% 65%, ${THEME.radialOriente} 0%, transparent 60%),
@@ -384,7 +384,7 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
 
   if (vista === 'menus') {
     return <>
-      <AppHeader onLoginClick={onLoginClick} />
+      <AppHeader onLoginClick={onLoginClick} onVolver={volverACategorias} />
       <MenuSelector
         categoriaActiva={categoriaActiva}
         menus={menus}
@@ -466,7 +466,7 @@ if (vista === 'chat') {
     return (
       <>
         <AppHeader onLoginClick={onLoginClick} onVolver={() => setVista('categorias')} />
-        <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:'#0F0E11', fontFamily:"'Exo 2',sans-serif" }}>
+        <div style={{ position:'relative', width:'100%', minHeight:'100vh', background:'#0F0E11', fontFamily:"'Exo 2',sans-serif" }}>
           <style>{`
             @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&family=Space+Grotesk:wght@500;600;700&display=swap');
             ::-webkit-scrollbar { width:3px; }

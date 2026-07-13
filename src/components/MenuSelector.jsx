@@ -48,7 +48,7 @@ const MENU_COLORS = {
   },
 }
 
-const MODULE_NAMES = { 'Plan': 'Peque', 'Build': 'Asun' }
+const MODULE_NAMES = { 'Plan': 'Tito', 'Build': 'Asun' }
 
 export default function MenuSelector({
   categoriaActiva, menus, modulos, error,
@@ -61,7 +61,7 @@ export default function MenuSelector({
 }) {
   return (
     <>
-      <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:'#0F0E11', fontFamily:"'Space Grotesk',sans-serif", overflowX:'hidden' }}>
+      <div style={{ position:'relative', width:'100%', minHeight:'100vh', background:'#0F0E11', fontFamily:"'Space Grotesk',sans-serif", overflowX:'hidden' }}>
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
           
@@ -132,18 +132,7 @@ export default function MenuSelector({
           onOpenPreferences={onOpenPreferences}
         />
 
-        {/* Botón Volver Estilo Control Deslizante */}
-        <button onClick={volverACategorias} style={{ 
-          position:'fixed', top:22, left:'50%', transform:'translateX(-50%)', zIndex:60, 
-          background:'#131215', border:'1px solid #201F23', borderRadius:20, padding:'8px 18px', 
-          color:'#9BA3A8', fontSize:'0.7rem', letterSpacing:'0.2em', cursor:'pointer', 
-          fontFamily:"'Orbitron',monospace", textTransform:'uppercase',
-          boxShadow:'0 4px 12px rgba(0,0,0,0.6)'
-        }}>
-          ◀ Volver
-        </button>
-
-        <div style={{ position:'relative', zIndex:10, maxWidth:1300, margin:'0 auto', padding:'100px 24px 40px' }}>
+        <div style={{ position:'relative', zIndex:10, maxWidth:1300, margin:'0 auto', padding:'100px 24px 120px' }}>
           
           {/* Cabecera */}
           <div style={{ textAlign:'center', marginBottom:56 }}>

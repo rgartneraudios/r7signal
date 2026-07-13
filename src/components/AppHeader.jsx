@@ -41,6 +41,65 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
         }}>
           {formattedDate}
         </div>
+
+        <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:18 }}>
+          {volverAMenus && (
+            <button onClick={volverAMenus} style={{
+              background:'transparent',
+              border:`1px solid ${THEME.borderSubtle}`,
+              borderRadius:24,
+              padding:'10px 24px',
+              color:THEME.textMed,
+              fontSize:'0.85rem',
+              letterSpacing:'0.2em',
+              cursor:'pointer',
+              fontFamily:"'Space Grotesk',sans-serif",
+              fontWeight:700,
+              textTransform:'uppercase',
+              transition:'all 0.3s ease',
+              width:'fit-content',
+            }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = THEME.textHigh
+                e.currentTarget.style.borderColor = THEME.celeste35
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = THEME.textMed
+                e.currentTarget.style.borderColor = THEME.borderSubtle
+              }}
+            >
+              ◀ Salir
+            </button>
+          )}
+          {onVolver && (
+            <button onClick={onVolver} style={{
+              background:'transparent',
+              border:`1px solid ${THEME.borderSubtle}`,
+              borderRadius:24,
+              padding:'10px 24px',
+              color:THEME.textMed,
+              fontSize:'0.85rem',
+              letterSpacing:'0.2em',
+              cursor:'pointer',
+              fontFamily:"'Space Grotesk',sans-serif",
+              fontWeight:700,
+              textTransform:'uppercase',
+              transition:'all 0.3s ease',
+              width:'fit-content',
+            }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = THEME.textHigh
+                e.currentTarget.style.borderColor = THEME.celeste35
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = THEME.textMed
+                e.currentTarget.style.borderColor = THEME.borderSubtle
+              }}
+            >
+              ◀ Volver
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ display:'flex', flexDirection:'column', gap:2, alignItems:'flex-end' }}>
@@ -85,64 +144,6 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
         >
           {user ? `👤 ${user.initials}` : '🔐 Acceso'}
         </button>
-        {volverAMenus && (
-          <button onClick={volverAMenus} style={{
-            marginTop:12,
-            background:'transparent',
-            border:`1px solid ${THEME.borderSubtle}`,
-            borderRadius:20,
-            padding:'4px 14px',
-            color:THEME.textMed,
-            fontSize:'0.65rem',
-            letterSpacing:'0.2em',
-            cursor:'pointer',
-            fontFamily:"'Space Grotesk',sans-serif",
-            fontWeight:600,
-            textTransform:'uppercase',
-            transition:'all 0.3s ease',
-            width:'fit-content',
-          }}
-            onMouseEnter={e => {
-              e.currentTarget.style.color = THEME.textHigh
-              e.currentTarget.style.borderColor = THEME.celeste35
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.color = THEME.textMed
-              e.currentTarget.style.borderColor = THEME.borderSubtle
-            }}
-          >
-            ◀ Salir
-          </button>
-        )}
-        {onVolver && (
-          <button onClick={onVolver} style={{
-            marginTop:8,
-            background:'transparent',
-            border:`1px solid ${THEME.borderSubtle}`,
-            borderRadius:20,
-            padding:'4px 14px',
-            color:THEME.textMed,
-            fontSize:'0.65rem',
-            letterSpacing:'0.2em',
-            cursor:'pointer',
-            fontFamily:"'Space Grotesk',sans-serif",
-            fontWeight:600,
-            textTransform:'uppercase',
-            transition:'all 0.3s ease',
-            width:'fit-content',
-          }}
-            onMouseEnter={e => {
-              e.currentTarget.style.color = THEME.textHigh
-              e.currentTarget.style.borderColor = THEME.celeste35
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.color = THEME.textMed
-              e.currentTarget.style.borderColor = THEME.borderSubtle
-            }}
-          >
-            ◀ Volver
-          </button>
-        )}
       </div>
 
     </div>

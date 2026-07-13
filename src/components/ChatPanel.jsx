@@ -148,7 +148,7 @@ export default function ChatPanel({
             transition: 'all 0.2s ease'
           }}
         >
-          Peque
+Tito
         </button>
         <button
           onClick={() => { setActiveModel('asun'); setShowDecision(false) }}
@@ -195,7 +195,7 @@ export default function ChatPanel({
             fontSize:'1.4rem', fontWeight:700,
             color:'#D4D8DC', letterSpacing:'0.06em'
           }}>
-            MODELOS WEB: Base es {nombreMB || 'Peque'} · Superior es {nombreMS || 'Asun'} · PLAN Y/O EJECUCIÓN
+            MODELOS WEB: Base es {nombreMB || 'Tito'} · Superior es {nombreMS || 'Asun'} · PLAN Y/O EJECUCIÓN
           </div>
         </div>
       </div>
@@ -212,7 +212,7 @@ export default function ChatPanel({
               {esM01 ? 'INICIÁ EL FLUJO R7' : 'Modelo COCHI'}
             </div>
             <div style={{ fontSize:'0.95rem', color:'#8A868B', lineHeight:1.6 }}>
-              {esM01 ? 'Empieza con "Peque " o "Asun "' : 'M02 — Sin memoria (ahorro tokens)'}
+              {esM01 ? 'Empieza con "Tito " o "Asun "' : 'M02 — Sin memoria (ahorro tokens)'}
             </div>
           </div>
         )}
@@ -378,7 +378,7 @@ export default function ChatPanel({
                 fontFamily: "'Space Grotesk',sans-serif",
                 flex: 1
               }}>
-                ¿Usar Peque para preparar el contexto antes de Asun?
+                ¿Usar Tito para preparar el contexto antes de Asun?
               </span>
               <button
                 onClick={handleUsarPeque}
@@ -396,7 +396,7 @@ export default function ChatPanel({
                   whiteSpace: 'nowrap'
                 }}
               >
-                USAR PEQUE
+                USAR TITO
               </button>
               <button
                 onClick={handleOmitir}
@@ -430,7 +430,7 @@ export default function ChatPanel({
               }
             }}
             placeholder={activeModel === 'peque'
-              ? 'Peque escucha...'
+              ? 'Tito escucha...'
               : 'Asun escucha...'
             }
             className="chat-input-glow"

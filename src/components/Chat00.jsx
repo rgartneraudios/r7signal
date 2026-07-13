@@ -53,14 +53,14 @@ export default function Chat00() {
       `}</style>
 
       {/* Contenedor de pantalla completa que fuerza el cuero carbón */}
-      <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:'#0F0E11', overflowX:'hidden' }}>
+      <div style={{ position:'relative', width:'100%', minHeight:'100vh', background:'#0F0E11', overflowX:'hidden' }}>
         <div className="leather-ambient" style={{ position:'absolute', inset:0 }} />
         <div className="leather-grid" style={{ position:'absolute', inset:0, pointerEvents:'none' }} />
 
         <div style={{
           position:'relative', zIndex:10,
           maxWidth:1100, margin:'0 auto',
-          padding:'100px 24px 40px',
+          padding:'100px 24px 120px',
           fontFamily:"'Space Grotesk',sans-serif",
         }}>
           {/* Sidebar Lateral Izquierda con Estilo Corporativo */}

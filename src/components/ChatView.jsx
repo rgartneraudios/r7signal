@@ -35,7 +35,7 @@ export default function ChatView({
 
   return (
     <>
-      <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
+      <div style={{ position:'relative', width:'100%', minHeight:'100vh', paddingBottom:80, background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
         <style>{`
           @keyframes pulse-dot { 
             0%,100%{opacity:1;transform:scale(1)} 
@@ -171,7 +171,7 @@ export default function ChatView({
             position:'relative', zIndex:10,
             display:'flex',
             height:'calc(100vh - 250px)',
-            padding:'0 24px 16px',
+            padding:'0 24px 32px',
             maxWidth:1100,
             margin:'0 auto'
           }}>
