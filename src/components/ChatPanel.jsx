@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { THEME } from '../theme'
 
 const r7SyntaxTheme = {
   'code[class*="language-"]': {
-    color: THEME.textHigh,
+    color: '#D4D8DC',
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: '0.9rem',
     textShadow: 'none',
@@ -19,8 +18,8 @@ const r7SyntaxTheme = {
     hyphens: 'none'
   },
   'pre[class*="language-"]': {
-    color: THEME.textHigh,
-    background: THEME.bgMain,
+    color: '#D4D8DC',
+    background: '#09080A',
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: '0.9rem',
     textShadow: 'none',
@@ -36,39 +35,39 @@ const r7SyntaxTheme = {
     margin: '0.5em 0',
     overflow: 'auto',
     borderRadius: 10,
-    border: `1px solid ${THEME.celeste15}`
+    border: '1px solid #201F23'
   },
-  'comment': { color: THEME.textLow, fontStyle: 'italic' },
-  'prolog': { color: THEME.textLow },
-  'doctype': { color: THEME.textLow },
-  'cdata': { color: THEME.textLow },
-  'punctuation': { color: THEME.textMed },
-  'property': { color: THEME.celesteBright },
-  'tag': { color: THEME.pinkMarble },
-  'boolean': { color: THEME.goldBright },
-  'number': { color: THEME.goldBright },
-  'constant': { color: THEME.goldBright },
-  'symbol': { color: THEME.gold },
-  'selector': { color: THEME.celeste },
-  'attr-name': { color: THEME.celeste },
-  'string': { color: THEME.gold },
-  'char': { color: THEME.gold },
-  'builtin': { color: THEME.celesteBright },
-  'inserted': { color: THEME.gold },
-  'operator': { color: THEME.celeste },
-  'entity': { color: THEME.celesteBright, cursor: 'help' },
-  'url': { color: THEME.celeste },
-  'variable': { color: THEME.pinkMarble },
-  'atrule': { color: THEME.celesteBright },
-  'attr-value': { color: THEME.gold },
-  'keyword': { color: THEME.pinkMarble },
-  'function': { color: THEME.celesteBright },
-  'class-name': { color: THEME.goldBright },
-  'regex': { color: THEME.gold },
-  'important': { color: THEME.goldBright, fontWeight: 'bold' },
+  'comment': { color: '#8A868B', fontStyle: 'italic' },
+  'prolog': { color: '#8A868B' },
+  'doctype': { color: '#8A868B' },
+  'cdata': { color: '#8A868B' },
+  'punctuation': { color: '#5A585C' },
+  'property': { color: '#7A8FA0' },
+  'tag': { color: '#C4929A' },
+  'boolean': { color: '#E8C84A' },
+  'number': { color: '#E8C84A' },
+  'constant': { color: '#E8C84A' },
+  'symbol': { color: '#A08840' },
+  'selector': { color: '#6B9EC4' },
+  'attr-name': { color: '#6B9EC4' },
+  'string': { color: '#A08840' },
+  'char': { color: '#A08840' },
+  'builtin': { color: '#7A8FA0' },
+  'inserted': { color: '#A08840' },
+  'operator': { color: '#6B9EC4' },
+  'entity': { color: '#7A8FA0', cursor: 'help' },
+  'url': { color: '#6B9EC4' },
+  'variable': { color: '#C4929A' },
+  'atrule': { color: '#7A8FA0' },
+  'attr-value': { color: '#A08840' },
+  'keyword': { color: '#C4929A' },
+  'function': { color: '#7A8FA0' },
+  'class-name': { color: '#E8C84A' },
+  'regex': { color: '#A08840' },
+  'important': { color: '#E8C84A', fontWeight: 'bold' },
   'bold': { fontWeight: 'bold' },
   'italic': { fontStyle: 'italic' },
-  'deleted': { color: THEME.pinkMarble }
+  'deleted': { color: '#C4929A' }
 }
 
 // Palabras clave que cuando van con prefijo Asun sugieren usar Peque primero
@@ -82,8 +81,7 @@ export default function ChatPanel({
   titulo, mensajes, setMensajes, input, setInput,
   enviar, cargando, tokens, esM01, onCancel, cancelado,
   modeloPeque, modeloAsun, routingState,
-  nombreMB, nombreMS,
-  THEME
+  nombreMB, nombreMS
 }) {
   const [copiadoIndex, setCopiadoIndex] = useState(null)
   const [showDecision, setShowDecision] = useState(false)
@@ -123,17 +121,17 @@ export default function ChatPanel({
     if (cargando && routingState === 'chaining') {
       return (
         <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span className="menu-pulse" style={{ color: THEME.celeste }}>{modeloPeque}</span>
-          <span style={{ color: THEME.textLow }}>→</span>
-          <span className="menu-pulse" style={{ color: THEME.gold, animationDelay: '0.4s' }}>{modeloAsun}</span>
+          <span className="menu-pulse" style={{ color: '#7A8FA0' }}>{modeloPeque}</span>
+          <span style={{ color: '#5A585C' }}>→</span>
+          <span className="menu-pulse" style={{ color: '#E8C84A', animationDelay: '0.4s' }}>{modeloAsun}</span>
         </span>
       )
     }
     if (cargando && routingState === 'peque') {
-      return <span className="menu-pulse" style={{ color: THEME.celeste }}>{modeloPeque}</span>
+      return <span className="menu-pulse" style={{ color: '#7A8FA0' }}>{modeloPeque}</span>
     }
     if (cargando && routingState === 'asun') {
-      return <span className="menu-pulse" style={{ color: THEME.gold }}>{modeloAsun}</span>
+      return <span className="menu-pulse" style={{ color: '#E8C84A' }}>{modeloAsun}</span>
     }
     // Idle: toggle buttons
     return (
@@ -141,15 +139,13 @@ export default function ChatPanel({
         <button
           onClick={() => { setActiveModel('peque'); setShowDecision(false) }}
           style={{
-            background: activeModel === 'peque' ? THEME.celeste60 : 'rgba(50,51,48,0.4)',
-            border: `2px solid ${activeModel === 'peque' ? THEME.celesteBright : THEME.metallicGray}`,
+            background: activeModel === 'peque' ? 'rgba(122,143,160,0.25)' : 'rgba(19,18,21,0.6)',
+            border: `2px solid ${activeModel === 'peque' ? '#7A8FA0' : '#201F23'}`,
             borderRadius: 8, padding: '6px 20px',
-            color: activeModel === 'peque' ? '#fff' : THEME.textMed,
+            color: activeModel === 'peque' ? '#D4D8DC' : '#5A585C',
             fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em',
             cursor: 'pointer', fontFamily: "'Space Grotesk',sans-serif",
-            transition: 'all 0.2s ease',
-            boxShadow: activeModel === 'peque' ? `0 0 18px ${THEME.celeste40}` : 'none',
-            textShadow: activeModel === 'peque' ? `0 0 12px ${THEME.celeste60}` : 'none'
+            transition: 'all 0.2s ease'
           }}
         >
           Peque
@@ -157,15 +153,13 @@ export default function ChatPanel({
         <button
           onClick={() => { setActiveModel('asun'); setShowDecision(false) }}
           style={{
-            background: activeModel === 'asun' ? 'rgba(212,175,55,0.35)' : 'rgba(50,51,48,0.4)',
-            border: `2px solid ${activeModel === 'asun' ? '#f0d060' : THEME.metallicGray}`,
+            background: activeModel === 'asun' ? 'rgba(160,136,64,0.25)' : 'rgba(19,18,21,0.6)',
+            border: `2px solid ${activeModel === 'asun' ? '#A08840' : '#201F23'}`,
             borderRadius: 8, padding: '6px 20px',
-            color: activeModel === 'asun' ? '#fff' : THEME.textMed,
+            color: activeModel === 'asun' ? '#E8C84A' : '#5A585C',
             fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em',
             cursor: 'pointer', fontFamily: "'Space Grotesk',sans-serif",
-            transition: 'all 0.2s ease',
-            boxShadow: activeModel === 'asun' ? '0 0 18px rgba(212,175,55,0.4)' : 'none',
-            textShadow: activeModel === 'asun' ? '0 0 12px rgba(212,175,55,0.6)' : 'none'
+            transition: 'all 0.2s ease'
           }}
         >
           Asun
@@ -183,24 +177,23 @@ export default function ChatPanel({
   return (
     <div style={{
       flex:1, display:'flex', flexDirection:'column',
-      background:'linear-gradient(160deg, rgba(65,66,62,0.4) 0%, rgba(8,4,6,0.6) 100%)',
-      border:`1px solid ${THEME.celeste20}`,
-      borderRadius:18,
+      background:'#131215',
+      border:'1px solid #201F23',
+      borderRadius:16,
       padding:'16px 18px',
-      boxShadow:`0 8px 32px rgba(0,0,0,0.4)`,
-      backdropFilter:'blur(8px)',
+      boxShadow:'inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 36px rgba(0,0,0,0.85)',
       minHeight:0,
     }}>
       <div style={{
         display:'flex', justifyContent:'space-between', alignItems:'center',
         marginBottom:12, paddingBottom:10,
-        borderBottom:`1px solid ${THEME.metallicGray}`
+        borderBottom:'1px solid #201F23'
       }}>
         <div>
           <div style={{
             fontFamily:"'Orbitron',monospace",
             fontSize:'1.4rem', fontWeight:700,
-            color:THEME.textHigh, letterSpacing:'0.06em'
+            color:'#D4D8DC', letterSpacing:'0.06em'
           }}>
             MODELOS WEB: Base es {nombreMB || 'Peque'} · Superior es {nombreMS || 'Asun'} · PLAN Y/O EJECUCIÓN
           </div>
@@ -213,12 +206,12 @@ export default function ChatPanel({
         paddingRight:8
       }}>
         {mensajes.length === 0 && (
-          <div style={{ textAlign:'center', padding:'40px 20px', color:THEME.textMed }}>
+          <div style={{ textAlign:'center', padding:'40px 20px', color:'#8A868B' }}>
             <div style={{ fontSize:'2.5rem', marginBottom:16, opacity:0.5 }}>💬</div>
-            <div style={{ fontSize:'1.1rem', color:THEME.celeste, marginBottom:8, fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, letterSpacing:'0.05em' }}>
+            <div style={{ fontSize:'1.1rem', color:'#7A8FA0', marginBottom:8, fontFamily:"'Space Grotesk',sans-serif", fontWeight:700, letterSpacing:'0.05em' }}>
               {esM01 ? 'INICIÁ EL FLUJO R7' : 'Modelo COCHI'}
             </div>
-            <div style={{ fontSize:'0.95rem', color:THEME.textLow, lineHeight:1.6 }}>
+            <div style={{ fontSize:'0.95rem', color:'#8A868B', lineHeight:1.6 }}>
               {esM01 ? 'Empieza con "Peque " o "Asun "' : 'M02 — Sin memoria (ahorro tokens)'}
             </div>
           </div>
@@ -227,36 +220,33 @@ export default function ChatPanel({
         {mensajes.map((msg, i) => (
           <div key={i} className="message-enter" style={{
             background: msg.rol === 'usuario'
-              ? `linear-gradient(135deg, ${THEME.celeste15} 0%, ${THEME.celeste08} 100%)`
-              : 'rgba(65,66,62,0.25)',
+              ? 'linear-gradient(135deg, rgba(122,143,160,0.15) 0%, rgba(122,143,160,0.06) 100%)'
+              : 'rgba(19,18,21,0.6)',
             border: msg.rol === 'usuario'
-              ? `2px solid ${THEME.celeste40}`
-              : `1px solid ${THEME.borderSubtle}`,
+              ? '2px solid rgba(122,143,160,0.4)'
+              : '1px solid #201F23',
             borderRadius: 12,
             padding: msg.rol === 'usuario' ? '12px 18px' : '14px 20px',
             alignSelf: msg.rol === 'usuario' ? 'flex-end' : 'flex-start',
             maxWidth: '90%',
             boxShadow: msg.rol === 'usuario'
-              ? `0 4px 20px ${THEME.celeste10}`
-              : `0 2px 12px rgba(0,0,0,0.3)`
+              ? '0 4px 20px rgba(122,143,160,0.08)'
+              : '0 2px 12px rgba(0,0,0,0.3)'
           }}>
             <div style={{
               fontSize:'0.8rem',
-              color: msg.rol === 'usuario' ? THEME.celeste : THEME.gold,
+              color: msg.rol === 'usuario' ? '#7A8FA0' : '#A08840',
               marginBottom:8,
               letterSpacing:'0.18em',
               fontFamily:"'Space Grotesk',sans-serif",
               fontWeight:700,
-              textTransform:'uppercase',
-              textShadow: msg.rol === 'usuario'
-                ? `0 0 10px ${THEME.celeste30}`
-                : `0 0 10px ${THEME.gold20}`
+              textTransform:'uppercase'
             }}>
-              {msg.rol === 'usuario' ? '👤 INPUT' : '🎯 RESPUESTA'}
+              {msg.rol === 'usuario' ? 'INPUT' : 'RESPUESTA'}
             </div>
             <div style={{
               fontSize:'1.1rem',
-              color:THEME.textHigh,
+              color:'#D4D8DC',
               lineHeight:1.6,
               fontFamily:"'Exo 2',sans-serif",
               fontWeight:400
@@ -278,7 +268,7 @@ export default function ChatPanel({
                       )
                     }
                     return (
-                      <code style={{ background: 'rgba(92,155,165,0.15)', padding: '2px 6px', borderRadius: 4, fontSize: '0.9em' }} {...props}>
+                      <code style={{ background: 'rgba(122,143,160,0.15)', padding: '2px 6px', borderRadius: 4, fontSize: '0.9em' }} {...props}>
                         {children}
                       </code>
                     )
@@ -293,11 +283,11 @@ export default function ChatPanel({
                 <button
                   onClick={() => handleCopy(msg.contenido, i)}
                   style={{
-                    background: copiadoIndex === i ? 'rgba(92,155,165,0.2)' : 'transparent',
-                    border: `1px solid ${copiadoIndex === i ? THEME.celeste : THEME.celeste25}`,
+                    background: copiadoIndex === i ? 'rgba(122,143,160,0.2)' : 'transparent',
+                    border: `1px solid ${copiadoIndex === i ? '#7A8FA0' : '#201F23'}`,
                     borderRadius: 8,
                     padding: '4px 12px',
-                    color: copiadoIndex === i ? THEME.celeste : THEME.textMed,
+                    color: copiadoIndex === i ? '#7A8FA0' : '#5A585C',
                     fontSize: '0.75rem',
                     fontWeight: 600,
                     letterSpacing: '0.08em',
@@ -308,14 +298,14 @@ export default function ChatPanel({
                   }}
                   onMouseEnter={e => {
                     if (copiadoIndex !== i) {
-                      e.currentTarget.style.color = THEME.textHigh
-                      e.currentTarget.style.borderColor = THEME.celeste
+                      e.currentTarget.style.color = '#D4D8DC'
+                      e.currentTarget.style.borderColor = '#7A8FA0'
                     }
                   }}
                   onMouseLeave={e => {
                     if (copiadoIndex !== i) {
-                      e.currentTarget.style.color = THEME.textMed
-                      e.currentTarget.style.borderColor = THEME.celeste25
+                      e.currentTarget.style.color = '#5A585C'
+                      e.currentTarget.style.borderColor = '#201F23'
                     }
                   }}
                 >
@@ -327,29 +317,27 @@ export default function ChatPanel({
         ))}
 
         {cargando && (
-          <div style={{ textAlign:'center', padding:'20px', color:THEME.celeste }}>
+          <div style={{ textAlign:'center', padding:'20px', color:'#7A8FA0' }}>
             <div className='menu-pulse' style={{
               display:'inline-block',
               fontSize:'1.1rem',
               fontWeight:700,
               letterSpacing:'0.15em',
-              textTransform:'uppercase',
-              textShadow:`0 0 20px ${THEME.celeste40}`
+              textTransform:'uppercase'
             }}>
               Procesando...
             </div>
           </div>
         )}
         {cancelado && !cargando && (
-          <div style={{ textAlign:'center', padding:'16px', color:'#FF5E98' }}>
+          <div style={{ textAlign:'center', padding:'16px', color:'#8A5F65' }}>
             <div style={{
               fontSize:'0.95rem',
               fontWeight:700,
               letterSpacing:'0.1em',
-              textTransform:'uppercase',
-              textShadow:'0 0 15px rgba(255,94,152,0.5)'
+              textTransform:'uppercase'
             }}>
-              ■ Generación cancelada
+              Generación cancelada
             </div>
           </div>
         )}
@@ -357,79 +345,79 @@ export default function ChatPanel({
 
       {/* ── Input area ───────────────────────────────────────────────────── */}
       <div style={{
-        background:'rgba(65,66,62,0.35)',
-        border:`2px solid ${THEME.celeste25}`,
+        background:'#09080A',
+        border:'1px solid #201F23',
         borderRadius:14,
         padding:'12px 16px',
-        boxShadow:`0 4px 20px ${THEME.celeste08}`,
+        boxShadow:'inset 0 2px 4px rgba(0,0,0,0.85)',
         transition:'all 0.3s ease'
       }}
         onMouseEnter={e => {
-          e.currentTarget.style.borderColor = THEME.celeste40
-          e.currentTarget.style.boxShadow = `0 6px 30px ${THEME.celeste12}`
+          e.currentTarget.style.borderColor = '#7A8FA0'
+          e.currentTarget.style.boxShadow = 'inset 0 2px 4px rgba(0,0,0,0.85), 0 0 0 1px rgba(122,143,160,0.15)'
         }}
         onMouseLeave={e => {
-          e.currentTarget.style.borderColor = THEME.celeste25
-          e.currentTarget.style.boxShadow = `0 4px 20px ${THEME.celeste08}`
+          e.currentTarget.style.borderColor = '#201F23'
+          e.currentTarget.style.boxShadow = 'inset 0 2px 4px rgba(0,0,0,0.85)'
         }}
       >
-        {showDecision && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            marginBottom: 10,
-            padding: '8px 12px',
-            background: 'rgba(92,155,165,0.08)',
-            border: `1px solid ${THEME.celeste25}`,
-            borderRadius: 10,
-          }}>
-            <span style={{
-              fontSize: '0.8rem',
-              color: THEME.textMed,
-              fontFamily: "'Space Grotesk',sans-serif",
-              flex: 1
+{showDecision && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              marginBottom: 10,
+              padding: '8px 12px',
+              background: 'rgba(160,136,64,0.06)',
+              border: '1px solid rgba(160,136,64,0.25)',
+              borderRadius: 10,
             }}>
-              ¿Usar Peque para preparar el contexto antes de Asun?
-            </span>
-            <button
-              onClick={handleUsarPeque}
-              style={{
-                background: THEME.celeste20,
-                border: `1px solid ${THEME.celeste40}`,
-                borderRadius: 7,
-                padding: '4px 12px',
-                color: THEME.celeste,
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-                cursor: 'pointer',
+              <span style={{
+                fontSize: '0.8rem',
+                color: '#8A868B',
                 fontFamily: "'Space Grotesk',sans-serif",
-                whiteSpace: 'nowrap'
-              }}
-            >
-              USAR PEQUE
-            </button>
-            <button
-              onClick={handleOmitir}
-              style={{
-                background: 'transparent',
-                border: `1px solid ${THEME.celeste25}`,
-                borderRadius: 7,
-                padding: '4px 12px',
-                color: THEME.textMed,
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-                cursor: 'pointer',
-                fontFamily: "'Space Grotesk',sans-serif",
-                whiteSpace: 'nowrap'
-              }}
-            >
-              OMITIR
-            </button>
-          </div>
-        )}
+                flex: 1
+              }}>
+                ¿Usar Peque para preparar el contexto antes de Asun?
+              </span>
+              <button
+                onClick={handleUsarPeque}
+                style={{
+                  background: 'rgba(122,143,160,0.2)',
+                  border: '1px solid rgba(122,143,160,0.4)',
+                  borderRadius: 7,
+                  padding: '4px 12px',
+                  color: '#7A8FA0',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  cursor: 'pointer',
+                  fontFamily: "'Space Grotesk',sans-serif",
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                USAR PEQUE
+              </button>
+              <button
+                onClick={handleOmitir}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #201F23',
+                  borderRadius: 7,
+                  padding: '4px 12px',
+                  color: '#8A868B',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  cursor: 'pointer',
+                  fontFamily: "'Space Grotesk',sans-serif",
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                OMITIR
+              </button>
+            </div>
+          )}
 
         <div style={{ display:'flex', gap:10 }}>
           <textarea
@@ -451,7 +439,7 @@ export default function ChatPanel({
               flex:1,
               background:'transparent',
               border:'none',
-              color:THEME.textHigh,
+              color:'#D4D8DC',
               fontSize:'1.25rem',
               fontWeight:500,
               outline:'none',
@@ -468,11 +456,11 @@ export default function ChatPanel({
               onClick={handleEnviar}
               disabled={cargando || !input.trim()}
               style={{
-                background: THEME.celeste20,
-                border: `2px solid ${THEME.celeste40}`,
+                background: 'rgba(122,143,160,0.2)',
+                border: '1px solid rgba(122,143,160,0.4)',
                 borderRadius: 8,
                 padding: '6px 14px',
-                color: THEME.celeste,
+                color: '#7A8FA0',
                 fontSize:'0.8rem',
                 fontWeight:700,
                 letterSpacing:'0.15em',
@@ -481,18 +469,15 @@ export default function ChatPanel({
                 textTransform:'uppercase',
                 opacity: (cargando || !input.trim()) ? 0.4 : 1,
                 transition:'all 0.3s ease',
-                whiteSpace:'nowrap',
-                boxShadow: `0 0 15px ${THEME.celeste15}`
+                whiteSpace:'nowrap'
               }}
               onMouseEnter={e => {
                 if (!cargando && input.trim()) {
-                  e.currentTarget.style.background = THEME.celeste30
-                  e.currentTarget.style.boxShadow = `0 0 25px ${THEME.celeste25}`
+                  e.currentTarget.style.background = 'rgba(122,143,160,0.35)'
                 }
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.background = THEME.celeste20
-                e.currentTarget.style.boxShadow = `0 0 15px ${THEME.celeste15}`
+                e.currentTarget.style.background = 'rgba(122,143,160,0.2)'
               }}
             >
               ▶
@@ -502,31 +487,28 @@ export default function ChatPanel({
             <button
               onClick={onCancel}
               style={{
-                background: 'rgba(255,30,30,0.2)',
-                border: '2px solid #FF1E1E',
+                background: 'rgba(138,95,101,0.2)',
+                border: '1px solid #8A5F65',
                 borderRadius: 8,
                 padding: '6px 14px',
-                color: '#FF1E1E',
+                color: '#C4929A',
                 fontSize:'0.8rem',
                 fontWeight:700,
                 letterSpacing:'0.15em',
                 cursor:'pointer',
                 fontFamily:"'Space Grotesk',sans-serif",
                 textTransform:'uppercase',
-                boxShadow: '0 0 20px rgba(255,30,30,0.4)',
                 transition:'all 0.3s ease',
                 whiteSpace:'nowrap'
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.background = 'rgba(255,30,30,0.35)'
-                e.currentTarget.style.boxShadow = '0 0 30px rgba(255,30,30,0.6)'
+                e.currentTarget.style.background = 'rgba(138,95,101,0.35)'
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.background = 'rgba(255,30,30,0.2)'
-                e.currentTarget.style.boxShadow = '0 0 20px rgba(255,30,30,0.4)'
+                e.currentTarget.style.background = 'rgba(138,95,101,0.2)'
               }}
             >
-              ■ STOP
+              STOP
             </button>
           )}
         </div>
@@ -537,12 +519,12 @@ export default function ChatPanel({
           alignItems:'center',
           paddingTop:8,
           marginTop:8,
-          borderTop:`1px solid ${THEME.metallicGray}`
+          borderTop:'1px solid #201F23'
         }}>
           <div style={{ flex: '0 0 220px' }}>
             <span style={{
               fontSize:'0.7rem',
-              color: activeModel === 'peque' ? THEME.celeste : THEME.gold,
+              color: activeModel === 'peque' ? '#7A8FA0' : '#A08840',
               fontFamily:"'JetBrains Mono',monospace",
               opacity: 0.85,
               letterSpacing:'0.04em'
@@ -561,7 +543,7 @@ export default function ChatPanel({
           <div style={{ flex: '0 0 220px', textAlign:'right' }}>
             <span style={{
               fontSize:'0.8rem',
-              color:THEME.gold,
+              color:'#A08840',
               fontFamily:"'JetBrains Mono',monospace",
               letterSpacing:'0.05em'
             }}>

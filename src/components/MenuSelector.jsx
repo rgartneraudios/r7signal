@@ -300,7 +300,7 @@ export default function MenuSelector({
                     <div style={{ width: '100%', height:1, background:'rgba(255,255,255,0.02)', marginBottom:18 }} />
 
                     {/* Asignación de Modelos */}
-                    <div style={{ width: '100%', fontSize:'0.8rem', lineHeight:1.8, marginBottom:24, textAlign:'left', paddingLeft: '10px' }}>
+                    <div style={{ width: '100%', fontSize:'0.9rem', lineHeight:1.8, marginBottom:24, textAlign:'center' }}>
                       {[...new Set(menu.items.map(i => i.modelo_id))].map((modelo, idx) => {
                         const mod = modulos[idx] || modulos[0]
                         const displayName = MODULE_NAMES[mod.nombre] || mod.nombre

@@ -1,0 +1,41 @@
+GUÍA DE ESTILO R7 SIGNAL — CONSOLA CORPORATIVA PREMIUM
+1. Concepto y Atmósfera General
+Estilo: Consola de hardware de audio analógica, seria y corporativa (estilo rack de estudio de alta gama o buffet de abogados tecnológico).
+Texturas primarias: Cuero carbón profundo, placas de metal prensadas y luces físicas de estudio (biselados, luces de fondo).
+Luz física: Focos neutros/platino cenitales muy tenues que crean volumen y profundidad. Prohibidos los degradados de neón y los tonos verdes militares u oliva.
+2. Paleta de Colores Base
+Fondo General (Chasis exterior): #0F0E11 (Negro carbón neutro profundo).
+Fondo de Paneles/Placas (Superficie): #131215 (El tono exacto de cuero oscuro del chat de ejecución local).
+Pozos Empotrados (Inputs, Tracks, Pasos): #09080A con sombra interior (box-shadow: inset 0 2px 4px rgba(0,0,0,0.85)).
+Líneas de división y bordes neutrales: #201F23 (Bordes de placas).
+Tipografía secundaria y rutas: #8A868B / #5A585C.
+Tipografía de alto contraste (Blanco hueso): #D4D8DC / #E0E2E4.
+3. El Sistema de los 5 Metales (Acentos y Degradados)
+Cada metal tiene su tono base (opaco) y su highlight (brillo especular):
+Plata Fría (Peque / Código):
+Acento base: #7A8FA0 | Brillo: #D4D8DC
+Gradiente: linear-gradient(135deg, #7A8FA0 0%, #D4D8DC 100%)
+Oro Pálido (Asun / Texto):
+Acento base: #A08840 | Brillo: #E8C84A
+Gradiente: linear-gradient(135deg, #A08840 0%, #E8C84A 100%)
+Platino (Imagen):
+Acento base: #9AA0A6 | Brillo: #E0E2E4
+Gradiente: linear-gradient(135deg, #9AA0A6 0%, #E0E2E4 100%)
+Sal Rosada (Audio / Cochi 02):
+Acento base: #8A5F65 | Brillo: #C4929A
+Gradiente: linear-gradient(135deg, #8A5F65 0%, #C4929A 100%)
+Azul Acero (Voces / Cochi 01):
+Acento base: #3A5A7A | Brillo: #6B9EC4
+Gradiente: linear-gradient(135deg, #3A5A7A 0%, #6B9EC4 100%)
+4. Tipografía y Estilo Editorial
+Logotipo e Isologos principales: Orbitron en estilo ultra-bold (fontWeight 900) con degradados metálicos combinados (Plata y Oro) y sombras duras.
+Fuentes de Interfaz: Space Grotesk (Limpia, geométrica y corporativa).
+Uso clave: Títulos y etiquetas en mayúsculas con espaciados de letras (tracking) anchos (de 0.15em a 0.6em) para dar un acabado editorial premium.
+Detalles técnicos, tokens y costes: JetBrains Mono (Fuentes monoespaciadas pequeñas).
+5. Reglas de Maquetación y Detalles Físicos (Skeuomorphism)
+Efecto Placa: Las tarjetas centrales (como el medallón de la portada o las placas de menú) deben parecer atornilladas al chasis de cuero. Esto se consigue con:
+Un bisel de microbrillo superior: box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02).
+Sombra proyectada profunda: box-shadow: 0 16px 48px rgba(0,0,0,0.9).
+4 remaches/tornillos pulidos simulados en las esquinas de los contenedores mediante CSS radial-gradient a escala diminuta (5px o 6px).
+Efecto Well (Pozos): Para barras de carga, tracks y campos de texto de inputs, el fondo debe ser más oscuro que el contenedor (#09080A) e ir hundido mediante una sombra interior dura para simular que está empotrado en la placa.
+Flotabilidad (Lifting): Los botones interactivos y las tarjetas de menú deben "levantarse" físicamente al pasar el cursor (hover) mediante transiciones suaves utilizando transform: translateY(-2px) o translateY(-4px) acompañados de una sombra proyectada más amplia y difusa.

@@ -68,12 +68,12 @@ export default function ChatView({
         `}</style>
 
         <div style={{ position:'fixed', inset:0, background:`
-  radial-gradient(ellipse 70% 55% at 0% 40%, ${THEME.radialOccidente} 0%, transparent 65%),
-  radial-gradient(ellipse 55% 45% at 100% 65%, ${THEME.radialOriente} 0%, transparent 60%),
-  radial-gradient(ellipse 40% 35% at 50% 50%, ${THEME.radialCenter} 0%, transparent 55%),
-  ${THEME.bgMainNeon}
+  radial-gradient(ellipse 70% 55% at 0% 40%, rgba(212,212,220,0.03) 0%, transparent 65%),
+  radial-gradient(ellipse 55% 45% at 100% 65%, rgba(212,212,220,0.02) 0%, transparent 60%),
+  radial-gradient(ellipse 40% 35% at 50% 50%, rgba(255,255,255,0.01) 0%, transparent 55%),
+  #0F0E11
 `, zIndex:0 }} />
-        <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.gridAmber} 1px, transparent 1px), linear-gradient(90deg, ${THEME.gridAmber} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
+        <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
 
         <SidebarPanel
           sidebarOpen={sidebarOpen}
@@ -104,24 +104,33 @@ export default function ChatView({
             <div className="sidebar-cochi" style={{
               width:220,
               padding:'1.5rem 1rem',
-              color:THEME.textLow,
+              background:'#131215',
+              border:'1px solid #201F23',
+              borderRadius:16,
+              boxShadow:'inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 36px rgba(0,0,0,0.85)',
+              color:'#8A868B',
               fontFamily:"'Space Grotesk',sans-serif",
               fontSize:'1rem',
               lineHeight:1.7,
               position:'absolute', left:-260, top:280,
             }}>
-              <h3 style={{ color:THEME.celeste, fontSize:'1.15rem', marginBottom:'1rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>
+              <h3 style={{
+                fontSize:'1.15rem', marginBottom:'1rem', textTransform:'uppercase', letterSpacing:'0.05em',
+                background:'linear-gradient(135deg, #9AA0A6 0%, #E0E2E4 100%)',
+                WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
+                fontWeight:700
+              }}>
                 ¿Qué es Cochi?
               </h3>
               <p style={{ margin:'0 0 0.75rem' }}>
-                Cochi es tu <strong style={{ color:THEME.textHigh }}>Agente de Ejecución Local</strong> — vive en tu escritorio
+                Cochi es tu <strong style={{ color:'#D4D8DC' }}>Agente de Ejecución Local</strong> — vive en tu escritorio
                 y tiene acceso a tus archivos, proyectos y herramientas.
               </p>
-              <p style={{ color:THEME.gold, fontWeight:600, margin:'0.75rem 0' }}>
+              <p style={{ color:'#E8C84A', fontWeight:600, margin:'0.75rem 0' }}>
                 Los Menús piensan. Cochi ejecuta.
               </p>
               <p style={{ margin:'0.75rem 0 0' }}>
-                Cuando escribas <span style={{ color:THEME.celeste, fontWeight:700 }}>/COCHI</span> en cualquier chat,
+                Cuando escribas <span style={{ color:'#7A8FA0', fontWeight:700 }}>/COCHI</span> en cualquier chat,
                 los modelos web formularán las instrucciones en un botón para copiar y pegar
                 directamente en Cochi.
               </p>
@@ -132,9 +141,11 @@ export default function ChatView({
               <h2 style={{
                 fontFamily:"'Orbitron',monospace",
                 fontSize:'2.8rem', fontWeight:900,
-                color:THEME.textHigh, letterSpacing:'0.08em',
+                background:'linear-gradient(135deg, #7A8FA0 0%, #D4D8DC 100%)',
+                WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
+                letterSpacing:'0.08em',
                 marginBottom:20,
-                textShadow:`0 0 30px ${THEME.pink30}`
+                filter:'drop-shadow(0 2px 4px rgba(122,143,160,0.4))'
               }}>
                 BIENVENIDO A R7
               </h2>
@@ -183,7 +194,6 @@ export default function ChatView({
               modeloAsun={modeloMS}
               modeloSeleccionado={modeloSeleccionado}
               modeloCochi={modeloCochi}
-              THEME={THEME}
             />
           </div>
           </>
