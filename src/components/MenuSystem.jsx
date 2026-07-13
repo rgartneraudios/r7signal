@@ -466,89 +466,89 @@ if (vista === 'chat') {
     return (
       <>
         <AppHeader onLoginClick={onLoginClick} onVolver={() => setVista('categorias')} />
-        <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
+        <div style={{ position:'relative', width:'100vw', minHeight:'100vh', background:'#0F0E11', fontFamily:"'Exo 2',sans-serif" }}>
           <style>{`
             @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&family=Space+Grotesk:wght@500;600;700&display=swap');
             ::-webkit-scrollbar { width:3px; }
-            ::-webkit-scrollbar-thumb { background:${THEME.celeste25}; border-radius:2px; }
+            ::-webkit-scrollbar-thumb { background:#201F23; border-radius:2px; }
 
             .billing-loading,
             .billing-empty {
               text-align: center; padding: 60px 20px;
-              color: ${THEME.textMed}; font-size: 1rem;
+              color: #8A868B; font-size: 1rem;
               letter-spacing: 0.1em; font-family: 'Exo 2', sans-serif;
             }
             .billing-container {
               position: relative; z-index: 10; max-width: 640px;
-              margin: 0 auto; padding: 80px 24px 40px;
+              margin: 0 auto; padding: 100px 24px 40px;
             }
             .billing-title {
               font-family: 'Orbitron', monospace; font-size: 1.8rem; font-weight: 700;
               text-align: center; letter-spacing: 0.15em;
-              background: linear-gradient(140deg, ${THEME.textHigh} 25%, ${THEME.gold} 100%);
+              background: linear-gradient(140deg, #7A8FA0 25%, #E8C84A 100%);
               -webkit-background-clip: text; -webkit-text-fill-color: transparent;
               margin-bottom: 40px;
             }
             .billing-saldo-card {
-              background: linear-gradient(135deg, ${THEME.gold10} 0%, ${THEME.bgFeedCC} 100%);
-              border: 1px solid ${THEME.gold40}; border-radius: 18px;
+              background: #131215;
+              border: 1px solid #201F23; border-radius: 18px;
               padding: 32px 24px; text-align: center; margin-bottom: 28px;
-              box-shadow: 0 0 40px ${THEME.gold10};
+              box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 36px rgba(0,0,0,0.85);
             }
             .billing-saldo-amount {
               display: block; font-family: 'Orbitron', monospace;
-              font-size: 2.6rem; font-weight: 900; color: ${THEME.gold};
+              font-size: 2.6rem; font-weight: 900; color: #E8C84A;
               letter-spacing: 0.05em; margin-bottom: 8px;
             }
             .billing-saldo-label {
               font-family: 'Space Grotesk', sans-serif; font-size: 0.85rem;
-              letter-spacing: 0.18em; color: ${THEME.textMed}; text-transform: uppercase;
+              letter-spacing: 0.18em; color: #8A868B; text-transform: uppercase;
             }
             .billing-stats {
               display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
               margin-bottom: 36px;
             }
             .billing-stat {
-              background: ${THEME.celeste08}; border: 1px solid ${THEME.celeste20};
+              background: #131215; border: 1px solid #201F23;
               border-radius: 14px; padding: 20px 16px; text-align: center;
             }
             .billing-stat-value {
               display: block; font-family: 'Orbitron', monospace;
-              font-size: 1.4rem; font-weight: 700; color: ${THEME.textHigh};
+              font-size: 1.4rem; font-weight: 700; color: #D4D8DC;
               margin-bottom: 6px;
             }
             .billing-stat-label {
               font-family: 'Space Grotesk', sans-serif; font-size: 0.75rem;
-              letter-spacing: 0.15em; color: ${THEME.textMed}; text-transform: uppercase;
+              letter-spacing: 0.15em; color: #8A868B; text-transform: uppercase;
             }
             .billing-section-title {
               font-family: 'Orbitron', monospace; font-size: 1.1rem; font-weight: 700;
-              letter-spacing: 0.15em; color: ${THEME.celeste}; margin-bottom: 18px;
-              padding-bottom: 10px; border-bottom: 1px solid ${THEME.metallicGray};
+              letter-spacing: 0.15em; color: #7A8FA0; margin-bottom: 18px;
+              padding-bottom: 10px; border-bottom: 1px solid #201F23;
             }
             .billing-turnos { display: flex; flex-direction: column; gap: 6px; }
             .billing-turno-row {
               display: grid; grid-template-columns: 1fr 1.5fr 1fr 1.2fr; gap: 8px;
               padding: 10px 14px; border-radius: 10px;
-              background: rgba(92,155,165,0.05); border: 1px solid ${THEME.celeste12};
+              background: rgba(122,143,160,0.04); border: 1px solid #201F23;
               font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
               align-items: center; transition: all 0.2s ease;
             }
             .billing-turno-row:hover {
-              background: ${THEME.celeste10}; border-color: ${THEME.celeste25};
+              background: rgba(122,143,160,0.08); border-color: rgba(122,143,160,0.3);
             }
-            .billing-turno-fecha { color: ${THEME.textMed}; }
-            .billing-turno-modelo { color: ${THEME.celeste}; }
-            .billing-turno-tokens { color: ${THEME.gold}; text-align: right; }
-            .billing-turno-coste { color: ${THEME.pinkMarble}; text-align: right; }
+            .billing-turno-fecha { color: #8A868B; }
+            .billing-turno-modelo { color: #7A8FA0; }
+            .billing-turno-tokens { color: #A08840; text-align: right; }
+            .billing-turno-coste { color: #C4929A; text-align: right; }
           `}</style>
           <div style={{ position:'fixed', inset:0, background:`
-  radial-gradient(ellipse 70% 55% at 0% 40%, ${THEME.radialOccidente} 0%, transparent 65%),
-  radial-gradient(ellipse 55% 45% at 100% 65%, ${THEME.radialOriente} 0%, transparent 60%),
-  radial-gradient(ellipse 40% 35% at 50% 50%, ${THEME.radialCenter} 0%, transparent 55%),
-  ${THEME.bgMainNeon}
+  radial-gradient(ellipse 70% 55% at 0% 40%, rgba(212,212,220,0.03) 0%, transparent 65%),
+  radial-gradient(ellipse 55% 45% at 100% 65%, rgba(212,212,220,0.02) 0%, transparent 60%),
+  radial-gradient(ellipse 40% 35% at 50% 50%, rgba(255,255,255,0.01) 0%, transparent 55%),
+  #0F0E11
 `, zIndex:0 }} />
-          <div style={{ position:'fixed', inset:0, backgroundImage:`linear-gradient(${THEME.gridAmber} 1px, transparent 1px), linear-gradient(90deg, ${THEME.gridAmber} 1px, transparent 1px)`, backgroundSize:'48px 48px', zIndex:0 }} />
+          <div style={{ position:'fixed', inset:0, backgroundImage:'linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px)', backgroundSize:'48px 48px', zIndex:0 }} />
           <SidebarPanel
             sidebarOpen={sidebarOpen}
             toggleSidebar={toggleSidebar}
