@@ -134,16 +134,19 @@ export default function App() {
   ]
 
   if (view === 'menus') return (
-    <MenuSystem
-      onBack={handleBack}
-      user={user}
-      categoriaDirecta={categoriaSeleccionada}
-      onLoginClick={() => setShowLoginModal(true)}
-    />
+    <div style={{ position:'relative', width:'100%', minHeight:'100vh', background:'#0F0E11' }}>
+      <MenuSystem
+        onBack={handleBack}
+        user={user}
+        categoriaDirecta={categoriaSeleccionada}
+        onLoginClick={() => setShowLoginModal(true)}
+      />
+      <Footer />
+    </div>
   )
 
   return (
-    <div style={{ position:'relative', width:'100vw', height:'100vh', overflow:'hidden', background:'#0F0E11', fontFamily:"'Space Grotesk', sans-serif" }}>
+    <div style={{ position:'relative', width:'100%', minHeight:'100vh', overflow:'hidden', background:'#0F0E11', fontFamily:"'Space Grotesk', sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
         
@@ -364,8 +367,8 @@ export default function App() {
               {/* Barra 1: PEQUE / ASUN */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.15em' }}>
-                  <span style={{ color: '#9BA3A8' }}>PEQUE (PLATA)</span>
-                  <span style={{ color: '#E8C84A' }}>ASUN (ORO)</span>
+                  <span style={{ color: '#9BA3A8' }}>TITO</span>
+                  <span style={{ color: '#E8C84A' }}>ASUN</span>
                 </div>
                 {/* Track empotrado */}
                 <div style={{
@@ -440,7 +443,7 @@ export default function App() {
                   }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center', fontSize: '0.55rem', color: '#8A868B', fontWeight: 600, letterSpacing: '0.1em', marginTop: '2px' }}>
-                  INTERNACIONAL (PLATINO)
+                  INTERNACIONAL
                 </div>
               </div>
 

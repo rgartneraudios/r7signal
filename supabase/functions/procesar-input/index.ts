@@ -35,7 +35,19 @@ function parsearR1R2R3(content: string): { r1: string; r2: string; r3: string } 
   return { r1, r2, r3 };
 }
 
-const SYSTEM_PROMPTS: Record<string, string> = {
+const SYSTEM_PROMPTS_TITO: Record<string, string> = {
+  '74721199-5ee8-42b1-a1a5-e6203c3ff9bb': `[REDACTED PROMPT]`,
+
+  'af3962bb-7a19-425c-882a-5301a837c7d7': `[REDACTED PROMPT]`,
+
+  'db79925b-c161-419e-bd94-460b3d43af8a': `[REDACTED PROMPT]`,
+
+  '28e7ba28-b6be-4d59-9e0f-cdd55cf09124': `[REDACTED PROMPT]`,
+
+  'ba438025-4674-4fb8-8f5d-8d5269b13e03': `[REDACTED PROMPT]`,
+}
+
+const SYSTEM_PROMPTS_ASUN: Record<string, string> = {
   '74721199-5ee8-42b1-a1a5-e6203c3ff9bb': `[REDACTED PROMPT]`,
 
   'af3962bb-7a19-425c-882a-5301a837c7d7': `[REDACTED PROMPT]`,
@@ -73,8 +85,10 @@ Si tu respuesta (R3) contenía uno o más bloques de código, inclúyelo en R2 c
 
 LANGUAGE RULE: R1 and R2 must be written in English (internal context, more token-efficient). R3 must always be written in ${chatLanguage} — that is the user's preferred language.`
 
-function getSystemPrompt(categoria_id: string, esCochi: boolean, chatLanguage: string): string {
-  const base = SYSTEM_PROMPTS[categoria_id] || 'You are a helpful assistant.'
+function getSystemPrompt(categoria_id: string, esCochi: boolean, chatLanguage: string, routing: string): string {
+  const isAsun = routing === 'asun' || routing === 'plus_chain'
+  const prompts = isAsun ? SYSTEM_PROMPTS_ASUN : SYSTEM_PROMPTS_TITO
+  const base = prompts[categoria_id] || (isAsun ? '[REDACTED PROMPT]' : '[REDACTED PROMPT]')
   return esCochi ? base + COCHI_SUFFIX : base + FORMATO_R7(chatLanguage)
 }
 
@@ -234,7 +248,7 @@ serve(async (req) => {
     if (routing_override === 'peque') {
       if (!itemPeque) throw new Error('No se encontró modelo Peque (mb) para este módulo')
 
-      const systemPrompt = getSystemPrompt(categoria_id, esCochi, chat_language)
+      const systemPrompt = getSystemPrompt(categoria_id, esCochi, chat_language, 'peque')
       const { raw, tokensInput, tokensOutput } = await llamarModelo(
         apiKey, itemPeque.modelo_id, systemPrompt,
         r7Acumulado, input_usuario,
@@ -266,8 +280,7 @@ serve(async (req) => {
     // ── MODO ROCO (PLUS solo) ────────────────────────────────────────────
     if (routing_override === 'asun') {
       if (!itemAsun) throw new Error('No se encontró modelo Asun (plus) para este módulo')
-
-      const systemPrompt = getSystemPrompt(categoria_id, esCochi, chat_language)
+const systemPrompt = getSystemPrompt(categoria_id, esCochi, chat_language, 'asun')
       const { raw, tokensInput, tokensOutput } = await llamarModelo(
         apiKey, itemAsun.modelo_id, systemPrompt,
         r7Acumulado, input_usuario,
@@ -301,8 +314,8 @@ serve(async (req) => {
       if (!itemPeque) throw new Error('No se encontró modelo Peque (mb) para el chain')
       if (!itemAsun) throw new Error('No se encontró modelo Asun (plus) para el chain')
 
-      const systemPromptPeque = getSystemPrompt(categoria_id, false, chat_language) // Peque no recibe /COCHI
-      const systemPromptAsun  = getSystemPrompt(categoria_id, esCochi, chat_language)
+const systemPromptPeque = getSystemPrompt(categoria_id, false, chat_language, 'peque') // Peque no recibe /COCHI
+      const systemPromptAsun  = getSystemPrompt(categoria_id, esCochi, chat_language, 'asun')
 
       // ── Turno 1: Peque ───────────────────────────────────────────────
       console.log(`🔗 Chain — Turno Peque: ${itemPeque.modelo_id}`)
