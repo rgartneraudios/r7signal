@@ -17,16 +17,22 @@ interface RequestBody {
   chat_language: string
 }
 
-function parsearR1R2R3(texto: string) {
-  const r1Match = texto.match(/R1:\s*([\s\S]*?)(?=R2:)/i)
-  const r2Match = texto.match(/R2:\s*([\s\S]*?)(?=R3:)/i)
-  const r3Match = texto.match(/R3:\s*([\s\S]*?)$/i)
-
-  return {
-    r1: r1Match?.[1]?.trim() || '',
-    r2: r2Match?.[1]?.trim() || '',
-    r3: r3Match?.[1]?.trim() || texto
+function parsearR1R2R3(content: string): { r1: string; r2: string; r3: string } {
+  const r1Match = content.match(/\*{0,2}R1:\*{0,2}\s*([^\n]*?)(?=\s*\*{0,2}R2:|$)/m);
+  const r2Match = content.match(/\*{0,2}R2:\*{0,2}\s*([^\n]*)/m);
+  const r3Match = content.match(/\*{0,2}R3:\*{0,2}\s*([\s\S]*?)(?=\*{0,2}R3_SAVE:|$)/);
+  const r1 = r1Match ? r1Match[1].trim() : '';
+  const r2 = r2Match ? r2Match[1].trim() : '';
+  let r3 = '';
+  if (r3Match) {
+    r3 = r3Match[1].trim();
+  } else if (r2Match) {
+    const r2LineEnd = content.indexOf(r2Match[0]) + r2Match[0].length;
+    r3 = content.slice(r2LineEnd).trim();
+  } else {
+    r3 = content;
   }
+  return { r1, r2, r3 };
 }
 
 const SYSTEM_PROMPTS: Record<string, string> = {

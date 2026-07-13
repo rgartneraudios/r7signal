@@ -5,12 +5,18 @@ export default function Footer() {
     <footer style={{
       position:'absolute', bottom:0, left:0, right:0, zIndex:20,
       padding:'13px 36px',
-      borderTop:`1px solid ${THEME.metallicGray}`,
-      background:`${THEME.bgMain}80`,
+      borderTop:'1px solid rgba(92,200,212,0.15)',
+      background:'#0F0E11CC',
       backdropFilter:'blur(12px)',
       display:'flex', alignItems:'center', justifyContent:'space-between'
     }}>
-      <div style={{ fontSize:'0.65rem', letterSpacing:'0.18em', color:'#FF5E98', textTransform:'uppercase', fontFamily:"'Exo 2',sans-serif" }}>
+      <div style={{
+        fontSize:'0.65rem', letterSpacing:'0.18em', textTransform:'uppercase',
+        fontFamily:"'Exo 2',sans-serif",
+        background:'linear-gradient(to right, #5CC8D4, #C0C0C0, #E8C84A, #E8A5B0)',
+        WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
+        backgroundClip:'text',
+      }}>
         © R7Signal · RGartner 2026 · All rights reserved
       </div>
       <div style={{ display:'flex', gap:24 }}>

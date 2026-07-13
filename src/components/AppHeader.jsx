@@ -26,7 +26,7 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
         <div style={{
           fontFamily:"'Chakra Petch',sans-serif", fontSize:'2.8rem', fontWeight:700,
           letterSpacing:'0.08em', lineHeight:1,
-          background:'linear-gradient(to right, #5CC8D4, #D4C850, #CC9060, #CC5060)',
+          background:'linear-gradient(to right, #5CC8D4, #C0C0C0, #E8C84A, #E8A5B0)',
           WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
           backgroundClip:'text',
         }}>
@@ -34,7 +34,10 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
         </div>
         <div style={{
           fontSize:'0.9rem', fontWeight:300, letterSpacing:'0.08em',
-          color:THEME.textMed, marginTop:4, textTransform:'capitalize',
+          marginTop:4, textTransform:'capitalize',
+          background:'linear-gradient(to right, #5CC8D4, #C0C0C0, #E8C84A, #E8A5B0)',
+          WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
+          backgroundClip:'text',
         }}>
           {formattedDate}
         </div>
@@ -44,7 +47,7 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
         <div style={{
           fontFamily:"'Chakra Petch',sans-serif", fontSize:'1.8rem', fontWeight:500,
           letterSpacing:'0.08em', lineHeight:1.1,
-          background:'linear-gradient(to right, #5CC8D4, #D4C850, #CC9060, #CC5060)',
+          background:'linear-gradient(to right, #5CC8D4, #C0C0C0, #E8C84A, #E8A5B0)',
           WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
           backgroundClip:'text',
         }}>
@@ -58,30 +61,26 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
         </div>
         <button onClick={onLoginClick} style={{
           marginTop:6,
-          background: user ? '#00CC44' : '#D32F2F',
-          border: user ? '2px solid #39FF14' : '2px solid #EF5350',
+          background:'transparent',
+          border:'2px solid transparent',
           borderRadius:20, padding:'6px 18px',
-          color:'#FFFFFF', fontSize:'0.75rem', letterSpacing:'0.15em',
+          backgroundImage:'linear-gradient(#141316, #141316), linear-gradient(to right, #5CC8D4, #C0C0C0, #E8C84A, #E8A5B0)',
+          backgroundOrigin:'border-box',
+          backgroundClip:'padding-box, border-box',
+          color:'#D4D8DC', fontSize:'0.75rem', letterSpacing:'0.15em',
           cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:700,
           textTransform:'uppercase', transition:'all 0.25s',
-          boxShadow: user ? '0 0 16px #00CC44, 0 0 32px #00CC4440' : 'none',
+          WebkitBackgroundClip:'padding-box, border-box',
+          boxShadow:'0 0 12px rgba(92,200,212,0.15), 0 0 24px rgba(232,200,74,0.1)',
           width:'fit-content',
         }}
           onMouseEnter={e=>{
-            if (user) {
-              e.currentTarget.style.background='#00E64D';
-              e.currentTarget.style.boxShadow='0 0 24px #00CC44, 0 0 48px #00CC4460';
-            } else {
-              e.currentTarget.style.background='#EF5350';
-            }
+            e.currentTarget.style.boxShadow='0 0 20px rgba(92,200,212,0.3), 0 0 40px rgba(232,200,74,0.2)';
+            e.currentTarget.style.backgroundImage='linear-gradient(#1B1A1E, #1B1A1E), linear-gradient(to right, #5CC8D4, #C0C0C0, #E8C84A, #E8A5B0)';
           }}
           onMouseLeave={e=>{
-            if (user) {
-              e.currentTarget.style.background='#00CC44';
-              e.currentTarget.style.boxShadow='0 0 16px #00CC44, 0 0 32px #00CC4440';
-            } else {
-              e.currentTarget.style.background='#D32F2F';
-            }
+            e.currentTarget.style.boxShadow='0 0 12px rgba(92,200,212,0.15), 0 0 24px rgba(232,200,74,0.1)';
+            e.currentTarget.style.backgroundImage='linear-gradient(#141316, #141316), linear-gradient(to right, #5CC8D4, #C0C0C0, #E8C84A, #E8A5B0)';
           }}
         >
           {user ? `👤 ${user.initials}` : '🔐 Acceso'}
