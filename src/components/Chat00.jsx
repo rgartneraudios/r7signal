@@ -16,15 +16,25 @@ const AI_LINKS = [
   { img: 'grok.webp', url: 'https://grok.com/' },
 ]
 
-const PROMPT_TEXT = `Has sido elegido como modelo para realizar tareas específicas. Procede según petición del usuario. El usuario lleva consigo una palabra clave /COCHI en mayúsculas. Cuando la escriba, empaqueta las instrucciones de las tareas encomendadas en formato ejecutable, dirigiéndote directamente al agente en segunda persona imperativa. Ejemplo: "Cochi, reemplaza en [archivo] esto: [código anterior] por esto: [código nuevo]". Sin explicaciones adicionales.`
+const PROMPT_TITO = `Hola, tu nombre es Tito y yo soy? Pregúntame por favor si no sabes para tener una mejor comunicación. Trabajas en remoto con un agente que esta en Local llamado Cochi que espera instrucciones tuyas para operar. Procede según petición del usuario. El usuario lleva consigo una palabra clave /COCHI en mayúsculas que es la señal para enviar a Cochi las tareas. Cuando la escriba, empaqueta las instrucciones en formato ejecutable, dirigiéndote directamente al agente Cochi en segunda persona imperativa. Ejemplo: "Cochi, reemplaza en [archivo] esto: [código anterior] por esto: [código nuevo]". Sin explicaciones adicionales.`
+
+const PROMPT_ASUN = `Hola, tu nombre es Asun y yo soy? Pregúntame por favor si no sabes para tener una mejor comunicación. Trabajas en remoto con un agente que esta en Local llamado Cochi que espera instrucciones tuyas para operar. Procede según petición del usuario. El usuario lleva consigo una palabra clave /COCHI en mayúsculas que es la señal para enviar a Cochi las tareas. Cuando la escriba, empaqueta las instrucciones en formato ejecutable, dirigiéndote directamente al agente Cochi en segunda persona imperativa. Ejemplo: "Cochi, reemplaza en [archivo] esto: [código anterior] por esto: [código nuevo]". Sin explicaciones adicionales.`
 
 export default function Chat00() {
-  const [copiado, setCopiado] = useState(false)
+  const [copiadoTito, setCopiadoTito] = useState(false)
+  const [copiadoAsun, setCopiadoAsun] = useState(false)
 
-  function handleCopy() {
-    navigator.clipboard.writeText(PROMPT_TEXT).then(() => {
-      setCopiado(true)
-      setTimeout(() => setCopiado(false), 2000)
+  function handleCopyTito() {
+    navigator.clipboard.writeText(PROMPT_TITO).then(() => {
+      setCopiadoTito(true)
+      setTimeout(() => setCopiadoTito(false), 2000)
+    })
+  }
+
+  function handleCopyAsun() {
+    navigator.clipboard.writeText(PROMPT_ASUN).then(() => {
+      setCopiadoAsun(true)
+      setTimeout(() => setCopiadoAsun(false), 2000)
     })
   }
 
@@ -164,8 +174,8 @@ export default function Chat00() {
               {/* Bloques de Pasos */}
               <div style={{ display:'flex', flexDirection:'column', gap:18, marginBottom:36, position: 'relative', zIndex: 5 }}>
                 {[
-                  { num: '1', text: <>Copia el prompt para insertar en el chat de tu IA favorita <span style={{ color: '#6B9EC4', fontWeight: 700 }}>[COPIAR PROMPT]</span></> },
-                  { num: '2', text: <>Si ya usas la App de escritorio con Cochi, la palabra clave es <span style={{ color: '#E8C84A', fontWeight:700 }}>/COCHI</span> en mayúsculas.</> },
+                  { num: '1', text: <>Copia el prompt para insertar en el chat de tu IA favorita. Si quieres que se llame Tito usa <span style={{ color: '#6B9EC4', fontWeight: 700 }}>[PROMPT TITO]</span> y si quieres que se llame Asun usa <span style={{ color: '#6B9EC4', fontWeight: 700 }}>[PROMPT ASUN]</span>.</> },
+                  { num: '2', text: <>Si ya usas la App de escritorio con Cochi, la palabra clave es <span style={{ color: '#E8C84A', fontWeight:700 }}>/COCHI</span> en mayúsculas para solicitar a tu modelo en la Web, las instrucciones a Cochi en PC.</> },
                   { num: '3', text: <>Elige tu IA favorita para empezar abajo.</> },
                 ].map(item => (
                   <div key={item.num} style={{
@@ -196,46 +206,86 @@ export default function Chat00() {
                 ))}
               </div>
 
-              {/* Botón de Copiado */}
-              <div style={{ textAlign:'center', marginBottom:44, position: 'relative', zIndex: 5 }}>
+              {/* Botones de Prompt */}
+              <div style={{ display:'flex', justifyContent:'center', gap:20, marginBottom:44, position: 'relative', zIndex: 5 }}>
                 <button
-                  onClick={handleCopy}
+                  onClick={handleCopyTito}
                   style={{
                     background:'transparent',
                     border:'2px solid transparent',
                     borderRadius:14,
-                    padding:'16px 48px',
-                    backgroundImage: copiado
+                    padding:'16px 32px',
+                    backgroundImage: copiadoTito
                       ? 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #6B9EC4, #B4B8BB)'
                       : 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #7A8FA0, #B4B8BB, #B8962E, #E8C84A)',
                     backgroundOrigin:'border-box',
                     backgroundClip:'padding-box, border-box',
                     color:'#D4D8DC',
-                    fontSize:'0.95rem',
+                    fontSize:'0.85rem',
                     fontWeight:800,
-                    letterSpacing:'0.18em',
+                    letterSpacing:'0.15em',
                     cursor:'pointer',
                     fontFamily:"'Space Grotesk',sans-serif",
                     textTransform:'uppercase',
-                    boxShadow: copiado
+                    boxShadow: copiadoTito
                       ? '0 0 30px rgba(107,158,196,0.15)'
                       : '0 4px 12px rgba(0,0,0,0.6)',
                     transition:'all 0.3s ease',
                   }}
                   onMouseEnter={e => {
-                    if (!copiado) {
-                      e.currentTarget.style.boxShadow = '0 0 30px rgba(232,165,176,0.05), 0 6px 18px rgba(0,0,0,0.8)'
+                    if (!copiadoTito) {
+                      e.currentTarget.style.boxShadow = '0 0 30px rgba(196,146,154,0.05), 0 6px 18px rgba(0,0,0,0.8)'
                       e.currentTarget.style.backgroundImage = 'linear-gradient(#1B1A1E, #1B1A1E), linear-gradient(to right, #7A8FA0, #B4B8BB, #B8962E, #E8C84A)'
                     }
                   }}
                   onMouseLeave={e => {
-                    if (!copiado) {
+                    if (!copiadoTito) {
                       e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.6)'
                       e.currentTarget.style.backgroundImage = 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #7A8FA0, #B4B8BB, #B8962E, #E8C84A)'
                     }
                   }}
                 >
-                  {copiado ? '✓ PROMPT COPIADO' : 'COPIAR PROMPT'}
+                  {copiadoTito ? '✓ PROMPT TITO COPIADO' : 'PROMPT TITO'}
+                </button>
+
+                <button
+                  onClick={handleCopyAsun}
+                  style={{
+                    background:'transparent',
+                    border:'2px solid transparent',
+                    borderRadius:14,
+                    padding:'16px 32px',
+                    backgroundImage: copiadoAsun
+                      ? 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #6B9EC4, #B4B8BB)'
+                      : 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #7A8FA0, #B4B8BB, #B8962E, #E8C84A)',
+                    backgroundOrigin:'border-box',
+                    backgroundClip:'padding-box, border-box',
+                    color:'#D4D8DC',
+                    fontSize:'0.85rem',
+                    fontWeight:800,
+                    letterSpacing:'0.15em',
+                    cursor:'pointer',
+                    fontFamily:"'Space Grotesk',sans-serif",
+                    textTransform:'uppercase',
+                    boxShadow: copiadoAsun
+                      ? '0 0 30px rgba(107,158,196,0.15)'
+                      : '0 4px 12px rgba(0,0,0,0.6)',
+                    transition:'all 0.3s ease',
+                  }}
+                  onMouseEnter={e => {
+                    if (!copiadoAsun) {
+                      e.currentTarget.style.boxShadow = '0 0 30px rgba(196,146,154,0.05), 0 6px 18px rgba(0,0,0,0.8)'
+                      e.currentTarget.style.backgroundImage = 'linear-gradient(#1B1A1E, #1B1A1E), linear-gradient(to right, #7A8FA0, #B4B8BB, #B8962E, #E8C84A)'
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!copiadoAsun) {
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.6)'
+                      e.currentTarget.style.backgroundImage = 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #7A8FA0, #B4B8BB, #B8962E, #E8C84A)'
+                    }
+                  }}
+                >
+                  {copiadoAsun ? '✓ PROMPT ASUN COPIADO' : 'PROMPT ASUN'}
                 </button>
               </div>
 
