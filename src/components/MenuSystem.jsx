@@ -363,18 +363,20 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
 
   if (cargandoMenu) {
     return (
-      <div style={{ position:'relative', width:'100%', minHeight:'100vh', background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
-<AppHeader onLoginClick={onLoginClick} onVolver={volverACategorias} />
-        <div style={{ position:'fixed', inset:0, background:`
-  radial-gradient(ellipse 70% 55% at 0% 40%, ${THEME.radialOccidente} 0%, transparent 65%),
-  radial-gradient(ellipse 55% 45% at 100% 65%, ${THEME.radialOriente} 0%, transparent 60%),
-  radial-gradient(ellipse 40% 35% at 50% 50%, ${THEME.radialCenter} 0%, transparent 55%),
-  ${THEME.bgMainNeon}
-`, zIndex:0 }} />
+      <div style={{ position:'relative', width:'100%', minHeight:'100vh', background:'#0F0E11', fontFamily:"'Space Grotesk',sans-serif" }}>
+        <style>{`
+          .leather-ambient {
+            background: radial-gradient(circle at 50% -20%, rgba(255, 255, 255, 0.02) 0%, transparent 65%),
+                        radial-gradient(circle at 50% 120%, rgba(255, 255, 255, 0.01) 0%, transparent 70%),
+                        #0F0E11;
+          }
+        `}</style>
+        <AppHeader onLoginClick={onLoginClick} onVolver={volverACategorias} />
+        <div className="leather-ambient" style={{ position:'fixed', inset:0, zIndex:0 }} />
         <div style={{ position:'relative', zIndex:10, display:'flex', alignItems:'center', justifyContent:'center', height:'100vh' }}>
-          <div style={{ textAlign:'center', color:THEME.celeste }}>
+          <div style={{ textAlign:'center', color:'#6B9EC4' }}>
             <div className='menu-pulse' style={{ fontSize:'1.2rem', marginBottom:12 }}>⏳</div>
-            <div style={{ fontSize:'0.85rem', letterSpacing:'0.15em' }}>Cargando menú...</div>
+            <div style={{ fontSize:'0.85rem', letterSpacing:'0.15em', color:'#8A868B' }}>Cargando menú...</div>
           </div>
         </div>
       </div>
@@ -425,6 +427,7 @@ if (vista === 'chat') {
         menuActivo={menuActivo}
         categoriaActiva={categoriaActiva}
         sesionId={sesionId}
+        user={user}
         mensajesM01={mensajesM01}
         setMensajesM01={setMensajesM01}
         inputM01={inputM01}

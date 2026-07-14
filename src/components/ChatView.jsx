@@ -1,11 +1,12 @@
 import { THEME } from '../theme'
 import Chat00 from './Chat00'
+import Chat00ImgVid from './Chat00ImgVid'
 import ChatPanel from './ChatPanel'
 import SidebarPanel from './SidebarPanel'
 import Descargas from './Descargas'
 
 export default function ChatView({
-  modulos, moduloActivo, menuActivo, categoriaActiva, sesionId,
+  modulos, moduloActivo, menuActivo, categoriaActiva, sesionId, user,
   mensajesM01, setMensajesM01, inputM01, setInputM01,
   enviarMensajeM01, cargandoM01, tokensM01, cancelarM01, canceladoM01,
   routingMode, setRoutingMode, routingState,
@@ -35,7 +36,7 @@ export default function ChatView({
 
   return (
     <>
-      <div style={{ position:'relative', width:'100%', minHeight:'100vh', paddingBottom:80, background:THEME.bgMain, fontFamily:"'Exo 2',sans-serif" }}>
+      <div style={{ position:'relative', width:'100%', minHeight:'100vh', paddingBottom:80, background:'#0F0E11', fontFamily:"'Exo 2',sans-serif" }}>
         <style>{`
           @keyframes pulse-dot { 
             0%,100%{opacity:1;transform:scale(1)} 
@@ -45,8 +46,8 @@ export default function ChatView({
             animation: pulse-dot 2s ease-in-out infinite; 
           }
           @keyframes textGlow {
-            0% { text-shadow: 0 0 10px rgba(92,155,165,0.5); }
-            100% { text-shadow: 0 0 20px rgba(92,155,165,0.8), 0 0 30px rgba(212,185,110,0.4); }
+            0% { text-shadow: 0 0 10px rgba(107,158,196,0.5); }
+            100% { text-shadow: 0 0 20px rgba(107,158,196,0.8), 0 0 30px rgba(232,200,74,0.4); }
           }
           .chat-input-glow {
             animation: textGlow 3s ease-in-out infinite alternate;
@@ -94,6 +95,8 @@ export default function ChatView({
 
         {menuActivo?.menu_numero === 0 ? (
           <Chat00 />
+        ) : categoriaActiva?.id === 'db79925b-c161-419e-bd94-460b3d43af8a' ? (
+          <Chat00ImgVid menuNumero={menuActivo?.menu_numero} user={user} />
         ) : (
           <>
           <div style={{
