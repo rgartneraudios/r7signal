@@ -1,0 +1,173 @@
+// CLOUDFLARE WORKER — generar-video
+// Deploy manually via Cloudflare dashboard → Workers → Create Worker → paste this script
+// Required secrets (set in Worker Settings → Variables → Secret):
+//   OPENROUTER_API_KEY
+//   SUPABASE_URL
+//   SUPABASE_SERVICE_ROLE_KEY
+// After deploy: copy the worker URL and replace the TODO comment in Chat00ImgVid.jsx
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
+export default {
+  async fetch(request, env) {
+    if (request.method === 'OPTIONS') {
+      return new Response('ok', { headers: corsHeaders })
+    }
+
+    try {
+      const body = await request.json()
+      const { user_id, menu_numero, estilo_id, objetos, vista, orientacion, duracion, imagen_b64, imagen_url, path } = body
+
+      if (!user_id || !menu_numero) {
+        return new Response(
+          JSON.stringify({ error: 'user_id and menu_numero are required' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        )
+      }
+
+      const supabaseUrl = env.SUPABASE_URL
+      const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY
+      const apiKey = env.OPENROUTER_API_KEY
+
+      if (!apiKey || !supabaseUrl || !serviceKey) {
+        throw new Error('Missing required secrets: OPENROUTER_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY')
+      }
+
+      // Fetch prompt_base from Supabase (service_role)
+      let promptBase = null
+      if (estilo_id) {
+        const res = await fetch(`${supabaseUrl}/rest/v1/estilos_imagen?id=eq.${estilo_id}&select=prompt_base`, {
+          headers: {
+            'Authorization': `Bearer ${serviceKey}`,
+            'apikey': serviceKey,
+          },
+        })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.length > 0) promptBase = data[0].prompt_base
+        }
+      }
+
+      // Fetch Tito slug
+      const titoRes = await fetch(
+        `${supabaseUrl}/rest/v1/menu_items?menu_numero=eq.${menu_numero}&tipo=eq.tito&modulo_id=eq.592f5894-41d8-4191-90b7-b1e47e166626&select=modelo_id&limit=1`,
+        { headers: { 'Authorization': `Bearer ${serviceKey}`, 'apikey': serviceKey } }
+      )
+      const titoData = await titoRes.json()
+      const titoSlug = titoData[0]?.modelo_id
+      if (!titoSlug) throw new Error('Tito model not found for this menu')
+
+      // Fetch Asun·Video slug
+      const asunRes = await fetch(
+        `${supabaseUrl}/rest/v1/menu_items?menu_numero=eq.${menu_numero}&tipo=eq.asun_video&modulo_id=eq.4425984b-704e-472a-9b7c-965ae51c55b8&select=modelo_id&limit=1`,
+        { headers: { 'Authorization': `Bearer ${serviceKey}`, 'apikey': serviceKey } }
+      )
+      const asunData = await asunRes.json()
+      const asunSlug = asunData[0]?.modelo_id
+      if (!asunSlug) throw new Error('Asun·Video model not found for this menu')
+
+      // Step 1: Call Tito to build prompt_final
+      const titoSystemPrompt = `You are a professional video prompt engineer. 
+Combine the provided style description and user inputs into a single optimized English prompt 
+for a video generation model. Include camera movement, duration context, and motion description.
+Output only the final prompt, no explanations, no preamble.`
+
+      const titoUserMessage = `Style base: ${promptBase || 'derive style from the provided reference image'}
+Subject: ${objetos}
+Camera view: ${vista || 'default natural perspective'}
+Orientation: ${orientacion || 'default'}
+Duration: ${duracion || 4} seconds`
+
+      const titoPayload = {
+        model: titoSlug,
+        messages: [
+          { role: 'system', content: titoSystemPrompt },
+          { role: 'user', content: titoUserMessage },
+        ],
+        max_tokens: 300,
+        temperature: 0.7,
+      }
+
+      const titoResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://r7signal.com',
+          'X-Title': 'R7Signal',
+        },
+        body: JSON.stringify(titoPayload),
+      })
+
+      if (!titoResp.ok) {
+        const err = await titoResp.text()
+        throw new Error(`Tito OpenRouter error: ${titoResp.status} - ${err}`)
+      }
+
+      const titoDataJson = await titoResp.json()
+      const promptFinal = titoDataJson.choices?.[0]?.message?.content?.trim()
+      if (!promptFinal) throw new Error('Tito returned empty prompt')
+
+      // Step 2: Call Asun·Video with prompt + optional reference image
+      let asunMessages = [
+        { role: 'system', content: 'Generate a video based on the prompt. Return the video URL.' },
+      ]
+
+      if (imagen_url || imagen_b64) {
+        const refUrl = imagen_url || imagen_b64
+        asunMessages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: promptFinal },
+            { type: 'image_url', image_url: { url: refUrl } },
+          ],
+        })
+      } else {
+        asunMessages.push({ role: 'user', content: promptFinal })
+      }
+
+      const asunPayload = {
+        model: asunSlug,
+        messages: asunMessages,
+        max_tokens: 1024,
+        temperature: 0.7,
+      }
+
+      const asunResp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://r7signal.com',
+          'X-Title': 'R7Signal',
+        },
+        body: JSON.stringify(asunPayload),
+      })
+
+      if (!asunResp.ok) {
+        const err = await asunResp.text()
+        throw new Error(`Asun OpenRouter error: ${asunResp.status} - ${err}`)
+      }
+
+      const asunDataJson = await asunResp.json()
+      const videoUrl = asunDataJson.choices?.[0]?.message?.content?.trim()
+      if (!videoUrl) throw new Error('Asun returned empty video URL')
+
+      return new Response(
+        JSON.stringify({ video_url: videoUrl }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      )
+
+    } catch (error) {
+      console.error('Error in generar-video worker:', error.message)
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      )
+    }
+  }
+}
