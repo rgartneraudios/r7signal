@@ -4,6 +4,60 @@ import { supabase } from '../supabaseClient'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+const SHORTCUTS = [
+  { nombre: 'Gemini',   asset: '/assets/gemini.webp',   url: 'https://gemini.google.com' },
+  { nombre: 'Copilot',  asset: '/assets/copilot.webp',  url: 'https://copilot.microsoft.com' },
+  { nombre: 'Meta AI',  asset: '/assets/meta.webp',     url: 'https://www.meta.ai' },
+  { nombre: 'ChatGPT',  asset: '/assets/gpt.webp',      url: 'https://chatgpt.com' },
+  { nombre: 'Leonardo', asset: '/assets/leonardo.webp', url: 'https://leonardo.ai/' },
+  { nombre: 'Reve',     asset: '/assets/reve.webp',     url: 'https://app.reve.com/' },
+]
+
+function Chat00ImgShortcuts() {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      justifyContent: 'center', minHeight: '80vh', gap: 32, padding: '40px 24px'
+    }}>
+      <div style={{
+        fontFamily: "'Orbitron', monospace", fontSize: '0.75rem',
+        letterSpacing: '0.25em', color: '#8A868B', textTransform: 'uppercase'
+      }}>
+        Generadores externos
+      </div>
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: 28, maxWidth: 720, width: '100%'
+      }}>
+        {SHORTCUTS.map(s => (
+          <div
+            key={s.nombre}
+            onClick={() => window.open(s.url, '_blank')}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              gap: 14, padding: '32px 16px', borderRadius: 18, cursor: 'pointer',
+              background: 'rgba(255,255,255,0.03)', border: '1px solid #201F23',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+          >
+            <img src={s.asset} alt={s.nombre}
+              style={{ width: 132, height: 132, objectFit: 'contain', borderRadius: 16 }}
+            />
+            <span style={{
+              fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.72rem',
+              letterSpacing: '0.1em', color: '#8A868B', textTransform: 'uppercase'
+            }}>
+              {s.nombre}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const TITO_SPEECH = {
   path_select: '¿Empezamos desde cero o tienes una imagen para trabajar?',
   lore_select: 'Elige el estilo que más te guste.',
@@ -20,15 +74,6 @@ const TITO_SPEECH = {
   processing_video: (dur, timer) => `Asun procesando video (${dur}s)...\n\u23F1 ${timer} — los videos tardan entre 1 y 3 minutos`,
   result: '¿No quedas conforme? Llama a Tito.',
 }
-
-const SHORTCUTS = [
-  { nombre: 'Gemini',   asset: '/assets/gemini.webp',   url: 'https://gemini.google.com' },
-  { nombre: 'Copilot',  asset: '/assets/copilot.webp',  url: 'https://copilot.microsoft.com' },
-  { nombre: 'Meta AI',  asset: '/assets/meta.webp',     url: 'https://www.meta.ai' },
-  { nombre: 'ChatGPT',  asset: '/assets/gpt.webp',      url: 'https://chatgpt.com' },
-  { nombre: 'Leonardo', asset: '/assets/leonardo.webp', url: 'https://leonardo.ai/' },
-  { nombre: 'Reve',     asset: '/assets/reve.webp',     url: 'https://app.reve.com/' },
-]
 
 const VISTA_BUTTONS = [
   { label: 'POV',           value: 'pov' },
@@ -51,7 +96,7 @@ const DURACION_BUTTONS = [
   { label: '20s', value: 20 },
 ]
 
-export default function Chat00ImgVid({ menuNumero, user }) {
+function TitoFlow({ menuNumero, user }) {
   const [estilos, setEstilos] = useState([])
   const [uiState, setUiState] = useState('path_select')
   const [briefingState, setBriefingState] = useState({
@@ -78,6 +123,7 @@ export default function Chat00ImgVid({ menuNumero, user }) {
         .from('estilos_imagen_public')
         .select('*')
         .order('orden')
+      console.log('ESTILOS:', data)
       if (data) setEstilos(data)
     }
     fetchEstilos()
@@ -256,39 +302,6 @@ export default function Chat00ImgVid({ menuNumero, user }) {
     }
   }
 
-  function renderShortcuts() {
-    const showStates = ['path_select', 'lore_select', 'image_upload', 'result']
-    if (!showStates.includes(uiState)) return null
-    return (
-      <div style={{ marginTop: 32, textAlign: 'center' }}>
-        <div style={{
-          fontSize: '0.8rem', letterSpacing: '0.15em', textTransform: 'uppercase',
-          color: '#8A868B', marginBottom: 14, fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600
-        }}>
-          Generadores externos
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {SHORTCUTS.map(s => (
-            <button key={s.nombre} onClick={() => window.open(s.url, '_blank')} style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-              padding: '8px 12px', background: '#131215', border: '1px solid #201F23',
-              borderRadius: 10, cursor: 'pointer', transition: 'all 0.2s',
-              color: '#8A868B', fontFamily: "'Space Grotesk',sans-serif",
-              fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.05em',
-              minWidth: 80,
-            }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#9AA0A6'; e.currentTarget.style.color = '#D4D8DC' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
-            >
-              <img src={s.asset} alt={s.nombre} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover' }} />
-              {s.nombre}
-            </button>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
   const titoText = () => {
     switch (uiState) {
       case 'path_select': return TITO_SPEECH.path_select
@@ -408,20 +421,30 @@ export default function Chat00ImgVid({ menuNumero, user }) {
 
         {/* LORE SELECT — 7 cards grid */}
         {uiState === 'lore_select' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
-            {estilos.map(est => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+            {estilos.map(est => {
+              const nombreOverride = {
+                'Ilustración 3D': 'Ilustración 1',
+                'Ilustración 2D': 'Ilustración 2',
+                'Pintura': 'Digital',
+              }[est.nombre] || est.nombre
+              return (
               <button key={est.id} onClick={() => handleEstiloSelect(est)} style={{
                 ...btnBase(briefingState.estilo_id === est.id),
-                padding: '14px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                minHeight: 80,
+                padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
               }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
               >
-                {est.emoji && <span style={{ fontSize: '1.5rem' }}>{est.emoji}</span>}
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.3 }}>{est.nombre}</span>
+                <img
+                  src={est.preview_url}
+                  alt={est.nombre}
+                  style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8, marginBottom: 8 }}
+                />
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.3 }}>{nombreOverride}</span>
               </button>
-            ))}
+              )
+            })}
           </div>
         )}
 
@@ -654,9 +677,16 @@ export default function Chat00ImgVid({ menuNumero, user }) {
         )}
 
       </div>
-
-      {/* External shortcuts */}
-      {renderShortcuts()}
     </div>
   )
+}
+
+export default function Chat00ImgVid({ menuActivo, user, volverAMenus }) {
+  const menuNumero = menuActivo?.menu_numero ?? 0
+  const esChat00 = menuNumero === 0
+
+  if (esChat00) {
+    return <Chat00ImgShortcuts />
+  }
+  return <TitoFlow menuNumero={menuNumero} user={user} />
 }

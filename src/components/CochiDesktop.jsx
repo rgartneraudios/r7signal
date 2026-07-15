@@ -718,7 +718,7 @@ Each label must be on its own line. Do not combine R1 and R2 on the same line. D
             <div>
               <span style={{
                 fontFamily:"'Orbitron',sans-serif", fontSize:'1.8rem', fontWeight:900, letterSpacing:'0.06em',
-                backgroundImage:'linear-gradient(135deg, #5CC8D4 0%, #C0C0C0 35%, #E8C84A 65%, #E8A5B0 100%)',
+                backgroundImage:'linear-gradient(135deg, #6B9EC4 0%, #D4D8DC 35%, #E8C84A 65%, #C4929A 100%)',
                 WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
                 filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))'
               }}>R7SIGNAL</span>
@@ -777,7 +777,7 @@ Each label must be on its own line. Do not combine R1 and R2 on the same line. D
                 color: cochiModel === 'cochi01' ? '#6B9EC4' : '#424045', 
                 fontFamily: "'JetBrains Mono', monospace",
                 textTransform: 'uppercase'
-              }}>Occidente (Celeste)</span>
+              }}>Occidente </span>
             </button>
             
             <button
@@ -812,7 +812,7 @@ Each label must be on its own line. Do not combine R1 and R2 on the same line. D
                 color: cochiModel === 'cochi02' ? '#C4929A' : '#424045', 
                 fontFamily: "'JetBrains Mono', monospace",
                 textTransform: 'uppercase'
-              }}>Asia (Sal Rosada)</span>
+              }}>Asia </span>
             </button>
           </div>
 

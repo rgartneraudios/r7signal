@@ -16,8 +16,8 @@ export default function SidebarPanel({
           right: sidebarOpen ? 340 : 0,
           transform: 'translateY(-50%)',
           zIndex: 30,
-          background: '#E8A5B0',
-          border: '2px solid rgba(232,165,176,0.6)',
+          background: '#C4929A',
+          border: '2px solid rgba(196,146,154,0.6)',
           borderRight: 'none',
           borderRadius: '10px 0 0 10px',
           width: 22,
@@ -32,14 +32,14 @@ export default function SidebarPanel({
           fontFamily: "'Space Grotesk',sans-serif"
         }}
         onMouseEnter={e => {
-          e.currentTarget.style.background = '#F4B8C4'
-          e.currentTarget.style.borderColor = 'rgba(232,165,176,0.8)'
-          e.currentTarget.style.boxShadow = '-4px 0 12px rgba(232,165,176,0.35)'
+          e.currentTarget.style.background = '#C4929A'
+          e.currentTarget.style.borderColor = 'rgba(196,146,154,0.8)'
+          e.currentTarget.style.boxShadow = '-4px 0 12px rgba(196,146,154,0.35)'
           e.currentTarget.style.width = 26
         }}
         onMouseLeave={e => {
-          e.currentTarget.style.background = '#E8A5B0'
-          e.currentTarget.style.borderColor = 'rgba(232,165,176,0.6)'
+          e.currentTarget.style.background = '#C4929A'
+          e.currentTarget.style.borderColor = 'rgba(196,146,154,0.6)'
           e.currentTarget.style.boxShadow = 'none'
           e.currentTarget.style.width = 22
         }}

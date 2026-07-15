@@ -84,13 +84,13 @@ export default function Chat00() {
             position:'absolute', left:-260, top:140,
           }}>
             <h3 style={{
-              color:'#6B9EC4',
+              color:'#C4929A',
               fontSize:'1.1rem',
               marginBottom:'1rem',
               textTransform:'uppercase',
               letterSpacing:'0.12em',
               fontWeight: 800,
-              textShadow: '0 0 10px rgba(107,158,196,0.2)'
+              textShadow: '0 0 10px rgba(196,146,154,0.2)'
             }}>
               ¿Qué es Cochi?
             </h3>
@@ -107,7 +107,7 @@ export default function Chat00() {
               Los Menús piensan. Cochi ejecuta.
             </p>
             <p style={{ margin:'0.75rem 0 0' }}>
-              Cuando escribas <span style={{ color:'#6B9EC4', fontWeight:700 }}>/COCHI</span> en cualquier chat,
+              Cuando escribas <span style={{ color:'#C4929A', fontWeight:700 }}>/COCHI</span> en cualquier chat,
               los modelos web formularán las instrucciones en un botón para copiar y pegar
               directamente en Cochi.
             </p>
@@ -161,7 +161,7 @@ export default function Chat00() {
                 letterSpacing:'0.06em',
                 textAlign:'center',
                 marginBottom:36,
-                background:'linear-gradient(135deg, #E0E2E4 0%, #B4B8BB 35%, #B8962E 65%, #E8C84A 100%)',
+                background:'linear-gradient(135deg, #6B9EC4 0%, #D4D8DC 30%, #E8C84A 60%, #C4929A 100%)',
                 WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
                 backgroundClip:'text',
                 filter:'drop-shadow(0 4px 8px rgba(0,0,0,0.7))',
@@ -174,7 +174,7 @@ export default function Chat00() {
               {/* Bloques de Pasos */}
               <div style={{ display:'flex', flexDirection:'column', gap:18, marginBottom:36, position: 'relative', zIndex: 5 }}>
                 {[
-                  { num: '1', text: <>Copia el prompt para insertar en el chat de tu IA favorita. Si quieres que se llame Tito usa <span style={{ color: '#6B9EC4', fontWeight: 700 }}>[PROMPT TITO]</span> y si quieres que se llame Asun usa <span style={{ color: '#6B9EC4', fontWeight: 700 }}>[PROMPT ASUN]</span>.</> },
+                  { num: '1', text: <>Puedes convertir cualquier IA general en Tito o Asun copiando uno de los prompts que encontrarás más abajo. Esos prompts ya incluyen las instrucciones necesarias para adaptarse al Ecosistema R7.<br/><br/>Si estás suscripto a alguno de sus planes, mantendrás privacidad; en cambio, los niveles gratuitos —según la información de esas empresas— suelen utilizar los datos para entrenamiento.<br/><br/>Con Cochi en PC obtienes el mismo nivel de privacidad que en la suscripción de esos modelos.</> },
                   { num: '2', text: <>Si ya usas la App de escritorio con Cochi, la palabra clave es <span style={{ color: '#E8C84A', fontWeight:700 }}>/COCHI</span> en mayúsculas para solicitar a tu modelo en la Web, las instrucciones a Cochi en PC.</> },
                   { num: '3', text: <>Elige tu IA favorita para empezar abajo.</> },
                 ].map(item => (
@@ -192,7 +192,7 @@ export default function Chat00() {
                   }}>
                     <div style={{
                       width:34, height:34, borderRadius:'50%',
-                      background:'linear-gradient(135deg, #7A8FA0 0%, #D4D8DC 50%, #B8962E 80%, #E8C84A 100%)',
+                      background:'linear-gradient(135deg, #6B9EC4 0%, #D4D8DC 33%, #E8C84A 66%, #C4929A 100%)',
                       display:'flex', alignItems:'center', justifyContent:'center',
                       fontFamily:"'Space Grotesk',sans-serif",
                       fontWeight:800, fontSize:'1rem',
@@ -216,8 +216,8 @@ export default function Chat00() {
                     borderRadius:14,
                     padding:'16px 32px',
                     backgroundImage: copiadoTito
-                      ? 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #6B9EC4, #B4B8BB)'
-                      : 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #7A8FA0, #B4B8BB, #B8962E, #E8C84A)',
+                      ? 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #3A5A7A, #6B9EC4)'
+                      : 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #3A5A7A, #6B9EC4)',
                     backgroundOrigin:'border-box',
                     backgroundClip:'padding-box, border-box',
                     color:'#D4D8DC',
@@ -234,14 +234,14 @@ export default function Chat00() {
                   }}
                   onMouseEnter={e => {
                     if (!copiadoTito) {
-                      e.currentTarget.style.boxShadow = '0 0 30px rgba(196,146,154,0.05), 0 6px 18px rgba(0,0,0,0.8)'
-                      e.currentTarget.style.backgroundImage = 'linear-gradient(#1B1A1E, #1B1A1E), linear-gradient(to right, #7A8FA0, #B4B8BB, #B8962E, #E8C84A)'
+                      e.currentTarget.style.boxShadow = '0 0 30px rgba(107,158,196,0.15), 0 6px 18px rgba(0,0,0,0.8)'
+                      e.currentTarget.style.backgroundImage = 'linear-gradient(#1B1A1E, #1B1A1E), linear-gradient(to right, #3A5A7A, #6B9EC4)'
                     }
                   }}
                   onMouseLeave={e => {
                     if (!copiadoTito) {
                       e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.6)'
-                      e.currentTarget.style.backgroundImage = 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #7A8FA0, #B4B8BB, #B8962E, #E8C84A)'
+                      e.currentTarget.style.backgroundImage = 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #3A5A7A, #6B9EC4)'
                     }
                   }}
                 >
@@ -256,8 +256,8 @@ export default function Chat00() {
                     borderRadius:14,
                     padding:'16px 32px',
                     backgroundImage: copiadoAsun
-                      ? 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #6B9EC4, #B4B8BB)'
-                      : 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #7A8FA0, #B4B8BB, #B8962E, #E8C84A)',
+                      ? 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #8A5F65, #C4929A)'
+                      : 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #8A5F65, #C4929A)',
                     backgroundOrigin:'border-box',
                     backgroundClip:'padding-box, border-box',
                     color:'#D4D8DC',
@@ -268,20 +268,20 @@ export default function Chat00() {
                     fontFamily:"'Space Grotesk',sans-serif",
                     textTransform:'uppercase',
                     boxShadow: copiadoAsun
-                      ? '0 0 30px rgba(107,158,196,0.15)'
+                      ? '0 0 30px rgba(196,146,154,0.15)'
                       : '0 4px 12px rgba(0,0,0,0.6)',
                     transition:'all 0.3s ease',
                   }}
                   onMouseEnter={e => {
                     if (!copiadoAsun) {
-                      e.currentTarget.style.boxShadow = '0 0 30px rgba(196,146,154,0.05), 0 6px 18px rgba(0,0,0,0.8)'
-                      e.currentTarget.style.backgroundImage = 'linear-gradient(#1B1A1E, #1B1A1E), linear-gradient(to right, #7A8FA0, #B4B8BB, #B8962E, #E8C84A)'
+                      e.currentTarget.style.boxShadow = '0 0 30px rgba(196,146,154,0.15), 0 6px 18px rgba(0,0,0,0.8)'
+                      e.currentTarget.style.backgroundImage = 'linear-gradient(#1B1A1E, #1B1A1E), linear-gradient(to right, #8A5F65, #C4929A)'
                     }
                   }}
                   onMouseLeave={e => {
                     if (!copiadoAsun) {
                       e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.6)'
-                      e.currentTarget.style.backgroundImage = 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #7A8FA0, #B4B8BB, #B8962E, #E8C84A)'
+                      e.currentTarget.style.backgroundImage = 'linear-gradient(#0F0E11, #0F0E11), linear-gradient(to right, #8A5F65, #C4929A)'
                     }
                   }}
                 >

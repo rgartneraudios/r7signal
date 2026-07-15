@@ -5,7 +5,7 @@ export default function Footer() {
     <footer style={{
       position:'absolute', bottom:0, left:0, right:0, zIndex:20,
       padding:'13px 36px',
-      borderTop:'1px solid rgba(92,200,212,0.15)',
+      borderTop:'1px solid rgba(107,158,196,0.15)',
       background:'#0F0E11CC',
       backdropFilter:'blur(12px)',
       display:'flex', alignItems:'center', justifyContent:'space-between'
@@ -13,7 +13,7 @@ export default function Footer() {
       <div style={{
         fontSize:'0.65rem', letterSpacing:'0.18em', textTransform:'uppercase',
         fontFamily:"'Exo 2',sans-serif",
-        background:'linear-gradient(to right, #5CC8D4, #C0C0C0, #E8C84A, #E8A5B0)',
+        background:'linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)',
         WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
         backgroundClip:'text',
       }}>

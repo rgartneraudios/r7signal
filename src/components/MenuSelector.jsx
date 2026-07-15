@@ -27,11 +27,11 @@ const MENU_COLORS = {
   2: { // Internacional / Oro
     rgb: '212,185,110',
     border: '#201F23',
-    glow: 'rgba(212,185,110,0.06)',
+    glow: 'rgba(232,200,74,0.06)',
     gradient: 'linear-gradient(135deg, #B8962E 0%, #E8C84A 100%)',
     gradientH: 'linear-gradient(90deg,#B8962E,#E8C84A,#B8962E)',
     ballBg: 'radial-gradient(circle at 35% 35%, #E8C84A, #B8962E, #2B2313)',
-    ballGlow: 'rgba(212,185,110,0.25)',
+    ballGlow: 'rgba(232,200,74,0.25)',
     labelColor: '#E8C84A',
     modelColor: '#E8C84A',
   },
