@@ -152,37 +152,75 @@ Orientation: ${orientacion || 'default'}`
 
     const promptFinal = titoResult.content.trim()
 
-    // Step 6: Call Asun·Imagen
-    let asunMessages: any[]
-    if (imagen_b64) {
-      asunMessages = [
-        { role: 'system', content: 'Generate an image based on the prompt. Return the image URL or base64 data.' },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: promptFinal },
-            { type: 'image_url', image_url: { url: imagen_b64 } },
-          ],
-        },
-      ]
-    } else {
-      asunMessages = [
-        { role: 'system', content: 'Generate an image based on the prompt. Return the image URL or base64 data.' },
-        { role: 'user', content: promptFinal },
-      ]
+    // Step 6: Call Asun·Imagen — direct call, no system prompt (image models reject empty system messages)
+    const asunUserContent = imagen_b64
+      ? [
+          { type: 'text', text: promptFinal },
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imagen_b64}` } }
+        ]
+      : promptFinal
+
+    const asunResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://r7signal.com',
+        'X-Title': 'R7Signal',
+      },
+      body: JSON.stringify({
+        model: asunItem.modelo_id,
+        messages: [{ 
+          role: 'user', 
+          content: typeof asunUserContent === 'string' 
+            ? `Generate an image: ${asunUserContent}`
+            : asunUserContent
+        }],
+        max_tokens: 1024,
+        response_modalities: ['IMAGE'],
+        include_reasoning: false,
+      }),
+    })
+
+    if (!asunResponse.ok) {
+      const errorText = await asunResponse.text()
+      throw new Error(`OpenRouter [${asunItem.modelo_id}]: ${asunResponse.status} - ${errorText}`)
     }
 
-    const asunResult = await callOpenRouter(
-      apiKey,
-      asunItem.modelo_id,
-      '',
-      asunMessages,
-      1024,
-      0.7
-    )
+    const asunData = await asunResponse.json()
+    const message = asunData.choices?.[0]?.message
+    const messageContent = message?.content
+    const messageImages = message?.images
 
-    // Step 7: Parse response for image URL or base64
-    const imageUrl = asunResult.content.trim()
+    // Step 7: Parse image — OpenRouter image models return in message.images[], not content
+    let imageUrl = ''
+
+    // Primary: check message.images array (OpenRouter non-standard field)
+    if (Array.isArray(messageImages) && messageImages.length > 0) {
+      const img = messageImages[0]
+      imageUrl = img?.image_url?.url || img?.url || ''
+      if (!imageUrl && img?.b64_json) imageUrl = `data:image/png;base64,${img.b64_json}`
+      if (!imageUrl && typeof img === 'string') imageUrl = img
+    }
+
+    // Fallback: check content as array of parts
+    if (!imageUrl && Array.isArray(messageContent)) {
+      const imagePart = messageContent.find((p: any) => 
+        p.type === 'image_url' || p.type === 'image'
+      )
+      if (imagePart) {
+        imageUrl = imagePart.image_url?.url || imagePart.url || ''
+      }
+    }
+
+    // Fallback: content as plain string URL
+    if (!imageUrl && typeof messageContent === 'string' && messageContent.trim()) {
+      imageUrl = messageContent.trim()
+    }
+
+    if (!imageUrl) {
+      throw new Error(`No image returned. images=${JSON.stringify(messageImages)?.substring(0,300)}`)
+    }
 
     return new Response(
       JSON.stringify({ image_url: imageUrl }),

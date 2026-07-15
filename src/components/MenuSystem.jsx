@@ -8,6 +8,7 @@ import Billing from '../pages/Billing'
 import SidebarPanel from './SidebarPanel'
 import MenuSelector from './MenuSelector'
 import ChatView from './ChatView'
+import Chat00ImgVid from './Chat00ImgVid'
 
 import PreferencesModal from './PreferencesModal'
 
@@ -160,6 +161,12 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
     const sorted = [...modulos].sort((a, b) => a.orden - b.orden)
     const m01 = sorted[0] || null
     setModuloActivo(m01)
+
+    // IMAGEN: no LLM session needed — handled by Chat00ImgVid
+    if (categoriaActiva?.id === 'db79925b-c161-419e-bd94-460b3d43af8a') {
+      setVista('imagen')
+      return
+    }
 
     const { data: sesionData, error: sesionError } = await supabase
       .from('sesiones')
@@ -417,6 +424,17 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
       )}
     </>
   }
+
+if (vista === 'imagen') {
+  return <>
+    <AppHeader onLoginClick={onLoginClick} volverAMenus={volverAMenus} />
+    <Chat00ImgVid
+      menuActivo={menuActivo}
+      user={user}
+      volverAMenus={volverAMenus}
+    />
+  </>
+}
 
 if (vista === 'chat') {
     return <>

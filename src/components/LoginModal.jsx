@@ -35,7 +35,7 @@ export default function LoginModal({ onClose, onLogin, user, onLogout }) {
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24 }}>
           <span style={{
             fontFamily:"'Space Grotesk',sans-serif", fontSize:'0.7rem', letterSpacing:'0.35em', fontWeight:700, textTransform:'uppercase',
-            background:'linear-gradient(to right, #5CC8D4, #C0C0C0, #E8C84A, #E8A5B0)',
+            background:'linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)',
             WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
             backgroundClip:'text',
           }}>Acceso</span>
@@ -44,7 +44,7 @@ export default function LoginModal({ onClose, onLogin, user, onLogout }) {
             color:'#C0C0C0', fontSize:'1.5rem', lineHeight:1, transition:'color 0.2s',
             fontFamily:"'Space Grotesk',sans-serif",
           }}
-            onMouseEnter={e=>e.currentTarget.style.color='#E8A5B0'}
+            onMouseEnter={e=>e.currentTarget.style.color='#C4929A'}
             onMouseLeave={e=>e.currentTarget.style.color='#C0C0C0'}
           >×</button>
         </div>
@@ -53,13 +53,13 @@ export default function LoginModal({ onClose, onLogin, user, onLogout }) {
             <div style={{ textAlign:'center', padding:'6px 0 12px' }}>
               <div style={{
                 fontSize:'0.8rem', letterSpacing:'0.12em', fontFamily:"'Exo 2',sans-serif",
-                background:'linear-gradient(to right, #5CC8D4, #C0C0C0, #E8C84A, #E8A5B0)',
+                background:'linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)',
                 WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
                 backgroundClip:'text',
               }}>Identifícate para acceder</div>
             </div>
             <div>
-              <label style={{ fontSize:'0.65rem', letterSpacing:'0.2em', color:'#5CC8D4', textTransform:'uppercase', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600 }}>Email</label>
+              <label style={{ fontSize:'0.65rem', letterSpacing:'0.2em', color:'#6B9EC4', textTransform:'uppercase', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600 }}>Email</label>
               <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@email.com" style={inputStyle}
                 onFocus={e=>e.target.style.borderColor='#7A8FA0'}
                 onBlur={e=>e.target.style.borderColor='#201F23'}
@@ -97,7 +97,7 @@ export default function LoginModal({ onClose, onLogin, user, onLogout }) {
               <span style={{ fontSize:'0.7rem', color:'#9BA3A8', fontFamily:"'Exo 2',sans-serif", letterSpacing:'0.06em' }}>¿Quieres ser editor? </span>
               <span style={{
                 fontSize:'0.7rem', fontFamily:"'Exo 2',sans-serif", cursor:'pointer', letterSpacing:'0.04em',
-                background:'linear-gradient(to right, #5CC8D4, #C0C0C0, #E8C84A, #E8A5B0)',
+                background:'linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)',
                 WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
                 backgroundClip:'text',
               }}>Solicitar acceso</span>

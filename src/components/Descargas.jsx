@@ -12,34 +12,32 @@ function PaginaDescargas({ onClose }) {
   return createPortal(
     <div style={{
       position:'fixed', inset:0, zIndex:2147483647,
-      background:THEME.bgMain,
+      background:'#0F0E11',
       fontFamily:"'Exo 2',sans-serif",
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&family=Space+Grotesk:wght@500;600;700&display=swap');
       `}</style>
-      <div style={{
-        position:'fixed', inset:0,
-        background:`
-  radial-gradient(ellipse 70% 55% at 0% 40%, ${THEME.radialOccidente} 0%, transparent 65%),
-  radial-gradient(ellipse 55% 45% at 100% 65%, ${THEME.radialOriente} 0%, transparent 60%),
-  radial-gradient(ellipse 40% 35% at 50% 50%, ${THEME.radialCenter} 0%, transparent 55%),
-  ${THEME.bgMainNeon}
-`,
-        zIndex:0
-      }} />
-      <div style={{
-        position:'fixed', inset:0,
-        backgroundImage:`linear-gradient(${THEME.gridAmber} 1px, transparent 1px), linear-gradient(90deg, ${THEME.gridAmber} 1px, transparent 1px)`,
-        backgroundSize:'48px 48px',
-        zIndex:0
-      }} />
+      <style>{`
+        .leather-ambient {
+          background: radial-gradient(circle at 50% -20%, rgba(255, 255, 255, 0.02) 0%, transparent 65%),
+                      radial-gradient(circle at 50% 120%, rgba(255, 255, 255, 0.01) 0%, transparent 70%),
+                      #0F0E11;
+        }
+        .leather-grid {
+          background-image: linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
+                            linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px);
+          background-size: 48px 48px;
+        }
+      `}</style>
+      <div className="leather-ambient" style={{ position:'fixed', inset:0, zIndex:0 }} />
+      <div className="leather-grid" style={{ position:'fixed', inset:0, zIndex:0 }} />
       <div style={{ position:'relative', zIndex:10, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:'40px 24px' }}>
         <button
           onClick={onClose}
           style={{
             position:'fixed', top:22, right:28,
-            background:THEME.bgFeedCC,
+            background:'#131215',
             border:`1px solid ${THEME.borderSubtle}`,
             borderRadius:20,
             padding:'6px 16px',
@@ -66,7 +64,7 @@ function PaginaDescargas({ onClose }) {
         </button>
 
         <div style={{
-          background:`linear-gradient(160deg, ${THEME.bgFeedCC} 0%, rgba(8,4,6,0.7) 100%)`,
+          background:`linear-gradient(160deg, #131215 0%, rgba(15,14,17,0.7) 100%)`,
           border:`1px solid ${THEME.celeste30}`,
           borderRadius:20,
           padding:'48px 40px',
