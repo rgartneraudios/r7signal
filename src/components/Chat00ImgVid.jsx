@@ -60,11 +60,15 @@ function Chat00ImgShortcuts() {
 
 const TITO_SPEECH = {
   path_select: '¿Empezamos desde cero o tienes una imagen para trabajar?',
-  lore_select: 'Elige el estilo que más te guste.',
+  lore_select: 'Voy a hacerte unas cuantas preguntas antes. Nos centramos solo en el estilo. Elige el que necesites para tu imagen.',
   image_upload: 'Sube tu imagen (máx. 4MB) y dime qué quieres ver.',
-  briefing_vista: (nombre) => `Elegiste ${nombre}. ¿Qué vista prefieres?`,
+  briefing_vista: (nombre) => `Elegiste ${nombre}. Elige cómo encuadrar la escena:`,
   briefing_formato: '¿En qué formato?',
   briefing_objetos: 'Perfecto. ¿Qué quieres ver?',
+  momento_dia: '¿En qué momento del día transcurre la escena?',
+  clima: '¿En qué clima o estación sucede?',
+  epoca: '¿Me facilitas la época o temática si eres tan amable?',
+  paleta_select: 'Elige una paleta de colores por favor.',
   tipo_select: '¿Imagen, video, o quieres mover una imagen en video?',
   duracion_select: '¿Cuántos segundos?',
   confirm: 'Todo en orden. ¿Le damos cana?',
@@ -76,12 +80,11 @@ const TITO_SPEECH = {
 }
 
 const VISTA_BUTTONS = [
-  { label: 'POV',           value: 'pov' },
-  { label: 'Paisaje',       value: 'paisaje' },
-  { label: 'Aéreo',         value: 'aereo' },
-  { label: 'Primer Plano',  value: 'primer_plano' },
-  { label: 'Plano Medio',   value: 'medio' },
-  { label: 'Panorámico',    value: 'panoramico' },
+  { label: 'Súper cerca (Detalle / Ojos)',         value: 'extreme_close_up' },
+  { label: 'Retrato (De hombros hacia arriba)',     value: 'medium_close_up' },
+  { label: 'Desde mi perspectiva (Como si lo viera yo)', value: 'first_person_pov' },
+  { label: 'Cuerpo entero (Personaje completo)',    value: 'full_body' },
+  { label: 'Paisaje / Escena amplia',               value: 'wide_panoramic' },
 ]
 
 const FORMATO_BUTTONS = [
@@ -96,6 +99,38 @@ const DURACION_BUTTONS = [
   { label: '20s', value: 20 },
 ]
 
+const MOMENTO_BUTTONS = [
+  { label: 'Pleno día (Mucha luz)',           value: 'clear_bright_daylight' },
+  { label: 'Mañana / Amanecer',               value: 'misty_soft_morning' },
+  { label: 'Atardecer (Luz cálida)',          value: 'warm_golden_hour_sunset' },
+  { label: 'Noche / Nocturno',                value: 'dark_midnight' },
+]
+
+const CLIMA_BUTTONS = [
+  { label: 'Despejado / Soleado',             value: 'clear_weather' },
+  { label: 'Lluvioso',                        value: 'rain_falling_wet' },
+  { label: 'Nevado / Frío',                   value: 'freezing_snowy' },
+  { label: 'Neblina / Misterioso',            value: 'dense_mysterious_fog' },
+  { label: 'Otoñal',                          value: 'autumn_leaves' },
+  { label: 'Primaveral',                      value: 'blooming_spring' },
+]
+
+const EPOCA_BUTTONS = [
+  { label: 'Actual / Moderno',                value: 'contemporary_modern' },
+  { label: 'Futurista / Ciencia ficción',     value: 'futuristic_sci_fi' },
+  { label: 'Antiguo / Medieval',              value: 'ancient_medieval' },
+  { label: 'Fantasía / Mágico',               value: 'whimsical_fantasy' },
+]
+
+const PALETA_BUTTONS = [
+  { label: 'Colores cálidos (Amarillo, naranja, café)',   value: 'warm_amber_orange' },
+  { label: 'Colores fríos (Azul, gris, verde oscuro)',    value: 'cool_blue_teal' },
+  { label: 'Colores pastel (Suaves y claros)',            value: 'soft_pastel' },
+  { label: 'Blanco y negro',                              value: 'monochrome_bw' },
+  { label: 'Vibrante / Muy colorido',                     value: 'vibrant_highly_saturated' },
+  { label: 'Apagado / Melancólico',                       value: 'muted_desaturated' },
+]
+
 function TitoFlow({ menuNumero, user }) {
   const [estilos, setEstilos] = useState([])
   const [uiState, setUiState] = useState('path_select')
@@ -106,6 +141,10 @@ function TitoFlow({ menuNumero, user }) {
     vista: null,
     orientacion: null,
     objetos: '',
+    momento_dia: null,
+    clima: null,
+    epoca: null,
+    paleta_color: null,
     tipo: null,
     duracion: null,
     imagen_b64: null,
@@ -152,6 +191,10 @@ function TitoFlow({ menuNumero, user }) {
       vista: null,
       orientacion: null,
       objetos: '',
+      momento_dia: null,
+      clima: null,
+      epoca: null,
+      paleta_color: null,
       tipo: null,
       duracion: null,
       imagen_b64: null,
@@ -187,6 +230,26 @@ function TitoFlow({ menuNumero, user }) {
   function handleOrientacionSelect(orientacion) {
     setBriefingState(prev => ({ ...prev, orientacion }))
     setUiState('briefing_objetos')
+  }
+
+  function handleMomentoDiaSelect(momento_dia) {
+    setBriefingState(prev => ({ ...prev, momento_dia }))
+    setUiState('clima')
+  }
+
+  function handleClimaSelect(clima) {
+    setBriefingState(prev => ({ ...prev, clima }))
+    setUiState('epoca')
+  }
+
+  function handleEpocaSelect(epoca) {
+    setBriefingState(prev => ({ ...prev, epoca }))
+    setUiState('paleta_select')
+  }
+
+  function handlePaletaSelect(paleta_color) {
+    setBriefingState(prev => ({ ...prev, paleta_color }))
+    setUiState('tipo_select')
   }
 
   function handleFileUpload(e) {
@@ -247,6 +310,10 @@ function TitoFlow({ menuNumero, user }) {
       vista: null,
       orientacion: null,
       objetos: '',
+      momento_dia: null,
+      clima: null,
+      epoca: null,
+      paleta_color: null,
       tipo: null,
       duracion: null,
     }))
@@ -310,6 +377,10 @@ function TitoFlow({ menuNumero, user }) {
       case 'briefing_vista': return TITO_SPEECH.briefing_vista(briefingState.estilo_nombre || '')
       case 'briefing_formato': return TITO_SPEECH.briefing_formato
       case 'briefing_objetos': return TITO_SPEECH.briefing_objetos
+      case 'momento_dia': return TITO_SPEECH.momento_dia
+      case 'clima': return TITO_SPEECH.clima
+      case 'epoca': return TITO_SPEECH.epoca
+      case 'paleta_select': return TITO_SPEECH.paleta_select
       case 'tipo_select': return TITO_SPEECH.tipo_select
       case 'duracion_select': return TITO_SPEECH.duracion_select
       case 'confirm': return TITO_SPEECH.confirm
@@ -496,7 +567,7 @@ function TitoFlow({ menuNumero, user }) {
                     return
                   }
                   setError(null)
-                  setUiState('tipo_select')
+                  setUiState('momento_dia')
                 }} style={{
                   ...btnBase(), padding: '12px 32px', fontSize: '0.9rem',
                   background: 'rgba(154,160,166,0.1)', color: '#D4D8DC',
@@ -565,7 +636,7 @@ function TitoFlow({ menuNumero, user }) {
                 return
               }
               setError(null)
-              setUiState('tipo_select')
+              setUiState('momento_dia')
             }} style={{
               ...btnBase(), padding: '12px 32px', fontSize: '0.9rem',
               background: 'rgba(154,160,166,0.1)', color: '#D4D8DC',
@@ -573,6 +644,70 @@ function TitoFlow({ menuNumero, user }) {
             }}>
               Siguiente
             </button>
+          </div>
+        )}
+
+        {/* MOMENTO DEL DÍA */}
+        {uiState === 'momento_dia' && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+            {MOMENTO_BUTTONS.map(m => (
+              <button key={m.value} onClick={() => handleMomentoDiaSelect(m.value)} style={{
+                ...btnBase(briefingState.momento_dia === m.value),
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* CLIMA / ESTACIÓN */}
+        {uiState === 'clima' && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+            {CLIMA_BUTTONS.map(c => (
+              <button key={c.value} onClick={() => handleClimaSelect(c.value)} style={{
+                ...btnBase(briefingState.clima === c.value),
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ÉPOCA / TEMÁTICA */}
+        {uiState === 'epoca' && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+            {EPOCA_BUTTONS.map(e => (
+              <button key={e.value} onClick={() => handleEpocaSelect(e.value)} style={{
+                ...btnBase(briefingState.epoca === e.value),
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
+              >
+                {e.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* PALETA DE COLORES */}
+        {uiState === 'paleta_select' && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+            {PALETA_BUTTONS.map(p => (
+              <button key={p.value} onClick={() => handlePaletaSelect(p.value)} style={{
+                ...btnBase(briefingState.paleta_color === p.value),
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
         )}
 
@@ -677,6 +812,9 @@ function TitoFlow({ menuNumero, user }) {
         )}
 
       </div>
+
+      {/* Spacer para que el botón Volver a Tito no choque con el footer */}
+      <div style={{ height: 160 }} />
     </div>
   )
 }

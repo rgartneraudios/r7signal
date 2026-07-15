@@ -48,7 +48,13 @@ const MENU_COLORS = {
   },
 }
 
-const MODULE_NAMES = { 'Plan': 'Tito', 'Build': 'Asun' }
+const TIPO_LABELS = {
+  'mb':          'Tito',
+  'plus':        'Asun',
+  'tito':        'Tito · Sistema',
+  'asun_imagen': 'Asun · Imagen',
+  'asun_video':  'Asun · Video',
+}
 
 export default function MenuSelector({
   categoriaActiva, menus, modulos, error,
@@ -290,16 +296,24 @@ export default function MenuSelector({
 
                     {/* Asignación de Modelos */}
                     <div style={{ width: '100%', fontSize:'0.9rem', lineHeight:1.8, marginBottom:24, textAlign:'center' }}>
-                      {[...new Set(menu.items.map(i => i.modelo_id))].map((modelo, idx) => {
-                        const mod = modulos[idx] || modulos[0]
-                        const displayName = MODULE_NAMES[mod.nombre] || mod.nombre
-                        return (
-                          <div key={modelo}>
-                            <span style={{ color:c.modelColor, letterSpacing:'0.5px', fontWeight:700 }}>{displayName} es &bull; </span>
-                            <span style={{ color:'#D4D8DC', fontFamily: "'Space Grotesk', sans-serif" }}>{modelo}</span>
+                      {menu.items
+                        .filter((item, idx, arr) => arr.findIndex(i => i.tipo === item.tipo) === idx)
+                        .map(item => (
+                          <div key={item.tipo}>
+                            <span style={{ color:c.modelColor, letterSpacing:'0.5px', fontWeight:700 }}>
+                              {TIPO_LABELS[item.tipo] || item.tipo}
+                            </span>
+                            {item.tipo !== 'tito' && (
+                              <>
+                                <span style={{ color:c.modelColor }}> &bull; </span>
+                                <span style={{ color:'#D4D8DC', fontFamily:"'Space Grotesk', sans-serif" }}>
+                                  {item.modelo_id.split('/').pop()}
+                                </span>
+                              </>
+                            )}
                           </div>
-                        )
-                      })}
+                        ))
+                      }
                     </div>
 
                     {/* Botón Biselado Metálico */}

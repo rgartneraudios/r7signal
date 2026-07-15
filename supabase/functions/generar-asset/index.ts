@@ -19,6 +19,10 @@ interface RequestBody {
   tipo: string | null
   duracion: number | null
   imagen_url: string | null
+  momento_dia: string | null
+  clima: string | null
+  epoca: string | null
+  paleta_color: string | null
 }
 
 async function callOpenRouter(
@@ -68,6 +72,38 @@ async function callOpenRouter(
   }
 }
 
+const MOMENTO_MAP: Record<string, string> = {
+  clear_bright_daylight:   'during clear bright daylight',
+  misty_soft_morning:      'during a misty soft morning',
+  warm_golden_hour_sunset: 'during a warm golden hour sunset',
+  dark_midnight:           'at dark midnight',
+}
+
+const CLIMA_MAP: Record<string, string> = {
+  clear_weather:        'with clear weather',
+  rain_falling_wet:     'with rain falling and wet surfaces',
+  freezing_snowy:       'in a freezing snowy landscape',
+  dense_mysterious_fog: 'surrounded by dense mysterious fog',
+  autumn_leaves:        'with autumn leaves',
+  blooming_spring:      'with blooming spring flowers',
+}
+
+const EPOCA_MAP: Record<string, string> = {
+  contemporary_modern: 'with contemporary modern background',
+  futuristic_sci_fi:   'with futuristic structures and glowing holographic elements',
+  ancient_medieval:    'with ancient historical architecture',
+  whimsical_fantasy:   'with whimsical fantasy elements',
+}
+
+const PALETA_MAP: Record<string, string> = {
+  warm_amber_orange:       'warm color palette dominated by amber, orange, and soft brown tones',
+  cool_blue_teal:          'cool color palette dominated by deep blues, teal, and slate grey tones',
+  soft_pastel:             'soft pastel color palette with gentle pink, lavender, and mint tones',
+  monochrome_bw:           'monochromatic black and white color palette with rich greyscale values',
+  vibrant_highly_saturated:'vibrant and highly saturated color palette with rich contrasting hues',
+  muted_desaturated:       'muted and desaturated color palette with soft earthy tones',
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -75,7 +111,7 @@ serve(async (req) => {
 
   try {
     const body: RequestBody = await req.json()
-    const { user_id, menu_numero, estilo_id, objetos, vista, orientacion, imagen_b64 } = body
+    const { user_id, menu_numero, estilo_id, objetos, vista, orientacion, imagen_b64, momento_dia, clima, epoca, paleta_color } = body
 
     if (!user_id || !menu_numero) {
       return new Response(
@@ -136,10 +172,16 @@ serve(async (req) => {
 Combine the provided style description and user inputs into a single optimized English prompt 
 for an image generation model. Output only the final prompt, no explanations, no preamble.`
 
-    const titoUserMessage = `Style base: ${promptBase || 'derive style from the provided reference image'}
-Subject: ${objetos}
-Camera view: ${vista || 'default natural perspective'}
-Orientation: ${orientacion || 'default'}`
+    const titoUserMessage = [
+      `Style base: ${promptBase || 'derive style from the provided reference image'}`,
+      `Subject: ${objetos}`,
+      `Camera view: ${vista ? `${vista.replace(/_/g,' ')} shot` : 'default natural perspective'}`,
+      `Orientation: ${orientacion || 'default'}`,
+      momento_dia && MOMENTO_MAP[momento_dia] ? `Time of day: ${MOMENTO_MAP[momento_dia]}` : null,
+      clima && CLIMA_MAP[clima] ? `Weather: ${CLIMA_MAP[clima]}` : null,
+      epoca && EPOCA_MAP[epoca] ? `Setting: ${EPOCA_MAP[epoca]}` : null,
+      paleta_color && PALETA_MAP[paleta_color] ? `Color palette: ${PALETA_MAP[paleta_color]}` : null,
+    ].filter(Boolean).join('\n')
 
     const titoResult = await callOpenRouter(
       apiKey,
