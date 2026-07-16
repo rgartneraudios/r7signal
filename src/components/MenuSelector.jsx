@@ -51,9 +51,10 @@ const MENU_COLORS = {
 const TIPO_LABELS = {
   'mb':          'Tito',
   'plus':        'Asun',
-  'tito':        'Tito · Sistema',
+  'tito':        'Tito',
   'asun_imagen': 'Asun · Imagen',
   'asun_video':  'Asun · Video',
+  'asun_musica': 'Asun · Música',
 }
 
 export default function MenuSelector({
@@ -298,21 +299,24 @@ export default function MenuSelector({
                     <div style={{ width: '100%', fontSize:'0.9rem', lineHeight:1.8, marginBottom:24, textAlign:'center' }}>
                       {menu.items
                         .filter((item, idx, arr) => arr.findIndex(i => i.tipo === item.tipo) === idx)
-                        .map(item => (
-                          <div key={item.tipo}>
-                            <span style={{ color:c.modelColor, letterSpacing:'0.5px', fontWeight:700 }}>
-                              {TIPO_LABELS[item.tipo] || item.tipo}
-                            </span>
-                            {item.tipo !== 'tito' && (
-                              <>
-                                <span style={{ color:c.modelColor }}> &bull; </span>
-                                <span style={{ color:'#D4D8DC', fontFamily:"'Space Grotesk', sans-serif" }}>
-                                  {item.modelo_id.split('/').pop()}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        ))
+                        .map(item => {
+                          const isTitoSistema = item.tipo === 'tito' && categoriaActiva.id === 'db79925b-c161-419e-bd94-460b3d43af8a'
+                          return (
+                            <div key={item.tipo}>
+                              <span style={{ color:c.modelColor, letterSpacing:'0.5px', fontWeight:700 }}>
+                                {TIPO_LABELS[item.tipo] || item.tipo}{isTitoSistema ? ' · Sistema' : ''}
+                              </span>
+                              {!isTitoSistema && (
+                                <>
+                                  <span style={{ color:c.modelColor }}> &bull; </span>
+                                  <span style={{ color:'#D4D8DC', fontFamily:"'Space Grotesk', sans-serif" }}>
+                                    {item.modelo_id.split('/').pop()}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )
+                        })
                       }
                     </div>
 

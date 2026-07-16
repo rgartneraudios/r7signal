@@ -85,7 +85,7 @@ export default function ChatPanel({
 }) {
   const [copiadoIndex, setCopiadoIndex] = useState(null)
   const [showDecision, setShowDecision] = useState(false)
-  const [activeModel, setActiveModel] = useState('peque')
+  const [activeModel, setActiveModel] = useState('tito')
 
   function handleInputChange(e) {
     setInput(e.target.value)
@@ -101,12 +101,12 @@ export default function ChatPanel({
       setShowDecision(true)
       return
     }
-    enviar(activeModel === 'peque' ? 'peque' : 'asun')
+    enviar(activeModel === 'tito' ? 'tito' : 'asun')
     setShowDecision(false)
   }
 
   function handleUsarPeque() {
-    enviar('peque_chain')
+    enviar('tito_chain')
     setShowDecision(false)
   }
 
@@ -127,7 +127,7 @@ export default function ChatPanel({
         </span>
       )
     }
-    if (cargando && routingState === 'peque') {
+    if (cargando && routingState === 'tito') {
       return <span className="menu-pulse" style={{ color: '#7A8FA0' }}>{modeloPeque}</span>
     }
     if (cargando && routingState === 'asun') {
@@ -137,12 +137,12 @@ export default function ChatPanel({
     return (
       <span style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
         <button
-          onClick={() => { setActiveModel('peque'); setShowDecision(false) }}
+          onClick={() => { setActiveModel('tito'); setShowDecision(false) }}
           style={{
-            background: activeModel === 'peque' ? 'rgba(122,143,160,0.25)' : 'rgba(19,18,21,0.6)',
-            border: `2px solid ${activeModel === 'peque' ? '#7A8FA0' : '#201F23'}`,
+            background: activeModel === 'tito' ? 'rgba(122,143,160,0.25)' : 'rgba(19,18,21,0.6)',
+            border: `2px solid ${activeModel === 'tito' ? '#7A8FA0' : '#201F23'}`,
             borderRadius: 8, padding: '6px 20px',
-            color: activeModel === 'peque' ? '#D4D8DC' : '#5A585C',
+            color: activeModel === 'tito' ? '#D4D8DC' : '#5A585C',
             fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em',
             cursor: 'pointer', fontFamily: "'Space Grotesk',sans-serif",
             transition: 'all 0.2s ease'
@@ -429,7 +429,7 @@ Tito
                 handleEnviar()
               }
             }}
-            placeholder={activeModel === 'peque'
+            placeholder={activeModel === 'tito'
               ? 'Tito escucha...'
               : 'Asun escucha...'
             }
@@ -524,12 +524,12 @@ Tito
           <div style={{ flex: '0 0 220px' }}>
             <span style={{
               fontSize:'0.7rem',
-              color: activeModel === 'peque' ? '#7A8FA0' : '#A08840',
+              color: activeModel === 'tito' ? '#7A8FA0' : '#A08840',
               fontFamily:"'JetBrains Mono',monospace",
               opacity: 0.85,
               letterSpacing:'0.04em'
             }}>
-              {activeModel === 'peque' ? modeloPeque : modeloAsun}
+              {activeModel === 'tito' ? modeloPeque : modeloAsun}
             </span>
           </div>
           <div style={{
