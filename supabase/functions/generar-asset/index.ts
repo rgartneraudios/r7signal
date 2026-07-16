@@ -11,6 +11,7 @@ interface RequestBody {
   objetos: string
   vista: string | null
   orientacion: string | null
+  ubicacion: string | null
   menu_numero: number
   imagen_b64: string | null
   user_id: string
@@ -104,6 +105,11 @@ const PALETA_MAP: Record<string, string> = {
   muted_desaturated:       'muted and desaturated color palette with soft earthy tones',
 }
 
+const UBICACION_MAP: Record<string, string> = {
+  interior_setting: 'set in an indoor interior environment',
+  exterior_setting: 'set in an outdoor exterior environment',
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -111,7 +117,7 @@ serve(async (req) => {
 
   try {
     const body: RequestBody = await req.json()
-    const { user_id, menu_numero, estilo_id, objetos, vista, orientacion, imagen_b64, momento_dia, clima, epoca, paleta_color } = body
+    const { user_id, menu_numero, estilo_id, objetos, vista, orientacion, ubicacion, imagen_b64, momento_dia, clima, epoca, paleta_color } = body
 
     if (!user_id || !menu_numero) {
       return new Response(
@@ -177,6 +183,7 @@ for an image generation model. Output only the final prompt, no explanations, no
       `Subject: ${objetos}`,
       `Camera view: ${vista ? `${vista.replace(/_/g,' ')} shot` : 'default natural perspective'}`,
       `Orientation: ${orientacion || 'default'}`,
+      ubicacion && UBICACION_MAP[ubicacion] ? `Location: ${UBICACION_MAP[ubicacion]}` : null,
       momento_dia && MOMENTO_MAP[momento_dia] ? `Time of day: ${MOMENTO_MAP[momento_dia]}` : null,
       clima && CLIMA_MAP[clima] ? `Weather: ${CLIMA_MAP[clima]}` : null,
       epoca && EPOCA_MAP[epoca] ? `Setting: ${EPOCA_MAP[epoca]}` : null,

@@ -63,20 +63,21 @@ const TITO_SPEECH = {
   lore_select: 'Voy a hacerte unas cuantas preguntas antes. Nos centramos solo en el estilo. Elige el que necesites para tu imagen.',
   image_upload: 'Sube tu imagen (máx. 4MB) y dime qué quieres ver.',
   briefing_vista: (nombre) => `Elegiste ${nombre}. Elige cómo encuadrar la escena:`,
-  briefing_formato: '¿En qué formato?',
-  briefing_objetos: 'Perfecto. ¿Qué quieres ver?',
   momento_dia: '¿En qué momento del día transcurre la escena?',
   clima: '¿En qué clima o estación sucede?',
   epoca: '¿Me facilitas la época o temática si eres tan amable?',
   paleta_select: 'Elige una paleta de colores por favor.',
+  briefing_formato: '¿En qué formato?',
+  ubicacion: '¿La escena es en interior o exterior?',
+  briefing_objetos: 'Perfecto. ¿Qué Objetos o Escenas quieres ver?',
   tipo_select: '¿Imagen, video, o quieres mover una imagen en video?',
   duracion_select: '¿Cuántos segundos?',
-  confirm: 'Todo en orden. ¿Le damos cana?',
+  confirm: 'Todo en orden. ¿Le digo a Asun para que le de caña?',
   sending_imagen: 'Tito enviando a Asun... (Imagen)',
   sending_video: 'Tito enviando a Asun... (Video)',
   processing_imagen: 'Asun procesando... (Imagen)',
   processing_video: (dur, timer) => `Asun procesando video (${dur}s)...\n\u23F1 ${timer} — los videos tardan entre 1 y 3 minutos`,
-  result: '¿No quedas conforme? Llama a Tito.',
+  result: '¿No estas conforme? Llama a Tito.',
 }
 
 const VISTA_BUTTONS = [
@@ -97,6 +98,11 @@ const DURACION_BUTTONS = [
   { label: '4s',  value: 4 },
   { label: '8s',  value: 8 },
   { label: '20s', value: 20 },
+]
+
+const UBICACION_BUTTONS = [
+  { label: 'Interior',  value: 'interior_setting' },
+  { label: 'Exterior',  value: 'exterior_setting' },
 ]
 
 const MOMENTO_BUTTONS = [
@@ -139,9 +145,10 @@ function TitoFlow({ menuNumero, user }) {
     estilo_id: null,
     estilo_nombre: null,
     vista: null,
-    orientacion: null,
-    objetos: '',
-    momento_dia: null,
+orientacion: null,
+      objetos: '',
+      ubicacion: null,
+      momento_dia: null,
     clima: null,
     epoca: null,
     paleta_color: null,
@@ -229,7 +236,12 @@ function TitoFlow({ menuNumero, user }) {
 
   function handleOrientacionSelect(orientacion) {
     setBriefingState(prev => ({ ...prev, orientacion }))
-    setUiState('briefing_objetos')
+    setUiState('ubicacion')
+  }
+
+  function handleUbicacionSelect(ubicacion) {
+    setBriefingState(prev => ({ ...prev, ubicacion }))
+    setUiState('momento_dia')
   }
 
   function handleMomentoDiaSelect(momento_dia) {
@@ -249,7 +261,7 @@ function TitoFlow({ menuNumero, user }) {
 
   function handlePaletaSelect(paleta_color) {
     setBriefingState(prev => ({ ...prev, paleta_color }))
-    setUiState('tipo_select')
+    setUiState('briefing_objetos')
   }
 
   function handleFileUpload(e) {
@@ -376,6 +388,7 @@ function TitoFlow({ menuNumero, user }) {
       case 'image_upload': return TITO_SPEECH.image_upload
       case 'briefing_vista': return TITO_SPEECH.briefing_vista(briefingState.estilo_nombre || '')
       case 'briefing_formato': return TITO_SPEECH.briefing_formato
+      case 'ubicacion': return TITO_SPEECH.ubicacion
       case 'briefing_objetos': return TITO_SPEECH.briefing_objetos
       case 'momento_dia': return TITO_SPEECH.momento_dia
       case 'clima': return TITO_SPEECH.clima
@@ -408,27 +421,29 @@ function TitoFlow({ menuNumero, user }) {
     border: '1px solid #201F23',
     borderLeft: '3px solid #9AA0A6',
     borderRadius: 12,
-    padding: '16px 22px',
-    marginBottom: 24,
-    color: '#D4D8DC',
-    fontSize: '1rem',
-    lineHeight: 1.6,
-    fontFamily: "'Exo 2',sans-serif",
+    padding: '20px 26px',
+    marginBottom: 28,
+    color: '#E8EAEC',
+    fontSize: '1.5rem',
+    lineHeight: 1.7,
+    fontFamily: "'Boogaloo',cursive",
+    fontWeight: 400,
+    letterSpacing: '0.04em',
     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02), 0 16px 36px rgba(0,0,0,0.85)',
     whiteSpace: 'pre-wrap',
   }
 
   const btnBase = (active = false) => ({
-    padding: '10px 18px',
+    padding: '12px 22px',
     background: active ? 'rgba(154,160,166,0.15)' : '#131215',
     border: `1px solid ${active ? '#9AA0A6' : '#201F23'}`,
-    borderRadius: 8,
+    borderRadius: 10,
     color: active ? '#E0E2E4' : '#8A868B',
     cursor: 'pointer',
-    fontFamily: "'Space Grotesk',sans-serif",
-    fontWeight: 600,
-    fontSize: '0.85rem',
-    letterSpacing: '0.05em',
+    fontFamily: "'Boogaloo',cursive",
+    fontWeight: 400,
+    fontSize: '1.1rem',
+    letterSpacing: '0.04em',
     transition: 'all 0.2s',
     textAlign: 'center',
   })
@@ -436,6 +451,7 @@ function TitoFlow({ menuNumero, user }) {
   return (
     <div style={containerStyle}>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Boogaloo&display=swap');
         @keyframes pulse-dot {
           0%,100%{opacity:1;transform:scale(1)}
           50%{opacity:.4;transform:scale(.75)}
@@ -451,13 +467,37 @@ function TitoFlow({ menuNumero, user }) {
         .imgv-pulse {
           animation: pulse-dot 2s ease-in-out infinite;
         }
+        .tito-btn {
+          font-family: 'Boogaloo', cursive !important;
+          font-size: 1.4rem !important;
+          letter-spacing: 0.05em !important;
+          background: linear-gradient(135deg, #7ECBCE, #C0C0C0, #D4AF37, #E8A0B4) !important;
+          -webkit-background-clip: text !important;
+          -webkit-text-fill-color: transparent !important;
+          background-clip: text !important;
+          border-color: #2A2830 !important;
+          padding: 14px 22px !important;
+        }
+        .tito-btn:hover {
+          border-color: #9AA0A6 !important;
+          -webkit-text-fill-color: transparent !important;
+        }
+        .tito-btn.active {
+          border-color: #D4AF37 !important;
+          background: linear-gradient(135deg, #D4AF37, #E8A0B4, #7ECBCE) !important;
+          -webkit-background-clip: text !important;
+          -webkit-text-fill-color: transparent !important;
+          background-clip: text !important;
+        }
       `}</style>
 
       {/* Tito speech bubble */}
       <div style={titoBubbleStyle}>
         <span style={{
-          fontSize: '0.7rem', color: '#9AA0A6', fontWeight: 700,
-          letterSpacing: '0.15em', textTransform: 'uppercase', display: 'block', marginBottom: 6,
+          fontSize: '1.1rem', fontWeight: 400,
+          letterSpacing: '0.15em', textTransform: 'uppercase', display: 'block', marginBottom: 8,
+fontFamily: "'Boogaloo',cursive",
+          color: '#D4D0C8',
         }}>
           Tito
         </span>
@@ -468,8 +508,8 @@ function TitoFlow({ menuNumero, user }) {
       {error && (
         <div style={{
           background: 'rgba(138,95,101,0.15)', border: '1px solid #8A5F65',
-          borderRadius: 8, padding: '12px 16px', marginBottom: 16,
-          color: '#C4929A', fontSize: '0.85rem', fontFamily: "'Exo 2',sans-serif",
+          borderRadius: 8, padding: '14px 18px', marginBottom: 16,
+          color: '#D4A0A8', fontSize: '0.95rem', fontFamily: "'Chakra Petch',sans-serif", fontWeight: 500,
         }}>
           {error}
         </div>
@@ -554,11 +594,12 @@ function TitoFlow({ menuNumero, user }) {
                   style={{
                     width: '100%', maxWidth: 400,
                     background: '#09080A', border: '1px solid #1C1B1F',
-                    borderRadius: 8, padding: '12px 14px',
-                    color: '#E0E2E4', fontSize: '0.95rem',
-                    fontFamily: "'Exo 2',sans-serif",
+                    borderRadius: 8, padding: '14px 16px',
+                    color: '#E0E2E4', fontSize: '1.05rem',
+fontFamily: "'Boogaloo',cursive",
+                    fontWeight: 500,
                     outline: 'none', resize: 'vertical',
-                    lineHeight: 1.5,
+                    lineHeight: 1.6,
                   }}
                 />
                 <button onClick={() => {
@@ -569,7 +610,7 @@ function TitoFlow({ menuNumero, user }) {
                   setError(null)
                   setUiState('momento_dia')
                 }} style={{
-                  ...btnBase(), padding: '12px 32px', fontSize: '0.9rem',
+                  ...btnBase(), padding: '14px 36px', fontSize: '0.95rem',
                   background: 'rgba(154,160,166,0.1)', color: '#D4D8DC',
                   border: '1px solid #424045',
                 }}>
@@ -584,9 +625,7 @@ function TitoFlow({ menuNumero, user }) {
         {uiState === 'briefing_vista' && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
             {VISTA_BUTTONS.map(v => (
-              <button key={v.value} onClick={() => handleVistaSelect(v.value)} style={{
-                ...btnBase(briefingState.vista === v.value),
-              }}
+              <button key={v.value} onClick={() => handleVistaSelect(v.value)} className={briefingState.vista === v.value ? 'tito-btn active' : 'tito-btn'}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
               >
@@ -600,13 +639,25 @@ function TitoFlow({ menuNumero, user }) {
         {uiState === 'briefing_formato' && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
             {FORMATO_BUTTONS.map(f => (
-              <button key={f.value} onClick={() => handleOrientacionSelect(f.value)} style={{
-                ...btnBase(briefingState.orientacion === f.value),
-              }}
+              <button key={f.value} onClick={() => handleOrientacionSelect(f.value)} className={briefingState.orientacion === f.value ? 'tito-btn active' : 'tito-btn'}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
               >
                 {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* UBICACION */}
+        {uiState === 'ubicacion' && (
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            {UBICACION_BUTTONS.map(u => (
+              <button key={u.value} onClick={() => handleUbicacionSelect(u.value)} className={briefingState.ubicacion === u.value ? 'tito-btn active' : 'tito-btn'}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
+              >
+                {u.label}
               </button>
             ))}
           </div>
@@ -623,11 +674,12 @@ function TitoFlow({ menuNumero, user }) {
               style={{
                 width: '100%', maxWidth: 400,
                 background: '#09080A', border: '1px solid #1C1B1F',
-                borderRadius: 8, padding: '12px 14px',
-                color: '#E0E2E4', fontSize: '0.95rem',
-                fontFamily: "'Exo 2',sans-serif",
+                borderRadius: 8, padding: '14px 16px',
+                color: '#E0E2E4', fontSize: '1.05rem',
+fontFamily: "'Boogaloo',cursive",
+                fontWeight: 500,
                 outline: 'none', resize: 'vertical',
-                lineHeight: 1.5,
+                lineHeight: 1.6,
               }}
             />
             <button onClick={() => {
@@ -636,9 +688,9 @@ function TitoFlow({ menuNumero, user }) {
                 return
               }
               setError(null)
-              setUiState('momento_dia')
+              setUiState('tipo_select')
             }} style={{
-              ...btnBase(), padding: '12px 32px', fontSize: '0.9rem',
+              ...btnBase(), padding: '14px 36px', fontSize: '0.95rem',
               background: 'rgba(154,160,166,0.1)', color: '#D4D8DC',
               border: '1px solid #424045',
             }}>
@@ -651,9 +703,7 @@ function TitoFlow({ menuNumero, user }) {
         {uiState === 'momento_dia' && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
             {MOMENTO_BUTTONS.map(m => (
-              <button key={m.value} onClick={() => handleMomentoDiaSelect(m.value)} style={{
-                ...btnBase(briefingState.momento_dia === m.value),
-              }}
+              <button key={m.value} onClick={() => handleMomentoDiaSelect(m.value)} className={briefingState.momento_dia === m.value ? 'tito-btn active' : 'tito-btn'}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
               >
@@ -667,9 +717,7 @@ function TitoFlow({ menuNumero, user }) {
         {uiState === 'clima' && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
             {CLIMA_BUTTONS.map(c => (
-              <button key={c.value} onClick={() => handleClimaSelect(c.value)} style={{
-                ...btnBase(briefingState.clima === c.value),
-              }}
+              <button key={c.value} onClick={() => handleClimaSelect(c.value)} className={briefingState.clima === c.value ? 'tito-btn active' : 'tito-btn'}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
               >
@@ -683,9 +731,7 @@ function TitoFlow({ menuNumero, user }) {
         {uiState === 'epoca' && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
             {EPOCA_BUTTONS.map(e => (
-              <button key={e.value} onClick={() => handleEpocaSelect(e.value)} style={{
-                ...btnBase(briefingState.epoca === e.value),
-              }}
+              <button key={e.value} onClick={() => handleEpocaSelect(e.value)} className={briefingState.epoca === e.value ? 'tito-btn active' : 'tito-btn'}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
               >
@@ -699,9 +745,7 @@ function TitoFlow({ menuNumero, user }) {
         {uiState === 'paleta_select' && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
             {PALETA_BUTTONS.map(p => (
-              <button key={p.value} onClick={() => handlePaletaSelect(p.value)} style={{
-                ...btnBase(briefingState.paleta_color === p.value),
-              }}
+              <button key={p.value} onClick={() => handlePaletaSelect(p.value)} className={briefingState.paleta_color === p.value ? 'tito-btn active' : 'tito-btn'}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
               >
@@ -776,7 +820,7 @@ function TitoFlow({ menuNumero, user }) {
         {(uiState === 'sending' || uiState === 'processing') && (
           <div style={{ textAlign: 'center', padding: 20 }}>
             <div className="imgv-spinner" style={{ margin: '0 auto 12px' }} />
-            <div style={{ color: '#9AA0A6', fontSize: '0.85rem', fontFamily: "'Exo 2',sans-serif", whiteSpace: 'pre-wrap' }}>
+            <div style={{ color: '#B0B4B8', fontSize: '0.95rem', fontFamily: "'Chakra Petch',sans-serif", fontWeight: 500, whiteSpace: 'pre-wrap' }}>
               {uiState === 'sending' ? (
                 <span className="imgv-pulse">
                   {briefingState.tipo === 'imagen' || briefingState.tipo === 'img2video'
