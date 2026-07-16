@@ -9,6 +9,7 @@ import SidebarPanel from './SidebarPanel'
 import MenuSelector from './MenuSelector'
 import ChatView from './ChatView'
 import Chat00ImgVid from './Chat00ImgVid'
+import Chat00Music from './Chat00Music'
 
 import PreferencesModal from './PreferencesModal'
 
@@ -165,6 +166,12 @@ export default function MenuSystem({ onBack, user, categoriaDirecta, onLoginClic
     // IMAGEN: no LLM session needed — handled by Chat00ImgVid
     if (categoriaActiva?.id === 'db79925b-c161-419e-bd94-460b3d43af8a') {
       setVista('imagen')
+      return
+    }
+
+    // MÚSICA: no LLM session needed — handled by Chat00Music
+    if (categoriaActiva?.id === '28e7ba28-b6be-4d59-9e0f-cdd55cf09124') {
+      setVista('musica')
       return
     }
 
@@ -432,6 +439,16 @@ if (vista === 'imagen') {
       menuActivo={menuActivo}
       user={user}
       volverAMenus={volverAMenus}
+    />
+  </>
+}
+
+if (vista === 'musica') {
+  return <>
+    <AppHeader onLoginClick={onLoginClick} volverAMenus={volverAMenus} />
+    <Chat00Music
+      menuActivo={menuActivo}
+      user={user}
     />
   </>
 }
