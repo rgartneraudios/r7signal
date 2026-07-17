@@ -65,6 +65,7 @@ function MusicChat({ menuNumero, user }) {
   const [generating, setGenerating] = useState(false)
   const [sesionId, setSesionId] = useState(null)
   const [promptListo, setPromptListo] = useState(null)
+  const [nombreUsuario, setNombreUsuario] = useState('')
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
@@ -83,6 +84,20 @@ function MusicChat({ menuNumero, user }) {
       if (!error && sesionData) setSesionId(sesionData.id)
     }
     crearSesion()
+  }, [])
+
+  useEffect(() => {
+    const cargarNombre = async () => {
+      const { data: userData } = await supabase.auth.getUser()
+      const userId = userData?.user?.id || user?.id
+      const { data: prefData } = await supabase
+        .from('user_preferences')
+        .select('nombre_alternativo, nombre_usuario')
+        .eq('user_id', userId)
+        .single()
+      setNombreUsuario(prefData?.nombre_alternativo || prefData?.nombre_usuario || '')
+    }
+    cargarNombre()
   }, [])
 
   const handleSend = async () => {
@@ -113,6 +128,7 @@ function MusicChat({ menuNumero, user }) {
           menu_numero: menuNumero,
           routing_override: routing,
           chat_language: 'Spanish',
+          nombre_usuario: nombreUsuario,
         })
       })
 
@@ -149,7 +165,6 @@ function MusicChat({ menuNumero, user }) {
     const promptFinal = promptListo
     setMessages(prev => [...prev, { rol: 'usuario', contenido: `🎵 Generar canción` }])
     setGenerating(true)
-    setRouting('asun_musica')
 
     try {
       const { data: userData } = await supabase.auth.getUser()
@@ -171,19 +186,27 @@ function MusicChat({ menuNumero, user }) {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Error al generar música')
 
-      if (data.audio_url) {
-        setAudioUrl(data.audio_url)
-        setMessages(prev => [...prev, { rol: 'asistente', origen: 'asun', contenido: 'Aquí tienes tu canción generada:', audio_url: data.audio_url }])
+      let finalAudioUrl = data.audio_url
+      if (!finalAudioUrl && data.audio_base64) {
+        const byteChars = atob(data.audio_base64)
+        const byteNumbers = new Array(byteChars.length)
+        for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i)
+        const byteArray = new Uint8Array(byteNumbers)
+        const blob = new Blob([byteArray], { type: 'audio/wav' })
+        finalAudioUrl = URL.createObjectURL(blob)
+      }
+
+      if (finalAudioUrl) {
+        setAudioUrl(finalAudioUrl)
+        setMessages(prev => [...prev, { rol: 'asistente', origen: 'asun', contenido: 'Aquí tienes tu canción generada:', audio_url: finalAudioUrl }])
       } else {
-        setMessages(prev => [...prev, { rol: 'asistente', origen: 'asun', contenido: data.r3 || 'Canción generada con éxito.' }])
+        setMessages(prev => [...prev, { rol: 'asistente', origen: 'asun', contenido: data.r3 || 'No se pudo generar el audio.' }])
       }
 
       setPromptListo(null)
-      setRouting('tito')
     } catch (err) {
       console.error('Generate error:', err)
       setMessages(prev => [...prev, { rol: 'asistente', origen: 'asun', contenido: `Error al generar: ${err.message}` }])
-      setRouting('tito')
     } finally {
       setGenerating(false)
     }
@@ -198,12 +221,18 @@ function MusicChat({ menuNumero, user }) {
 
   return (
     <div style={{
-      position: 'relative', zIndex: 10,
-      maxWidth: 800, margin: '0 auto',
-      padding: '80px 24px 12px',
-      fontFamily: "'Space Grotesk',sans-serif",
-      display: 'flex', flexDirection: 'column', minHeight: '100vh'
+      width: '100%', minHeight: '100vh',
+      backgroundImage: 'url(/assets/ChatMusic.webp)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
     }}>
+      <div style={{
+        maxWidth: 800, margin: '0 auto',
+        padding: '80px 24px 24px',
+        fontFamily: "'Space Grotesk',sans-serif",
+        display: 'flex', flexDirection: 'column', minHeight: '100vh', boxSizing: 'border-box',
+      }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Righteous&family=Space+Grotesk:wght@400;500;600;700&display=swap');
         @keyframes spin {
@@ -217,13 +246,13 @@ function MusicChat({ menuNumero, user }) {
       `}</style>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', marginBottom: 16 }}>
+      <div style={{ flex: 1, marginBottom: 16, paddingBottom: audioUrl ? 180 : 100 }}>
         {messages.length === 0 && (
           <div style={{
             textAlign: 'center', color: '#8A868B', marginTop: 60,
-            fontSize: '0.9rem', letterSpacing: '0.1em'
+            fontSize: '1.8rem', letterSpacing: '0.1em'
           }}>
-            Habla con Tito para descubrir tu estilo musical
+            Habla con Tito sobre música. Puedes conversar y debatir sobre compositores, músicos o cualquier tema relacionado con la música. Tito también puede crear el prompt para generar música instrumental con un estilo específico, basado en tus compositores favoritos. Además, compone letras de canciones y se las envía a Asun para que las genere.
           </div>
         )}
         {messages.map((msg, i) => (
@@ -254,7 +283,7 @@ function MusicChat({ menuNumero, user }) {
                   fontFamily: "'Space Grotesk',sans-serif",
                   color: '#D4D0C8',
                 }}>
-                  {msg.origen === 'asun' ? `Asun${msg.modelo ? ' · ' + msg.modelo.split('/').pop() : ''}` : `Tito${msg.modelo ? ' · ' + msg.modelo.split('/').pop() : ''}`}
+                  {msg.origen === 'asun' ? 'Asun' : 'Tito'}
                 </span>
               )}
               <div>{msg.contenido}</div>
@@ -274,114 +303,107 @@ function MusicChat({ menuNumero, user }) {
               fontFamily: "'Space Grotesk',sans-serif",
             }}>
               <div className="music-spinner" style={{ marginRight: 8, verticalAlign: 'middle' }} />
-              {generating ? 'Asun creando tu canción...' : 'Tito está escribiendo...'}
+              {generating ? 'Asun generando música...' : 'Tito está escribiendo...'}
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
+      {/* Fixed footer: audio player + input */}
       <div style={{
-        display: 'flex', gap: 8, alignItems: 'flex-end',
-        background: '#09080A', border: '1px solid #1C1B1F',
-        borderRadius: 12, padding: '8px 8px 8px 16px',
+        position: 'fixed',
+        bottom: 56,
+        left: 0,
+        right: 0,
+        zIndex: 20,
+        background: 'linear-gradient(to top, #050405 60%, rgba(5,4,5,0))',
+        paddingTop: 24,
+        paddingBottom: 12,
       }}>
-        <textarea
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={routing === 'tito' ? 'Describe tu estilo musical...' : 'Describe la canción que quieres...'}
-          rows={1}
-          style={{
-            flex: 1, background: 'transparent', border: 'none',
-            color: '#E0E2E4', fontSize: '1rem',
-            fontFamily: "'Space Grotesk',sans-serif",
-            outline: 'none', resize: 'none',
-            lineHeight: 1.6, maxHeight: 120,
-          }}
-        />
-        <button
-          onClick={routing === 'tito' ? handleSend : handleGenerate}
-          disabled={loading || generating || !input.trim()}
-          style={{
-            padding: '10px 20px',
-            background: 'rgba(154,160,166,0.15)',
-            border: '1px solid #9AA0A6',
-            borderRadius: 10,
-            color: input.trim() ? '#E0E2E4' : '#8A868B',
-            cursor: input.trim() ? 'pointer' : 'default',
-            fontFamily: "'Space Grotesk',sans-serif",
-            fontSize: '1rem',
-            letterSpacing: '0.04em',
-            transition: 'all 0.2s',
-            opacity: loading || generating ? 0.6 : 1,
-          }}
-        >
-          {routing === 'tito' ? 'Enviar' : 'Generar canción'}
-        </button>
-        {routing === 'tito' && (
-          <button
-            onClick={() => setRouting('asun_musica')}
-            style={{
-              padding: '10px 16px',
-              background: 'rgba(212,175,55,0.1)',
-              border: '1px solid #D4AF37',
-              borderRadius: 10,
-              color: '#D4AF37',
-              cursor: 'pointer',
-              fontFamily: "'Space Grotesk',sans-serif",
-              fontSize: '0.85rem',
-              letterSpacing: '0.04em',
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(212,175,55,0.2)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(212,175,55,0.1)'}
-          >
-            Generar Música con Asun
-          </button>
-        )}
-        {routing === 'asun_musica' && (
-          <button
-            onClick={() => setRouting('tito')}
-            style={{
-              padding: '10px 16px',
-              background: 'rgba(154,160,166,0.1)',
-              border: '1px solid #424045',
-              borderRadius: 10,
-              color: '#8A868B',
-              cursor: 'pointer',
-              fontFamily: "'Space Grotesk',sans-serif",
-              fontSize: '0.85rem',
-              letterSpacing: '0.04em',
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Volver a Tito
-          </button>
-        )}
+        <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 24px' }}>
+
+          {audioUrl && (
+            <div style={{
+              marginBottom: 12, padding: 14,
+              background: '#131215', border: '1px solid #201F23',
+              borderRadius: 12, textAlign: 'center',
+            }}>
+              <div style={{
+                fontFamily: "'Righteous', sans-serif", fontSize: '0.85rem',
+                color: '#D4AF37', marginBottom: 6, letterSpacing: '0.1em',
+              }}>
+                Canción generada
+              </div>
+              <audio controls src={audioUrl} style={{ width: '100%' }} />
+            </div>
+          )}
+
+          <div style={{
+            display: 'flex', gap: 8, alignItems: 'flex-end',
+            background: '#09080A', border: '1px solid #1C1B1F',
+            borderRadius: 12, padding: '18px 8px 18px 16px',
+          }}>
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Describe tu estilo musical..."
+              rows={1}
+              style={{
+                flex: 1, background: 'transparent', border: 'none',
+                color: '#E0E2E4', fontSize: '1rem',
+                fontFamily: "'Space Grotesk',sans-serif",
+                outline: 'none', resize: 'none',
+                lineHeight: 1.8, maxHeight: 120,
+              }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={loading || generating || !input.trim()}
+              style={{
+                padding: '16px 28px',
+                background: 'rgba(154,160,166,0.15)',
+                border: '1px solid #9AA0A6',
+                borderRadius: 10,
+                color: input.trim() ? '#E0E2E4' : '#8A868B',
+                cursor: input.trim() ? 'pointer' : 'default',
+                fontFamily: "'Space Grotesk',sans-serif",
+                fontSize: '1rem',
+                letterSpacing: '0.04em',
+                opacity: loading || generating ? 0.6 : 1,
+              }}
+            >
+              Enviar
+            </button>
+            {promptListo && (
+              <button
+                onClick={handleGenerate}
+                disabled={generating}
+                style={{
+                  padding: '16px 16px',
+                  background: 'rgba(212,175,55,0.1)',
+                  border: '1px solid #D4AF37',
+                  borderRadius: 10,
+                  color: '#D4AF37',
+                  cursor: generating ? 'default' : 'pointer',
+                  fontFamily: "'Space Grotesk',sans-serif",
+                  fontSize: '0.85rem',
+                  letterSpacing: '0.04em',
+                  whiteSpace: 'nowrap',
+                  opacity: generating ? 0.6 : 1,
+                }}
+                onMouseEnter={e => { if (!generating) e.currentTarget.style.background = 'rgba(212,175,55,0.2)' }}
+                onMouseLeave={e => { if (!generating) e.currentTarget.style.background = 'rgba(212,175,55,0.1)' }}
+              >
+                {generating ? 'Generando...' : 'Generar Música con Asun'}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Audio player for generated song */}
-      {audioUrl && (
-        <div style={{
-          marginTop: 16, padding: 16,
-          background: '#131215', border: '1px solid #201F23',
-          borderRadius: 12, textAlign: 'center',
-        }}>
-          <div style={{
-            fontFamily: "'Righteous', sans-serif", fontSize: '0.9rem',
-            color: '#D4AF37', marginBottom: 8, letterSpacing: '0.1em',
-          }}>
-            Canción generada
-          </div>
-          <audio controls src={audioUrl} style={{ width: '100%' }} />
-        </div>
-      )}
-
-      <div style={{ height: 80 }} />
+    </div>
     </div>
   )
 }

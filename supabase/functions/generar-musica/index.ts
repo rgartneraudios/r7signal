@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { decode as decodeBase64, encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,44 +68,73 @@ Output only the final prompt, no explanations, no preamble.`
           { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt_musica }
         ],
-        max_tokens: 1024,
+        modalities: ['text', 'audio'],
+        stream: true,
+        max_tokens: 4096,
         temperature: 0.7,
       }),
     })
 
-    if (!response.ok) {
+    if (!response.ok || !response.body) {
       const errorText = await response.text()
       throw new Error(`OpenRouter [${modelId}]: ${response.status} - ${errorText}`)
     }
 
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content || ''
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let audioChunks: string[] = []
+    let transcriptText = ''
+    let tokensInput = 0
+    let tokensOutput = 0
 
-    // Log usage
-    const tokensInput = data.usage?.prompt_tokens || 0
-    const tokensOutput = data.usage?.completion_tokens || 0
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
 
-    console.log(`✅ Música generada | Tokens in: ${tokensInput}, out: ${tokensOutput}`)
-
-    // Try to extract audio URL from the response
-    // OpenRouter audio models may return URL in content or in a structured format
-    let audioUrl = ''
-
-    // Check for audio_url in the response structure
-    const message = data.choices?.[0]?.message
-    if (message?.audio?.url) {
-      audioUrl = message.audio.url
-    } else if (message?.content && typeof message.content === 'string') {
-      const urlMatch = message.content.match(/https?:\/\/[^\s]+\.(mp3|wav|ogg|flac|m4a|wma)(\?[^\s]*)?/i)
-      if (urlMatch) {
-        audioUrl = urlMatch[0]
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('data:')) continue
+        const payload = trimmed.slice(5).trim()
+        if (payload === '[DONE]') continue
+        try {
+          const json = JSON.parse(payload)
+          const delta = json.choices?.[0]?.delta
+          if (delta?.audio?.data) audioChunks.push(delta.audio.data)
+          if (delta?.audio?.transcript) transcriptText += delta.audio.transcript
+          if (delta?.content) transcriptText += delta.content
+          if (json.usage?.prompt_tokens) tokensInput = json.usage.prompt_tokens
+          if (json.usage?.completion_tokens) tokensOutput = json.usage.completion_tokens
+        } catch (e) {
+          // Ignore malformed SSE fragments
+        }
       }
+    }
+
+    console.log(`✅ Música generada | Chunks de audio: ${audioChunks.length} | Tokens in: ${tokensInput}, out: ${tokensOutput}`)
+
+    // Concatenate base64 audio chunks into one binary blob (using native Deno base64 codec — fast, no manual char loops)
+    let audioBase64 = ''
+    if (audioChunks.length > 0) {
+      const binaryParts = audioChunks.map(chunk => decodeBase64(chunk))
+      const totalLength = binaryParts.reduce((sum, arr) => sum + arr.length, 0)
+      const combined = new Uint8Array(totalLength)
+      let offset = 0
+      for (const part of binaryParts) {
+        combined.set(part, offset)
+        offset += part.length
+      }
+      audioBase64 = encodeBase64(combined)
     }
 
     return new Response(
       JSON.stringify({
-        audio_url: audioUrl,
-        r3: content,
+        audio_base64: audioBase64 || null,
+        audio_url: null,
+        r3: audioBase64 ? 'Aquí tienes tu canción generada:' : (transcriptText || 'No se pudo generar el audio.'),
         metadata: {
           modelo_id: modelId,
           tokens_input: tokensInput,

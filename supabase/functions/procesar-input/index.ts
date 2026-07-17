@@ -15,30 +15,42 @@ interface RequestBody {
   menu_numero: number
   routing_override: 'tito' | 'asun' | 'tito_chain' | 'asun_musica'
   chat_language: string
+  nombre_usuario?: string
 }
 
 function parsearR1R2R3(content: string): { r1: string; r2: string; r3: string; promptAsun: string | null } {
-  const r1Match = content.match(/\*{0,2}R1:\*{0,2}\s*([^\n]*?)(?=\s*\*{0,2}R2:|$)/m);
-  const r2Match = content.match(/\*{0,2}R2:\*{0,2}\s*([^\n]*)/m);
-  const r3Match = content.match(/\*{0,2}R3:\*{0,2}\s*([\s\S]*?)(?=\*{0,2}R3_SAVE:|PROMPT_ASUN:|$)/);
-  const promptAsunMatch = content.match(/PROMPT_ASUN:\s*([\s\S]*)$/);
+  const clean = (s: string) => s.replace(/^\*{0,2}/, '').replace(/\*{0,2}\s*$/, '').trim()
 
-  const r1 = r1Match ? r1Match[1].trim() : '';
-  const r2 = r2Match ? r2Match[1].trim() : '';
-  const promptAsun = promptAsunMatch ? promptAsunMatch[1].trim() : null;
-
-  let r3 = '';
-  if (r3Match) {
-    r3 = r3Match[1].trim();
-  } else if (r2Match) {
-    const r2LineEnd = content.indexOf(r2Match[0]) + r2Match[0].length;
-    r3 = content.slice(r2LineEnd).trim();
-  } else {
-    r3 = content;
+  const findLabelIndex = (label: string): number => {
+    const re = new RegExp(`\\*{0,2}${label}:\\*{0,2}`, 'i')
+    const m = content.match(re)
+    return m ? content.indexOf(m[0]) : -1
   }
-  r3 = r3.replace(/PROMPT_ASUN:[\s\S]*$/, '').trim();
 
-  return { r1, r2, r3, promptAsun };
+  const idxR1 = findLabelIndex('R1')
+  const idxR2 = findLabelIndex('R2')
+  const idxR3 = findLabelIndex('R3')
+  const idxSave = findLabelIndex('R3_SAVE')
+  const idxPrompt = content.indexOf('PROMPT_ASUN:')
+
+  const promptAsunMatch = content.match(/PROMPT_ASUN:\s*([\s\S]*)$/)
+  const promptAsun = promptAsunMatch ? promptAsunMatch[1].trim() : null
+
+  if (idxR1 === -1 || idxR2 === -1 || idxR3 === -1) {
+    const r3fallback = content.replace(/PROMPT_ASUN:[\s\S]*$/, '').trim()
+    return { r1: '', r2: '', r3: r3fallback, promptAsun }
+  }
+
+  const r1raw = content.slice(idxR1, idxR2)
+  const r2raw = content.slice(idxR2, idxR3)
+  const r3end = idxSave !== -1 ? idxSave : (idxPrompt !== -1 ? idxPrompt : content.length)
+  const r3raw = content.slice(idxR3, r3end)
+
+  const r1 = clean(r1raw.replace(/^\*{0,2}R1:\*{0,2}/i, ''))
+  const r2 = clean(r2raw.replace(/^\*{0,2}R2:\*{0,2}/i, ''))
+  const r3 = clean(r3raw.replace(/^\*{0,2}R3:\*{0,2}/i, ''))
+
+  return { r1, r2, r3, promptAsun }
 }
 
 const SYSTEM_PROMPTS_TITO: Record<string, string> = {
@@ -91,10 +103,15 @@ Si tu respuesta (R3) contenía uno o más bloques de código, inclúyelo en R2 c
 
 LANGUAGE RULE: R1 and R2 must be written in English (internal context, more token-efficient). R3 must always be written in ${chatLanguage} — that is the user's preferred language.`
 
-function getSystemPrompt(categoria_id: string, esCochi: boolean, chatLanguage: string, routing: string): string {
+function getSystemPrompt(categoria_id: string, esCochi: boolean, chatLanguage: string, routing: string, nombreUsuario?: string): string {
   const isAsun = routing === 'asun'
   const prompts = isAsun ? SYSTEM_PROMPTS_ASUN : SYSTEM_PROMPTS_TITO
-  const base = prompts[categoria_id] || (isAsun ? '[REDACTED PROMPT]' : '[REDACTED PROMPT]')
+  let base = prompts[categoria_id] || (isAsun ? '[REDACTED PROMPT]' : '[REDACTED PROMPT]')
+  if (nombreUsuario) {
+    base = base.replace(/\{nombreUsuario\}/g, nombreUsuario)
+  } else {
+    base = base.replace(/\{nombreUsuario\}/g, '')
+  }
   return esCochi ? base + COCHI_SUFFIX : base + FORMATO_R7(chatLanguage)
 }
 
@@ -154,7 +171,8 @@ serve(async (req) => {
       categoria_id,
       menu_numero,
       routing_override,  // 'tito' | 'asun' | 'tito_chain' | 'asun_musica'
-      chat_language = 'Spanish'
+      chat_language = 'Spanish',
+      nombre_usuario
     }: RequestBody = await req.json()
 
     console.log(`📨 Sesión: ${sesion_id} | Routing: ${routing_override}`)
@@ -255,7 +273,7 @@ serve(async (req) => {
     if (routing_override === 'tito') {
       if (!itemTito) throw new Error('No se encontró modelo Tito para este módulo')
 
-      const systemPrompt = getSystemPrompt(categoria_id, esCochi, chat_language, 'tito')
+      const systemPrompt = getSystemPrompt(categoria_id, esCochi, chat_language, 'tito', nombre_usuario)
       const { raw, tokensInput, tokensOutput } = await llamarModelo(
         apiKey, itemTito.modelo_id, systemPrompt,
         r7Acumulado, input_usuario,
@@ -288,7 +306,7 @@ serve(async (req) => {
     // ── MODO ASUN (superior solo) ────────────────────────────────────────
     if (routing_override === 'asun' || routing_override === 'asun_musica') {
       if (!itemAsun) throw new Error('No se encontró modelo Asun para este módulo')
-      const systemPrompt = getSystemPrompt(categoria_id, esCochi, chat_language, 'asun')
+      const systemPrompt = getSystemPrompt(categoria_id, esCochi, chat_language, 'asun', nombre_usuario)
       const { raw, tokensInput, tokensOutput } = await llamarModelo(
         apiKey, itemAsun.modelo_id, systemPrompt,
         r7Acumulado, input_usuario,
@@ -322,8 +340,8 @@ serve(async (req) => {
       if (!itemTito) throw new Error('No se encontró modelo Tito para el chain')
       if (!itemAsun) throw new Error('No se encontró modelo Asun para el chain')
 
-      const systemPromptTito = getSystemPrompt(categoria_id, false, chat_language, 'tito') // Tito no recibe /COCHI
-      const systemPromptAsun = getSystemPrompt(categoria_id, esCochi, chat_language, 'asun')
+      const systemPromptTito = getSystemPrompt(categoria_id, false, chat_language, 'tito', nombre_usuario) // Tito no recibe /COCHI
+      const systemPromptAsun = getSystemPrompt(categoria_id, esCochi, chat_language, 'asun', nombre_usuario)
 
       // ── Turno 1: Tito ───────────────────────────────────────────────
       console.log(`🔗 Chain — Turno Tito: ${itemTito.modelo_id}`)
