@@ -94,12 +94,6 @@ const FORMATO_BUTTONS = [
   { label: 'Cuadrado 1:1',    value: 'cuadrado' },
 ]
 
-const DURACION_BUTTONS = [
-  { label: '4s',  value: 4 },
-  { label: '8s',  value: 8 },
-  { label: '20s', value: 20 },
-]
-
 const UBICACION_BUTTONS = [
   { label: 'Interior',  value: 'interior_setting' },
   { label: 'Exterior',  value: 'exterior_setting' },
@@ -152,13 +146,10 @@ orientacion: null,
     clima: null,
     epoca: null,
     paleta_color: null,
-    tipo: null,
-    duracion: null,
     imagen_b64: null,
     imagen_url: null,
   })
   const [resultUrl, setResultUrl] = useState(null)
-  const [timerSeconds, setTimerSeconds] = useState(0)
   const [error, setError] = useState(null)
   const fileInputRef = useRef(null)
   const [uploadPreview, setUploadPreview] = useState(null)
@@ -175,21 +166,6 @@ orientacion: null,
     fetchEstilos()
   }, [])
 
-  useEffect(() => {
-    let interval
-    if (uiState === 'processing' && briefingState.tipo !== 'imagen') {
-      setTimerSeconds(0)
-      interval = setInterval(() => setTimerSeconds(s => s + 1), 1000)
-    }
-    return () => clearInterval(interval)
-  }, [uiState, briefingState.tipo])
-
-  const formatTimer = (s) => {
-    const m = Math.floor(s / 60)
-    const sec = s % 60
-    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-  }
-
   function resetBriefing() {
     setBriefingState({
       path: null,
@@ -202,8 +178,6 @@ orientacion: null,
       clima: null,
       epoca: null,
       paleta_color: null,
-      tipo: null,
-      duracion: null,
       imagen_b64: null,
       imagen_url: null,
     })
@@ -281,29 +255,6 @@ orientacion: null,
     reader.readAsDataURL(file)
   }
 
-  function handleTipoSelect(tipo) {
-    setBriefingState(prev => ({ ...prev, tipo }))
-    if (tipo === 'imagen') {
-      setUiState('confirm')
-    } else {
-      setUiState('duracion_select')
-    }
-  }
-
-  function handleMoverImgAVideo() {
-    setBriefingState(prev => ({
-      ...prev,
-      imagen_url: resultUrl,
-      tipo: 'img2video',
-    }))
-    setUiState('duracion_select')
-  }
-
-  function handleDuracionSelect(duracion) {
-    setBriefingState(prev => ({ ...prev, duracion }))
-    setUiState('confirm')
-  }
-
   function handleCambiarAlgo() {
     resetBriefing()
     if (briefingState.path === 'A') {
@@ -326,55 +277,31 @@ orientacion: null,
       clima: null,
       epoca: null,
       paleta_color: null,
-      tipo: null,
-      duracion: null,
     }))
     setError(null)
   }
 
   const handleGenerate = async () => {
-    const esImagen = briefingState.tipo === 'imagen' ||
-                     (briefingState.tipo === 'img2video' && !briefingState.imagen_url)
-
     setUiState('sending')
     setError(null)
-
     try {
-      if (esImagen) {
-        setUiState('processing')
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/generar-asset`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify({
-            ...briefingState,
-            menu_numero: menuNumero,
-            user_id: user.id
-          })
+      setUiState('processing')
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/generar-asset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          ...briefingState,
+          menu_numero: menuNumero,
+          user_id: user.id
         })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Error al generar imagen')
-        setResultUrl(data.image_url || data.image_b64)
-        setUiState('result')
-      } else {
-        setUiState('processing')
-        const WORKER_URL = 'https://TODO.workers.dev'
-        const res = await fetch(WORKER_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...briefingState,
-            menu_numero: menuNumero,
-            user_id: user.id
-          })
-        })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Error al generar video')
-        setResultUrl(data.video_url)
-        setUiState('result')
-      }
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al generar imagen')
+      setResultUrl(data.image_url || data.image_b64)
+      setUiState('result')
     } catch (err) {
       setError(err.message)
       setUiState('confirm')
@@ -394,16 +321,9 @@ orientacion: null,
       case 'clima': return TITO_SPEECH.clima
       case 'epoca': return TITO_SPEECH.epoca
       case 'paleta_select': return TITO_SPEECH.paleta_select
-      case 'tipo_select': return TITO_SPEECH.tipo_select
-      case 'duracion_select': return TITO_SPEECH.duracion_select
       case 'confirm': return TITO_SPEECH.confirm
-      case 'sending':
-        return briefingState.tipo === 'imagen' || briefingState.tipo === 'img2video'
-          ? TITO_SPEECH.sending_imagen : TITO_SPEECH.sending_video
-      case 'processing':
-        return briefingState.tipo === 'imagen'
-          ? TITO_SPEECH.processing_imagen
-          : TITO_SPEECH.processing_video(briefingState.duracion || '', formatTimer(timerSeconds))
+      case 'sending': return TITO_SPEECH.sending_imagen
+      case 'processing': return TITO_SPEECH.processing_imagen
       case 'result': return TITO_SPEECH.result
       default: return ''
     }
@@ -688,7 +608,7 @@ fontFamily: "'Boogaloo',cursive",
                 return
               }
               setError(null)
-              setUiState('tipo_select')
+              setUiState('confirm')
             }} style={{
               ...btnBase(), padding: '14px 36px', fontSize: '0.95rem',
               background: 'rgba(154,160,166,0.1)', color: '#D4D8DC',
@@ -755,48 +675,6 @@ fontFamily: "'Boogaloo',cursive",
           </div>
         )}
 
-        {/* TIPO SELECT */}
-        {uiState === 'tipo_select' && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-            <button onClick={() => handleTipoSelect('imagen')} style={btnBase(briefingState.tipo === 'imagen')}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
-            >
-              Imagen
-            </button>
-            <button onClick={() => handleTipoSelect('video')} style={btnBase(briefingState.tipo === 'video')}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
-            >
-              Video
-            </button>
-            {briefingState.path === 'A' && resultUrl && (
-              <button onClick={handleMoverImgAVideo} style={btnBase(briefingState.tipo === 'img2video')}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
-              >
-                Mover imagen en video
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* DURACION SELECT */}
-        {uiState === 'duracion_select' && (
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-            {DURACION_BUTTONS.map(d => (
-              <button key={d.value} onClick={() => handleDuracionSelect(d.value)} style={{
-                ...btnBase(briefingState.duracion === d.value), minWidth: 60,
-              }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#424045'; e.currentTarget.style.color = '#D4D8DC' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = '#201F23'; e.currentTarget.style.color = '#8A868B' }}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* CONFIRM */}
         {uiState === 'confirm' && (
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
@@ -820,29 +698,18 @@ fontFamily: "'Boogaloo',cursive",
         {(uiState === 'sending' || uiState === 'processing') && (
           <div style={{ textAlign: 'center', padding: 20 }}>
             <div className="imgv-spinner" style={{ margin: '0 auto 12px' }} />
-            <div style={{ color: '#B0B4B8', fontSize: '0.95rem', fontFamily: "'Chakra Petch',sans-serif", fontWeight: 500, whiteSpace: 'pre-wrap' }}>
-              {uiState === 'sending' ? (
-                <span className="imgv-pulse">
-                  {briefingState.tipo === 'imagen' || briefingState.tipo === 'img2video'
-                    ? 'Enviando a Asun...' : 'Enviando a Cloudflare...'}
-                </span>
-              ) : (
-                briefingState.tipo !== 'imagen' && (
-                  <span>⏱ {formatTimer(timerSeconds)}</span>
-                )
-              )}
-            </div>
+            {uiState === 'sending' && (
+              <div style={{ color: '#B0B4B8', fontSize: '0.95rem', fontFamily: "'Chakra Petch',sans-serif", fontWeight: 500 }}>
+                <span className="imgv-pulse">Enviando a Asun...</span>
+              </div>
+            )}
           </div>
         )}
 
         {/* RESULT */}
         {uiState === 'result' && resultUrl && (
           <div style={{ textAlign: 'center' }}>
-            {briefingState.tipo === 'imagen' ? (
-              <img src={resultUrl} alt="Resultado" style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid #201F23' }} />
-            ) : (
-              <video src={resultUrl} controls style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid #201F23' }} />
-            )}
+            <img src={resultUrl} alt="Resultado" style={{ maxWidth: '100%', borderRadius: 12, border: '1px solid #201F23' }} />
             <div style={{ marginTop: 16 }}>
               <button onClick={handleVolverATito} style={{
                 ...btnBase(), padding: '12px 32px',
