@@ -53,7 +53,6 @@ const TIPO_LABELS = {
   'plus':        'Asun',
   'tito':        'Tito',
   'asun_imagen': 'Asun · Imagen',
-  'asun_video':  'Asun · Video',
   'asun_musica': 'Asun · Música',
 }
 
@@ -299,6 +298,10 @@ export default function MenuSelector({
                     <div style={{ width: '100%', fontSize:'0.9rem', lineHeight:1.8, marginBottom:24, textAlign:'center' }}>
                       {menu.items
                         .filter((item, idx, arr) => arr.findIndex(i => i.tipo === item.tipo) === idx)
+                        .sort((a, b) => {
+                          const order = ['tito', 'mb', 'plus', 'asun_imagen', 'asun_musica']
+                          return order.indexOf(a.tipo) - order.indexOf(b.tipo)
+                        })
                         .map(item => {
                           const isTitoSistema = item.tipo === 'tito' && categoriaActiva.id === 'db79925b-c161-419e-bd94-460b3d43af8a'
                           return (

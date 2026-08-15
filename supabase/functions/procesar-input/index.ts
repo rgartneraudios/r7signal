@@ -315,7 +315,7 @@ serve(async (req) => {
       .from('menu_items')
       .select('*')
       .eq('modulo_id', modulo_id)
-      .in('tipo', ['plus', 'asun_imagen', 'asun_video', 'asun_musica'])
+      .in('tipo', ['plus', 'asun_imagen', 'asun_musica'])
       .eq('menu_numero', menu_numero)
       .single()
 
