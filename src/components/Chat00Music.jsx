@@ -94,7 +94,7 @@ function MusicChat({ menuNumero, user }) {
         .from('user_preferences')
         .select('nombre_alternativo, nombre_usuario')
         .eq('user_id', userId)
-        .single()
+        .maybeSingle()
       setNombreUsuario(prefData?.nombre_alternativo || prefData?.nombre_usuario || '')
     }
     cargarNombre()

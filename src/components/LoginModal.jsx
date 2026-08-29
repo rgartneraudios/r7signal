@@ -93,15 +93,6 @@ export default function LoginModal({ onClose, onLogin, user, onLogout }) {
             >
               {logging ? 'Verificando...' : '▶ Iniciar Sesión'}
             </button>
-            <div style={{ textAlign:'center' }}>
-              <span style={{ fontSize:'0.7rem', color:'#9BA3A8', fontFamily:"'Exo 2',sans-serif", letterSpacing:'0.06em' }}>¿Quieres ser editor? </span>
-              <span style={{
-                fontSize:'0.7rem', fontFamily:"'Exo 2',sans-serif", cursor:'pointer', letterSpacing:'0.04em',
-                background:'linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)',
-                WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
-                backgroundClip:'text',
-              }}>Solicitar acceso</span>
-            </div>
           </div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:20 }}>

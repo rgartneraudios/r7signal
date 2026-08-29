@@ -24,7 +24,7 @@ export default function PreferencesModal({ onClose, userId, supabase }) {
         .from('user_preferences')
         .select('nombre_usuario, nombre_alternativo, chat_language')
         .eq('user_id', userId)
-        .single()
+        .maybeSingle()
       if (data) {
         setNombreUsuario(data.nombre_usuario || '')
         setNombreAlternativo(data.nombre_alternativo || '')
@@ -41,12 +41,12 @@ export default function PreferencesModal({ onClose, userId, supabase }) {
     setError(null)
     const { error } = await supabase
       .from('user_preferences')
-      .update({
+      .upsert({
+        user_id: userId,
         nombre_usuario: nombreUsuario,
         nombre_alternativo: nombreAlternativo,
         chat_language: chatLanguage
-      })
-      .eq('user_id', userId)
+      }, { onConflict: 'user_id' })
     if (error) {
       setError('Error guardando. Intentá de nuevo.')
       setSaving(false)

@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from 'react'
 import AsunPanel from './AsunPanel'
 import CochiDesktop from './CochiDesktop'
+import PreferencesModal from './PreferencesModal'
+import { supabase } from '../supabaseClient'
 
 const DEFAULT_WORKSPACE = { path: '', permission: 'read' }
 const DEFAULT_R9        = { acumulado: {}, memorySize: 0 }
@@ -25,6 +27,7 @@ export default function R7Desktop() {
   const [totalCost,   setTotalCost]   = useState(null) // null hasta el primer turno
   const [asunTokens,  setAsunTokens]  = useState(0)
   const [cochiTokens, setCochiTokens] = useState(0)
+  const [showPrefs, setShowPrefs] = useState(false)
 
   const inputRef = useRef(null)
 
@@ -282,8 +285,32 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
               </span>
             </div>
           )}
+
+          <button
+            onClick={() => setShowPrefs(true)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#9BA3A8',
+              fontSize: '1.1rem',
+              padding: '0 12px',
+              transition: 'color 0.2s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = '#D4D8DC'}
+            onMouseLeave={e => e.currentTarget.style.color = '#9BA3A8'}
+            title="Preferencias"
+          >⚙️</button>
         </div>
       </div>
+
+      {showPrefs && (
+        <PreferencesModal
+          onClose={() => setShowPrefs(false)}
+          userId={import.meta.env.VITE_R7_USER_ID}
+          supabase={supabase}
+        />
+      )}
 
       {/* ── Paneles ── */}
       <div style={{
