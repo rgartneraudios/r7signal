@@ -112,7 +112,8 @@ const css = `
   @keyframes subtleGridMove { 0% { background-position:0 0; } 100% { background-position:50px 50px; } }
   .cd-activity-item { animation:activitySlide 0.2s ease-out; }
   .leather-grid { background-image:linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px); background-size:50px 50px; animation:subtleGridMove 50s linear infinite; }
-  .cd-model-select { appearance:none; -webkit-appearance:none; background:#09080A; border:1px solid #201F23; border-radius:6px; padding:7px 10px; font-size:0.82rem; font-weight:700; font-family:'Space Grotesk',sans-serif; letter-spacing:0.04em; cursor:pointer; outline:none; width:100%; }
+  .cd-model-select { appearance:none; -webkit-appearance:none; background:#1A1920; border:1px solid #201F23; border-radius:6px; padding:7px 10px; font-size:0.82rem; font-weight:700; font-family:'Space Grotesk',sans-serif; letter-spacing:0.04em; cursor:pointer; outline:none; width:100%; color:#C0C0C0; }
+  .cd-model-select option { background:#1A1920; color:#C0C0C0; }
   .cd-radio-label { display:flex; align-items:center; gap:5px; cursor:pointer; }
   .cd-radio-label input { accent-color:#6A7A8A; cursor:pointer; }
   .cd-gear-popup { position:absolute; top:100%; right:0; margin-top:6px; min-width:260px; background:#131215; border:1px solid #201F23; border-radius:10px; padding:14px 16px; box-shadow:0 12px 40px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.02); z-index:100; }
@@ -165,19 +166,19 @@ export default function CochiDesktop({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showGearMenu])
 
-  // Cargar nombre de usuario
+  // Cargar nombre de usuario desde user_preferences
   useEffect(() => {
     async function loadUser() {
       try {
-        const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
-        const userId     = import.meta.env.VITE_R7_USER_ID
-        if (serviceKey && userId) {
-          const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
-            headers: { Authorization: `Bearer ${serviceKey}`, apiKey: serviceKey }
-          })
-          if (res.ok) {
-            const data = await res.json()
-            setUserName(data?.email?.split('@')[0] || '')
+        const userId = import.meta.env.VITE_R7_USER_ID
+        if (userId) {
+          const { data, error } = await supabase
+            .from('user_preferences')
+            .select('nombre_usuario')
+            .eq('user_id', userId)
+            .maybeSingle()
+          if (data?.nombre_usuario) {
+            setUserName(data.nombre_usuario)
           }
         }
       } catch {}
@@ -372,7 +373,7 @@ export default function CochiDesktop({
   }
 
   function handleEsc()   { abortRef.current?.abort(); setLoading(false) }
-  function handleClear() { setMessages([]); setActivity([]); setTokens(0); setCost(0); setLoading(false) }
+  function handleClear() { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); setActivity([]); setTokens(0); setCost(0); setLoading(false) } }
 
   const costStr = cost < 0.001 ? '~0,00€' : `~${cost.toFixed(3).replace('.', ',')}€`
 
@@ -442,13 +443,21 @@ export default function CochiDesktop({
                 className="cd-model-select"
                 value={selectedModel}
                 onChange={e => setSelectedModel(e.target.value)}
-                style={{ color: meta.color }}
+                style={{
+                  backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
               >
                 <option value="occidental">Gemini 2.5 Flash Lite — Occidental</option>
                 <option value="asia">DeepSeek V4 Flash — Asia</option>
                 <option value="local">IA Local · Ollama — Privado</option>
               </select>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, fontSize: '0.65rem', color: meta.color }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, fontSize: '0.65rem',
+                backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}>
                 <span>{meta.sub}</span>
                 {selectedModel === 'local' && (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
@@ -456,7 +465,11 @@ export default function CochiDesktop({
                     <input
                       value={ollamaModel}
                       onChange={e => setOllamaModel(e.target.value)}
-                      style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #424045', color: '#C0C0C0', fontSize: '0.65rem', padding: '0 4px', outline: 'none', width: 80, fontFamily: "'JetBrains Mono', monospace" }}
+                      style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #424045', fontSize: '0.65rem', padding: '0 4px', outline: 'none', width: 80, fontFamily: "'JetBrains Mono', monospace",
+                        backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
+                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                        backgroundClip: 'text',
+                      }}
                     />
                   </span>
                 )}
@@ -534,10 +547,11 @@ export default function CochiDesktop({
                 borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               }}>
-                <div style={{ fontSize: '0.68rem', color: '#6A7A8A', marginBottom: 4, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase' }}>
-                  IN · {userName || 'TÚ'}
-                </div>
-                <div style={{ fontSize: '0.92rem', color: '#D4D8DC', lineHeight: 1.5, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                <div style={{ fontSize: '0.92rem', lineHeight: 1.5, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                  backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}>
                   {msg.content}
                 </div>
               </div>
@@ -548,9 +562,13 @@ export default function CochiDesktop({
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               }}>
                 <div style={{ fontSize: '0.68rem', color: '#6A7A8A', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase' }}>
-                  🎯 COCHI
+                  COCHI
                 </div>
-                <div style={{ fontSize: '0.95rem', color: '#E0E2E4', lineHeight: 1.6, fontFamily: "'Inter', sans-serif" }}>
+                <div style={{ fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
+                  backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}>
                   <ReactMarkdown components={{
                     code({ node, inline, className, children, ...props }) {
                       const match = /language-(\w+)/.exec(className || '')
