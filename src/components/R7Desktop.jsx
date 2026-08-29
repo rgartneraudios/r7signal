@@ -195,38 +195,40 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
         backdropFilter: 'blur(10px)',
         padding: '0 20px', gap: 0,
       }}>
-        {/* R7SIGNAL */}
-        <span style={{
-          fontFamily: "'Orbitron', sans-serif", fontWeight: 900,
-          fontSize: '1rem', letterSpacing: '0.07em',
-          backgroundImage: 'linear-gradient(135deg, #6B9EC4 0%, #D4D8DC 30%, #E8C84A 65%, #C4929A 100%)',
-          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text', userSelect: 'none', flexShrink: 0,
-          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
-        }}>R7SIGNAL</span>
-
-        {/* Sep */}
-        <div style={{ width:1, height:24, background:'rgba(255,255,255,0.07)', margin:'0 14px', flexShrink:0 }} />
-
-        {/* ASUN tokens — izquierda */}
-        <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0 }}>
+        {/* Sección izquierda */}
+        <div style={{ display:'flex', alignItems:'center', flexShrink:0 }}>
           <span style={{
-            fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
-            letterSpacing:'0.25em', fontWeight:700,
-            backgroundImage:'linear-gradient(135deg, #C8A2D8, #E8368F)',
-            WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
-            backgroundClip:'text', opacity:0.8,
-          }}>ASUN</span>
-          <span style={{
-            fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
-            fontWeight:700, color:'#C4929A', letterSpacing:'0.04em', lineHeight:1,
-          }}>{asunTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+            fontFamily: "'Orbitron', sans-serif", fontWeight: 900,
+            fontSize: '1rem', letterSpacing: '0.07em',
+            backgroundImage: 'linear-gradient(135deg, #6B9EC4 0%, #D4D8DC 30%, #E8C84A 65%, #C4929A 100%)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text', userSelect: 'none', flexShrink: 0,
+            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
+          }}>R7SIGNAL</span>
+
+          <div style={{ width:1, height:24, background:'rgba(255,255,255,0.07)', margin:'0 14px', flexShrink:0 }} />
+
+          <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0 }}>
+            <span style={{
+              fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
+              letterSpacing:'0.25em', fontWeight:700,
+              backgroundImage:'linear-gradient(135deg, #C8A2D8, #E8368F)',
+              WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
+              backgroundClip:'text', opacity:0.8,
+            }}>ASUN</span>
+            <span style={{
+              fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
+              fontWeight:700, color:'#C4929A', letterSpacing:'0.04em', lineHeight:1,
+            }}>{asunTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+          </div>
         </div>
 
-        <div style={{ flex:1 }} />
-
-        {/* TOTAL — centro */}
-        <div style={{ display:'flex', flexDirection:'column', gap:2, alignItems:'center', flexShrink:0 }}>
+        {/* TOTAL — centrado absoluto */}
+        <div style={{
+          position: 'absolute', left: '50%', top: '50%',
+          transform: 'translate(-50%, -50%)',
+          display:'flex', flexDirection:'column', gap:2, alignItems:'center',
+        }}>
           <span style={{
             fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
             letterSpacing:'0.25em', fontWeight:700, color:'#E8C84A', opacity:0.7,
@@ -239,60 +241,48 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
           </span>
         </div>
 
-        <div style={{ flex:1 }} />
-
-        {/* COCHI tokens — derecha */}
-        <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0, alignItems:'flex-end' }}>
-          <span style={{
-            fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
-            letterSpacing:'0.25em', fontWeight:700,
-            backgroundImage:'linear-gradient(135deg, #4A5A6A 0%, #8A9AAA 30%, #C0C8D0 60%, #E0E4E8 100%)',
-            WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
-            backgroundClip:'text', opacity:0.8,
-          }}>COCHI</span>
-          <span style={{
-            fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
-            fontWeight:700, color:'#6B9EC4', letterSpacing:'0.04em', lineHeight:1,
-          }}>{cochiTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
-        </div>
-
-        {/* Sep */}
-        <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', margin:'0 14px', flexShrink:0 }} />
-
-        {/* Workspace pill */}
-        {workspace.path && (
-          <div style={{
-            display:'flex', alignItems:'center', gap:6,
-            padding:'3px 10px', borderRadius:20,
-            border:'1px solid rgba(255,255,255,0.07)',
-            background:'rgba(255,255,255,0.025)',
-            marginRight: 12,
-          }}>
-            <div style={{
-              width:5, height:5, borderRadius:'50%',
-              background: workspace.permission === 'full' ? '#7EC48A'
-                : workspace.permission === 'readwrite' ? '#E8C84A' : '#6B9EC4',
-              animation:'pulseIndicator 2.5s ease-in-out infinite',
-            }} />
+        {/* Sección derecha */}
+        <div style={{ display:'flex', alignItems:'center', flexShrink:0, marginLeft:'auto' }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0, alignItems:'flex-end' }}>
             <span style={{
-              fontFamily:"'JetBrains Mono',monospace",
-              fontSize:'0.55rem', letterSpacing:'0.1em',
-              color:'#5A5860', fontWeight:700,
-            }}>
-              {workspace.path.split(/[\\/]/).pop() || workspace.path}
-            </span>
+              fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
+              letterSpacing:'0.25em', fontWeight:700,
+              backgroundImage:'linear-gradient(135deg, #4A5A6A 0%, #8A9AAA 30%, #C0C8D0 60%, #E0E4E8 100%)',
+              WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
+              backgroundClip:'text', opacity:0.8,
+            }}>COCHI</span>
+            <span style={{
+              fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
+              fontWeight:700, color:'#6B9EC4', letterSpacing:'0.04em', lineHeight:1,
+            }}>{cochiTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
           </div>
-        )}
 
-        {/* Panel activo label */}
-        <span style={{
-          fontFamily:"'Orbitron',sans-serif", fontSize:'0.55rem', fontWeight:700,
-          letterSpacing:'0.25em',
-          color: selectedPanel === 'asun' ? '#C4929A' : '#6B9EC4',
-          opacity: 0.8, transition:'color 0.3s',
-        }}>
-          {selectedPanel === 'asun' ? 'ASUN ▸' : 'COCHI ▸'}
-        </span>
+          <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', margin:'0 14px', flexShrink:0 }} />
+
+          {workspace.path && (
+            <div style={{
+              display:'flex', alignItems:'center', gap:6,
+              padding:'3px 10px', borderRadius:20,
+              border:'1px solid rgba(255,255,255,0.07)',
+              background:'rgba(255,255,255,0.025)',
+              marginRight: 12,
+            }}>
+              <div style={{
+                width:5, height:5, borderRadius:'50%',
+                background: workspace.permission === 'full' ? '#7EC48A'
+                  : workspace.permission === 'readwrite' ? '#E8C84A' : '#6B9EC4',
+                animation:'pulseIndicator 2.5s ease-in-out infinite',
+              }} />
+              <span style={{
+                fontFamily:"'JetBrains Mono',monospace",
+                fontSize:'0.55rem', letterSpacing:'0.1em',
+                color:'#5A5860', fontWeight:700,
+              }}>
+                {workspace.path.split(/[\\/]/).pop() || workspace.path}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Paneles ── */}

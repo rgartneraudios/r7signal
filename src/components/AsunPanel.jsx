@@ -3,14 +3,14 @@ import { supabase } from '../supabaseClient'
 
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
-const OR_KEY        = import.meta.env.VITE_OPENROUTER_KEY
+const OR_KEY        = import.meta.env.VITE_OPENROUTER_API_KEY
 const OR_BASE       = 'https://openrouter.ai/api/v1'
 
 // ─── Modelos ──────────────────────────────────────────────────────────────────
 const MODELS = {
-  llm:    { occidente: 'anthropic/claude-sonnet-5:batch', asia: 'deepseek/deepseek-v4-pro-0813' },
+  llm:    { occidente: 'anthropic/claude-sonnet-5:batch', asia: 'z-ai/glm-5.3-flash' },
   imagen: { occidente: 'x-ai/grok-imagine-image-quality', asia: 'bytedance-seed/seedream-5-0-pro' },
-  musica: { chat: 'qwen/qwen3.8-flash', gen: 'google/lyria-3-pro-preview' },
+  musica: { chat: 'z-ai/glm-5.3-flash', gen: 'google/lyria-3-pro-preview' },
 }
 
 // ─── System prompts ───────────────────────────────────────────────────────────
@@ -673,11 +673,11 @@ export default function AsunPanel({
         }
         .asun-msg-bubble.usuario {
           background: rgba(154,160,166,0.08); border: 1px solid rgba(154,160,166,0.15);
-          color: #C8CACC; align-self: flex-end;
+          align-self: flex-end;
         }
         .asun-msg-bubble.asistente {
           background: #131215; border: 1px solid #201F23;
-          border-left: 3px solid #C8A2D8; color: #E8EAEC;
+          border-left: 3px solid #C8A2D8;
         }
 
         .asun-handoff-btn {
@@ -799,7 +799,11 @@ export default function AsunPanel({
                       color: '#C8A2D8', fontFamily: "'Space Grotesk', sans-serif",
                     }}>Asun</span>
                   )}
-                  <div>{msg.contenido}</div>
+                  <div style={{
+                    backgroundImage: 'linear-gradient(135deg, #C8A2D8, #E8368F)',
+                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}>{msg.contenido}</div>
                   {msg.audioUrl && (
                     <audio controls src={msg.audioUrl} style={{ marginTop: 10, width: '100%' }} />
                   )}
@@ -845,12 +849,22 @@ export default function AsunPanel({
           color: '#C8A2D8',
         }}>
           {category === 'musica'
-            ? '⚡ qwen/qwen3.8-flash · lyria-3'
+            ? '⚡ z-ai/glm-5.3-flash · lyria-3'
             : category === 'llm'
-              ? `⚡ ${submenu === 'occidente' ? 'anthropic/claude-sonnet-5' : 'deepseek/deepseek-v4-pro'}`
+              ? `⚡ ${submenu === 'occidente' ? 'anthropic/claude-sonnet-5' : 'z-ai/glm-5.3-flash'}`
               : `⚡ ${submenu === 'occidente' ? 'x-ai/grok-imagine' : 'bytedance/seedream-5'}`
           }
         </span>
+
+        <div style={{ flex: 1 }} />
+
+        {/* CLS */}
+        <button
+          onClick={() => { if (window.confirm('¿Borrar toda la conversación?')) setMessages([]) }}
+          style={{ background: 'transparent', border: '1px solid #1F1E22', borderRadius: 4, padding: '2px 8px', color: '#8A868B', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#D4D8DC'; e.currentTarget.style.color = '#D4D8DC' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#1F1E22'; e.currentTarget.style.color = '#8A868B' }}
+        >🗑 CLS</button>
       </div>
 
       {/* ── Footer música: botón generar ── */}
