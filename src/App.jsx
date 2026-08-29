@@ -6,10 +6,11 @@ import AppHeader from './components/AppHeader'
 import LoginModal from './components/LoginModal'
 import Footer from './components/Footer'
 import CochiDesktop from './components/CochiDesktop'
+import R7Desktop from './components/R7Desktop'
 import Descargas from './components/Descargas'
 
 export default function App() {
-  if (window.__TAURI_INTERNALS__) return <CochiDesktop />
+  if (window.__TAURI_INTERNALS__) return <R7Desktop />
 
   const { user, setUser } = useAuth()
   const [showLoginModal, setShowLoginModal] = useState(false)
