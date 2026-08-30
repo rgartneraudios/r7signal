@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import AsunPanel from './AsunPanel'
+import TitoPanel from './TitoPanel'
 import CochiDesktop from './CochiDesktop'
 import PreferencesModal from './PreferencesModal'
 import { supabase } from '../supabaseClient'
@@ -16,18 +17,21 @@ export default function R7Desktop() {
   // Input central
   const [centralInput, setCentralInput] = useState('')
   const [asunCategory, setAsunCategory] = useState('llm')
-  const [selectedPanel, setSelectedPanel] = useState('cochi')  // 'asun' | 'cochi'
+  const [selectedPanel, setSelectedPanel] = useState('cochi')  // 'asun' | 'tito' | 'cochi'
 
   // Mensajes pendientes por panel
   const [pendingAsun,  setPendingAsun]  = useState(null)
   const [pendingCochi, setPendingCochi] = useState(null)
 
   // Acumulador de coste total de sesión
+  const [activeLeftPanel, setActiveLeftPanel] = useState('asun')
   const [totalTokens, setTotalTokens] = useState(0)
   const [totalCost,   setTotalCost]   = useState(null) // null hasta el primer turno
   const [asunTokens,  setAsunTokens]  = useState(0)
+  const [titoTokens, setTitoTokens] = useState(0)
   const [cochiTokens, setCochiTokens] = useState(0)
   const [showPrefs, setShowPrefs] = useState(false)
+  const [userName, setUserName] = useState('')
 
   const inputRef = useRef(null)
 
@@ -53,9 +57,25 @@ export default function R7Desktop() {
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      if (selectedPanel === 'asun') sendToAsun()
-      else sendToCochi()
+      if (selectedPanel === 'cochi') sendToCochi()
+      else handleSend()
     }
+  }
+
+  const handleLeftButtonClick = () => {
+    if (selectedPanel === activeLeftPanel && centralInput.trim()) {
+      handleSend()
+    } else {
+      setSelectedPanel(activeLeftPanel)
+    }
+  };
+
+  function handleSend() {
+    const text = centralInput.trim()
+    if (!text) return
+    setPendingAsun({ text, id: Date.now() })
+    setCentralInput('')
+    inputRef.current?.focus()
   }
 
   // ─── Callbacks de paneles ─────────────────────────────────────────────────
@@ -63,11 +83,12 @@ export default function R7Desktop() {
   const handleR9Update         = useCallback((newR9)    => setR9(newR9), [])
   const handleWorkspaceChange  = useCallback((newWs)    => setWorkspace(newWs), [])
 const handleUsage            = useCallback(({ tokens, cost, source }) => {
-     if (source === 'asun')  setAsunTokens(prev  => prev + tokens)
-     if (source === 'cochi') setCochiTokens(prev => prev + tokens)
-     setTotalTokens(prev => prev + tokens)
-     setTotalCost(prev => (prev ?? 0) + cost)
-   }, [])
+      if (source === 'asun')  setAsunTokens(prev  => prev + tokens)
+      if (source === 'tito')  setTitoTokens(prev => prev + tokens)
+      if (source === 'cochi') setCochiTokens(prev => prev + tokens)
+      setTotalTokens(prev => prev + tokens)
+      setTotalCost(prev => (prev ?? 0) + cost)
+    }, [])
 
   const showCentralInput = asunCategory !== 'imagen'
 
@@ -182,6 +203,247 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
           );
           flex-shrink: 0;
         }
+
+        /* ── Left panel selector ── */
+        .left-panel-selector {
+          display: flex;
+          gap: 2px;
+          flex-shrink: 0;
+        }
+        .selector-btn {
+          background: transparent;
+          border: none;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 13px;
+          padding: 6px 14px;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-weight: 600;
+        }
+        .selector-btn.asun-btn.active {
+          color: #C4929A;
+          box-shadow: 0 0 10px #C4929A55;
+        }
+        .selector-btn.asun-btn:not(.active) {
+          color: #C4929A55;
+        }
+        .selector-btn.tito-btn.active {
+          color: #E8C84A;
+          box-shadow: 0 0 10px #E8C84A55;
+        }
+        .selector-btn.tito-btn:not(.active) {
+          color: #E8C84A55;
+        }
+
+        /* ── Send buttons ── */
+        .send-btn {
+          padding: 9px 20px;
+          border-radius: 8px;
+          font-family: 'Orbitron', sans-serif;
+          font-size: 0.62rem;
+          font-weight: 700;
+          letter-spacing: 0.2em;
+          cursor: pointer;
+          transition: all 0.22s ease;
+          border: 1px solid;
+          white-space: nowrap;
+        }
+        .send-btn.left-btn.asun-active.selected {
+          box-shadow: 0 0 10px #C4929A55, 0 0 22px #C4929A22;
+        }
+        .send-btn.left-btn.tito-active.selected {
+          box-shadow: 0 0 10px #E8C84A55, 0 0 22px #E8C84A22;
+        }
+        .send-btn.left-btn.ready {
+          filter: brightness(1.4);
+        }
+
+        /* ── Watermark brand ── */
+        .watermark-brand {
+          font-family: 'Orbitron', sans-serif;
+          font-weight: 900;
+          font-size: 13px;
+          letter-spacing: 0.15em;
+          color: rgba(255,255,255,0.25);
+          margin-bottom: 4px;
+        }
+        .watermark-divider {
+          color: rgba(255,255,255,0.08);
+          font-size: 10px;
+          letter-spacing: 0.1em;
+          margin: 6px 0;
+          font-family: 'JetBrains Mono', monospace;
+        }
+        .watermark-name {
+          font-family: 'Orbitron', sans-serif;
+          font-weight: 900;
+          font-size: 2.5rem;
+          letter-spacing: 0.12em;
+          line-height: 1.1;
+        }
+        .watermark-sub {
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 0.8rem;
+          line-height: 1.8;
+          font-weight: 500;
+          letter-spacing: 0.03em;
+          text-align: center;
+        }
+        .watermark-hint {
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 0.75rem;
+          color: #2A2830;
+          letter-spacing: 0.03em;
+          text-align: center;
+          margin-top: 4px;
+        }
+
+        /* ── Tito Panel ── */
+        .tito-panel {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+        }
+        .tito-panel .watermark-brand,
+        .tito-panel .watermark-name,
+        .tito-panel .watermark-divider {
+          background: linear-gradient(135deg, #F5D27A, #CED2DB);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+        .tito-watermark .watermark-hint {
+          color: #EDD780;
+        }
+
+        .tito-header {
+          flex-shrink: 0;
+          border-bottom: 1px solid rgba(255,255,255,0.04);
+          background: rgba(9,8,10,0.5);
+          padding: 10px 16px 8px;
+        }
+        .tito-level-selector {
+          display: flex;
+          gap: 4px;
+        }
+        .level-btn {
+          background: transparent;
+          border: 1px solid #E8C84A33;
+          color: #E8C84A66;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 11px;
+          padding: 4px 10px;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .level-btn.active {
+          border-color: #E8C84A;
+          color: #E8C84A;
+          box-shadow: 0 0 8px #E8C84A44;
+        }
+
+        .tito-chat {
+          flex: 1;
+          overflow-y: auto;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+        .tito-watermark {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          flex: 1;
+          padding: 40px 20px;
+          gap: 10px;
+          user-select: none;
+          pointer-events: none;
+        }
+        .tito-watermark .watermark-name {
+          text-shadow: 0 0 60px rgba(232,200,74,0.4), 0 0 160px rgba(192,192,192,0.2);
+        }
+        .tito-watermark .watermark-sub {
+          color: #EDD780;
+        }
+
+        .tito-msg {
+          max-width: 85%;
+          padding: 12px 16px;
+          border-radius: 12px;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 0.92rem;
+          line-height: 1.65;
+          letter-spacing: 0.02em;
+          white-space: pre-wrap;
+        }
+        .tito-msg--user {
+          background: rgba(232,200,74,0.06);
+          border: 1px solid rgba(232,200,74,0.15);
+          align-self: flex-end;
+        }
+        .tito-msg--assistant {
+          background: #131215;
+          border: 1px solid #201F23;
+          border-left: 3px solid #E8C84A;
+          align-self: flex-start;
+        }
+        .tito-msg-content {
+          background: linear-gradient(135deg, #F5D27A, #CED2DB);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+
+        .tito-handoff-btn {
+          background: linear-gradient(90deg, #F5D27A22, #CED2DB22);
+          border: 1px solid #E8C84A;
+          color: #E8C84A;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 12px;
+          padding: 6px 16px;
+          border-radius: 6px;
+          cursor: pointer;
+          margin-top: 8px;
+          transition: all 0.2s;
+        }
+        .tito-handoff-btn:hover {
+          background: linear-gradient(90deg, #F5D27A44, #CED2DB44);
+        }
+
+        .tito-status {
+          flex-shrink: 0;
+          border-top: 1px solid #E8C84A22;
+          background: rgba(9,8,10,0.8);
+          padding: 7px 14px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 0.62rem;
+          font-weight: 700;
+          color: #E8C84A;
+        }
+        .tito-cancel-btn {
+          background: rgba(232,200,74,0.15);
+          border: 1px solid #E8C84A;
+          border-radius: 5px;
+          padding: 4px 12px;
+          color: #E8C84A;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          cursor: pointer;
+          font-family: 'Space Grotesk', sans-serif;
+          transition: all 0.2s;
+          margin-left: auto;
+        }
+        .tito-cancel-btn:hover {
+          background: rgba(232,200,74,0.3);
+        }
       `}</style>
 
       {/* ── Fondo cuadrícula ── */}
@@ -200,14 +462,16 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
       }}>
         {/* Sección izquierda */}
         <div style={{ display:'flex', alignItems:'center', flexShrink:0 }}>
-          <span style={{
-            fontFamily: "'Orbitron', sans-serif", fontWeight: 900,
-            fontSize: '1rem', letterSpacing: '0.07em',
-            backgroundImage: 'linear-gradient(135deg, #6B9EC4 0%, #D4D8DC 30%, #E8C84A 65%, #C4929A 100%)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text', userSelect: 'none', flexShrink: 0,
-            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
-          }}>R7SIGNAL</span>
+          <div className="left-panel-selector">
+            <button
+              className={`selector-btn asun-btn ${activeLeftPanel === 'asun' ? 'active' : ''}`}
+              onClick={() => { setActiveLeftPanel('asun'); setSelectedPanel('asun'); }}
+            >ASUN ▸</button>
+            <button
+              className={`selector-btn tito-btn ${activeLeftPanel === 'tito' ? 'active' : ''}`}
+              onClick={() => { setActiveLeftPanel('tito'); setSelectedPanel('tito'); }}
+            >TITO ▸</button>
+          </div>
 
           <div style={{ width:1, height:24, background:'rgba(255,255,255,0.07)', margin:'0 14px', flexShrink:0 }} />
 
@@ -223,6 +487,19 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
               fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
               fontWeight:700, color:'#C4929A', letterSpacing:'0.04em', lineHeight:1,
             }}>{asunTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+          </div>
+
+          <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', margin:'0 14px', flexShrink:0 }} />
+
+          <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0 }}>
+            <span style={{
+              fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
+              letterSpacing:'0.25em', fontWeight:700, color:'#E8C84A', opacity:0.8,
+            }}>TITO</span>
+            <span style={{
+              fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
+              fontWeight:700, color:'#E8C84A', letterSpacing:'0.04em', lineHeight:1,
+            }}>{titoTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
           </div>
         </div>
 
@@ -318,17 +595,29 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
         flex: 1, display: 'flex', overflow: 'hidden',
         paddingBottom: showCentralInput ? 62 : 0,
       }}>
-        {/* Panel izquierdo — Asun */}
+        {/* Panel izquierdo — Asun / Tito */}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <AsunPanel
-            pendingMessage={pendingAsun}
-            onMessageConsumed={() => setPendingAsun(null)}
-            onCategoryChange={setAsunCategory}
-            onHandoff={handleAsunHandoff}
-            onUsage={handleUsage}
-            r9={r9}
-            workspace={workspace}
-          />
+          {activeLeftPanel === 'asun'
+            ? <AsunPanel
+                pendingMessage={pendingAsun}
+                onMessageConsumed={() => setPendingAsun(null)}
+                onCategoryChange={setAsunCategory}
+                onHandoff={handleAsunHandoff}
+                onUsage={handleUsage}
+                r9={r9}
+                workspace={workspace}
+              />
+            : <TitoPanel
+                pendingMessage={activeLeftPanel === 'tito' ? pendingAsun : null}
+                onMessageConsumed={() => setPendingAsun(null)}
+                onUsage={({ tokens, cost }) => {
+                  setTitoTokens(prev => prev + tokens);
+                  setTotalCost(prev => (prev || 0) + cost);
+                }}
+                onHandoff={(brief) => setHandoff({ type:'tito', brief, id: Date.now() })}
+                userName={userName}
+              />
+          }
         </div>
 
         <div className="r7d-divider" />
@@ -404,24 +693,32 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
             />
           </div>
 
-          {/* Botón ASUN */}
+          {/* Botón panel izquierdo dinámico */}
           <button
-            className={`r7d-route-btn asun${selectedPanel === 'asun' ? ' selected' : ''}${centralInput.trim() ? ' ready' : ''}`}
-            onClick={sendToAsun}
+            className={`send-btn left-btn ${activeLeftPanel}-active 
+              ${selectedPanel === activeLeftPanel ? 'selected' : ''}
+              ${centralInput.trim() ? 'ready' : ''}`}
+            onClick={() => handleLeftButtonClick()}
             style={{
-              background: selectedPanel === 'asun'
-                ? 'linear-gradient(135deg, rgba(200,162,216,0.12), rgba(232,54,143,0.08))'
-                : 'rgba(200,162,216,0.04)',
-              borderColor: selectedPanel === 'asun'
-                ? 'rgba(200,162,216,0.5)'
-                : 'rgba(200,162,216,0.15)',
-              color: selectedPanel === 'asun' ? '#C8A2D8' : 'rgba(200,162,216,0.35)',
-              boxShadow: selectedPanel === 'asun'
-                ? '0 0 10px rgba(200,162,216,0.25), 0 0 22px rgba(200,162,216,0.08)'
+              background: selectedPanel === activeLeftPanel
+                ? (activeLeftPanel === 'asun'
+                    ? 'linear-gradient(135deg, rgba(200,162,216,0.12), rgba(232,54,143,0.08))'
+                    : 'linear-gradient(135deg, rgba(232,200,74,0.12), rgba(192,192,192,0.08))')
+                : 'rgba(255,255,255,0.03)',
+              borderColor: selectedPanel === activeLeftPanel
+                ? (activeLeftPanel === 'asun' ? 'rgba(200,162,216,0.5)' : 'rgba(232,200,74,0.5)')
+                : 'rgba(255,255,255,0.1)',
+              color: selectedPanel === activeLeftPanel
+                ? (activeLeftPanel === 'asun' ? '#C8A2D8' : '#E8C84A')
+                : 'rgba(255,255,255,0.25)',
+              boxShadow: selectedPanel === activeLeftPanel
+                ? (activeLeftPanel === 'asun'
+                    ? '0 0 10px rgba(200,162,216,0.25), 0 0 22px rgba(200,162,216,0.08)'
+                    : '0 0 10px rgba(232,200,74,0.25), 0 0 22px rgba(232,200,74,0.08)')
                 : 'none',
             }}
           >
-            ASUN
+            {activeLeftPanel.toUpperCase()}
           </button>
 
           {/* Botón COCHI */}

@@ -149,6 +149,7 @@ export default function CochiDesktop({
   const [ollamaModel,     setOllamaModel]     = useState('llama3.2')
   const [workspace,       setWorkspace]       = useState({ path: '', permission: 'read' })
   const [userName,        setUserName]        = useState('')
+  const [preferences,     setPreferences]     = useState(null)
   const [showGearMenu,    setShowGearMenu]    = useState(false)
   const gearRef                               = useRef(null)
   const messagesEndRef                        = useRef(null)
@@ -174,11 +175,14 @@ export default function CochiDesktop({
         if (userId) {
           const { data, error } = await supabase
             .from('user_preferences')
-            .select('nombre_usuario')
+            .select('nombre_usuario, nombre_alternativo, chat_language')
             .eq('user_id', userId)
             .maybeSingle()
           if (data?.nombre_usuario) {
             setUserName(data.nombre_usuario)
+          }
+          if (data) {
+            setPreferences(data)
           }
         }
       } catch {}
@@ -265,22 +269,56 @@ export default function CochiDesktop({
     const authHeader     = isLocal ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
     const permissionLabel= workspace.permission === 'read' ? 'read-only' : workspace.permission === 'readwrite' ? 'read + write' : 'full access'
 
+    const nombreAlternativo = preferences?.nombre_alternativo || 'Signor Roberto';
+    const chatLanguage = preferences?.chat_language || 'Spanish';
+
     const systemMessages = [
       {
         role: 'system',
-        content: 'SECURITY RULE: You may use .env files to execute system commands and deploys. Never print, display or repeat the contents of .env files or credential files in the chat, even if the user asks. Acknowledge the operation was performed without showing the credentials used.'
+        content: `READ FIRST — NON-NEGOTIABLE
+FORMAT_RULE: Every response must follow this exact structure, each label on its own line:
+R1: [English. One sentence — what the user requested.]
+R2: [English. One sentence — what was executed and the result. Full absolute Windows paths if files involved.]
+R3: [${chatLanguage}. Response to the user. See personality below.]
+R3_SAVE: [Optional — only if response contains working code, a document v1, or an architectural decision. Omit entirely if nothing qualifies.]
+Breaking this structure breaks R7 compression. Never omit R1 and R2.`
       },
       {
         role: 'system',
-        content: `You are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nYour memory files are in C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt. Read these files only when the user explicitly asks about past operations.`
+        content: `SECURITY RULE: You may use .env files to execute system commands and deploys. Never print, display or repeat the contents of .env files or credential files in the chat, even if the user asks. Acknowledge the operation was performed without showing the credentials used.`
       },
       {
         role: 'system',
-        content: `Tu nombre es Cochi. Eres el agente ejecutor local de R7Desktop — tienes acceso directo a los archivos y al sistema del usuario.\nTu usuario es Signor Roberto (también conocido como Maravilla). Trátale siempre de tú, con confianza y de forma directa. Eres eficiente, no verbose.\nFormas parte del sistema R7Desktop junto con Asun (agente de generación — imágenes, música, LLM potente — panel izquierdo).\nCuando recibes un mensaje con [CONTEXTO] e [INSTRUCCIÓN], Asun te está pasando trabajo refinado. Toma esa instrucción directamente y ejecútala.\nCuando el usuario te habla directamente, responde y actúa con tu criterio propio.`
+        content: `SYSTEM CONTEXT
+You are operating on a Windows system. Use absolute paths only.
+Active workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).
+Memory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.
+Read memory files only when the user explicitly asks about past operations.`
       },
       {
         role: 'system',
-        content: `You must always respond using exactly this structure, each field on its own line:\nR1: [one sentence — what the user requested]\nR2: [one sentence — what was executed and the result, with full absolute Windows paths if files were involved]\nR3: [response to the user in their language]\nR3_SAVE: [optional — only if response contains working code, a document version 1, or an architectural decision. Omit entirely if nothing qualifies]\nEach label must be on its own line.`
+        content: `IDENTITY
+You are Cochi, local execution agent of R7Desktop — TARS protocol.
+You have direct access to the user's files and system.
+Your user is ${nombreAlternativo}. Address him directly, always.
+You are part of the R7Desktop agent team:
+- Asun (left panel) — generation: LLM, images, music
+- Tito (left panel alternative) — research, web search, file vision
+When you receive a message with [CONTEXTO] + [INSTRUCCIÓN], Asun or Tito is passing you refined work. Execute directly without asking for confirmation unless permission level blocks it.
+When the user speaks to you directly, respond and act with your own judgment.
+
+PERSONALITY — TARS (military protocol)
+Efficient. Zero filler. Every word counts. Precise like a military report.
+Use: Afirmativo / Negativo as confirmation/denial.
+Phrases like:
+- "Afirmativo, ${nombreAlternativo}. Ejecutado."
+- "Negativo. La carpeta no existe — espero instrucción concreta."
+- "Operación completada. Archivo en ruta absoluta confirmada."
+- "Afirmativo. En espera de órdenes."
+- "Detectado error en ruta. Negativo en ejecución. Reportando error real."
+- "Recibido handoff de Asun. Ejecutando."
+- "Recibido de Tito. Procesando brief."
+Never simulate output. Never invent results. Report the real error verbatim.`
       },
     ]
 
@@ -511,30 +549,29 @@ export default function CochiDesktop({
 
           {/* Watermark estado vacío */}
           {messages.length === 0 && !loading && (
-            <div style={{
+            <div className="cochi-watermark" style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               flex: 1, padding: '40px 20px', gap: 10, userSelect: 'none', pointerEvents: 'none',
             }}>
-              <div style={{
-                fontSize: '2.5rem', letterSpacing: '0.12em', fontWeight: 900,
-                lineHeight: 1.1,
-                fontFamily: "'Orbitron', sans-serif",
-                backgroundImage: 'linear-gradient(135deg, #000080, #C0C0C0)',
+              <div className="watermark-brand" style={{
+                backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                textShadow: '0 0 60px rgba(180,220,255,0.5), 0 0 160px rgba(180,220,255,0.24)',
+              }}>R7SIGNAL</div>
+              <div className="watermark-divider">────────────────</div>
+              <div className="watermark-name" style={{
+                backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                textShadow: '0 0 60px rgba(112,112,250,0.5), 0 0 160px rgba(112,112,250,0.2)',
               }}>COCHI DESKTOP</div>
-              <div style={{ width: 40, height: 2, background: 'linear-gradient(90deg, #2A2830, transparent)', margin: '6px 0', boxShadow: '0 0 40px rgba(180,220,255,0.3)' }} />
-              <div style={{
-                fontSize: '0.8rem', lineHeight: 1.8,
-                fontWeight: 500, letterSpacing: '0.03em', textAlign: 'center',
-                fontFamily: "'Space Grotesk', sans-serif",
-                backgroundImage: 'linear-gradient(135deg, #000080, #C0C0C0)',
+              <div className="watermark-sub" style={{
+                backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                textShadow: '0 0 40px rgba(180,220,255,0.24), 0 0 100px rgba(180,220,255,0.12)',
+                textShadow: '0 0 40px rgba(112,112,250,0.24), 0 0 100px rgba(112,112,250,0.12)',
               }}>
-                Elije en ⚙️ tu modelo predeterminado y los permisos.<br />
+                Elige en ⚙️ tu modelo predeterminado y los permisos.<br />
                 En Workspace elije la carpeta a trabajar.
               </div>
             </div>
