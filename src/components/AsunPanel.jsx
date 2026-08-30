@@ -14,9 +14,9 @@ const MODELS = {
 }
 
 // ─── System prompts ───────────────────────────────────────────────────────────
-const LLM_SYSTEM = (r9) => `[REDACTED PROMPT]`
+const LLM_SYSTEM = (r9, chatLanguage = 'Spanish', nombreAlternativo = null) => `[REDACTED PROMPT]`;
 
-const MUSICA_SYSTEM = `[REDACTED PROMPT]`
+const MUSICA_SYSTEM = (chatLanguage = 'Spanish', nombreAlternativo = null) => `[REDACTED PROMPT]`;
 
 // ─── Markers ──────────────────────────────────────────────────────────────────
 const COCHI_RE = /\[→ COCHI: ([^\]]+)\]/
@@ -742,26 +742,25 @@ export default function AsunPanel({
             flex: 1,
           }}>
             {messages.length === 0 && (
-              <div style={{
+              <div className="asun-watermark" style={{
                 display: 'flex', flexDirection: 'column',
                 alignItems: 'center', justifyContent: 'center',
                 flex: 1, padding: '40px 20px', gap: 10,
                 userSelect: 'none', pointerEvents: 'none',
               }}>
-                <div style={{
-                  fontSize: '2.5rem', letterSpacing: '0.12em', fontWeight: 900,
-                  lineHeight: 1.1,
-                  fontFamily: "'Orbitron', sans-serif",
+                <div className="watermark-brand" style={{
+                backgroundImage: 'linear-gradient(135deg, #C8A2D8, #E8368F)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}>R7SIGNAL</div>
+                <div className="watermark-divider">────────────────</div>
+                <div className="watermark-name" style={{
                   backgroundImage: 'linear-gradient(135deg, #C8A2D8, #E8368F)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
                   textShadow: '0 0 60px rgba(200,162,216,0.4), 0 0 160px rgba(232,54,143,0.2)',
                 }}>ASUN PANEL</div>
-                <div style={{ width: 40, height: 2, background: 'linear-gradient(90deg, #2A2830, transparent)', margin: '6px 0', boxShadow: '0 0 40px rgba(200,162,216,0.25)' }} />
-                <div style={{
-                  fontSize: '0.8rem', color: '#2A2830', lineHeight: 1.8,
-                  fontWeight: 500, letterSpacing: '0.03em', textAlign: 'center',
-                  fontFamily: "'Space Grotesk', sans-serif",
+                <div className="watermark-sub" style={{
                   backgroundImage: 'linear-gradient(135deg, #C8A2D8, #E8368F)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',

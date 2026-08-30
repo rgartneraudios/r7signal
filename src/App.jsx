@@ -234,21 +234,21 @@ export default function App() {
             <div style={{ display:'flex', flexDirection:'column', gap:'22px', position:'relative', zIndex:5 }}>
               <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.62rem', fontWeight:700, letterSpacing:'0.15em' }}>
-                  <span style={{ color:'#9BA3A8' }}>TITO</span>
-                  <span style={{ color:'#E8C84A' }}>ASUN</span>
+                  <span style={{ color:'#C4929A' }}>ASUN</span>
+                  <span style={{ color:'#E8C84A' }}>TITO</span>
                 </div>
                 <div style={{ height:'8px', background:'#09080A', borderRadius:'10px', position:'relative', boxShadow:'inset 0 2px 4px rgba(0,0,0,0.85)' }}>
-                  <div style={{ position:'absolute', left:'4px', right:'4px', height:'4px', top:'50%', transform:'translateY(-50%)', borderRadius:'2px', background:'linear-gradient(90deg, #9BA3A8 0%, #B4B8BB 35%, #B8962E 70%, #E8C84A 100%)', opacity:0.85 }} />
+                  <div style={{ position:'absolute', left:'4px', right:'4px', height:'4px', top:'50%', transform:'translateY(-50%)', borderRadius:'2px', background:'linear-gradient(90deg, #6B9EC4 0%, #9BA3A8 35%, #F5D27A 65%, #CED2DB 100%)', opacity:0.85 }} />
                   <div style={{ position:'absolute', left:'45%', top:'50%', transform:'translateY(-50%)', width:'8px', height:'14px', background:'#D4D8DC', borderRadius:'2px', boxShadow:'0 2px 4px rgba(0,0,0,0.7)', border:'1px solid #1C1B1F' }} />
                 </div>
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.62rem', fontWeight:700, letterSpacing:'0.15em' }}>
-                  <span style={{ color:'#6B9EC4' }}>COCHI 01 · OCCIDENTAL</span>
-                  <span style={{ color:'#C4929A' }}>COCHI 02 · ASIA</span>
+                  <span style={{ color:'#6B9EC4' }}>COCHI · OCCIDENTAL</span>
+                  <span style={{ color:'#6B9EC4' }}>COCHI · ASIA</span>
                 </div>
                 <div style={{ height:'8px', background:'#09080A', borderRadius:'10px', position:'relative', boxShadow:'inset 0 2px 4px rgba(0,0,0,0.85)' }}>
-                  <div style={{ position:'absolute', left:'4px', right:'4px', height:'4px', top:'50%', transform:'translateY(-50%)', borderRadius:'2px', background:'linear-gradient(90deg, #3A5A7A 0%, #B4B8BB 50%, #9B6B72 100%)', opacity:0.85 }} />
+                  <div style={{ position:'absolute', left:'4px', right:'4px', height:'4px', top:'50%', transform:'translateY(-50%)', borderRadius:'2px', background:'linear-gradient(90deg, #4A5A6A 0%, #8A9AAA 30%, #C0C8D0 60%, #E0E4E8 100%)', opacity:0.85 }} />
                   <div style={{ position:'absolute', left:'60%', top:'50%', transform:'translateY(-50%)', width:'8px', height:'14px', background:'#B4B8BB', borderRadius:'2px', boxShadow:'0 2px 4px rgba(0,0,0,0.7)', border:'1px solid #1C1B1F' }} />
                 </div>
                 <div style={{ display:'flex', justifyContent:'center', fontSize:'0.55rem', color:'#8A868B', fontWeight:600, letterSpacing:'0.1em', marginTop:'2px' }}>INTERNACIONAL</div>
@@ -260,9 +260,9 @@ export default function App() {
           <div style={{ maxWidth:'460px', width:'100%', textAlign:'center', padding:'0 8px' }}>
             <div style={{ fontSize:'0.78rem', color:'#8A868B', lineHeight:1.7, letterSpacing:'0.03em' }}>
               <strong style={{ color:'#D4D8DC' }}>R7 Desktop</strong> es tu equipo de agentes local —{' '}
-              <span style={{ color:'#6B9EC4' }}>Tito</span> piensa y orquesta,{' '}
               <span style={{ color:'#C4929A' }}>Asun</span> genera con derechos comerciales,{' '}
-              <span style={{ color:'#D4D8DC' }}>Cochi</span> ejecuta en tus archivos.{' '}
+              <span style={{ color:'#E8C84A' }}>Tito</span> busca datos de la actualidad (Research),{' '}
+              <span style={{ color:'#D4D8DC', backgroundImage:'linear-gradient(135deg, #4A5A6A 0%, #8A9AAA 30%, #C0C8D0 60%, #E0E4E8 100%)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Cochi</span> ejecuta en tus archivos.{' '}
               Privacidad real. Sin suscripción por modelo.
             </div>
           </div>
@@ -273,8 +273,8 @@ export default function App() {
           <div style={{ fontSize:'1rem', letterSpacing:'0.4em', color:'#B4B8BB', fontWeight:600 }}>R7</div>
           <div style={{ fontSize:'2.5rem', letterSpacing:'0.12em', fontWeight:900, color:'#D4D8DC', lineHeight:'1.1', textShadow:'0 2px 4px rgba(0,0,0,0.5)', margin:'4px 0' }}>DESKTOP</div>
           <div style={{ width:'40px', height:'2px', background:'linear-gradient(90deg, #B4B8BB, transparent)', margin:'14px 0' }} />
-          <div style={{ fontSize:'0.8rem', letterSpacing:'0.3em', color:'#B4B8BB', fontWeight:700 }}>TITO · ASUN</div>
-          <div style={{ fontSize:'1.1rem', letterSpacing:'0.4em', color:'#8A868B', fontWeight:500, marginTop:'2px' }}>COCHI</div>
+          <div style={{ fontSize:'0.8rem', letterSpacing:'0.3em', color:'#B4B8BB', fontWeight:700 }}>Asun · Tito</div>
+          <div style={{ fontSize:'1.1rem', letterSpacing:'0.4em', color:'#8A868B', fontWeight:500, marginTop:'2px' }}>Cochi</div>
         </div>
 
       </div>
