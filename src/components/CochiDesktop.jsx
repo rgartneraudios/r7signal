@@ -4,7 +4,9 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { readTextFile, writeTextFile, readDir, exists, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
 import { Command } from '@tauri-apps/plugin-shell'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
-import { supabase } from '../supabaseClient'
+import PlanViewer from './PlanViewer'
+import { PLANNING_SYSTEM_PROMPT, buildPlanContext } from '../lib/cochiPlanningPrompts'
+
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
 const getDateHeader = () => {
@@ -138,6 +140,8 @@ export default function CochiDesktop({
   onR9Update,
   onWorkspaceChange,
   onUsage,
+  onSavePreferences,
+  onPreferencesLoaded,
 }) {
   const [messages,        setMessages]        = useState([])
   const [activity,        setActivity]        = useState([])
@@ -155,6 +159,11 @@ export default function CochiDesktop({
   const messagesEndRef                        = useRef(null)
   const meta = MODEL_META[selectedModel]
 
+  const [executionPlan,  setExecutionPlan]  = useState(null)
+  const [planStatus,     setPlanStatus]     = useState('idle')
+  const planRef = useRef(null)
+  const originalMessageRef = useRef('')
+
   // Scroll al final
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
 
@@ -167,32 +176,40 @@ export default function CochiDesktop({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showGearMenu])
 
-  // Cargar nombre de usuario desde user_preferences
+  // Cargar nombre de usuario desde archivo local
   useEffect(() => {
     async function loadUser() {
       try {
-        const userId = import.meta.env.VITE_R7_USER_ID
-        if (userId) {
-          const { data, error } = await supabase
-            .from('user_preferences')
-            .select('nombre_usuario, nombre_alternativo, chat_language')
-            .eq('user_id', userId)
-            .maybeSingle()
-          if (data?.nombre_usuario) {
-            setUserName(data.nombre_usuario)
-          }
-          if (data) {
-            setPreferences(data)
-          }
+        const text = await readTextFile('user_preferences.json', { baseDir: BaseDirectory.AppLocalData })
+        const data = JSON.parse(text)
+        if (data?.nombre_usuario) {
+          setUserName(data.nombre_usuario)
         }
-      } catch {}
+        if (data) {
+          setPreferences(data)
+        }
+        onPreferencesLoaded?.(data)
+      } catch {
+        onPreferencesLoaded?.({ nombre_usuario: '', nombre_alternativo: '', chat_language: 'Español' })
+      }
     }
     loadUser()
+  }, [])
+
+  const savePreferences = async (prefs) => {
+    try {
+      await writeTextFile('user_preferences.json', JSON.stringify(prefs, null, 2), { baseDir: BaseDirectory.AppLocalData })
+    } catch (err) { console.error('Error saving preferences:', err) }
+  }
+
+  useEffect(() => {
+    if (onSavePreferences) onSavePreferences(savePreferences)
   }, [])
 
   // ─── Consumir mensaje del input central ───────────────────────────────────
   useEffect(() => {
     if (!pendingMessage) return
+    if (planStatus === 'executing') { onMessageConsumed?.(); return }
     onMessageConsumed?.()
     const text = pendingMessage.text.trim()
     if (text) handleSendText(text)
@@ -202,6 +219,7 @@ export default function CochiDesktop({
   // ─── Consumir handoff de Asun ─────────────────────────────────────────────
   useEffect(() => {
     if (!handoff) return
+    if (planStatus === 'executing') { onHandoffConsumed?.(); return }
     onHandoffConsumed?.()
     const briefText = [
       `[CONTEXTO]`,
@@ -252,52 +270,232 @@ export default function CochiDesktop({
     return { r1, r2, r3, r3Save: r3SaveMatch ? r3SaveMatch[1].trim() : null }
   }
 
-  // ─── Envío principal ──────────────────────────────────────────────────────
-  async function handleSendText(sent) {
-    if (!sent || loading) return
+  function pruneApiMessages(messages) {
+    const MAX_NON_SYSTEM = 24
+    const systemMsgs = messages.filter(m => m.role === 'system')
+    const nonSystem  = messages.filter(m => m.role !== 'system')
+    if (nonSystem.length <= MAX_NON_SYSTEM) return messages
+    const firstUser  = nonSystem[0]
+    const recent     = nonSystem.slice(-16)
+    const compressed = {
+      role: 'user',
+      content: '[MEMORY] Previous tool results compressed to save context. Continue task from current state.'
+    }
+    return [...systemMsgs, firstUser, compressed, ...recent]
+  }
+
+  // ─── Plan helpers ─────────────────────────────────────────────────────────
+  function syncPlan(newPlan) {
+    setExecutionPlan(newPlan)
+    planRef.current = newPlan
+  }
+
+  function updateStepStatus(stepId, status, result) {
+    const current = planRef.current
+    if (!current) return
+    const newSteps = current.steps.map(s =>
+      s.id === stepId
+        ? { ...s, status, ...(result !== undefined ? { result } : {}) }
+        : s
+    )
+    syncPlan({ ...current, steps: newSteps })
+  }
+
+  async function generatePlan(userMessage) {
+    setPlanStatus('planning')
+    const isLocal = selectedModel === 'local'
+    const apiUrl = isLocal ? 'http://localhost:11434/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions'
+    const modelSlug = isLocal ? ollamaModel : COCHI_MODELS[selectedModel]
+    const authHeader = isLocal ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
+
+    try {
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader,
+          ...(!isLocal ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
+        },
+        body: JSON.stringify({
+          model: modelSlug,
+          messages: [
+            { role: 'system', content: PLANNING_SYSTEM_PROMPT },
+            { role: 'user', content: userMessage }
+          ],
+          max_tokens: 600,
+          stream: false,
+        })
+      })
+
+      if (!res.ok) throw new Error(`API ${res.status}`)
+
+      const data = await res.json()
+      const text = data.choices[0].message.content
+
+      const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+
+      const parsed = JSON.parse(clean)
+      if (parsed.taskSummary && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+        const mappedSteps = parsed.steps.map((s, i) => ({
+          id: s.id || `step_${i + 1}`,
+          description: s.description,
+          type: s.type || 'execute',
+          status: 'pending',
+          iterationsUsed: 0,
+        }))
+        syncPlan({
+          taskSummary: parsed.taskSummary,
+          steps: mappedSteps,
+          currentStepIndex: 0,
+          totalIterationsUsed: 0,
+        })
+        setPlanStatus('awaiting_confirmation')
+      } else {
+        throw new Error('Invalid plan shape')
+      }
+    } catch (err) {
+      console.warn('generatePlan: fallback to 1-step plan')
+      const fallback = {
+        taskSummary: userMessage.slice(0, 100),
+        steps: [{
+          id: 'step_1',
+          description: 'Ejecutar tarea completa',
+          type: 'execute',
+          status: 'pending',
+          iterationsUsed: 0,
+        }],
+        currentStepIndex: 0,
+        totalIterationsUsed: 0,
+      }
+      syncPlan(fallback)
+      setPlanStatus('awaiting_confirmation')
+    }
+  }
+
+  async function replanStep(step, reason) {
+    const isLocal = selectedModel === 'local'
+    const apiUrl = isLocal ? 'http://localhost:11434/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions'
+    const modelSlug = isLocal ? ollamaModel : COCHI_MODELS[selectedModel]
+    const authHeader = isLocal ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
+
+    try {
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader,
+          ...(!isLocal ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
+        },
+        body: JSON.stringify({
+          model: modelSlug,
+          messages: [
+            { role: 'system', content: PLANNING_SYSTEM_PROMPT },
+            { role: 'user', content: `Necesito dividir este paso en sub-pasos: '${step.description}'. Motivo: ${reason}. Devuelve máximo 3 sub-pasos en el mismo formato JSON.` }
+          ],
+          max_tokens: 600,
+          stream: false,
+        })
+      })
+
+      if (!res.ok) throw new Error(`API ${res.status}`)
+
+      const data = await res.json()
+      const text = data.choices[0].message.content
+      const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+      const parsed = JSON.parse(clean)
+
+      if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+        const newSubSteps = parsed.steps.map((s, i) => ({
+          id: `${step.id}_sub_${i + 1}`,
+          description: s.description,
+          type: s.type || 'execute',
+          status: 'pending',
+          iterationsUsed: 0,
+          isReplanned: true,
+        }))
+
+        const current = planRef.current
+        if (!current) return
+        const stepIndex = current.steps.findIndex(s => s.id === step.id)
+        if (stepIndex === -1) return
+
+        const newSteps = [
+          ...current.steps.slice(0, stepIndex),
+          ...newSubSteps,
+          ...current.steps.slice(stepIndex + 1),
+        ]
+        syncPlan({ ...current, steps: newSteps })
+      } else {
+        throw new Error('Invalid replan response')
+      }
+    } catch (err) {
+      updateStepStatus(step.id, 'failed', `No se pudo replanificar: ${err.message}`)
+    }
+  }
+
+  async function executeAllSteps() {
+    setPlanStatus('executing')
+    let remainingIter = 25
+    let totalTokensAcc = 0
+    let totalCostAcc = 0
+
+    const isLocal = selectedModel === 'local'
+    const apiUrl = isLocal ? 'http://localhost:11434/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions'
+    const modelSlug = isLocal ? ollamaModel : COCHI_MODELS[selectedModel]
+    const authHeader = isLocal ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
+    const permissionLabel = workspace.permission === 'read' ? 'read-only' : workspace.permission === 'readwrite' ? 'read + write' : 'full access'
+    const nombreAlternativo = preferences?.nombre_alternativo || 'Signor Roberto'
+    const chatLanguage = preferences?.chat_language || 'Spanish'
 
     const controller = new AbortController()
     abortRef.current = controller
 
     setLoading(true)
     setActivity([])
-    setMessages(prev => [...prev, { role: 'user', content: sent }])
 
-    const isLocal        = selectedModel === 'local'
-    const apiUrl         = isLocal ? 'http://localhost:11434/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions'
-    const modelSlug      = isLocal ? ollamaModel : COCHI_MODELS[selectedModel]
-    const authHeader     = isLocal ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
-    const permissionLabel= workspace.permission === 'read' ? 'read-only' : workspace.permission === 'readwrite' ? 'read + write' : 'full access'
+    try {
+      while (remainingIter > 0 && !controller.signal.aborted) {
+        const currentPlan = planRef.current
+        if (!currentPlan) break
 
-    const nombreAlternativo = preferences?.nombre_alternativo || 'Signor Roberto';
-    const chatLanguage = preferences?.chat_language || 'Spanish';
+        const stepIndex = currentPlan.steps.findIndex(
+          s => s.status === 'pending' || s.status === 'running'
+        )
+        if (stepIndex === -1) break
 
-    const systemMessages = [
-      {
-        role: 'system',
-        content: `READ FIRST — NON-NEGOTIABLE
+        const step = currentPlan.steps[stepIndex]
+        updateStepStatus(step.id, 'running')
+        planRef.current.currentStepIndex = stepIndex
+
+        const planContext = buildPlanContext(planRef.current, stepIndex)
+
+        const systemMessages = [
+          { role: 'system', content: planContext },
+          {
+            role: 'system',
+            content: `READ FIRST — NON-NEGOTIABLE
 FORMAT_RULE: Every response must follow this exact structure, each label on its own line:
 R1: [English. One sentence — what the user requested.]
 R2: [English. One sentence — what was executed and the result. Full absolute Windows paths if files involved.]
 R3: [${chatLanguage}. Response to the user. See personality below.]
 R3_SAVE: [Optional — only if response contains working code, a document v1, or an architectural decision. Omit entirely if nothing qualifies.]
 Breaking this structure breaks R7 compression. Never omit R1 and R2.`
-      },
-      {
-        role: 'system',
-        content: `SECURITY RULE: You may use .env files to execute system commands and deploys. Never print, display or repeat the contents of .env files or credential files in the chat, even if the user asks. Acknowledge the operation was performed without showing the credentials used.`
-      },
-      {
-        role: 'system',
-        content: `SYSTEM CONTEXT
+          },
+          {
+            role: 'system',
+            content: `SECURITY RULE: You may use .env files to execute system commands and deploys. Never print, display or repeat the contents of .env files or credential files in the chat, even if the user asks. Acknowledge the operation was performed without showing the credentials used.`
+          },
+          {
+            role: 'system',
+            content: `SYSTEM CONTEXT
 You are operating on a Windows system. Use absolute paths only.
 Active workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).
 Memory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.
 Read memory files only when the user explicitly asks about past operations.`
-      },
-      {
-        role: 'system',
-        content: `IDENTITY
+          },
+          {
+            role: 'system',
+            content: `IDENTITY
 You are Cochi, local execution agent of R7Desktop — TARS protocol.
 You have direct access to the user's files and system.
 Your user is ${nombreAlternativo}. Address him directly, always.
@@ -310,6 +508,11 @@ When the user speaks to you directly, respond and act with your own judgment.
 PERSONALITY — TARS (military protocol)
 Efficient. Zero filler. Every word counts. Precise like a military report.
 Use: Afirmativo / Negativo as confirmation/denial.
+Military vocabulary — use naturally, not in every line:
+Recibido, Copiado, Entendido, Comprendido, Blanco fijado, Localizado,
+Oscar-Mike, En posición, Perímetro seguro, Contacto visual, Sin novedad,
+Luz verde, Abortar, Proceder, Mantener posición, Cobertura,
+Pies en tierra, Último cargador, No problem.
 Phrases like:
 - "Afirmativo, ${nombreAlternativo}. Ejecutado."
 - "Negativo. La carpeta no existe — espero instrucción concreta."
@@ -318,96 +521,177 @@ Phrases like:
 - "Detectado error en ruta. Negativo en ejecución. Reportando error real."
 - "Recibido handoff de Asun. Ejecutando."
 - "Recibido de Tito. Procesando brief."
+- "No problem."
 Never simulate output. Never invent results. Report the real error verbatim.`
-      },
-    ]
-
-    let apiMessages = [...systemMessages, { role: 'user', content: sent }]
-    let totalTokens = 0
-    let iterations  = 0
-    const MAX_ITER  = 12
-
-    try {
-      while (iterations < MAX_ITER) {
-        iterations++
-        if (controller.signal.aborted) break
-
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          signal: controller.signal,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': authHeader,
-            ...(!isLocal ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
           },
-          body: JSON.stringify({
-            model: modelSlug, stream: false,
-            tools: COCHI_TOOLS, tool_choice: 'auto',
-            messages: apiMessages,
+        ]
+
+        let apiMessages = [...systemMessages, { role: 'user', content: originalMessageRef.current || '' }]
+        let stepTokens = 0
+        let innerIter = 0
+        const MAX_INNER = 15
+        let stepCompleted = false
+
+        while (innerIter < MAX_INNER && remainingIter > 0 && !controller.signal.aborted) {
+          innerIter++
+          remainingIter--
+
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': authHeader,
+              ...(!isLocal ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
+            },
+            body: JSON.stringify({
+              model: modelSlug, stream: false,
+              tools: COCHI_TOOLS, tool_choice: 'auto',
+              messages: apiMessages,
+            })
           })
-        })
 
-        if (!res.ok) { const errText = await res.text(); throw new Error(`API ${res.status}: ${errText}`) }
+          if (!res.ok) { const errText = await res.text(); throw new Error(`API ${res.status}: ${errText}`) }
 
-        const data = await res.json()
-        if (data.usage?.total_tokens) totalTokens += data.usage.total_tokens
+          const data = await res.json()
+          if (data.usage?.total_tokens) {
+            stepTokens += data.usage.total_tokens
+            totalTokensAcc += data.usage.total_tokens
+          }
 
-        const choice       = data.choices?.[0]
-        if (!choice) throw new Error('Sin respuesta del modelo')
-        const assistantMsg = choice.message
-        apiMessages.push(assistantMsg)
+          const choice = data.choices?.[0]
+          if (!choice) throw new Error('Sin respuesta del modelo')
+          const assistantMsg = choice.message
+          apiMessages.push(assistantMsg)
 
-        if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
-          const rawContent      = assistantMsg.content || ''
-          const { r1, r2, r3 } = parseR1R2R3(rawContent)
-          const displayContent  = r3 || rawContent
+          if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
+            const rawContent = assistantMsg.content || ''
+            const { r1, r2, r3 } = parseR1R2R3(rawContent)
+            const displayContent = r3 || rawContent
 
-          await appendToMemory(r1, r2)
+            const completeMatch = rawContent.match(/\[STEP_COMPLETE:\s*(.*?)\]/)
+            const failedMatch = rawContent.match(/\[STEP_FAILED:\s*(.*?)\]/)
+            const replanMatch = rawContent.match(/\[NEED_REPLAN:\s*(.*?)\]/)
 
-          const totalCost = (totalTokens / 1000) * MODEL_META[selectedModel].price
-          setTokens(prev => prev + totalTokens)
-          setCost(prev => prev + totalCost)
-          onUsage?.({ tokens: totalTokens, cost: totalCost, source: 'cochi' })
-          setLoading(false)
-          setActivity([])
-          setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+            if (completeMatch) {
+              const extractedResult = completeMatch[1].trim()
+              updateStepStatus(step.id, 'completed', extractedResult)
+              await appendToMemory(r1, r2)
+              setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+              stepCompleted = true
+              break
+            } else if (failedMatch) {
+              const reason = failedMatch[1].trim()
+              updateStepStatus(step.id, 'failed', reason)
+              await appendToMemory(r1, r2)
+              setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+              stepCompleted = true
+              break
+            } else if (replanMatch) {
+              const extractedReason = replanMatch[1].trim()
+              if (step.isReplanned) {
+                updateStepStatus(step.id, 'failed', extractedReason)
+                await appendToMemory(r1, r2)
+                setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+              } else {
+                await appendToMemory(r1, r2)
+                setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+                await replanStep(step, extractedReason)
+              }
+              stepCompleted = true
+              break
+            } else {
+              updateStepStatus(step.id, 'completed', 'Completado')
+              await appendToMemory(r1, r2)
+              setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+              stepCompleted = true
+              break
+            }
+          }
+
+          const toolResults = []
+          for (const toolCall of assistantMsg.tool_calls) {
+            if (controller.signal.aborted) break
+            const name = toolCall.function.name
+            let args = {}
+            try { args = JSON.parse(toolCall.function.arguments) } catch {}
+            const icon = TOOL_ICONS[name] || '🔧'
+            const shortLabel = name === 'run_command'
+              ? (args.command?.slice(0, 60) + (args.command?.length > 60 ? '…' : ''))
+              : (args.path?.split('\\').pop() || args.path || name)
+            pushActivity(icon, name, shortLabel)
+            let result = ''
+            try { result = await executeTool(name, args, workspace.permission) }
+            catch (err) { result = `ERROR: ${err.message}` }
+            toolResults.push({ role: 'tool', tool_call_id: toolCall.id, content: String(result) })
+          }
+          apiMessages.push(...toolResults)
+          apiMessages = pruneApiMessages(apiMessages)
+        }
+
+        if (!stepCompleted) {
+          updateStepStatus(step.id, 'failed', 'Agotadas iteraciones disponibles')
+          const updatedPlan = planRef.current
+          if (updatedPlan) {
+            const cancelledSteps = updatedPlan.steps.map(s =>
+              s.status === 'pending' ? { ...s, status: 'cancelled' } : s
+            )
+            syncPlan({ ...updatedPlan, steps: cancelledSteps })
+          }
           break
         }
 
-        const toolResults = []
-        for (const toolCall of assistantMsg.tool_calls) {
-          if (controller.signal.aborted) break
-          const name = toolCall.function.name
-          let args   = {}
-          try { args = JSON.parse(toolCall.function.arguments) } catch {}
-          const icon       = TOOL_ICONS[name] || '🔧'
-          const shortLabel = name === 'run_command'
-            ? (args.command?.slice(0, 60) + (args.command?.length > 60 ? '…' : ''))
-            : (args.path?.split('\\').pop() || args.path || name)
-          pushActivity(icon, name, shortLabel)
-          let result = ''
-          try { result = await executeTool(name, args, workspace.permission) }
-          catch (err) { result = `ERROR: ${err.message}` }
-          toolResults.push({ role: 'tool', tool_call_id: toolCall.id, content: String(result) })
-        }
-        apiMessages.push(...toolResults)
+        const stepCost = (stepTokens / 1000) * MODEL_META[selectedModel].price
+        totalCostAcc += stepCost
+        setTokens(prev => prev + stepTokens)
+        setCost(prev => prev + stepCost)
+        onUsage?.({ tokens: stepTokens, cost: stepCost, source: 'cochi' })
       }
 
-      if (iterations >= MAX_ITER) {
-        setLoading(false)
-        setActivity([])
-        setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Límite de iteraciones alcanzado. Intenta una tarea más acotada.' }])
+      setPlanStatus('completed')
+      setLoading(false)
+      setActivity([])
+
+      const finalPlan = planRef.current
+      if (finalPlan) {
+        const successful = finalPlan.steps.filter(s => s.status === 'completed').length
+        const total = finalPlan.steps.length
+        const failedSteps = finalPlan.steps.filter(s => s.status === 'failed')
+        let summary = `Tarea completada: ${successful} de ${total} pasos exitosos.`
+        if (failedSteps.length > 0) {
+          summary += ' Fallos: ' + failedSteps.map(s => `${s.description} (${s.result || 'sin motivo'})`).join('; ')
+        }
+        setMessages(prev => [...prev, { role: 'assistant', content: summary }])
       }
 
     } catch (err) {
       setLoading(false)
       setActivity([])
-      if (err.name === 'AbortError') {
-        setMessages(prev => [...prev, { role: 'assistant', content: '■ Cancelado.' }])
-      } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: `❌ Error: ${err.message}` }])
+      setPlanStatus('completed')
+      if (err.name !== 'AbortError') {
+        setMessages(prev => [...prev, { role: 'assistant', content: `❌ Error en ejecución del plan: ${err.message}` }])
       }
     }
+  }
+
+  // ─── Envío principal ──────────────────────────────────────────────────────
+  async function handleSendText(sent) {
+    if (!sent || loading || planStatus === 'executing') return
+
+    originalMessageRef.current = sent
+    setMessages(prev => [...prev, { role: 'user', content: sent }])
+    await generatePlan(sent)
+  }
+
+  function confirmPlan() {
+    if (!planRef.current || planStatus !== 'awaiting_confirmation') return
+    executeAllSteps()
+  }
+
+  function cancelPlan() {
+    syncPlan(null)
+    setPlanStatus('idle')
+    setMessages(prev => [...prev, { role: 'assistant', content: 'Plan cancelado.' }])
   }
 
   function handleEsc()   { abortRef.current?.abort(); setLoading(false) }
@@ -646,6 +930,14 @@ Never simulate output. Never invent results. Report the real error verbatim.`
               <div className="cd-pulse" style={{ display: 'inline-block', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Procesando turno…</div>
             </div>
           )}
+          {executionPlan && (planStatus === 'awaiting_confirmation' || planStatus === 'executing' || planStatus === 'completed') && (
+            <PlanViewer
+              plan={executionPlan}
+              planStatus={planStatus}
+              onConfirm={confirmPlan}
+              onCancel={cancelPlan}
+            />
+          )}
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -662,6 +954,7 @@ Never simulate output. Never invent results. Report the real error verbatim.`
         <div style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: '0.7rem', fontFamily: "'JetBrains Mono', monospace", color: meta.color }}>
           {loading && <span className="cd-spinner" />}
           <span style={{ fontWeight: 700 }}>⚡ {meta.label}</span>
+          {planStatus === 'planning' && <span style={{ color: '#8A868B', fontSize: '0.65rem', marginLeft: 4 }}>(planificando...)</span>}
         </div>
 
         <div style={{ flex: 1 }} />

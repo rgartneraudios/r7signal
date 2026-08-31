@@ -1,0 +1,176 @@
+1. Data structures — React state
+
+Dos variables de estado nuevas en CochiDesktop.jsx. Todo el plan vive en executionPlan; planStatus orquesta el ciclo de vida.
+
+// Tipos (JSDoc para referencia de Cochi)
+PlanStep {
+  id:             string          // "step_1", "step_2", ...
+  description:    string          // Texto visible al usuario, en español
+  type:           string          // "read"|"write"|"execute"|"analyze"|"create"|"delete"
+  status:         StepStatus      // 'pending'|'running'|'completed'|'failed'|'cancelled'
+  result?:        string          // Resumen del resultado o motivo del fallo
+  iterationsUsed: number          // Iteraciones consumidas por este paso
+  isReplanned?:   boolean         // true si fue generado por replanStep()
+}
+
+ExecutionPlan {
+  taskSummary:          string      // Una frase: lo que Cochi entendió del encargo
+  steps:                PlanStep[]
+  currentStepIndex:     number      // Índice del paso en ejecución
+  totalIterationsUsed:  number      // Global, acumulado entre todos los pasos
+}
+
+// Estado React nuevo:
+const [executionPlan,  setExecutionPlan]  = useState(null)
+const [planStatus,     setPlanStatus]     = useState('idle')
+// 'idle' | 'planning' | 'awaiting_confirmation' | 'executing' | 'completed'
+
+// Ref para lectura síncrona del plan dentro de loops async:
+const planRef = useRef(null)
+// — se actualiza en cada setExecutionPlan, igual que messagesEndRef
+
+La ref planRef es crítica: React no garantiza que executionPlan sea el valor actual dentro de un async mientras el loop está corriendo. La ref siempre refleja el último setExecutionPlan.
+
+2. API calls — dos llamadas distintas
+
+Llamada de planificación (nueva, ocurre una sola vez antes de ejecutar):
+
+endpoint:      mismo que ejecución (OpenRouter o Ollama)
+model:         selectedModel (el que esté activo en ese momento)
+system:        PLANNING_SYSTEM_PROMPT  (módulo separado)
+user:          el mensaje del usuario tal cual
+max_tokens:    600
+tools:         ninguno (la planificación no ejecuta herramientas)
+tool_choice:   ninguno
+stream:        false
+
+El response se parsea como JSON puro. Si el modelo envuelve la respuesta en markdown fences (```json ... ```), se stripean antes del parse.
+
+Llamada de ejecución (modificada):
+
+Igual que hoy, con un cambio: el primer system message se reemplaza por el output de buildPlanContext(plan, currentStepIndex). El resto de los system messages (FORMAT_RULE, SECURITY_RULE, SYSTEM CONTEXT, IDENTITY) siguen igual y van a continuación.
+
+La inyección de contexto de plan va antes que FORMAT_RULE, porque el modelo debe entender primero en qué parte del plan está.
+
+3. System prompts — texto exacto
+PLANNING_SYSTEM_PROMPT
+Eres el módulo de planificación de Cochi, un agente de filesystem.
+Tu única función: analizar la tarea y devolver un plan de ejecución JSON.
+
+DEVUELVE SOLO UN OBJETO JSON VÁLIDO.
+Sin markdown. Sin explicaciones. Sin texto adicional antes o después.
+
+Reglas:
+- Entre 1 y 7 pasos, ordenados, discretos e independientemente ejecutables
+- Las descripciones de pasos deben estar en español, claras para el usuario
+- Si la tarea es simple, devuelve 1 paso
+- No ejecutes nada — solo planifica
+
+Formato exacto requerido:
+{
+  "taskSummary": "Una frase describiendo lo que entendiste del encargo",
+  "steps": [
+    {
+      "id": "step_1",
+      "description": "Descripción visible al usuario",
+      "type": "read|write|execute|analyze|create|delete"
+    }
+  ]
+}
+buildPlanContext(plan, currentStepIndex) — inyección dinámica de ejecución
+
+Esta función construye un string que se pasa como primer system message al loop de ejecución:
+
+╔══════════ PLAN ACTIVO ══════════╗
+Tarea: {plan.taskSummary}
+Paso actual: {n} de {total} — "{currentStep.description}"
+
+Completados:
+{lista de pasos completados con ✓ y su result, o "(ninguno)"}
+
+Pendientes tras este:
+{lista de pasos pendientes con •, o "(ninguno)"}
+
+Señales de control (escribe exactamente una cuando corresponda):
+  [STEP_COMPLETE: resumen breve del resultado]
+  [STEP_FAILED: motivo concreto]
+  [NEED_REPLAN: motivo por el que necesita dividirse]
+╚════════════════════════════════╝
+
+La regla FORMAT_RULE existente (R1/R2/R3) sigue aplicando. R2 debe incluir la señal: R2: Executed step 2/4. File written. [STEP_COMPLETE: package.json updated].
+
+4. PlanViewer — diseño de UI
+
+Nuevo componente src/components/PlanViewer.jsx. Props:
+
+plan:        ExecutionPlan
+planStatus:  string
+onConfirm:   () => void
+onCancel:    () => void
+
+Render por estado:
+
+awaiting_confirmation — muestra el plan completo con botones:
+
+Header: plan.taskSummary en dorado 
+#E8C84A
+Lista numerada de pasos. Cada paso: ⏳ [step.description]
+Dos botones: Ejecutar plan (azul/teal, onClick → onConfirm) y Cancelar (gris, onClick → onCancel)
+No usa <form>. Solo onClick.
+
+executing — muestra progreso en tiempo real:
+
+Misma lista, pero iconos actualizados por step.status:
+⏳ pending, 🔄 running (destaca con borde), ✅ completed, ❌ failed, 🚫 cancelled
+Barra de progreso: completedCount / totalSteps
+Si el paso tiene result, se muestra en gris tenue debajo de la descripción
+Botones de confirmar/cancelar ocultos
+
+completed — resumen persistente hasta el próximo mensaje:
+
+Pasos con iconos finales
+Texto sumario: M de N pasos completados
+
+El componente usa los mismos colores y tipografías de CochiDesktop (Space Grotesk, JetBrains Mono, fondo 
+#18171C, borde 
+#232227). No genera CSS global — todo inline o en el bloque <style> del componente con scope local.
+
+5. Edge cases — los cinco
+
+① JSON inválido o llamada de planificación falla:
+generatePlan() atrapa el error. Crea un plan sintético: { taskSummary: userMessage.slice(0, 80), steps: [{ id: 'step_1', description: 'Ejecutar tarea completa', type: 'execute', status: 'pending', iterationsUsed: 0 }] }. Log console.warn. Flujo continúa normalmente hacia confirmación. El usuario ve un plan de 1 paso y puede confirmar. Mejora 3 nunca bloquea la ejecución.
+
+② Paso imposible desde el inicio (STEP_FAILED inmediato):
+Se marca status: 'failed', se guarda el motivo en result. currentStepIndex avanza al siguiente. La ejecución no se aborta. En el resumen final aparece listado con su motivo. El usuario puede ver exactamente qué falló y por qué.
+
+③ MAX_ITER agotado dentro de un paso (sin señal):
+Cuando totalIterationsUsed >= MAX_ITER y el paso no ha emitido ninguna señal, el paso activo se marca failed con result: 'Agotadas iteraciones disponibles'. Los pasos restantes se marcan cancelled. El loop sale. Se genera el resumen de progreso parcial. Esto resuelve el problema original: ya no es posible que la tarea entera sature las 25 iteraciones en silencio.
+
+④ NEED_REPLAN en un paso ya replanificado (riesgo de recursión):
+Si step.isReplanned === true y el modelo emite [NEED_REPLAN], se trata como STEP_FAILED. No se llama a replanStep(). Limita la profundidad de replanificación a 1 nivel. Se guarda en result: 'Replanificación falló: ' + motivo.
+
+⑤ Usuario envía mensaje mientras se está ejecutando el plan:
+El input central de R7Desktop pasa pendingMessage a CochiDesktop. Cuando planStatus === 'executing', el useEffect que procesa pendingMessage tiene un guard: if (planStatus === 'executing') return. El mensaje se descarta y se llama igualmente a onMessageConsumed(). Adicionalmente, el footer de CochiDesktop puede mostrar un estado visual de "plan en progreso" mientras dura la ejecución.
+
+6. Qué cambia, qué es nuevo
+
+Archivos nuevos:
+
+src/lib/cochiPlanningPrompts.js — exporta PLANNING_SYSTEM_PROMPT (string constante) y buildPlanContext(plan, currentStepIndex) (función que retorna string). Nada más.
+
+src/components/PlanViewer.jsx — componente React puro. Props declaradas arriba. Sin dependencias externas nuevas.
+
+Archivos modificados:
+
+src/components/CochiDesktop.jsx:
+
++2 imports (PlanViewer, cochiPlanningPrompts)
++2 useState (executionPlan, planStatus)
++1 useRef (planRef)
++4 funciones: generatePlan(), updateStepStatus(), replanStep(), executeAllSteps()
+handleSendText: la mitad del contenido actual (el while loop completo) se extrae a executeAllSteps(). handleSendText queda como orquestador: captura el mensaje, llama a generatePlan(), termina.
++2 handlers: confirmPlan(), cancelPlan()
++1 useRef: originalMessageRef para guardar el mensaje del usuario entre handleSendText y confirmPlan
+JSX: PlanViewer renderizado condicionalmente antes del área de mensajes
+
+Sin cambios: AsunPanel.jsx, TitoPanel.jsx, R7Desktop.jsx, todas las Edge Functions, todo el stack web.

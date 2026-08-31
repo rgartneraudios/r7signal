@@ -90,6 +90,7 @@ function MusicChat({ menuNumero, user }) {
     const cargarNombre = async () => {
       const { data: userData } = await supabase.auth.getUser()
       const userId = userData?.user?.id || user?.id
+      if (!userId) return
       const { data: prefData } = await supabase
         .from('user_preferences')
         .select('nombre_alternativo, nombre_usuario')
