@@ -14,6 +14,9 @@ export default function PreferencesModal({ onClose, userId, supabase, preference
   const [nombreUsuario, setNombreUsuario] = useState(preferences?.nombre_usuario || '')
   const [nombreAlternativo, setNombreAlternativo] = useState(preferences?.nombre_alternativo || '')
   const [chatLanguage, setChatLanguage] = useState(preferences?.chat_language || 'Español')
+  const [ollamaEndpoint, setOllamaEndpoint] = useState(preferences?.ollamaEndpoint || 'http://localhost:11434')
+  const [lmStudioEndpoint, setLmStudioEndpoint] = useState(preferences?.lmStudioEndpoint || 'http://localhost:1234')
+  const [lmStudioModel, setLmStudioModel] = useState(preferences?.lmStudioModel || 'local-model')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -36,13 +39,16 @@ export default function PreferencesModal({ onClose, userId, supabase, preference
       }
       const { data, error } = await supabase
         .from('user_preferences')
-        .select('nombre_usuario, nombre_alternativo, chat_language')
+        .select('nombre_usuario, nombre_alternativo, chat_language, ollamaEndpoint, lmStudioEndpoint, lmStudioModel')
         .eq('user_id', user.id)
         .maybeSingle()
       if (data) {
         setNombreUsuario(data.nombre_usuario || '')
         setNombreAlternativo(data.nombre_alternativo || '')
         setChatLanguage(data.chat_language || 'Español')
+        setOllamaEndpoint(data.ollamaEndpoint || 'http://localhost:11434')
+        setLmStudioEndpoint(data.lmStudioEndpoint || 'http://localhost:1234')
+        setLmStudioModel(data.lmStudioModel || 'local-model')
       }
       if (error) setError('Error cargando preferencias.')
       setLoading(false)
@@ -54,7 +60,7 @@ export default function PreferencesModal({ onClose, userId, supabase, preference
     setSaving(true)
     setError(null)
     if (onSave) {
-      const newPrefs = { nombre_usuario: nombreUsuario, nombre_alternativo: nombreAlternativo, chat_language: chatLanguage }
+      const newPrefs = { nombre_usuario: nombreUsuario, nombre_alternativo: nombreAlternativo, chat_language: chatLanguage, ollamaEndpoint, lmStudioEndpoint, lmStudioModel }
       await onSave(newPrefs)
       onSaved?.(newPrefs)
       onClose()
@@ -77,7 +83,10 @@ export default function PreferencesModal({ onClose, userId, supabase, preference
           user_id: user.id,
           nombre_usuario: nombreUsuario,
           nombre_alternativo: nombreAlternativo,
-          chat_language: chatLanguage
+          chat_language: chatLanguage,
+          ollamaEndpoint,
+          lmStudioEndpoint,
+          lmStudioModel
         }, { onConflict: 'user_id' })
     if (error) {
       setError('Error guardando. Intentá de nuevo.')
@@ -161,6 +170,37 @@ export default function PreferencesModal({ onClose, userId, supabase, preference
                 <option key={idioma} value={idioma} style={{ background: '#1a1a2e' }}>{idioma}</option>
               ))}
             </select>
+
+            <div style={{ height: 1, background: '#201F23', margin: '8px 0 16px' }} />
+
+            <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>IA Local</div>
+
+            <div style={{ fontSize: '0.65rem', color: '#6B9EC4', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>Ollama Endpoint</div>
+            <input
+              type="text"
+              value={ollamaEndpoint}
+              onChange={e => setOllamaEndpoint(e.target.value)}
+              placeholder="http://localhost:11434"
+              style={inputStyle}
+            />
+
+            <div style={{ fontSize: '0.65rem', color: '#6B9EC4', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>LM Studio Endpoint</div>
+            <input
+              type="text"
+              value={lmStudioEndpoint}
+              onChange={e => setLmStudioEndpoint(e.target.value)}
+              placeholder="http://localhost:1234"
+              style={inputStyle}
+            />
+
+            <div style={{ fontSize: '0.65rem', color: '#6B9EC4', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>LM Studio Model</div>
+            <input
+              type="text"
+              value={lmStudioModel}
+              onChange={e => setLmStudioModel(e.target.value)}
+              placeholder="local-model"
+              style={{ ...inputStyle, marginBottom: 28 }}
+            />
 
             {error && (
               <div style={{ color: THEME.pinkMarble, fontSize: '0.8rem', marginBottom: 16 }}>{error}</div>
