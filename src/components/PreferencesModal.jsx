@@ -10,20 +10,34 @@ const IDIOMAS = [
   '中文(简体)', '中文(繁體)', '日本語', '한국어', 'हिन्दी', 'العربية'
 ]
 
-export default function PreferencesModal({ onClose, userId, supabase }) {
-  const [nombreUsuario, setNombreUsuario] = useState('')
-  const [nombreAlternativo, setNombreAlternativo] = useState('')
-  const [chatLanguage, setChatLanguage] = useState('Español')
+export default function PreferencesModal({ onClose, userId, supabase, preferences, onSave, onSaved }) {
+  const [nombreUsuario, setNombreUsuario] = useState(preferences?.nombre_usuario || '')
+  const [nombreAlternativo, setNombreAlternativo] = useState(preferences?.nombre_alternativo || '')
+  const [chatLanguage, setChatLanguage] = useState(preferences?.chat_language || 'Español')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    if (preferences) {
+      setLoading(false)
+      return
+    }
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
     async function fetchPrefs() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setError('Sesión no activa.')
+        setLoading(false)
+        return
+      }
       const { data, error } = await supabase
         .from('user_preferences')
         .select('nombre_usuario, nombre_alternativo, chat_language')
-        .eq('user_id', userId)
+        .eq('user_id', user.id)
         .maybeSingle()
       if (data) {
         setNombreUsuario(data.nombre_usuario || '')
@@ -39,14 +53,32 @@ export default function PreferencesModal({ onClose, userId, supabase }) {
   async function handleSave() {
     setSaving(true)
     setError(null)
+    if (onSave) {
+      const newPrefs = { nombre_usuario: nombreUsuario, nombre_alternativo: nombreAlternativo, chat_language: chatLanguage }
+      await onSave(newPrefs)
+      onSaved?.(newPrefs)
+      onClose()
+      return
+    }
+    if (!supabase) {
+      setError('No hay método de guardado disponible.')
+      setSaving(false)
+      return
+    }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setError('Sesión no activa.')
+      setSaving(false)
+      return
+    }
     const { error } = await supabase
-      .from('user_preferences')
-      .upsert({
-        user_id: userId,
-        nombre_usuario: nombreUsuario,
-        nombre_alternativo: nombreAlternativo,
-        chat_language: chatLanguage
-      }, { onConflict: 'user_id' })
+        .from('user_preferences')
+        .upsert({
+          user_id: user.id,
+          nombre_usuario: nombreUsuario,
+          nombre_alternativo: nombreAlternativo,
+          chat_language: chatLanguage
+        }, { onConflict: 'user_id' })
     if (error) {
       setError('Error guardando. Intentá de nuevo.')
       setSaving(false)

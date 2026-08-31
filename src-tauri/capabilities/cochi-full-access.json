@@ -29,7 +29,17 @@
     "fs:allow-stat",
     "shell:default",
     "shell:allow-spawn",
-    "shell:allow-execute",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "powershell",
+          "cmd": "powershell",
+          "args": ["-Command", { "validator": ".*" }],
+          "sidecar": false
+        }
+      ]
+    },
     "shell:allow-open",
     "dialog:default",
     "dialog:allow-open"

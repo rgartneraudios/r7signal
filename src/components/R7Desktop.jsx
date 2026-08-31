@@ -32,8 +32,10 @@ export default function R7Desktop() {
   const [cochiTokens, setCochiTokens] = useState(0)
   const [showPrefs, setShowPrefs] = useState(false)
   const [userName, setUserName] = useState('')
+  const [preferences, setPreferences] = useState({ nombre_usuario: '', nombre_alternativo: '', chat_language: 'Español' })
 
   const inputRef = useRef(null)
+  const cochiSavePrefsRef = useRef(null)
 
   // ─── Routing ──────────────────────────────────────────────────────────────
   function sendToAsun() {
@@ -584,7 +586,9 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
       {showPrefs && (
         <PreferencesModal
           onClose={() => setShowPrefs(false)}
-          userId={import.meta.env.VITE_R7_USER_ID}
+          preferences={preferences}
+          onSave={(data) => cochiSavePrefsRef.current?.(data)}
+          onSaved={(prefs) => setPreferences(prefs)}
           supabase={supabase}
         />
       )}
@@ -632,6 +636,8 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
             onR9Update={handleR9Update}
             onWorkspaceChange={handleWorkspaceChange}
             onUsage={handleUsage}
+            onPreferencesLoaded={(prefs) => setPreferences(prefs)}
+            onSavePreferences={(fn) => { cochiSavePrefsRef.current = fn }}
             r9={r9}
           />
         </div>
