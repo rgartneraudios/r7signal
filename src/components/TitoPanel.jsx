@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { calculateCost } from '../lib/modelPrices.js'
 
 const TITO_MODELS = {
   rapido: 'perplexity/sonar',
@@ -110,6 +111,7 @@ export default function TitoPanel({
         body: JSON.stringify({
           model: TITO_MODELS[searchLevel],
           stream: true,
+          stream_options: { include_usage: true },
           messages: [
             { role: 'system', content: TITO_SYSTEM_PROMPT },
             ...history,
@@ -141,11 +143,11 @@ export default function TitoPanel({
               return updated;
             });
             if (parsed.usage) {
-              onUsage?.({ 
-                tokens: parsed.usage.total_tokens, 
-                cost: parsed.usage.total_cost || 0,
-                source: 'tito'
-              });
+              const { prompt_tokens, completion_tokens } = parsed.usage
+              const cost = calculateCost(TITO_MODELS[searchLevel], prompt_tokens, completion_tokens, 'token')
+              if (typeof onUsage === 'function') {
+                onUsage({ source: 'tito', inputTokens: prompt_tokens, outputTokens: completion_tokens, cost })
+              }
             }
           } catch {}
         }
@@ -198,8 +200,8 @@ export default function TitoPanel({
         <div className="tito-level-selector">
           {[
             { key: 'rapido', label: '⚡ Rápido', model: 'sonar' },
-            { key: 'pro',    label: '🔍 Pro',    model: 'sonar-pro' },
             { key: 'deep',   label: '🔬 Deep',   model: 'deep-research' },
+            { key: 'pro',    label: '🔍 Pro',    model: 'sonar-pro' },
           ].map(({ key, label }) => (
             <button
               key={key}

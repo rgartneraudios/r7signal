@@ -4,6 +4,7 @@ import TitoPanel from './TitoPanel'
 import CochiDesktop from './CochiDesktop'
 import PreferencesModal from './PreferencesModal'
 import { supabase } from '../supabaseClient'
+import { openUrl } from '@tauri-apps/plugin-opener'
 
 const DEFAULT_WORKSPACE = { path: '', permission: 'read' }
 const DEFAULT_R9        = { acumulado: {}, memorySize: 0 }
@@ -59,8 +60,14 @@ export default function R7Desktop() {
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      if (selectedPanel === 'cochi') sendToCochi()
-      else handleSend()
+      if (e.altKey) {
+        setSelectedPanel(activeLeftPanel)
+        handleSend()
+      } else if (selectedPanel === 'cochi') {
+        sendToCochi()
+      } else {
+        handleSend()
+      }
     }
   }
 
@@ -84,12 +91,13 @@ export default function R7Desktop() {
   const handleAsunHandoff      = useCallback((brief)    => setHandoff({ ...brief, id: Date.now() }), [])
   const handleR9Update         = useCallback((newR9)    => setR9(newR9), [])
   const handleWorkspaceChange  = useCallback((newWs)    => setWorkspace(newWs), [])
-const handleUsage            = useCallback(({ tokens, cost, source }) => {
-      if (source === 'asun')  setAsunTokens(prev  => prev + tokens)
-      if (source === 'tito')  setTitoTokens(prev => prev + tokens)
-      if (source === 'cochi') setCochiTokens(prev => prev + tokens)
-      setTotalTokens(prev => prev + tokens)
-      setTotalCost(prev => (prev ?? 0) + cost)
+const handleUsage            = useCallback(({ source, inputTokens = 0, outputTokens = 0, cost }) => {
+      const total = (inputTokens || 0) + (outputTokens || 0)
+      if (source === 'asun')  setAsunTokens(prev  => prev + total)
+      if (source === 'tito')  setTitoTokens(prev => prev + total)
+      if (source === 'cochi') setCochiTokens(prev => prev + total)
+      setTotalTokens(prev => prev + total)
+      setTotalCost(prev => (prev ?? 0) + (cost || 0))
     }, [])
 
   const showCentralInput = asunCategory !== 'imagen'
@@ -98,6 +106,10 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
   const costDisplay = totalCost === null
     ? null
     : totalCost < 0.001 ? '~0,00€' : `~${totalCost.toFixed(3).replace('.', ',')}€`
+
+  const openExternal = (url) => {
+    openUrl(url).catch(() => window.open(url, '_blank'))
+  }
 
   return (
     <div style={{
@@ -505,24 +517,6 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
           </div>
         </div>
 
-        {/* TOTAL — centrado absoluto */}
-        <div style={{
-          position: 'absolute', left: '50%', top: '50%',
-          transform: 'translate(-50%, -50%)',
-          display:'flex', flexDirection:'column', gap:2, alignItems:'center',
-        }}>
-          <span style={{
-            fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
-            letterSpacing:'0.25em', fontWeight:700, color:'#E8C84A', opacity:0.7,
-          }}>TOTAL</span>
-          <span style={{
-            fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
-            fontWeight:700, color:'#E8C84A', letterSpacing:'0.04em', lineHeight:1,
-          }}>
-            {totalCost === null ? '—' : totalCost < 0.001 ? '~0,00€' : `~${totalCost.toFixed(3).replace('.',',')}€`}
-          </span>
-        </div>
-
         {/* Sección derecha */}
         <div style={{ display:'flex', alignItems:'center', flexShrink:0, marginLeft:'auto' }}>
           <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0, alignItems:'flex-end' }}>
@@ -540,6 +534,39 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
           </div>
 
           <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', margin:'0 14px', flexShrink:0 }} />
+
+          <button
+            onClick={() => openExternal('https://openrouter.ai/settings/credits')}
+            style={{
+              background: 'none',
+              border: '1px solid #B0F527',
+              color: '#B0F527',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '11px',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              marginRight: '4px',
+            }}
+          >
+            OR Credits
+          </button>
+          <button
+            onClick={() => openExternal('https://openrouter.ai/activity')}
+            style={{
+              background: 'none',
+              border: '1px solid #B0F527',
+              color: '#B0F527',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '11px',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              marginRight: '12px',
+            }}
+          >
+            OR Activity
+          </button>
 
           {workspace.path && (
             <div style={{
@@ -597,7 +624,7 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
       <div style={{
         position: 'relative', zIndex: 5,
         flex: 1, display: 'flex', overflow: 'hidden',
-        paddingBottom: showCentralInput ? 62 : 0,
+        
       }}>
         {/* Panel izquierdo — Asun / Tito */}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -614,10 +641,7 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
             : <TitoPanel
                 pendingMessage={activeLeftPanel === 'tito' ? pendingAsun : null}
                 onMessageConsumed={() => setPendingAsun(null)}
-                onUsage={({ tokens, cost }) => {
-                  setTitoTokens(prev => prev + tokens);
-                  setTotalCost(prev => (prev || 0) + cost);
-                }}
+                onUsage={handleUsage}
                 onHandoff={(brief) => setHandoff({ type:'tito', brief, id: Date.now() })}
                 userName={userName}
               />
@@ -646,7 +670,7 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
       {/* ── Footer / Input central ── */}
       {showCentralInput && (
         <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
+          flexShrink: 0,
           borderTop: '1px solid rgba(255,255,255,0.05)',
           background: 'rgba(9,8,10,0.9)',
           backdropFilter: 'blur(14px)',
@@ -660,9 +684,18 @@ const handleUsage            = useCallback(({ tokens, cost, source }) => {
             <div style={{
               fontFamily: "'Orbitron', sans-serif",
               fontSize: '0.42rem', letterSpacing: '0.18em',
-              color: '#1E1D22', fontWeight: 700, lineHeight: 1.7, userSelect: 'none',
+              fontWeight: 700, lineHeight: 1.7, userSelect: 'none',
             }}>
-              ↵ COCHI<br />⌥↵ ASUN
+              <span style={{ color: '#00D4FF', textShadow: '0 0 6px rgba(0,212,255,0.6)' }}>↵ COCHI</span>
+              <br />
+              <span style={{
+                color: activeLeftPanel === 'asun' ? '#E040FB' : '#FFD740',
+                textShadow: activeLeftPanel === 'asun'
+                  ? '0 0 6px rgba(224,64,251,0.6)'
+                  : '0 0 6px rgba(255,215,64,0.6)',
+              }}>
+                ⌥↵ {activeLeftPanel === 'asun' ? 'ASUN' : 'TITO'}
+              </span>
             </div>
             {costDisplay && (
               <div style={{

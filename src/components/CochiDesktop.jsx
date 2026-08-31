@@ -35,11 +35,13 @@ const COCHI_MODELS = {
   occidental: 'google/gemini-2.5-flash-lite',
   asia:       'deepseek/deepseek-v4-flash-0731',
   local:      'local',
+  lmstudio:   'lm-studio',
 }
 const MODEL_META = {
   occidental: { label: 'Gemini 2.5 Flash Lite', sub: 'Occidental · Google',  color: '#4A5A6A', price: 0.000150 },
   asia:       { label: 'DeepSeek V4 Flash',      sub: 'Asia · DeepSeek',      color: '#6A7A8A', price: 0.000270 },
   local:      { label: 'IA Local · Ollama',      sub: 'Privado · Sin salida', color: '#C0C0C0', price: 0       },
+  lmstudio:   { label: 'IA Local · LM Studio',   sub: 'Privado · Sin salida', color: '#C0C0C0', price: 0       },
 }
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
@@ -130,7 +132,7 @@ const css = `
 //   onHandoffConsumed ()             — avisar al padre que se consumió
 //   onR9Update        (r9)           — subir contexto r9 actualizado
 //   onWorkspaceChange (workspace)    — subir cambio de workspace
-//   onUsage           ({ tokens, cost }) — reportar coste de turno
+//   onUsage           ({ source, inputTokens, outputTokens, cost }) — report cost
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function CochiDesktop({
   pendingMessage,
@@ -151,6 +153,7 @@ export default function CochiDesktop({
   const abortRef                              = useRef(null)
   const [selectedModel,   setSelectedModel]   = useState('occidental')
   const [ollamaModel,     setOllamaModel]     = useState('llama3.2')
+  const [lmStudioModel,   setLmStudioModel]   = useState('local-model')
   const [workspace,       setWorkspace]       = useState({ path: '', permission: 'read' })
   const [userName,        setUserName]        = useState('')
   const [preferences,     setPreferences]     = useState(null)
@@ -187,6 +190,8 @@ export default function CochiDesktop({
         }
         if (data) {
           setPreferences(data)
+          if (data.ollamaModel) setOllamaModel(data.ollamaModel)
+          if (data.lmStudioModel) setLmStudioModel(data.lmStudioModel)
         }
         onPreferencesLoaded?.(data)
       } catch {
@@ -198,7 +203,9 @@ export default function CochiDesktop({
 
   const savePreferences = async (prefs) => {
     try {
-      await writeTextFile('user_preferences.json', JSON.stringify(prefs, null, 2), { baseDir: BaseDirectory.AppLocalData })
+      const merged = { ...prefs, ollamaModel, lmStudioModel }
+      await writeTextFile('user_preferences.json', JSON.stringify(merged, null, 2), { baseDir: BaseDirectory.AppLocalData })
+      setPreferences(merged)
     } catch (err) { console.error('Error saving preferences:', err) }
   }
 
@@ -304,9 +311,14 @@ export default function CochiDesktop({
   async function generatePlan(userMessage) {
     setPlanStatus('planning')
     const isLocal = selectedModel === 'local'
-    const apiUrl = isLocal ? 'http://localhost:11434/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions'
-    const modelSlug = isLocal ? ollamaModel : COCHI_MODELS[selectedModel]
-    const authHeader = isLocal ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
+    const isLmStudio = selectedModel === 'lmstudio'
+    const apiUrl = isLocal
+      ? `${preferences?.ollamaEndpoint || 'http://localhost:11434'}/v1/chat/completions`
+      : isLmStudio
+        ? `${preferences?.lmStudioEndpoint || 'http://localhost:1234'}/v1/chat/completions`
+        : 'https://openrouter.ai/api/v1/chat/completions'
+    const modelSlug = isLocal ? ollamaModel : isLmStudio ? lmStudioModel : COCHI_MODELS[selectedModel]
+    const authHeader = isLocal || isLmStudio ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
 
     try {
       const res = await fetch(apiUrl, {
@@ -314,7 +326,7 @@ export default function CochiDesktop({
         headers: {
           'Content-Type': 'application/json',
           'Authorization': authHeader,
-          ...(!isLocal ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
+          ...(!isLocal && !isLmStudio ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
         },
         body: JSON.stringify({
           model: modelSlug,
@@ -350,6 +362,7 @@ export default function CochiDesktop({
           totalIterationsUsed: 0,
         })
         setPlanStatus('awaiting_confirmation')
+        setMessages(prev => [...prev, { role: 'plan' }])
       } else {
         throw new Error('Invalid plan shape')
       }
@@ -369,14 +382,20 @@ export default function CochiDesktop({
       }
       syncPlan(fallback)
       setPlanStatus('awaiting_confirmation')
+      setMessages(prev => [...prev, { role: 'plan' }])
     }
   }
 
   async function replanStep(step, reason) {
     const isLocal = selectedModel === 'local'
-    const apiUrl = isLocal ? 'http://localhost:11434/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions'
-    const modelSlug = isLocal ? ollamaModel : COCHI_MODELS[selectedModel]
-    const authHeader = isLocal ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
+    const isLmStudio = selectedModel === 'lmstudio'
+    const apiUrl = isLocal
+      ? `${preferences?.ollamaEndpoint || 'http://localhost:11434'}/v1/chat/completions`
+      : isLmStudio
+        ? `${preferences?.lmStudioEndpoint || 'http://localhost:1234'}/v1/chat/completions`
+        : 'https://openrouter.ai/api/v1/chat/completions'
+    const modelSlug = isLocal ? ollamaModel : isLmStudio ? lmStudioModel : COCHI_MODELS[selectedModel]
+    const authHeader = isLocal || isLmStudio ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
 
     try {
       const res = await fetch(apiUrl, {
@@ -384,7 +403,7 @@ export default function CochiDesktop({
         headers: {
           'Content-Type': 'application/json',
           'Authorization': authHeader,
-          ...(!isLocal ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
+          ...(!isLocal && !isLmStudio ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
         },
         body: JSON.stringify({
           model: modelSlug,
@@ -440,9 +459,14 @@ export default function CochiDesktop({
     let totalCostAcc = 0
 
     const isLocal = selectedModel === 'local'
-    const apiUrl = isLocal ? 'http://localhost:11434/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions'
-    const modelSlug = isLocal ? ollamaModel : COCHI_MODELS[selectedModel]
-    const authHeader = isLocal ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
+    const isLmStudio = selectedModel === 'lmstudio'
+    const apiUrl = isLocal
+      ? `${preferences?.ollamaEndpoint || 'http://localhost:11434'}/v1/chat/completions`
+      : isLmStudio
+        ? `${preferences?.lmStudioEndpoint || 'http://localhost:1234'}/v1/chat/completions`
+        : 'https://openrouter.ai/api/v1/chat/completions'
+    const modelSlug = isLocal ? ollamaModel : isLmStudio ? lmStudioModel : COCHI_MODELS[selectedModel]
+    const authHeader = isLocal || isLmStudio ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
     const permissionLabel = workspace.permission === 'read' ? 'read-only' : workspace.permission === 'readwrite' ? 'read + write' : 'full access'
     const nombreAlternativo = preferences?.nombre_alternativo || 'Signor Roberto'
     const chatLanguage = preferences?.chat_language || 'Spanish'
@@ -542,7 +566,7 @@ Never simulate output. Never invent results. Report the real error verbatim.`
             headers: {
               'Content-Type': 'application/json',
               'Authorization': authHeader,
-              ...(!isLocal ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
+              ...(!isLocal && !isLmStudio ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
             },
             body: JSON.stringify({
               model: modelSlug, stream: false,
@@ -645,7 +669,7 @@ Never simulate output. Never invent results. Report the real error verbatim.`
         totalCostAcc += stepCost
         setTokens(prev => prev + stepTokens)
         setCost(prev => prev + stepCost)
-        onUsage?.({ tokens: stepTokens, cost: stepCost, source: 'cochi' })
+        onUsage?.({ source: 'cochi', inputTokens: stepTokens, outputTokens: 0, cost: stepCost })
       }
 
       setPlanStatus('completed')
@@ -717,16 +741,7 @@ Never simulate output. Never invent results. Report the real error verbatim.`
         padding: '10px 14px',
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
-        {/* Label COCHI con gradiente propio */}
-        <span style={{
-          fontFamily: "'Orbitron', sans-serif", fontWeight: 900,
-          fontSize: '0.65rem', letterSpacing: '0.35em',
-          backgroundImage: 'linear-gradient(135deg, #4A5A6A 0%, #8A9AAA 30%, #C0C8D0 60%, #E0E4E8 100%)',
-          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text', userSelect: 'none', flexShrink: 0,
-        }}>
-          COCHI · PANEL
-        </span>
+        
 
         {/* Workspace */}
         <span
@@ -774,6 +789,7 @@ Never simulate output. Never invent results. Report the real error verbatim.`
                 <option value="occidental">Gemini 2.5 Flash Lite — Occidental</option>
                 <option value="asia">DeepSeek V4 Flash — Asia</option>
                 <option value="local">IA Local · Ollama — Privado</option>
+                <option value="lmstudio">IA Local · LM Studio — Privado</option>
               </select>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, fontSize: '0.65rem',
                 backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
@@ -787,6 +803,20 @@ Never simulate output. Never invent results. Report the real error verbatim.`
                     <input
                       value={ollamaModel}
                       onChange={e => setOllamaModel(e.target.value)}
+                      style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #424045', fontSize: '0.65rem', padding: '0 4px', outline: 'none', width: 80, fontFamily: "'JetBrains Mono', monospace",
+                        backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
+                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                        backgroundClip: 'text',
+                      }}
+                    />
+                  </span>
+                )}
+                {selectedModel === 'lmstudio' && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+                    <span style={{ color: '#8A868B' }}>modelo:</span>
+                    <input
+                      value={lmStudioModel}
+                      onChange={e => setLmStudioModel(e.target.value)}
                       style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #424045', fontSize: '0.65rem', padding: '0 4px', outline: 'none', width: 80, fontFamily: "'JetBrains Mono', monospace",
                         backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
                         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
@@ -862,7 +892,17 @@ Never simulate output. Never invent results. Report the real error verbatim.`
           )}
 
           {messages.map((msg, idx) => (
-            msg.role === 'user' ? (
+            msg.role === 'plan' ? (
+              executionPlan ? (
+                <PlanViewer
+                  key={`plan-${idx}`}
+                  plan={executionPlan}
+                  planStatus={planStatus}
+                  onConfirm={confirmPlan}
+                  onCancel={cancelPlan}
+                />
+              ) : null
+            ) : msg.role === 'user' ? (
               <div key={idx} className="cd-message-enter" style={{
                 background: 'rgba(107,158,196,0.06)', border: '1px solid rgba(107,158,196,0.15)',
                 borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
@@ -929,14 +969,6 @@ Never simulate output. Never invent results. Report the real error verbatim.`
             <div style={{ textAlign: 'center', padding: 20, color: '#6A7A8A' }}>
               <div className="cd-pulse" style={{ display: 'inline-block', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Procesando turno…</div>
             </div>
-          )}
-          {executionPlan && (planStatus === 'awaiting_confirmation' || planStatus === 'executing' || planStatus === 'completed') && (
-            <PlanViewer
-              plan={executionPlan}
-              planStatus={planStatus}
-              onConfirm={confirmPlan}
-              onCancel={cancelPlan}
-            />
           )}
           <div ref={messagesEndRef} />
         </div>

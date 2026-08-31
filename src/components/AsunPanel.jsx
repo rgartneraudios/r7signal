@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
+import { calculateCost } from '../lib/modelPrices.js'
 
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -100,7 +101,7 @@ const COCHI_RE = /\[→ COCHI: ([^\]]+)\]/
 const MUSIC_RE  = /\[MUSIC_READY: ([\s\S]+?)\]/
 
 // ─── OpenRouter streaming ─────────────────────────────────────────────────────
-async function streamOR(model, messages, onChunk) {
+async function streamOR(model, messages, onChunk, onUsage) {
   const res = await fetch(`${OR_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -109,7 +110,7 @@ async function streamOR(model, messages, onChunk) {
       'HTTP-Referer': 'https://r7signal.com',
       'X-Title': 'R7Desktop · Asun',
     },
-    body: JSON.stringify({ model, messages, stream: true, max_tokens: 4096 }),
+    body: JSON.stringify({ model, messages, stream: true, max_tokens: 4096, stream_options: { include_usage: true } }),
   })
   if (!res.ok) throw new Error(`OpenRouter ${res.status}`)
   const reader  = res.body.getReader()
@@ -126,8 +127,16 @@ async function streamOR(model, messages, onChunk) {
       const raw = line.slice(6).trim()
       if (raw === '[DONE]') continue
       try {
-        const delta = JSON.parse(raw).choices?.[0]?.delta?.content || ''
+        const parsed = JSON.parse(raw)
+        const delta = parsed.choices?.[0]?.delta?.content || ''
         if (delta) { full += delta; onChunk(full) }
+        if (parsed.usage) {
+          const { prompt_tokens, completion_tokens } = parsed.usage
+          const cost = calculateCost(model, prompt_tokens, completion_tokens, 'token')
+          if (typeof onUsage === 'function') {
+            onUsage({ source: 'asun', inputTokens: prompt_tokens, outputTokens: completion_tokens, cost })
+          }
+        }
       } catch {}
     }
   }
@@ -275,6 +284,10 @@ function AsunImagenFlow({ submenu, onHandoff }) {
       if (!res.ok) throw new Error(data.error || 'Error al generar imagen')
       setResultUrl(data.image_url || data.image_b64)
       setUiState('result')
+      const imageCost = calculateCost(MODELS.imagen[submenu], 0, 0, 'image')
+      if (typeof onUsage === 'function') {
+        onUsage({ source: 'asun', inputTokens: 0, outputTokens: 0, cost: imageCost })
+      }
     } catch (err) {
       setError(err.message)
       setUiState('confirm')
@@ -521,6 +534,7 @@ export default function AsunPanel({
   onMessageConsumed,
   onCategoryChange,
   onHandoff,
+  onUsage,
   r9,
   workspace,
 }) {
@@ -587,7 +601,7 @@ export default function AsunPanel({
         setMessages(prev => prev.map(m =>
           m.id === placeholderId ? { ...m, contenido: partial } : m
         ))
-      })
+      }, onUsage)
 
       // Procesar marcadores
       let displayText   = fullText
@@ -660,6 +674,10 @@ export default function AsunPanel({
           contenido: 'Aquí tienes tu canción:',
           audioUrl: finalUrl,
         }])
+        const songCost = calculateCost('google/lyria-3-pro-preview', 0, 0, 'song')
+        if (typeof onUsage === 'function') {
+          onUsage({ source: 'asun', inputTokens: 0, outputTokens: 0, cost: songCost })
+        }
       }
       setPromptMusica(null)
     } catch (err) {
