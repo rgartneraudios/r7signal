@@ -13,7 +13,7 @@ export default function Footer() {
       <div style={{
         fontSize:'0.65rem', letterSpacing:'0.18em', textTransform:'uppercase',
         fontFamily:"'Exo 2',sans-serif",
-        backgroundImage:'linear-gradient(to right, #B088C2, #477396, #CED2DB, #E8C84A)',
+        backgroundImage:'linear-gradient(to right, #FA61DB, #E8C84A, #C0C0C0, #CF444D)',
         WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
         backgroundClip:'text',
       }}>

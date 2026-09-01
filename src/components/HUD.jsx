@@ -6,7 +6,7 @@ export default function HUD({ formattedTime, weather }) {
       <div className='menu-clock' style={{
         fontFamily:"'Chakra Petch',sans-serif", fontSize:'3.2rem', fontWeight:700,
         letterSpacing:'0.06em',
-        backgroundImage:'linear-gradient(to right, #B088C2, #477396, #CED2DB, #E8C84A)',
+        backgroundImage:'linear-gradient(to right, #FA61DB, #E8C84A, #C0C0C0, #CF444D)',
         WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
         backgroundClip:'text',
       }}>

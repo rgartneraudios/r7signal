@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import { ASUN_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { readFile } from '@tauri-apps/plugin-fs'
+import { getAsunTools, executeTool } from '../lib/asunTools.js'
 import { open } from '@tauri-apps/plugin-dialog'
 
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
@@ -540,7 +541,10 @@ export default function AsunPanel({
   onUsage,
   r9,
   workspace,
+  preferences = {},
 }) {
+  const chatLanguage      = preferences.chat_language     ?? 'Spanish'
+  const nombreAlternativo = preferences.nombre_alternativo ?? null
   const [category, setCategory] = useState('llm')       // 'llm' | 'imagen' | 'musica'
   const [submenu,  setSubmenu]  = useState('occidente')  // 'occidente' | 'asia'
   const [messages, setMessages] = useState([])           // historial global LLM + Música
@@ -588,22 +592,58 @@ export default function AsunPanel({
     setMessages(prev => [...prev, userMsg])
     setLoading(true)
 
-    // Placeholder de respuesta (streaming)
     const placeholderId = Date.now() + 1
     setMessages(prev => [...prev, { rol: 'asistente', contenido: '', id: placeholderId, streaming: true }])
 
     try {
-      const systemContent = category === 'musica'
-        ? MUSICA_SYSTEM
-        : remotePrompts?.system
-          ? interpolatePrompt(remotePrompts.system, {
-              chatLanguage: chatLanguage ?? 'Spanish',
-              nombreAlternativo: nombreAlternativo ?? 'sujeto de prueba',
-            })
-          : LLM_SYSTEM(r9, chatLanguage, nombreAlternativo)
-      const model = category === 'musica' ? MODELS.musica.chat : selectedLLMModel
+      // ── MODO MÚSICA: sin herramientas, streaming directo ──────────────────
+      if (category === 'musica') {
+        const systemContent = MUSICA_SYSTEM(chatLanguage, nombreAlternativo)
+        const history = messages
+          .filter(m => !m.streaming)
+          .map(m => ({ role: m.rol === 'usuario' ? 'user' : 'assistant', content: m.contenido }))
+        const apiMessages = [
+          { role: 'system', content: systemContent },
+          ...history,
+          { role: 'user', content: text },
+        ]
+        const extractR3Streaming = (t) => {
+          const i = t.indexOf('R3:')
+          return i === -1 ? '' : t.slice(i + 3).trim()
+        }
+        const extractR3 = (t) => {
+          const m = t.match(/R3:\s*([\s\S]*)$/)
+          return m ? m[1].trim() : t
+        }
+        const fullText = await streamOR(MODELS.musica.chat, apiMessages, (partial) => {
+          setMessages(prev => prev.map(m =>
+            m.id === placeholderId ? { ...m, contenido: extractR3Streaming(partial) } : m
+          ))
+        }, onUsage)
+        const musicMatch = MUSIC_RE.exec(fullText)
+        if (musicMatch) {
+          setPromptMusica(musicMatch[1].trim())
+        }
+        setMessages(prev => prev.map(m =>
+          m.id === placeholderId
+            ? { ...m, contenido: extractR3(fullText).replace(MUSIC_RE, '').trim(), streaming: false }
+            : m
+        ))
+        return
+      }
 
-      // Build user content with optional attachment
+      // ── MODO LLM: loop agéntico con tool calling ──────────────────────────
+      const systemContent = remotePrompts?.system
+        ? interpolatePrompt(remotePrompts.system, {
+            chatLanguage: chatLanguage ?? 'Spanish',
+            nombreAlternativo: nombreAlternativo ?? 'sujeto de prueba',
+          })
+        : LLM_SYSTEM(r9, chatLanguage, nombreAlternativo)
+
+      const model   = selectedLLMModel
+      const tools   = getAsunTools(workspace)
+
+      // Construir contenido inicial del usuario
       const userContent = []
       if (attachedFile?.type === 'image') {
         const modelMeta = ASUN_MODELS.find(m => m.id === selectedLLMModel)
@@ -621,9 +661,10 @@ export default function AsunPanel({
         })
       }
       userContent.push({ type: 'text', text })
-      const messageContent = attachedFile ? userContent : text
+      const messageContent = userContent.length > 1 ? userContent : text
+      setAttachedFile(null)
 
-      // Historial para la API (excluye el placeholder)
+      // Historial (sin placeholder)
       const history = messages
         .filter(m => !m.streaming)
         .map(m => ({ role: m.rol === 'usuario' ? 'user' : 'assistant', content: m.contenido }))
@@ -634,43 +675,117 @@ export default function AsunPanel({
         { role: 'user', content: messageContent },
       ]
 
-      setAttachedFile(null)
+      const MAX_ITER = 10
+      let iter = 0
+      let finalText = ''
 
-      const extractR3Streaming = (text) => {
-        const r3Index = text.indexOf('R3:')
-        if (r3Index === -1) return ''
-        return text.slice(r3Index + 3).trim()
+      while (iter < MAX_ITER) {
+        iter++
+
+        const res = await fetch(`${OR_BASE}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OR_KEY}`,
+            'HTTP-Referer': 'https://r7signal.com',
+            'X-Title': 'R7Desktop · Asun',
+          },
+          body: JSON.stringify({
+            model,
+            messages: apiMessages,
+            tools,
+            tool_choice: 'auto',
+            max_tokens: 4096,
+          }),
+        })
+
+        if (!res.ok) throw new Error(`OpenRouter ${res.status}`)
+        const data = await res.json()
+
+        // Acumular coste
+        if (data.usage) {
+          const { prompt_tokens, completion_tokens } = data.usage
+          const cost = calculateCost(model, prompt_tokens, completion_tokens, 'token')
+          onUsage?.({ source: 'asun', inputTokens: prompt_tokens, outputTokens: completion_tokens, cost })
+        }
+
+        const message = data.choices?.[0]?.message
+
+        // ── Sin tool calls → respuesta final ─────────────────────────────
+        if (!message?.tool_calls?.length) {
+          finalText = message?.content || ''
+          break
+        }
+
+        // ── Con tool calls → ejecutar y continuar ─────────────────────────
+        apiMessages.push({
+          role: 'assistant',
+          content: message.content || '',
+          tool_calls: message.tool_calls,
+        })
+
+        for (const tc of message.tool_calls) {
+          const toolName = tc.function.name
+          const toolArgs = JSON.parse(tc.function.arguments || '{}')
+
+          // Mostrar actividad al usuario
+          setMessages(prev => prev.map(m =>
+            m.id === placeholderId
+              ? { ...m, contenido: `⚙ ${toolName}(${toolArgs.path || toolArgs.subpath || toolArgs.from || ''})` }
+              : m
+          ))
+
+          let toolResult = ''
+          try {
+            toolResult = await executeTool(toolName, toolArgs, workspace)
+          } catch (err) {
+            toolResult = `Error: ${err.message}`
+          }
+
+          // Caso especial: imagen → inyectar como imagen en el contexto
+          if (toolName === 'read_image_file' && !toolResult.startsWith('Error')) {
+            const imageData = JSON.parse(toolResult)
+            apiMessages.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              content: 'Imagen leída. Analiza la imagen adjunta en el siguiente mensaje.',
+            })
+            apiMessages.push({
+              role: 'user',
+              content: [
+                { type: 'image_url', image_url: { url: `data:${imageData.mimeType};base64,${imageData.base64}` } },
+                { type: 'text', text: 'Esta es la imagen solicitada. Analízala y responde al usuario.' },
+              ],
+            })
+          } else {
+            apiMessages.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              content: toolResult,
+            })
+          }
+        }
       }
 
-      const fullText = await streamOR(model, apiMessages, (partial) => {
-        setMessages(prev => prev.map(m =>
-          m.id === placeholderId ? { ...m, contenido: extractR3Streaming(partial) } : m
-        ))
-      }, onUsage)
-
-      const extractR3 = (text) => {
-        const match = text.match(/R3:\s*([\s\S]*)$/)
-        return match ? match[1].trim() : text
+      // ── Procesar respuesta final ──────────────────────────────────────────
+      const extractR3 = (t) => {
+        const m = t.match(/R3:\s*([\s\S]*)$/)
+        return m ? m[1].trim() : t
       }
 
-      // Procesar marcadores
-      let displayText   = extractR3(fullText)
-      let handoffBrief  = null
-      let musicPrompt   = null
+      let displayText  = extractR3(finalText)
+      let handoffBrief = null
 
-      // Marcador → COCHI
-      const cochiMatch = COCHI_RE.exec(fullText)
+      const cochiMatch = COCHI_RE.exec(finalText)
       if (cochiMatch || isCochiCommand) {
         handoffBrief = cochiMatch ? cochiMatch[1] : `Ejecutar tarea: ${text}`
         displayText  = displayText.replace(COCHI_RE, '').trim()
       }
 
-      // Marcador MUSIC_READY
-      const musicMatch = MUSIC_RE.exec(fullText)
+      const musicMatch = MUSIC_RE.exec(finalText)
       if (musicMatch) {
-        musicPrompt = musicMatch[1].trim()
+        setPromptMusica(musicMatch[1].trim())
         displayText = displayText.replace(MUSIC_RE, '').trim()
-        setPromptMusica(musicPrompt)
       }
 
       setMessages(prev => prev.map(m =>

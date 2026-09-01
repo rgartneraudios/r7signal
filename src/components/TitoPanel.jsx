@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { calculateCost } from '../lib/modelPrices.js'
-import { loadAgentPrompt } from '../lib/promptLoader.js'
+import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 
 const TITO_MODELS = {
   rapido: 'perplexity/sonar',
@@ -76,8 +76,10 @@ const needsWebSearch = (message) => {
 
 export default function TitoPanel({ 
   pendingMessage, onMessageConsumed, 
-  onUsage, onHandoff, userName 
+  onUsage, onHandoff, userName,
+  preferences = {},
 }) {
+  const chatLanguage = preferences.chat_language ?? 'Spanish'
   const [messages, setMessages] = useState([]);
   const [searchLevel, setSearchLevel] = useState('rapido');
   const [streaming, setStreaming] = useState(false);
@@ -120,7 +122,9 @@ export default function TitoPanel({
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const titoSystem = remotePrompts?.system ?? TITO_SYSTEM_PROMPT
+    const titoSystem = remotePrompts?.system
+      ? interpolatePrompt(remotePrompts.system, { chatLanguage })
+      : TITO_SYSTEM_PROMPT
 
     try {
       // Conversational guard — skip web search for casual messages
