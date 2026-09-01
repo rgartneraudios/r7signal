@@ -718,6 +718,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
                 onUsage={handleUsage}
                 r9={r9}
                 workspace={workspace}
+                preferences={preferences}
               />
             : <TitoPanel
                 pendingMessage={activeLeftPanel === 'tito' ? pendingAsun : null}
@@ -725,6 +726,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
                 onUsage={handleUsage}
                 onHandoff={(brief) => setHandoff({ type:'tito', brief, id: Date.now() })}
                 userName={userName}
+                preferences={preferences}
               />
           }
         </div>

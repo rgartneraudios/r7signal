@@ -191,7 +191,7 @@ export default function App() {
 
         </div>
 
-        {/* COLUMNA 2: MEDALLÃ“N CENTRAL */}
+        {/* COLUMNA 2: MEDALLÓN CENTRAL */}
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'28px' }}>
           <div style={{
             width:'100%', maxWidth:'460px',
@@ -226,7 +226,7 @@ export default function App() {
                 filter:'drop-shadow(0 2px 4px rgba(0,0,0,0.6))'
               }}>SIGNAL</div>
               <div style={{ fontSize:'0.55rem', letterSpacing:'0.35em', color:'#8A868B', marginTop:'18px', textTransform:'uppercase', fontWeight:600 }}>
-                IA PÃºblica &bull; R7 Desktop
+                IA PÚBLICA &bull; R7 Desktop
               </div>
             </div>
 
@@ -236,20 +236,23 @@ export default function App() {
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.62rem', fontWeight:700, letterSpacing:'0.15em' }}>
                   <span style={{ color:'#FA61DB' }}>ASUN</span>
                   <span style={{ color:'#E8C84A' }}>TITO</span>
+                  <span style={{ color:'#CF444D' }}>COCHI</span>
                 </div>
                 <div style={{ height:'8px', background:'#09080A', borderRadius:'10px', position:'relative', boxShadow:'inset 0 2px 4px rgba(0,0,0,0.85)' }}>
-                  <div style={{ position:'absolute', left:'4px', right:'4px', height:'4px', top:'50%', transform:'translateY(-50%)', borderRadius:'2px', background:'linear-gradient(90deg, #FA61DB 0%, #CED2DB 50%, #E8C84A 100%)', opacity:0.85 }} />
+                  <div style={{ position:'absolute', left:'4px', right:'4px', height:'4px', top:'50%', transform:'translateY(-50%)', borderRadius:'2px', background:'linear-gradient(90deg, #FA61DB 0%, #E8C84A 50%, #CF444D 100%)', opacity:0.85 }} />
                   <div style={{ position:'absolute', left:'45%', top:'50%', transform:'translateY(-50%)', width:'8px', height:'14px', background:'#D4D8DC', borderRadius:'2px', boxShadow:'0 2px 4px rgba(0,0,0,0.7)', border:'1px solid #1C1B1F' }} />
                 </div>
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.62rem', fontWeight:700, letterSpacing:'0.15em' }}>
-                  <span style={{ color:'#876EF5' }}>COCHI · OCCIDENTAL</span>
-                  <span style={{ color:'#876EF5' }}>COCHI · ASIA</span>
+                  <span style={{ color:'#CF444D' }}>LLM</span>
+                  <span style={{ color:'#C0C0C0' }}>RESEARCH</span>
+                  <span style={{ color:'#E8C84A' }}>IMAGEN</span>
+                  <span style={{ color:'#FA61DB' }}>AUDIO</span>
                 </div>
                 <div style={{ height:'8px', background:'#09080A', borderRadius:'10px', position:'relative', boxShadow:'inset 0 2px 4px rgba(0,0,0,0.85)' }}>
-                  <div style={{ position:'absolute', left:'4px', right:'4px', height:'4px', top:'50%', transform:'translateY(-50%)', borderRadius:'2px', background:'linear-gradient(90deg, #876EF5 0%, #C0C0C0 100%)', opacity:0.85 }} />
-                  <div style={{ position:'absolute', left:'60%', top:'50%', transform:'translateY(-50%)', width:'8px', height:'14px', background:'#B4B8BB', borderRadius:'2px', boxShadow:'0 2px 4px rgba(0,0,0,0.7)', border:'1px solid #1C1B1F' }} />
+                  <div style={{ position:'absolute', left:'4px', right:'4px', height:'4px', top:'50%', transform:'translateY(-50%)', borderRadius:'2px', background:'linear-gradient(90deg, #CF444D 0%, #C0C0C0 33%, #E8C84A 66%, #FA61DB 100%)', opacity:0.85 }} />
+                  <div style={{ position:'absolute', left:'45%', top:'50%', transform:'translateY(-50%)', width:'8px', height:'14px', background:'#D4D8DC', borderRadius:'2px', boxShadow:'0 2px 4px rgba(0,0,0,0.7)', border:'1px solid #1C1B1F' }} />
                 </div>
                 <div style={{ display:'flex', justifyContent:'center', fontSize:'0.55rem', color:'#8A868B', fontWeight:600, letterSpacing:'0.1em', marginTop:'2px' }}>IA LOCAL</div>
               </div>
@@ -259,11 +262,10 @@ export default function App() {
           {/* Blurb R7 Desktop */}
           <div style={{ maxWidth:'460px', width:'100%', textAlign:'center', padding:'0 8px' }}>
             <div style={{ fontSize:'0.78rem', color:'#8A868B', lineHeight:1.7, letterSpacing:'0.03em' }}>
-              <strong style={{ color:'#D4D8DC' }}>R7 Desktop</strong> es tu equipo de agentes local â€”{' '}
-              <span style={{ color:'transparent', backgroundImage:'linear-gradient(135deg, #FA61DB, #DB7BB4)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text', display:'inline-block' }}>Asun</span> genera con derechos comerciales,{' '}
+              <strong style={{ color:'#D4D8DC' }}>R7 Desktop</strong> es tu equipo de agentes local IA”{' '}
+              <span style={{ color:'transparent', backgroundImage:'linear-gradient(135deg, #FA61DB, #DB7BB4)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text', display:'inline-block' }}>Asun</span> , LLM con potencia, genera con derechos comerciales,{' '}
               <span style={{ color:'transparent', backgroundImage:'linear-gradient(135deg, #F5D27A, #CED2DB)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text', display:'inline-block' }}>Tito</span> busca datos de la actualidad (Research),{' '}
-              <span style={{ color:'transparent', backgroundImage:'linear-gradient(135deg, #876EF5, #C0C0C0)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text', display:'inline-block' }}>Cochi</span> ejecuta en tus archivos.
-              Privacidad real. Sin suscripciÃ³n por modelo.
+              <span style={{ color:'transparent', backgroundImage:'linear-gradient(135deg, #876EF5, #C0C0C0)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text', display:'inline-block' }}>Cochi</span> Modelos Flash LLM con potencia. Sin suscripción por modelo.
             </div>
           </div>
         </div>

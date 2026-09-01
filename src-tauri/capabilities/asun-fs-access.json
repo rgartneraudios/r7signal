@@ -1,0 +1,32 @@
+{
+  "$schema": "../schemas/desktop-schema.json",
+  "identifier": "asun-fs-access",
+  "description": "Asun Panel filesystem access",
+  "windows": ["main"],
+  "permissions": [
+    "core:path:allow-resolve-directory",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$HOME/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DOWNLOAD/**" }
+      ]
+    },
+    "fs:default",
+    "fs:allow-read-text-file",
+    "fs:allow-read-file",
+    "fs:allow-write-text-file",
+    "fs:allow-write-file",
+    "fs:allow-read-dir",
+    "fs:allow-mkdir",
+    "fs:allow-remove",
+    "fs:allow-rename",
+    "fs:allow-copy-file",
+    "fs:allow-exists",
+    "fs:allow-stat",
+    "dialog:default",
+    "dialog:allow-open"
+  ]
+}
