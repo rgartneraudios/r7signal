@@ -131,7 +131,7 @@ export default function Chat00() {
               <div style={{
                 fontFamily:"'Orbitron',sans-serif", fontSize:'2.8rem', fontWeight:900,
                 letterSpacing:'0.06em', textAlign:'center', marginBottom:36,
-                background:'linear-gradient(135deg, #6B9EC4 0%, #D4D8DC 30%, #E8C84A 60%, #C4929A 100%)',
+                backgroundImage:'linear-gradient(135deg, #ED6491 0%, #477396 30%, #CED2DB 60%, #E8C84A 100%)',
                 WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
                 filter:'drop-shadow(0 4px 8px rgba(0,0,0,0.7))',
                 position:'relative', zIndex:5
@@ -156,7 +156,7 @@ export default function Chat00() {
                   }}>
                     <div style={{
                       width:34, height:34, borderRadius:'50%',
-                      background:'linear-gradient(135deg, #6B9EC4 0%, #D4D8DC 33%, #E8C84A 66%, #C4929A 100%)',
+                      background:'linear-gradient(135deg, #ED6491 0%, #477396 33%, #CED2DB 66%, #E8C84A 100%)',
                       display:'flex', alignItems:'center', justifyContent:'center',
                       fontFamily:"'Space Grotesk',sans-serif", fontWeight:800,
                       fontSize:'1rem', color:'#0F0E11', flexShrink:0,

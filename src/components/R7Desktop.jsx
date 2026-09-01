@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import AsunPanel from './AsunPanel'
 import TitoPanel from './TitoPanel'
 import CochiDesktop from './CochiDesktop'
 import PreferencesModal from './PreferencesModal'
 import { supabase } from '../supabaseClient'
 import { openUrl } from '@tauri-apps/plugin-opener'
+import { open as openDialog } from '@tauri-apps/plugin-dialog'
 
 const DEFAULT_WORKSPACE = { path: '', permission: 'read' }
 const DEFAULT_R9        = { acumulado: {}, memorySize: 0 }
@@ -14,11 +15,13 @@ export default function R7Desktop() {
   const [workspace,   setWorkspace]   = useState(DEFAULT_WORKSPACE)
   const [r9,          setR9]          = useState(DEFAULT_R9)
   const [handoff,     setHandoff]     = useState(null)
+  const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false)
+  const workspaceRef = useRef(null)
 
-  // Input central
-  const [centralInput, setCentralInput] = useState('')
+  // Inputs separados por panel
+  const [leftInput, setLeftInput] = useState('')
+  const [cochiInput, setCochiInput] = useState('')
   const [asunCategory, setAsunCategory] = useState('llm')
-  const [selectedPanel, setSelectedPanel] = useState('cochi')  // 'asun' | 'tito' | 'cochi'
 
   // Mensajes pendientes por panel
   const [pendingAsun,  setPendingAsun]  = useState(null)
@@ -35,56 +38,39 @@ export default function R7Desktop() {
   const [userName, setUserName] = useState('')
   const [preferences, setPreferences] = useState({ nombre_usuario: '', nombre_alternativo: '', chat_language: 'Español' })
 
-  const inputRef = useRef(null)
+  const leftInputRef = useRef(null)
+  const cochiInputRef = useRef(null)
   const cochiSavePrefsRef = useRef(null)
 
   // ─── Routing ──────────────────────────────────────────────────────────────
-  function sendToAsun() {
-    setSelectedPanel('asun')
-    const text = centralInput.trim()
+  function sendToLeft() {
+    const text = leftInput.trim()
     if (!text) return
     setPendingAsun({ text, id: Date.now() })
-    setCentralInput('')
-    inputRef.current?.focus()
+    setLeftInput('')
+    leftInputRef.current?.focus()
   }
 
   function sendToCochi() {
-    setSelectedPanel('cochi')
-    const text = centralInput.trim()
+    const text = cochiInput.trim()
     if (!text) return
     setPendingCochi({ text, id: Date.now() })
-    setCentralInput('')
-    inputRef.current?.focus()
+    setCochiInput('')
+    cochiInputRef.current?.focus()
   }
 
-  function handleKeyDown(e) {
+  function leftKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      if (e.altKey) {
-        setSelectedPanel(activeLeftPanel)
-        handleSend()
-      } else if (selectedPanel === 'cochi') {
-        sendToCochi()
-      } else {
-        handleSend()
-      }
+      sendToLeft()
     }
   }
 
-  const handleLeftButtonClick = () => {
-    if (selectedPanel === activeLeftPanel && centralInput.trim()) {
-      handleSend()
-    } else {
-      setSelectedPanel(activeLeftPanel)
+  function cochiKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendToCochi()
     }
-  };
-
-  function handleSend() {
-    const text = centralInput.trim()
-    if (!text) return
-    setPendingAsun({ text, id: Date.now() })
-    setCentralInput('')
-    inputRef.current?.focus()
   }
 
   // ─── Callbacks de paneles ─────────────────────────────────────────────────
@@ -100,7 +86,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
       setTotalCost(prev => (prev ?? 0) + (cost || 0))
     }, [])
 
-  const showCentralInput = asunCategory !== 'imagen'
+  const showFooter = asunCategory !== 'imagen'
 
   // Formato coste total
   const costDisplay = totalCost === null
@@ -110,6 +96,48 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
   const openExternal = (url) => {
     openUrl(url).catch(() => window.open(url, '_blank'))
   }
+
+  // ─── Workspace pick ─────────────────────────────────────────────────────────
+  async function handleWorkspacePick() {
+    try {
+      const selected = await openDialog({ directory: true, multiple: false, title: 'Seleccionar carpeta de trabajo' })
+      if (selected) {
+        setWorkspace(prev => ({ ...prev, path: selected }))
+      }
+    } catch (err) { console.error('Error al seleccionar carpeta:', err) }
+    setShowWorkspaceMenu(false)
+  }
+
+  function handleSetPermission(permission) {
+    setWorkspace(prev => ({ ...prev, permission }))
+  }
+
+  // Cerrar popup al hacer click fuera
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (workspaceRef.current && !workspaceRef.current.contains(e.target)) {
+        setShowWorkspaceMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Resolver permisos para la pill
+  const perm = workspace?.permission || null
+  const permissionColor = perm === 'read' ? '#E8C84A'
+    : perm === 'readwrite' || perm === 'write' ? '#6B9EC4'
+    : perm === 'full' ? '#B0F527'
+    : '#555'
+  const permissionIcon = perm === 'read' ? '🔒'
+    : perm === 'readwrite' || perm === 'write' ? '✏️'
+    : perm === 'full' ? '⚡'
+    : '○'
+  const permissionLabel = perm === 'read' ? 'Lectura'
+    : perm === 'readwrite' ? 'L + Escritura'
+    : perm === 'write' ? 'Escritura'
+    : perm === 'full' ? 'Full Access'
+    : 'Sin permisos'
 
   return (
     <div style={{
@@ -160,36 +188,36 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
         .r7d-route-btn:disabled { opacity: 0.3; cursor: default; }
 
         .r7d-route-btn.asun {
-          background: rgba(196,146,154,0.06);
-          border-color: rgba(196,146,154,0.2);
-          color: rgba(196,146,154,0.6);
+          background: rgba(200,162,216,0.06);
+          border-color: rgba(200,162,216,0.2);
+          color: rgba(200,162,216,0.6);
         }
         .r7d-route-btn.asun:not(:disabled):hover {
-          background: rgba(196,146,154,0.14);
-          border-color: rgba(196,146,154,0.5);
-          color: #C4929A;
+          background: rgba(200,162,216,0.14);
+          border-color: rgba(200,162,216,0.5);
+          color: #C8A2D8;
         }
         .r7d-route-btn.asun.selected {
-          background: rgba(196,146,154,0.12);
-          border-color: rgba(196,146,154,0.5);
-          color: #C4929A;
-          box-shadow: 0 0 10px rgba(196,146,154,0.35), 0 0 22px rgba(196,146,154,0.12);
+          background: rgba(200,162,216,0.12);
+          border-color: rgba(200,162,216,0.5);
+          color: #C8A2D8;
+          box-shadow: 0 0 10px rgba(200,162,216,0.35), 0 0 22px rgba(200,162,216,0.12);
         }
         .r7d-route-btn.asun.ready {
-          border-color: rgba(196,146,154,0.7);
-          box-shadow: 0 0 14px rgba(196,146,154,0.55), 0 0 30px rgba(196,146,154,0.2);
-          color: #D4A8B0;
+          border-color: rgba(200,162,216,0.7);
+          box-shadow: 0 0 14px rgba(200,162,216,0.55), 0 0 30px rgba(200,162,216,0.2);
+          color: #C8A2D8;
         }
         .r7d-route-btn.cochi.selected {
-          background: rgba(107,158,196,0.12);
-          border-color: rgba(107,158,196,0.5);
-          color: #6B9EC4;
-          box-shadow: 0 0 10px rgba(107,158,196,0.35), 0 0 22px rgba(107,158,196,0.12);
+          background: rgba(207,68,77,0.12);
+          border-color: rgba(207,68,77,0.5);
+          color: #CF444D;
+          box-shadow: 0 0 10px rgba(207,68,77,0.35), 0 0 22px rgba(207,68,77,0.12);
         }
         .r7d-route-btn.cochi.ready {
-          border-color: rgba(107,158,196,0.7);
-          box-shadow: 0 0 14px rgba(107,158,196,0.55), 0 0 30px rgba(107,158,196,0.2);
-          color: #8AB8D4;
+          border-color: rgba(207,68,77,0.7);
+          box-shadow: 0 0 14px rgba(207,68,77,0.55), 0 0 30px rgba(207,68,77,0.2);
+          color: #CF444D;
         }
 
         .r7d-input {
@@ -218,39 +246,6 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
           flex-shrink: 0;
         }
 
-        /* ── Left panel selector ── */
-        .left-panel-selector {
-          display: flex;
-          gap: 2px;
-          flex-shrink: 0;
-        }
-        .selector-btn {
-          background: transparent;
-          border: none;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 13px;
-          padding: 6px 14px;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: all 0.2s;
-          font-weight: 600;
-        }
-        .selector-btn.asun-btn.active {
-          color: #C4929A;
-          box-shadow: 0 0 10px #C4929A55;
-        }
-        .selector-btn.asun-btn:not(.active) {
-          color: #C4929A55;
-        }
-        .selector-btn.tito-btn.active {
-          color: #E8C84A;
-          box-shadow: 0 0 10px #E8C84A55;
-        }
-        .selector-btn.tito-btn:not(.active) {
-          color: #E8C84A55;
-        }
-
-        /* ── Send buttons ── */
         .send-btn {
           padding: 9px 20px;
           border-radius: 8px;
@@ -264,7 +259,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
           white-space: nowrap;
         }
         .send-btn.left-btn.asun-active.selected {
-          box-shadow: 0 0 10px #C4929A55, 0 0 22px #C4929A22;
+          box-shadow: 0 0 10px rgba(200,162,216,0.33), 0 0 22px rgba(200,162,216,0.13);
         }
         .send-btn.left-btn.tito-active.selected {
           box-shadow: 0 0 10px #E8C84A55, 0 0 22px #E8C84A22;
@@ -472,142 +467,207 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
         borderBottom: '1px solid rgba(255,255,255,0.05)',
         background: 'rgba(9,8,10,0.75)',
         backdropFilter: 'blur(10px)',
-        padding: '0 20px', gap: 0,
+        padding: '0 20px', gap: '20px',
       }}>
-        {/* Sección izquierda */}
-        <div style={{ display:'flex', alignItems:'center', flexShrink:0 }}>
-          <div className="left-panel-selector">
+        {/* R7SIGNAL brand — leftmost */}
+<span style={{
+            fontFamily: "'Orbitron', sans-serif",
+            fontWeight: 900,
+            fontSize: '1rem',
+            letterSpacing: '0.15em',
+            backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            flexShrink: 0,
+            userSelect: 'none',
+          }}>R7SIGNAL</span>
+
+        <div style={{ width:1, height:24, background:'rgba(255,255,255,0.07)', flexShrink:0 }} />
+
+        {/* Left panel selector — ASUN · TITO */}
+        <div className="left-panel-selector" style={{ display:'flex', gap:2, flexShrink:0 }}>
+          {['asun', 'tito'].map(id => (
             <button
-              className={`selector-btn asun-btn ${activeLeftPanel === 'asun' ? 'active' : ''}`}
-              onClick={() => { setActiveLeftPanel('asun'); setSelectedPanel('asun'); }}
-            >ASUN ▸</button>
-            <button
-              className={`selector-btn tito-btn ${activeLeftPanel === 'tito' ? 'active' : ''}`}
-              onClick={() => { setActiveLeftPanel('tito'); setSelectedPanel('tito'); }}
-            >TITO ▸</button>
-          </div>
-
-          <div style={{ width:1, height:24, background:'rgba(255,255,255,0.07)', margin:'0 14px', flexShrink:0 }} />
-
-          <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0 }}>
-            <span style={{
-              fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
-              letterSpacing:'0.25em', fontWeight:700,
-              backgroundImage:'linear-gradient(135deg, #C8A2D8, #E8368F)',
-              WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
-              backgroundClip:'text', opacity:0.8,
-            }}>ASUN</span>
-            <span style={{
-              fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
-              fontWeight:700, color:'#C4929A', letterSpacing:'0.04em', lineHeight:1,
-            }}>{asunTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
-          </div>
-
-          <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', margin:'0 14px', flexShrink:0 }} />
-
-          <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0 }}>
-            <span style={{
-              fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
-              letterSpacing:'0.25em', fontWeight:700, color:'#E8C84A', opacity:0.8,
-            }}>TITO</span>
-            <span style={{
-              fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
-              fontWeight:700, color:'#E8C84A', letterSpacing:'0.04em', lineHeight:1,
-            }}>{titoTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
-          </div>
+              key={id}
+              className={`selector-btn ${id}-btn${activeLeftPanel === id ? ' active' : ''}`}
+              onClick={() => setActiveLeftPanel(id)}
+              style={{
+                background: 'transparent', border: 'none',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '13px', padding: '6px 14px',
+                borderRadius: '6px', cursor: 'pointer',
+                transition: 'all 0.2s', fontWeight: 600,
+                color: activeLeftPanel === id
+                  ? (id === 'asun' ? '#C8A2D8' : '#E8C84A')
+                  : (id === 'asun' ? 'rgba(200,162,216,0.33)' : 'rgba(232,200,74,0.33)'),
+                boxShadow: activeLeftPanel === id
+                  ? (id === 'asun' ? '0 0 10px rgba(200,162,216,0.33)' : '0 0 10px rgba(232,200,74,0.33)')
+                  : 'none',
+              }}
+            >
+              {id.toUpperCase()}
+            </button>
+          ))}
         </div>
 
-        {/* Sección derecha */}
-        <div style={{ display:'flex', alignItems:'center', flexShrink:0, marginLeft:'auto' }}>
-          <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0, alignItems:'flex-end' }}>
-            <span style={{
-              fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
-              letterSpacing:'0.25em', fontWeight:700,
-              backgroundImage:'linear-gradient(135deg, #4A5A6A 0%, #8A9AAA 30%, #C0C8D0 60%, #E0E4E8 100%)',
-              WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
-              backgroundClip:'text', opacity:0.8,
-            }}>COCHI</span>
-            <span style={{
-              fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
-              fontWeight:700, color:'#6B9EC4', letterSpacing:'0.04em', lineHeight:1,
-            }}>{cochiTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+        <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', flexShrink:0 }} />
+
+        {/* ASUN tok */}
+        <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0 }}>
+          <span style={{
+            fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
+            letterSpacing:'0.25em', fontWeight:700,
+            color:'#C8A2D8', opacity:0.8,
+          }}>ASUN</span>
+          <span style={{
+            fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
+            fontWeight:700, color:'#C8A2D8', letterSpacing:'0.04em', lineHeight:1,
+          }}>{asunTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+        </div>
+
+        <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', flexShrink:0 }} />
+
+        {/* TITO tok */}
+        <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0 }}>
+          <span style={{
+            fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
+            letterSpacing:'0.25em', fontWeight:700,
+            color:'#A89EC4', opacity:0.8,
+          }}>TITO</span>
+          <span style={{
+            fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
+            fontWeight:700, color:'#A89EC4', letterSpacing:'0.04em', lineHeight:1,
+          }}>{titoTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+        </div>
+
+        <div style={{ flex:1 }} />
+
+        {/* Workspace + permisos pill — center */}
+        <div ref={workspaceRef} style={{ position: 'relative', flexShrink:0 }}>
+          <div
+            onClick={() => setShowWorkspaceMenu(prev => !prev)}
+            style={{
+              display:'flex', alignItems:'center', gap:'8px',
+              background:'#1E1D23', border:'1px solid #333',
+              borderRadius:'6px', padding:'2px 10px',
+              cursor:'pointer', fontFamily:'JetBrains Mono, monospace',
+              fontSize:'11px', color:'#ccc',
+            }}
+          >
+            <span>📁</span>
+            <span style={{ maxWidth:'180px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {workspace?.path ? workspace.path.split(/[\\/]/).pop() : 'Sin workspace'}
+            </span>
+            <span style={{ marginLeft:'6px', color: permissionColor }}>
+              {permissionIcon} {permissionLabel}
+            </span>
           </div>
 
-          <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', margin:'0 14px', flexShrink:0 }} />
-
-          <button
-            onClick={() => openExternal('https://openrouter.ai/settings/credits')}
-            style={{
-              background: 'none',
-              border: '1px solid #B0F527',
-              color: '#B0F527',
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '11px',
-              padding: '2px 8px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginRight: '4px',
-            }}
-          >
-            OR Credits
-          </button>
-          <button
-            onClick={() => openExternal('https://openrouter.ai/activity')}
-            style={{
-              background: 'none',
-              border: '1px solid #B0F527',
-              color: '#B0F527',
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '11px',
-              padding: '2px 8px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginRight: '12px',
-            }}
-          >
-            OR Activity
-          </button>
-
-          {workspace.path && (
+          {showWorkspaceMenu && (
             <div style={{
-              display:'flex', alignItems:'center', gap:6,
-              padding:'3px 10px', borderRadius:20,
-              border:'1px solid rgba(255,255,255,0.07)',
-              background:'rgba(255,255,255,0.025)',
-              marginRight: 12,
+              position:'absolute', top:'100%', left:'50%', transform:'translateX(-50%)', marginTop:6,
+              minWidth:240, background:'#131215', border:'1px solid #201F23', borderRadius:10,
+              padding:'14px 16px', boxShadow:'0 12px 40px rgba(0,0,0,0.9)',
+              zIndex:200, display:'flex', flexDirection:'column', gap:10,
             }}>
-              <div style={{
-                width:5, height:5, borderRadius:'50%',
-                background: workspace.permission === 'full' ? '#7EC48A'
-                  : workspace.permission === 'readwrite' ? '#E8C84A' : '#6B9EC4',
-                animation:'pulseIndicator 2.5s ease-in-out infinite',
-              }} />
-              <span style={{
-                fontFamily:"'JetBrains Mono',monospace",
-                fontSize:'0.55rem', letterSpacing:'0.1em',
-                color:'#5A5860', fontWeight:700,
+              <div style={{ fontSize:'0.6rem', color:'#8A868B', letterSpacing:'0.2em', fontWeight:700, textTransform:'uppercase' }}>CARPETA</div>
+              <button onClick={handleWorkspacePick} style={{
+                background:'transparent', border:'1px solid #2F2D35', borderRadius:6,
+                padding:'6px 10px', color:'#ccc', cursor:'pointer',
+                fontFamily:'JetBrains Mono, monospace', fontSize:'11px', textAlign:'left',
               }}>
-                {workspace.path.split(/[\\/]/).pop() || workspace.path}
-              </span>
+                📁 {workspace?.path ? workspace.path.split(/[\\/]/).pop() : 'Seleccionar carpeta'}
+              </button>
+              <div style={{ height:1, background:'#201F23' }} />
+              <div style={{ fontSize:'0.6rem', color:'#8A868B', letterSpacing:'0.2em', fontWeight:700, textTransform:'uppercase' }}>PERMISOS</div>
+              <div style={{ display:'flex', gap:12 }}>
+                {[
+                  { value:'read', label:'Lectura' },
+                  { value:'write', label:'Escritura' },
+                  { value:'full', label:'Full Access' },
+                ].map(p => (
+                  <label key={p.value} style={{ display:'flex', alignItems:'center', gap:5, cursor:'pointer', fontSize:'0.65rem', color: workspace.permission === p.value ? '#D4D8DC' : '#5A585C', fontWeight:600 }}>
+                    <input
+                      type="radio" name="ws-permission" value={p.value}
+                      checked={workspace.permission === p.value}
+                      onChange={() => handleSetPermission(p.value)}
+                      style={{ accentColor:'#6B9EC4', cursor:'pointer' }}
+                    />
+                    {p.label}
+                  </label>
+                ))}
+              </div>
             </div>
           )}
-
-          <button
-            onClick={() => setShowPrefs(true)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#9BA3A8',
-              fontSize: '1.1rem',
-              padding: '0 12px',
-              transition: 'color 0.2s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = '#D4D8DC'}
-            onMouseLeave={e => e.currentTarget.style.color = '#9BA3A8'}
-            title="Preferencias"
-          >⚙️</button>
         </div>
+
+        <div style={{ flex:1 }} />
+
+        {/* OR Credits */}
+        <button
+          onClick={() => openExternal('https://openrouter.ai/settings/credits')}
+          style={{
+            background:'none',
+            border:'1px solid #B2FF61',
+            color:'#B2FF61',
+            fontFamily:"'JetBrains Mono', monospace",
+            fontSize:'11px',
+            padding:'2px 8px',
+            borderRadius:'4px',
+            cursor:'pointer',
+          }}
+        >
+          OR Credits
+        </button>
+
+        {/* OR Activity */}
+        <button
+          onClick={() => openExternal('https://openrouter.ai/activity')}
+          style={{
+            background:'none',
+            border:'1px solid #B2FF61',
+            color:'#B2FF61',
+            fontFamily:"'JetBrains Mono', monospace",
+            fontSize:'11px',
+            padding:'2px 8px',
+            borderRadius:'4px',
+            cursor:'pointer',
+          }}
+        >
+          OR Activity
+        </button>
+
+        <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', flexShrink:0 }} />
+
+        {/* COCHI tok — rightmost */}
+        <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0, alignItems:'flex-end' }}>
+          <span style={{
+            fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
+            letterSpacing:'0.25em', fontWeight:700,
+            color:'#CF444D', opacity:0.8,
+          }}>COCHI</span>
+          <span style={{
+            fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
+            fontWeight:700, color:'#CF444D', letterSpacing:'0.04em', lineHeight:1,
+          }}>{cochiTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+        </div>
+
+        <button
+          onClick={() => setShowPrefs(true)}
+          style={{
+            background:'none',
+            border:'none',
+            cursor:'pointer',
+            color:'#9BA3A8',
+            fontSize:'1.1rem',
+            padding:'0 8px',
+            transition:'color 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = '#D4D8DC'}
+          onMouseLeave={e => e.currentTarget.style.color = '#9BA3A8'}
+          title="Preferencias"
+        >⚙️</button>
       </div>
 
       {showPrefs && (
@@ -626,9 +686,30 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
         flex: 1, display: 'flex', overflow: 'hidden',
         
       }}>
-        {/* Panel izquierdo — Asun / Tito */}
+        {/* Panel izquierdo — R7Signal / Asun / Tito */}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {activeLeftPanel === 'asun'
+          {activeLeftPanel === 'r7signal' ? (
+            <div style={{
+              flex: 1, display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              padding: 40, gap: 10, userSelect: 'none', pointerEvents: 'none',
+            }}>
+              <div className="watermark-brand" style={{
+                backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}>R7SIGNAL</div>
+              <div className="watermark-divider">────────────────</div>
+              <div className="watermark-sub" style={{
+                backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}>
+                Panel central — selecciona Asun o Tito.<br />
+                Usa ⌥↵ para enviar directo.
+              </div>
+            </div>
+          ) : activeLeftPanel === 'asun'
             ? <AsunPanel
                 pendingMessage={pendingAsun}
                 onMessageConsumed={() => setPendingAsun(null)}
@@ -658,6 +739,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
             handoff={handoff}
             onHandoffConsumed={() => setHandoff(null)}
             onR9Update={handleR9Update}
+            workspace={workspace}
             onWorkspaceChange={handleWorkspaceChange}
             onUsage={handleUsage}
             onPreferencesLoaded={(prefs) => setPreferences(prefs)}
@@ -667,8 +749,8 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
         </div>
       </div>
 
-      {/* ── Footer / Input central ── */}
-      {showCentralInput && (
+      {/* ── Footer / Inputs ── */}
+      {showFooter && (
         <div style={{
           flexShrink: 0,
           borderTop: '1px solid rgba(255,255,255,0.05)',
@@ -677,28 +759,11 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
           padding: '8px 14px',
           display: 'flex', alignItems: 'flex-end', gap: 9,
         }}>
-          {/* Hint teclado + coste */}
-          <div style={{
-            flexShrink: 0, alignSelf: 'center', display: 'flex', flexDirection: 'column', gap: 3,
-          }}>
-            <div style={{
-              fontFamily: "'Orbitron', sans-serif",
-              fontSize: '0.42rem', letterSpacing: '0.18em',
-              fontWeight: 700, lineHeight: 1.7, userSelect: 'none',
-            }}>
-              <span style={{ color: '#00D4FF', textShadow: '0 0 6px rgba(0,212,255,0.6)' }}>↵ COCHI</span>
-              <br />
-              <span style={{
-                color: activeLeftPanel === 'asun' ? '#E040FB' : '#FFD740',
-                textShadow: activeLeftPanel === 'asun'
-                  ? '0 0 6px rgba(224,64,251,0.6)'
-                  : '0 0 6px rgba(255,215,64,0.6)',
-              }}>
-                ⌥↵ {activeLeftPanel === 'asun' ? 'ASUN' : 'TITO'}
-              </span>
-            </div>
+          {/* Left section: cost + Asun/Tito input */}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: 9 }}>
             {costDisplay && (
               <div style={{
+                flexShrink: 0, alignSelf: 'center',
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: '0.52rem', letterSpacing: '0.08em',
                 color: '#3A3840', fontWeight: 700,
@@ -706,9 +771,31 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
                 {totalTokens.toLocaleString('es')}t · {costDisplay}
               </div>
             )}
+            <div style={{
+              flex: 1,
+              background: '#0C0B0F',
+              border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: 10,
+              padding: '9px 14px',
+              display: 'flex', alignItems: 'flex-end',
+            }}>
+              <textarea
+                ref={leftInputRef}
+                className="r7d-input"
+                rows={1}
+                value={leftInput}
+                onChange={e => setLeftInput(e.target.value)}
+                onKeyDown={leftKeyDown}
+                placeholder="Asun / Tito"
+                onInput={e => {
+                  e.target.style.height = 'auto'
+                  e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px'
+                }}
+              />
+            </div>
           </div>
 
-          {/* Input */}
+          {/* Right section: Cochi input */}
           <div style={{
             flex: 1,
             background: '#0C0B0F',
@@ -718,67 +805,19 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
             display: 'flex', alignItems: 'flex-end',
           }}>
             <textarea
-              ref={inputRef}
+              ref={cochiInputRef}
               className="r7d-input"
               rows={1}
-              value={centralInput}
-              onChange={e => setCentralInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Escribe aquí — elige a quién enviar →"
+              value={cochiInput}
+              onChange={e => setCochiInput(e.target.value)}
+              onKeyDown={cochiKeyDown}
+              placeholder="Cochi"
               onInput={e => {
                 e.target.style.height = 'auto'
                 e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px'
               }}
             />
           </div>
-
-          {/* Botón panel izquierdo dinámico */}
-          <button
-            className={`send-btn left-btn ${activeLeftPanel}-active 
-              ${selectedPanel === activeLeftPanel ? 'selected' : ''}
-              ${centralInput.trim() ? 'ready' : ''}`}
-            onClick={() => handleLeftButtonClick()}
-            style={{
-              background: selectedPanel === activeLeftPanel
-                ? (activeLeftPanel === 'asun'
-                    ? 'linear-gradient(135deg, rgba(200,162,216,0.12), rgba(232,54,143,0.08))'
-                    : 'linear-gradient(135deg, rgba(232,200,74,0.12), rgba(192,192,192,0.08))')
-                : 'rgba(255,255,255,0.03)',
-              borderColor: selectedPanel === activeLeftPanel
-                ? (activeLeftPanel === 'asun' ? 'rgba(200,162,216,0.5)' : 'rgba(232,200,74,0.5)')
-                : 'rgba(255,255,255,0.1)',
-              color: selectedPanel === activeLeftPanel
-                ? (activeLeftPanel === 'asun' ? '#C8A2D8' : '#E8C84A')
-                : 'rgba(255,255,255,0.25)',
-              boxShadow: selectedPanel === activeLeftPanel
-                ? (activeLeftPanel === 'asun'
-                    ? '0 0 10px rgba(200,162,216,0.25), 0 0 22px rgba(200,162,216,0.08)'
-                    : '0 0 10px rgba(232,200,74,0.25), 0 0 22px rgba(232,200,74,0.08)')
-                : 'none',
-            }}
-          >
-            {activeLeftPanel.toUpperCase()}
-          </button>
-
-          {/* Botón COCHI */}
-          <button
-            className={`r7d-route-btn cochi${selectedPanel === 'cochi' ? ' selected' : ''}${centralInput.trim() ? ' ready' : ''}`}
-            onClick={sendToCochi}
-            style={{
-              background: selectedPanel === 'cochi'
-                ? 'linear-gradient(135deg, rgba(74,90,106,0.15), rgba(107,158,196,0.1))'
-                : 'rgba(107,158,196,0.04)',
-              borderColor: selectedPanel === 'cochi'
-                ? 'rgba(107,158,196,0.5)'
-                : 'rgba(107,158,196,0.15)',
-              color: selectedPanel === 'cochi' ? '#6B9EC4' : 'rgba(107,158,196,0.35)',
-              boxShadow: selectedPanel === 'cochi'
-                ? '0 0 10px rgba(107,158,196,0.25), 0 0 22px rgba(107,158,196,0.08)'
-                : 'none',
-            }}
-          >
-            COCHI
-          </button>
         </div>
       )}
     </div>
