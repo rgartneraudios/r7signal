@@ -1,7 +1,7 @@
 const STATUS_DOT = {
   pending:   '#8A868B',
-  running:   '#6B9EC4',
-  completed: '#7070FA',
+  running:   '#876EF5',
+  completed: '#7B6FD4',
   failed:    '#C45A5A',
   cancelled: '#3A3A3F',
 }
@@ -31,7 +31,7 @@ export default function PlanViewer({ plan, planStatus, onConfirm, onCancel }) {
     <div style={{
       background: '#18171C',
       border: '1px solid #2A2830',
-      borderLeft: '2px solid #7070FA',
+      borderLeft: '2px solid #876EF5',
       borderRadius: 8,
       padding: '12px 16px',
       fontFamily: "'Space Grotesk', sans-serif",
@@ -42,7 +42,7 @@ export default function PlanViewer({ plan, planStatus, onConfirm, onCancel }) {
         fontSize: '0.85rem',
         fontWeight: 700,
         marginBottom: 12,
-        background: 'linear-gradient(135deg, #FB923C, #C0C0C0)',
+        background: 'linear-gradient(135deg, #876EF5, #C0C0C0)',
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
         backgroundClip: 'text',
@@ -58,7 +58,7 @@ export default function PlanViewer({ plan, planStatus, onConfirm, onCancel }) {
             gap: 10,
             padding: '5px 8px',
             borderRadius: 6,
-            background: step.status === 'running' ? 'rgba(107,158,196,0.06)' : 'transparent',
+            background: step.status === 'running' ? 'rgba(135,110,245,0.06)' : 'transparent',
           }}>
             <Dot status={step.status} />
             <div>
@@ -92,9 +92,9 @@ export default function PlanViewer({ plan, planStatus, onConfirm, onCancel }) {
       {planStatus === 'awaiting_confirmation' && (
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
           <button onClick={onConfirm} style={{
-            background: 'linear-gradient(135deg, #7070FA22, #7070FA11)',
-            border: '1px solid #7070FA',
-            color: '#A0A0FA',
+            background: 'linear-gradient(135deg, #876EF522, #876EF511)',
+            border: '1px solid #876EF5',
+            color: '#A890F0',
             borderRadius: 5,
             padding: '5px 16px',
             fontSize: '0.78rem',

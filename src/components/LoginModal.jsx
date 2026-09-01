@@ -35,7 +35,7 @@ export default function LoginModal({ onClose, onLogin, user, onLogout }) {
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24 }}>
           <span style={{
             fontFamily:"'Space Grotesk',sans-serif", fontSize:'0.7rem', letterSpacing:'0.35em', fontWeight:700, textTransform:'uppercase',
-            background:'linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)',
+            backgroundImage:'linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)',
             WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
             backgroundClip:'text',
           }}>Acceso</span>
@@ -53,7 +53,7 @@ export default function LoginModal({ onClose, onLogin, user, onLogout }) {
             <div style={{ textAlign:'center', padding:'6px 0 12px' }}>
               <div style={{
                 fontSize:'0.8rem', letterSpacing:'0.12em', fontFamily:"'Exo 2',sans-serif",
-                background:'linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)',
+                backgroundImage:'linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)',
                 WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
                 backgroundClip:'text',
               }}>Identifícate para acceder</div>

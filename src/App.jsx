@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { supabase } from './supabaseClient'
 import { useAuth } from './context/AuthContext'
 import MenuSystem from './components/MenuSystem'
@@ -164,7 +164,7 @@ export default function App() {
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:'2px' }}>
               <div style={{ fontSize:'0.85rem', fontWeight:700, letterSpacing:'0.15em', color:'#D4D8DC' }}>ENTRAR</div>
-              <div style={{ fontSize:'0.65rem', color:'#9BA3A8', fontWeight:500, letterSpacing:'0.05em' }}>IA Pública • Accesos directos</div>
+              <div style={{ fontSize:'0.65rem', color:'#9BA3A8', fontWeight:500, letterSpacing:'0.05em' }}>IA PÃºblica â€¢ Accesos directos</div>
             </div>
           </button>
 
@@ -185,13 +185,13 @@ export default function App() {
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:'2px' }}>
               <div style={{ fontSize:'0.85rem', fontWeight:700, letterSpacing:'0.15em', color:'#D4D8DC' }}>BILLING</div>
-              <div style={{ fontSize:'0.65rem', color:'#9BA3A8', fontWeight:500, letterSpacing:'0.05em' }}>Créditos • Historial de uso</div>
+              <div style={{ fontSize:'0.65rem', color:'#9BA3A8', fontWeight:500, letterSpacing:'0.05em' }}>CrÃ©ditos â€¢ Historial de uso</div>
             </div>
           </button>
 
         </div>
 
-        {/* COLUMNA 2: MEDALLÓN CENTRAL */}
+        {/* COLUMNA 2: MEDALLÃ“N CENTRAL */}
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'28px' }}>
           <div style={{
             width:'100%', maxWidth:'460px',
@@ -213,20 +213,20 @@ export default function App() {
               <div style={{
                 fontFamily:"'Orbitron',sans-serif", fontSize:'6.5rem', fontWeight:900,
                 letterSpacing:'-0.04em',
-                background:'linear-gradient(135deg, #E0E2E4 0%, #B4B8BB 35%, #B8962E 65%, #E8C84A 100%)',
+                backgroundImage:'linear-gradient(135deg, #E0E2E4 0%, #B4B8BB 35%, #B8962E 65%, #E8C84A 100%)',
                 WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
                 lineHeight:'0.85', filter:'drop-shadow(0 6px 12px rgba(0,0,0,0.8))',
                 margin:'0 auto', userSelect:'none'
               }}>R7</div>
               <div style={{
                 fontFamily:"'Orbitron',sans-serif", fontSize:'1rem', letterSpacing:'0.6em',
-                background:'linear-gradient(135deg, #B4B8BB 0%, #E0E2E4 50%, #9BA3A8 100%)',
+                backgroundImage:'linear-gradient(135deg, #CED2DB 0%, #E0E2E4 50%, #9BA3A8 100%)',
                 WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
                 fontWeight:900, marginTop:'12px', marginLeft:'0.6em', userSelect:'none',
                 filter:'drop-shadow(0 2px 4px rgba(0,0,0,0.6))'
               }}>SIGNAL</div>
               <div style={{ fontSize:'0.55rem', letterSpacing:'0.35em', color:'#8A868B', marginTop:'18px', textTransform:'uppercase', fontWeight:600 }}>
-                IA Pública &bull; R7 Desktop
+                IA PÃºblica &bull; R7 Desktop
               </div>
             </div>
 
@@ -234,24 +234,24 @@ export default function App() {
             <div style={{ display:'flex', flexDirection:'column', gap:'22px', position:'relative', zIndex:5 }}>
               <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.62rem', fontWeight:700, letterSpacing:'0.15em' }}>
-                  <span style={{ color:'#C4929A' }}>ASUN</span>
+                  <span style={{ color:'#FA61DB' }}>ASUN</span>
                   <span style={{ color:'#E8C84A' }}>TITO</span>
                 </div>
                 <div style={{ height:'8px', background:'#09080A', borderRadius:'10px', position:'relative', boxShadow:'inset 0 2px 4px rgba(0,0,0,0.85)' }}>
-                  <div style={{ position:'absolute', left:'4px', right:'4px', height:'4px', top:'50%', transform:'translateY(-50%)', borderRadius:'2px', background:'linear-gradient(90deg, #6B9EC4 0%, #9BA3A8 35%, #F5D27A 65%, #CED2DB 100%)', opacity:0.85 }} />
+                  <div style={{ position:'absolute', left:'4px', right:'4px', height:'4px', top:'50%', transform:'translateY(-50%)', borderRadius:'2px', background:'linear-gradient(90deg, #FA61DB 0%, #CED2DB 50%, #E8C84A 100%)', opacity:0.85 }} />
                   <div style={{ position:'absolute', left:'45%', top:'50%', transform:'translateY(-50%)', width:'8px', height:'14px', background:'#D4D8DC', borderRadius:'2px', boxShadow:'0 2px 4px rgba(0,0,0,0.7)', border:'1px solid #1C1B1F' }} />
                 </div>
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.62rem', fontWeight:700, letterSpacing:'0.15em' }}>
-                  <span style={{ color:'#6B9EC4' }}>COCHI · OCCIDENTAL</span>
-                  <span style={{ color:'#6B9EC4' }}>COCHI · ASIA</span>
+                  <span style={{ color:'#876EF5' }}>COCHI · OCCIDENTAL</span>
+                  <span style={{ color:'#876EF5' }}>COCHI · ASIA</span>
                 </div>
                 <div style={{ height:'8px', background:'#09080A', borderRadius:'10px', position:'relative', boxShadow:'inset 0 2px 4px rgba(0,0,0,0.85)' }}>
-                  <div style={{ position:'absolute', left:'4px', right:'4px', height:'4px', top:'50%', transform:'translateY(-50%)', borderRadius:'2px', background:'linear-gradient(90deg, #4A5A6A 0%, #8A9AAA 30%, #C0C8D0 60%, #E0E4E8 100%)', opacity:0.85 }} />
+                  <div style={{ position:'absolute', left:'4px', right:'4px', height:'4px', top:'50%', transform:'translateY(-50%)', borderRadius:'2px', background:'linear-gradient(90deg, #876EF5 0%, #C0C0C0 100%)', opacity:0.85 }} />
                   <div style={{ position:'absolute', left:'60%', top:'50%', transform:'translateY(-50%)', width:'8px', height:'14px', background:'#B4B8BB', borderRadius:'2px', boxShadow:'0 2px 4px rgba(0,0,0,0.7)', border:'1px solid #1C1B1F' }} />
                 </div>
-                <div style={{ display:'flex', justifyContent:'center', fontSize:'0.55rem', color:'#8A868B', fontWeight:600, letterSpacing:'0.1em', marginTop:'2px' }}>INTERNACIONAL</div>
+                <div style={{ display:'flex', justifyContent:'center', fontSize:'0.55rem', color:'#8A868B', fontWeight:600, letterSpacing:'0.1em', marginTop:'2px' }}>IA LOCAL</div>
               </div>
             </div>
           </div>
@@ -259,11 +259,11 @@ export default function App() {
           {/* Blurb R7 Desktop */}
           <div style={{ maxWidth:'460px', width:'100%', textAlign:'center', padding:'0 8px' }}>
             <div style={{ fontSize:'0.78rem', color:'#8A868B', lineHeight:1.7, letterSpacing:'0.03em' }}>
-              <strong style={{ color:'#D4D8DC' }}>R7 Desktop</strong> es tu equipo de agentes local —{' '}
-              <span style={{ color:'#C4929A' }}>Asun</span> genera con derechos comerciales,{' '}
-              <span style={{ color:'#E8C84A' }}>Tito</span> busca datos de la actualidad (Research),{' '}
-              <span style={{ color:'#D4D8DC', backgroundImage:'linear-gradient(135deg, #4A5A6A 0%, #8A9AAA 30%, #C0C8D0 60%, #E0E4E8 100%)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Cochi</span> ejecuta en tus archivos.{' '}
-              Privacidad real. Sin suscripción por modelo.
+              <strong style={{ color:'#D4D8DC' }}>R7 Desktop</strong> es tu equipo de agentes local â€”{' '}
+              <span style={{ color:'transparent', backgroundImage:'linear-gradient(135deg, #FA61DB, #DB7BB4)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text', display:'inline-block' }}>Asun</span> genera con derechos comerciales,{' '}
+              <span style={{ color:'transparent', backgroundImage:'linear-gradient(135deg, #F5D27A, #CED2DB)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text', display:'inline-block' }}>Tito</span> busca datos de la actualidad (Research),{' '}
+              <span style={{ color:'transparent', backgroundImage:'linear-gradient(135deg, #876EF5, #C0C0C0)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text', display:'inline-block' }}>Cochi</span> ejecuta en tus archivos.
+              Privacidad real. Sin suscripciÃ³n por modelo.
             </div>
           </div>
         </div>
@@ -273,7 +273,7 @@ export default function App() {
           <div style={{ fontSize:'1rem', letterSpacing:'0.4em', color:'#B4B8BB', fontWeight:600 }}>R7</div>
           <div style={{ fontSize:'2.5rem', letterSpacing:'0.12em', fontWeight:900, color:'#D4D8DC', lineHeight:'1.1', textShadow:'0 2px 4px rgba(0,0,0,0.5)', margin:'4px 0' }}>DESKTOP</div>
           <div style={{ width:'40px', height:'2px', background:'linear-gradient(90deg, #B4B8BB, transparent)', margin:'14px 0' }} />
-          <div style={{ fontSize:'0.8rem', letterSpacing:'0.3em', color:'#B4B8BB', fontWeight:700 }}>Asun · Tito</div>
+          <div style={{ fontSize:'0.8rem', letterSpacing:'0.3em', color:'#B4B8BB', fontWeight:700 }}>Asun Â· Tito</div>
           <div style={{ fontSize:'1.1rem', letterSpacing:'0.4em', color:'#8A868B', fontWeight:500, marginTop:'2px' }}>Cochi</div>
         </div>
 

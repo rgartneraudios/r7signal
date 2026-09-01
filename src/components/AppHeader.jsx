@@ -25,8 +25,8 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
       <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
         <div style={{
           fontFamily:"'Chakra Petch',sans-serif", fontSize:'2.8rem', fontWeight:700,
-          letterSpacing:'0.08em', lineHeight:1,
-          background:'linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)',
+          letterSpacing:'0.08em', lineHeight:1, color:'transparent',
+          backgroundImage:'linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)',
           WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
           backgroundClip:'text',
         }}>
@@ -34,8 +34,8 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
         </div>
         <div style={{
           fontSize:'0.9rem', fontWeight:300, letterSpacing:'0.08em',
-          marginTop:4, textTransform:'capitalize',
-          background:'linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)',
+          marginTop:4, textTransform:'capitalize', color:'transparent',
+          backgroundImage:'linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)',
           WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
           backgroundClip:'text',
         }}>
@@ -105,8 +105,8 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
       <div style={{ display:'flex', flexDirection:'column', gap:2, alignItems:'flex-end' }}>
         <div style={{
           fontFamily:"'Chakra Petch',sans-serif", fontSize:'1.8rem', fontWeight:500,
-          letterSpacing:'0.08em', lineHeight:1.1,
-          background:'linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)',
+          letterSpacing:'0.08em', lineHeight:1.1, color:'transparent',
+          backgroundImage:'linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)',
           WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
           backgroundClip:'text',
         }}>
@@ -123,7 +123,7 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
           background:'transparent',
           border:'2px solid transparent',
           borderRadius:20, padding:'6px 18px',
-          backgroundImage:'linear-gradient(#141316, #141316), linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)',
+          backgroundImage:'linear-gradient(#141316, #141316), linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)',
           backgroundOrigin:'border-box',
           backgroundClip:'padding-box, border-box',
           color:'#D4D8DC', fontSize:'0.75rem', letterSpacing:'0.15em',
@@ -135,11 +135,11 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
         }}
           onMouseEnter={e=>{
             e.currentTarget.style.boxShadow='0 0 20px rgba(107,158,196,0.3), 0 0 40px rgba(232,200,74,0.2)';
-            e.currentTarget.style.backgroundImage='linear-gradient(#1B1A1E, #1B1A1E), linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)';
+            e.currentTarget.style.backgroundImage='linear-gradient(#1B1A1E, #1B1A1E), linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)';
           }}
           onMouseLeave={e=>{
             e.currentTarget.style.boxShadow='0 0 12px rgba(107,158,196,0.15), 0 0 24px rgba(232,200,74,0.1)';
-            e.currentTarget.style.backgroundImage='linear-gradient(#141316, #141316), linear-gradient(to right, #6B9EC4, #D4D8DC, #E8C84A, #C4929A)';
+            e.currentTarget.style.backgroundImage='linear-gradient(#141316, #141316), linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)';
           }}
         >
           {user ? `👤 ${user.initials}` : '🔐 Acceso'}

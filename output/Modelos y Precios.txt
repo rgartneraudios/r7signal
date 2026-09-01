@@ -1,0 +1,28 @@
+ASUN
+LLM
+anthropic/claude-sonnet-5  $2/M input tokens  $10/M output tokens
+z-ai/glm-5.3-flash  $0.07125/M input tokens $0.2375/M output tokens
+
+Imagen
+bytedance-seed/seedream-5-0-pro  from $0.045/image
+x-ai/grok-imagine-image-quality  from $0,05/image
+
+Musica
+z-ai/glm-5.3-flash   $0.07125/M input tokens $0.2375/M output tokens
+google/lyria-3-pro-preview  $0,08/song
+
+
+TITO
+
+perplexity/sonar  $1/M input tokens  $1/M output tokens
+perplexity/sonar-deep-research  $2/M input tokens $8/M output tokens
+perplexity/sonar-pro  $3/M input tokens  $15/M output tokens
+
+
+// Aquí necesitamos invertir , Deep research va en 2º lugar y el PRO es el mas caro. 
+
+COCHI
+google/gemini-2.5-flash-lite  $0.10/M input tokens  $0.40/M output tokens
+deepseek/deepseek-v4-flash-0731  $0.05/M input tokens  $0.16/M output tokens
+IA LOCAL. OLLAMA
+IA LOCAL  LLM STUDIO. 

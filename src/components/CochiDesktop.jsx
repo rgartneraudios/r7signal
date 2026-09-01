@@ -3,9 +3,10 @@ import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { readTextFile, writeTextFile, readDir, exists, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
 import { Command } from '@tauri-apps/plugin-shell'
-import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import PlanViewer from './PlanViewer'
 import { PLANNING_SYSTEM_PROMPT, buildPlanContext } from '../lib/cochiPlanningPrompts'
+import { loadAgentPrompt } from '../lib/promptLoader.js'
+import { COCHI_MODELS, MODEL_PRICES } from '../lib/modelPrices.js'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -31,17 +32,9 @@ const appendToMemory = async (r1, r2) => {
 }
 
 // ─── Modelos ──────────────────────────────────────────────────────────────────
-const COCHI_MODELS = {
-  occidental: 'google/gemini-2.5-flash-lite',
-  asia:       'deepseek/deepseek-v4-flash-0731',
-  local:      'local',
-  lmstudio:   'lm-studio',
-}
-const MODEL_META = {
-  occidental: { label: 'Gemini 2.5 Flash Lite', sub: 'Occidental · Google',  color: '#4A5A6A', price: 0.000150 },
-  asia:       { label: 'DeepSeek V4 Flash',      sub: 'Asia · DeepSeek',      color: '#6A7A8A', price: 0.000270 },
-  local:      { label: 'IA Local · Ollama',      sub: 'Privado · Sin salida', color: '#C0C0C0', price: 0       },
-  lmstudio:   { label: 'IA Local · LM Studio',   sub: 'Privado · Sin salida', color: '#C0C0C0', price: 0       },
+const COCHI_TIER_LABEL = {
+  'deepseek/deepseek-v4-flash-0731': 'Centinela',
+  'z-ai/glm-5.3-flash':             'Terminator',
 }
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
@@ -56,7 +49,7 @@ const COCHI_TOOLS = [
 async function executeTool(name, args, permission = 'full') {
   if (permission === 'read' && (name === 'write_file' || name === 'run_command'))
     return `⛔ Bloqueado: permiso Solo Lectura. Cambia el nivel en Workspace.`
-  if (permission === 'readwrite' && name === 'run_command')
+  if (permission === 'write' && name === 'run_command')
     return `⛔ Bloqueado: permiso L+Escritura. Activa Full Access para ejecutar comandos.`
   switch (name) {
     case 'read_file':   return await readTextFile(args.path)
@@ -140,6 +133,7 @@ export default function CochiDesktop({
   handoff,
   onHandoffConsumed,
   onR9Update,
+  workspace,
   onWorkspaceChange,
   onUsage,
   onSavePreferences,
@@ -151,24 +145,27 @@ export default function CochiDesktop({
   const [cost,            setCost]            = useState(0)
   const [loading,         setLoading]         = useState(false)
   const abortRef                              = useRef(null)
-  const [selectedModel,   setSelectedModel]   = useState('occidental')
+  const [selectedModel,   setSelectedModel]   = useState(COCHI_MODELS[0].id)
   const [ollamaModel,     setOllamaModel]     = useState('llama3.2')
   const [lmStudioModel,   setLmStudioModel]   = useState('local-model')
-  const [workspace,       setWorkspace]       = useState({ path: '', permission: 'read' })
   const [userName,        setUserName]        = useState('')
   const [preferences,     setPreferences]     = useState(null)
   const [showGearMenu,    setShowGearMenu]    = useState(false)
   const gearRef                               = useRef(null)
   const messagesEndRef                        = useRef(null)
-  const meta = MODEL_META[selectedModel]
 
   const [executionPlan,  setExecutionPlan]  = useState(null)
   const [planStatus,     setPlanStatus]     = useState('idle')
+  const [remotePrompts,  setRemotePrompts]  = useState(null)
   const planRef = useRef(null)
   const originalMessageRef = useRef('')
 
   // Scroll al final
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
+
+  useEffect(() => {
+    loadAgentPrompt('cochi').then(p => { if (p) setRemotePrompts(p) })
+  }, [])
 
   // Cerrar gear al hacer click fuera
   useEffect(() => {
@@ -241,21 +238,8 @@ export default function CochiDesktop({
   }, [handoff?.id])
 
   // ─── Workspace ────────────────────────────────────────────────────────────
-  async function handlePickFolder() {
-    try {
-      const selected = await openDialog({ directory: true, multiple: false, title: 'Seleccionar carpeta — Cochi' })
-      if (selected) {
-        const newWs = { ...workspace, path: selected }
-        setWorkspace(newWs)
-        onWorkspaceChange?.(newWs)
-      }
-    } catch (err) { console.error('Error al seleccionar carpeta:', err) }
-  }
-
   function setPermission(permission) {
-    const newWs = { ...workspace, permission }
-    setWorkspace(newWs)
-    onWorkspaceChange?.(newWs)
+    onWorkspaceChange?.({ ...workspace, permission })
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -310,17 +294,18 @@ export default function CochiDesktop({
 
   async function generatePlan(userMessage) {
     setPlanStatus('planning')
-    const isLocal = selectedModel === 'local'
+    const isLocal = selectedModel === 'ollama'
     const isLmStudio = selectedModel === 'lmstudio'
     const apiUrl = isLocal
       ? `${preferences?.ollamaEndpoint || 'http://localhost:11434'}/v1/chat/completions`
       : isLmStudio
         ? `${preferences?.lmStudioEndpoint || 'http://localhost:1234'}/v1/chat/completions`
         : 'https://openrouter.ai/api/v1/chat/completions'
-    const modelSlug = isLocal ? ollamaModel : isLmStudio ? lmStudioModel : COCHI_MODELS[selectedModel]
+    const modelSlug = isLocal ? ollamaModel : isLmStudio ? lmStudioModel : selectedModel
     const authHeader = isLocal || isLmStudio ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
 
     try {
+      const planningPrompt = remotePrompts?.planning ?? PLANNING_SYSTEM_PROMPT
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -331,7 +316,7 @@ export default function CochiDesktop({
         body: JSON.stringify({
           model: modelSlug,
           messages: [
-            { role: 'system', content: PLANNING_SYSTEM_PROMPT },
+            { role: 'system', content: planningPrompt },
             { role: 'user', content: userMessage }
           ],
           max_tokens: 600,
@@ -387,17 +372,18 @@ export default function CochiDesktop({
   }
 
   async function replanStep(step, reason) {
-    const isLocal = selectedModel === 'local'
+    const isLocal = selectedModel === 'ollama'
     const isLmStudio = selectedModel === 'lmstudio'
     const apiUrl = isLocal
       ? `${preferences?.ollamaEndpoint || 'http://localhost:11434'}/v1/chat/completions`
       : isLmStudio
         ? `${preferences?.lmStudioEndpoint || 'http://localhost:1234'}/v1/chat/completions`
         : 'https://openrouter.ai/api/v1/chat/completions'
-    const modelSlug = isLocal ? ollamaModel : isLmStudio ? lmStudioModel : COCHI_MODELS[selectedModel]
+    const modelSlug = isLocal ? ollamaModel : isLmStudio ? lmStudioModel : selectedModel
     const authHeader = isLocal || isLmStudio ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
 
     try {
+      const planningPrompt = remotePrompts?.planning ?? PLANNING_SYSTEM_PROMPT
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -408,7 +394,7 @@ export default function CochiDesktop({
         body: JSON.stringify({
           model: modelSlug,
           messages: [
-            { role: 'system', content: PLANNING_SYSTEM_PROMPT },
+            { role: 'system', content: planningPrompt },
             { role: 'user', content: `Necesito dividir este paso en sub-pasos: '${step.description}'. Motivo: ${reason}. Devuelve máximo 3 sub-pasos en el mismo formato JSON.` }
           ],
           max_tokens: 600,
@@ -458,16 +444,16 @@ export default function CochiDesktop({
     let totalTokensAcc = 0
     let totalCostAcc = 0
 
-    const isLocal = selectedModel === 'local'
+    const isLocal = selectedModel === 'ollama'
     const isLmStudio = selectedModel === 'lmstudio'
     const apiUrl = isLocal
       ? `${preferences?.ollamaEndpoint || 'http://localhost:11434'}/v1/chat/completions`
       : isLmStudio
         ? `${preferences?.lmStudioEndpoint || 'http://localhost:1234'}/v1/chat/completions`
         : 'https://openrouter.ai/api/v1/chat/completions'
-    const modelSlug = isLocal ? ollamaModel : isLmStudio ? lmStudioModel : COCHI_MODELS[selectedModel]
+    const modelSlug = isLocal ? ollamaModel : isLmStudio ? lmStudioModel : selectedModel
     const authHeader = isLocal || isLmStudio ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
-    const permissionLabel = workspace.permission === 'read' ? 'read-only' : workspace.permission === 'readwrite' ? 'read + write' : 'full access'
+    const permissionLabel = workspace.permission === 'read' ? 'read-only' : workspace.permission === 'write' ? 'write' : 'full access'
     const nombreAlternativo = preferences?.nombre_alternativo || 'Signor Roberto'
     const chatLanguage = preferences?.chat_language || 'Spanish'
 
@@ -480,18 +466,22 @@ export default function CochiDesktop({
     try {
       while (remainingIter > 0 && !controller.signal.aborted) {
         const currentPlan = planRef.current
-        if (!currentPlan) break
+        const trackSteps = currentPlan !== null
 
-        const stepIndex = currentPlan.steps.findIndex(
-          s => s.status === 'pending' || s.status === 'running'
-        )
-        if (stepIndex === -1) break
+        let step = null
+        let stepIndex = -1
 
-        const step = currentPlan.steps[stepIndex]
-        updateStepStatus(step.id, 'running')
-        planRef.current.currentStepIndex = stepIndex
+        if (trackSteps) {
+          stepIndex = currentPlan.steps.findIndex(
+            s => s.status === 'pending' || s.status === 'running'
+          )
+          if (stepIndex === -1) break
+          step = currentPlan.steps[stepIndex]
+          updateStepStatus(step.id, 'running')
+          planRef.current.currentStepIndex = stepIndex
+        }
 
-        const planContext = buildPlanContext(planRef.current, stepIndex)
+        const planContext = trackSteps ? buildPlanContext(planRef.current, stepIndex) : ''
 
         const systemMessages = [
           { role: 'system', content: planContext },
@@ -599,33 +589,33 @@ Never simulate output. Never invent results. Report the real error verbatim.`
 
             if (completeMatch) {
               const extractedResult = completeMatch[1].trim()
-              updateStepStatus(step.id, 'completed', extractedResult)
+              if (trackSteps) updateStepStatus(step.id, 'completed', extractedResult)
               await appendToMemory(r1, r2)
               setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
               stepCompleted = true
               break
             } else if (failedMatch) {
               const reason = failedMatch[1].trim()
-              updateStepStatus(step.id, 'failed', reason)
+              if (trackSteps) updateStepStatus(step.id, 'failed', reason)
               await appendToMemory(r1, r2)
               setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
               stepCompleted = true
               break
             } else if (replanMatch) {
               const extractedReason = replanMatch[1].trim()
-              if (step.isReplanned) {
-                updateStepStatus(step.id, 'failed', extractedReason)
-                await appendToMemory(r1, r2)
-                setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
-              } else {
-                await appendToMemory(r1, r2)
-                setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
-                await replanStep(step, extractedReason)
+              if (trackSteps) {
+                if (step.isReplanned) {
+                  updateStepStatus(step.id, 'failed', extractedReason)
+                } else {
+                  await replanStep(step, extractedReason)
+                }
               }
+              await appendToMemory(r1, r2)
+              setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
               stepCompleted = true
               break
             } else {
-              updateStepStatus(step.id, 'completed', 'Completado')
+              if (trackSteps) updateStepStatus(step.id, 'completed', 'Completado')
               await appendToMemory(r1, r2)
               setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
               stepCompleted = true
@@ -654,22 +644,29 @@ Never simulate output. Never invent results. Report the real error verbatim.`
         }
 
         if (!stepCompleted) {
-          updateStepStatus(step.id, 'failed', 'Agotadas iteraciones disponibles')
-          const updatedPlan = planRef.current
-          if (updatedPlan) {
-            const cancelledSteps = updatedPlan.steps.map(s =>
-              s.status === 'pending' ? { ...s, status: 'cancelled' } : s
-            )
-            syncPlan({ ...updatedPlan, steps: cancelledSteps })
+          if (trackSteps) {
+            updateStepStatus(step.id, 'failed', 'Agotadas iteraciones disponibles')
+            const updatedPlan = planRef.current
+            if (updatedPlan) {
+              const cancelledSteps = updatedPlan.steps.map(s =>
+                s.status === 'pending' ? { ...s, status: 'cancelled' } : s
+              )
+              syncPlan({ ...updatedPlan, steps: cancelledSteps })
+            }
           }
           break
         }
 
-        const stepCost = (stepTokens / 1000) * MODEL_META[selectedModel].price
-        totalCostAcc += stepCost
-        setTokens(prev => prev + stepTokens)
-        setCost(prev => prev + stepCost)
-        onUsage?.({ source: 'cochi', inputTokens: stepTokens, outputTokens: 0, cost: stepCost })
+        if (trackSteps) {
+          const stepCost = (stepTokens / 1_000_000) * (MODEL_PRICES[selectedModel]?.inputPerM ?? 0)
+          totalCostAcc += stepCost
+          setTokens(prev => prev + stepTokens)
+          setCost(prev => prev + stepCost)
+          onUsage?.({ source: 'cochi', inputTokens: stepTokens, outputTokens: 0, cost: stepCost })
+        }
+
+        // Single pass when no plan
+        if (!trackSteps) break
       }
 
       setPlanStatus('completed')
@@ -698,13 +695,51 @@ Never simulate output. Never invent results. Report the real error verbatim.`
     }
   }
 
+  // ─── Guard de intención — clasificador ligero ──────────────────────────
+  const needsPlanning = (message) => {
+    const msg = message.toLowerCase().trim()
+
+    // Conversational — no planning needed
+    const conversational = [
+      /^hola/, /^hi/, /^hey/, /^buenos/, /^buenas/, /^qué tal/,
+      /^como est/, /^cómo est/, /^todo bien/, /^gracias/, /^ok$/, /^okay/,
+      /^perfecto/, /^entendido/, /^de acuerdo/, /^sí$/, /^no$/, /^claro/,
+      /^qué (eres|puedes|haces|sabes)/, /^who are/, /^what (are|can)/,
+    ]
+    if (conversational.some(r => r.test(msg))) return false
+
+    // Filesystem / agentic keywords — planning needed
+    const agentic = [
+      'crea', 'crear', 'cre ', 'escribe', 'modifica', 'modif',
+      'elimina', 'borra', 'mueve', 'copia', 'renombra',
+      'ejecuta', 'instala', 'instalar', 'añade', 'agrega',
+      'refactori', 'implement', 'migra', 'actualiza',
+      'lee el', 'lee la', 'leer', 'busca en', 'analiza',
+      'archivo', 'carpeta', 'directorio', 'fichero',
+      'package.json', 'jsx', 'tsx', 'js', 'ts', 'css',
+      '/cochi', 'npm', 'yarn', 'pip', 'cargo',
+    ]
+    if (agentic.some(k => msg.includes(k))) return true
+
+    // Default: if message is short and has no agentic keywords, skip planning
+    if (msg.length < 60) return false
+
+    return true
+  }
+
   // ─── Envío principal ──────────────────────────────────────────────────────
   async function handleSendText(sent) {
     if (!sent || loading || planStatus === 'executing') return
 
     originalMessageRef.current = sent
     setMessages(prev => [...prev, { role: 'user', content: sent }])
-    await generatePlan(sent)
+
+    if (needsPlanning(sent)) {
+      await generatePlan(sent)
+    } else {
+      setPlanStatus('idle')
+      await executeAllSteps()
+    }
   }
 
   function confirmPlan() {
@@ -720,6 +755,10 @@ Never simulate output. Never invent results. Report the real error verbatim.`
 
   function handleEsc()   { abortRef.current?.abort(); setLoading(false) }
   function handleClear() { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); setActivity([]); setTokens(0); setCost(0); setLoading(false) } }
+
+  const activeModelPrice = MODEL_PRICES[selectedModel]
+  const activeModelLabel = COCHI_MODELS.find(m => m.id === selectedModel)?.label
+    ?? (selectedModel === 'ollama' ? 'Ollama' : 'LM Studio')
 
   const costStr = cost < 0.001 ? '~0,00€' : `~${cost.toFixed(3).replace('.', ',')}€`
 
@@ -739,112 +778,89 @@ Never simulate output. Never invent results. Report the real error verbatim.`
         borderBottom: '1px solid rgba(255,255,255,0.04)',
         background: 'rgba(9,8,10,0.5)',
         padding: '10px 14px',
-        display: 'flex', alignItems: 'center', gap: 10,
+        display: 'flex', alignItems: 'center',
       }}>
-        
+        <span style={{
+          fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
+          letterSpacing:'0.25em', fontWeight:700,
+          backgroundImage:'linear-gradient(135deg, #E36873 15%, #C0C0C0 85%)',
+          WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
+          backgroundClip:'text', opacity:0.8, flexShrink:0, marginRight: 8,
+        }}>LLM</span>
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 4, alignItems: 'center' }}>
+          {COCHI_MODELS.map(m => (
+            <button
+              key={m.id}
+              onClick={() => setSelectedModel(m.id)}
+              style={{
+                padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+                fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
+                background: selectedModel === m.id ? '#2a2a35' : 'transparent',
+                border: '1px solid',
+                borderColor: selectedModel === m.id ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
+                color: selectedModel === m.id ? '#C0C0C0' : 'rgba(207,68,77,0.5)',
+                transition: 'all 0.2s',
+              }}
+            >
+              {m.label}
+            </button>
+          ))}
 
-        {/* Workspace */}
-        <span
-          onClick={handlePickFolder}
-          style={{
-            fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em',
-            textTransform: 'uppercase', color: meta.color, cursor: 'pointer',
-            fontFamily: "'JetBrains Mono', monospace",
-            maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            padding: '2px 8px', borderRadius: 4,
-            background: workspace.path ? 'rgba(107,158,196,0.06)' : 'rgba(255,255,255,0.02)',
-            border: '1px solid ' + (workspace.path ? 'rgba(107,158,196,0.2)' : '#201F23'),
-            transition: 'all 0.2s',
-          }}
-          title={workspace.path || 'Seleccionar carpeta de trabajo'}
-        >
-          {workspace.path ? '📁 ' + workspace.path.split('\\').pop() : '📁 WORKSPACE'}
-        </span>
+          <div style={{ width:1, height:20, background:'rgba(255,255,255,0.05)', flexShrink:0, margin: '0 6px' }} />
 
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
+          <button
+            onClick={() => setSelectedModel('ollama')}
+            style={{
+              padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+              fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
+              background: selectedModel === 'ollama' ? '#2a2a35' : 'transparent',
+              border: '1px solid',
+              borderColor: selectedModel === 'ollama' ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
+              color: selectedModel === 'ollama' ? '#C0C0C0' : 'rgba(207,68,77,0.5)',
+              transition: 'all 0.2s',
+            }}
+          >
+            Ollama
+          </button>
+          <button
+            onClick={() => setSelectedModel('lmstudio')}
+            style={{
+              padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+              fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
+              background: selectedModel === 'lmstudio' ? '#2a2a35' : 'transparent',
+              border: '1px solid',
+              borderColor: selectedModel === 'lmstudio' ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
+              color: selectedModel === 'lmstudio' ? '#C0C0C0' : 'rgba(207,68,77,0.5)',
+              transition: 'all 0.2s',
+            }}
+          >
+            LM Studio
+          </button>
 
-        {/* Gear */}
-        <div ref={gearRef} style={{ position: 'relative' }}>
-          <span
-            onClick={() => setShowGearMenu(!showGearMenu)}
-            style={{ fontSize: '1rem', cursor: 'pointer', color: '#8A868B', transition: 'color 0.2s', lineHeight: 1 }}
-            onMouseEnter={e => e.currentTarget.style.color = '#D4D8DC'}
-            onMouseLeave={e => e.currentTarget.style.color = '#8A868B'}
-          >⚙️</span>
-
-          {showGearMenu && (
-            <div className="cd-gear-popup">
-              <div style={{ fontSize: '0.6rem', color: '#8A868B', letterSpacing: '0.2em', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>MODELO</div>
-              <select
-                className="cd-model-select"
-                value={selectedModel}
-                onChange={e => setSelectedModel(e.target.value)}
-                style={{
-                  backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                }}
-              >
-                <option value="occidental">Gemini 2.5 Flash Lite — Occidental</option>
-                <option value="asia">DeepSeek V4 Flash — Asia</option>
-                <option value="local">IA Local · Ollama — Privado</option>
-                <option value="lmstudio">IA Local · LM Studio — Privado</option>
-              </select>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, fontSize: '0.65rem',
-                backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}>
-                <span>{meta.sub}</span>
-                {selectedModel === 'local' && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
-                    <span style={{ color: '#8A868B' }}>modelo:</span>
-                    <input
-                      value={ollamaModel}
-                      onChange={e => setOllamaModel(e.target.value)}
-                      style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #424045', fontSize: '0.65rem', padding: '0 4px', outline: 'none', width: 80, fontFamily: "'JetBrains Mono', monospace",
-                        backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
-                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                        backgroundClip: 'text',
-                      }}
-                    />
-                  </span>
-                )}
-                {selectedModel === 'lmstudio' && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
-                    <span style={{ color: '#8A868B' }}>modelo:</span>
-                    <input
-                      value={lmStudioModel}
-                      onChange={e => setLmStudioModel(e.target.value)}
-                      style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #424045', fontSize: '0.65rem', padding: '0 4px', outline: 'none', width: 80, fontFamily: "'JetBrains Mono', monospace",
-                        backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
-                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                        backgroundClip: 'text',
-                      }}
-                    />
-                  </span>
-                )}
-              </div>
-              <div style={{ height: 1, background: '#201F23', margin: '12px 0' }} />
-              <div style={{ fontSize: '0.6rem', color: '#8A868B', letterSpacing: '0.2em', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>PERMISOS</div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                {[
-                  { value: 'read',      label: 'Solo Lectura' },
-                  { value: 'readwrite', label: 'L + Escritura' },
-                  { value: 'full',      label: 'Full Access' },
-                ].map(p => (
-                  <label key={p.value} className="cd-radio-label">
-                    <input
-                      type="radio" name="gear-permission" value={p.value}
-                      checked={workspace.permission === p.value}
-                      onChange={() => setPermission(p.value)}
-                    />
-                    <span style={{ fontSize: '0.65rem', fontWeight: 600, color: workspace.permission === p.value ? '#D4D8DC' : '#5A585C' }}>{p.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+          {/* Local model name input */}
+          {selectedModel === 'ollama' && (
+            <input
+              value={ollamaModel}
+              onChange={e => setOllamaModel(e.target.value)}
+              placeholder="modelo"
+              style={{
+                background: 'transparent', border: 'none', borderBottom: '1px solid #424045',
+                fontSize: '0.65rem', padding: '0 4px', outline: 'none', width: 80,
+                fontFamily: "'JetBrains Mono', monospace", color: '#C0C0C0',
+              }}
+            />
+          )}
+          {selectedModel === 'lmstudio' && (
+            <input
+              value={lmStudioModel}
+              onChange={e => setLmStudioModel(e.target.value)}
+              placeholder="modelo"
+              style={{
+                background: 'transparent', border: 'none', borderBottom: '1px solid #424045',
+                fontSize: '0.65rem', padding: '0 4px', outline: 'none', width: 80,
+                fontFamily: "'JetBrains Mono', monospace", color: '#C0C0C0',
+              }}
+            />
           )}
         </div>
       </div>
@@ -868,25 +884,25 @@ Never simulate output. Never invent results. Report the real error verbatim.`
               flex: 1, padding: '40px 20px', gap: 10, userSelect: 'none', pointerEvents: 'none',
             }}>
               <div className="watermark-brand" style={{
-                backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
+                backgroundImage: 'linear-gradient(135deg, #CF444D, #C0C0C0)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
               }}>R7SIGNAL</div>
               <div className="watermark-divider">────────────────</div>
               <div className="watermark-name" style={{
-                backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
+                backgroundImage: 'linear-gradient(135deg, #CF444D, #C0C0C0)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                textShadow: '0 0 60px rgba(112,112,250,0.5), 0 0 160px rgba(112,112,250,0.2)',
+                textShadow: '0 0 60px rgba(71,115,150,0.5), 0 0 160px rgba(71,115,150,0.2)',
               }}>COCHI DESKTOP</div>
               <div className="watermark-sub" style={{
-                backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
+                backgroundImage: 'linear-gradient(135deg, #CF444D, #C0C0C0)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                textShadow: '0 0 40px rgba(112,112,250,0.24), 0 0 100px rgba(112,112,250,0.12)',
+                textShadow: '0 0 40px rgba(71,115,150,0.24), 0 0 100px rgba(71,115,150,0.12)',
               }}>
-                Elige en ⚙️ tu modelo predeterminado y los permisos.<br />
-                En Workspace elije la carpeta a trabajar.
+                Elige en los selectores tu modelo predeterminado.<br />
+                En la cabecera elige la carpeta a trabajar y los permisos.
               </div>
             </div>
           )}
@@ -909,7 +925,7 @@ Never simulate output. Never invent results. Report the real error verbatim.`
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               }}>
                 <div style={{ fontSize: '0.92rem', lineHeight: 1.5, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                  backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
+                  backgroundImage: 'linear-gradient(135deg, #E36873, #C0C0C0)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
                 }}>
@@ -926,7 +942,7 @@ Never simulate output. Never invent results. Report the real error verbatim.`
                   COCHI
                 </div>
                 <div style={{ fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
-                  backgroundImage: 'linear-gradient(135deg, #7070FA, #C0C0C0)',
+                  backgroundImage: 'linear-gradient(135deg, #E36873, #C0C0C0)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
                 }}>
@@ -983,9 +999,19 @@ Never simulate output. Never invent results. Report the real error verbatim.`
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
         {/* Modelo activo */}
-        <div style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: '0.7rem', fontFamily: "'JetBrains Mono', monospace", color: meta.color }}>
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: '0.62rem', fontFamily: "'JetBrains Mono', monospace" }}>
           {loading && <span className="cd-spinner" />}
-          <span style={{ fontWeight: 700 }}>⚡ {meta.label}</span>
+          <span style={{
+            fontWeight: 700,
+            backgroundImage:'linear-gradient(135deg, #E36873 15%, #C0C0C0 85%)',
+            WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
+            backgroundClip:'text',
+          }}>{selectedModel}</span>
+          {activeModelPrice && (
+            <span style={{ color: 'rgba(207,68,77,0.6)', fontSize: '0.55rem' }}>
+              · {activeModelPrice.inputPerM}$/M in · {activeModelPrice.outputPerM}$/M out
+            </span>
+          )}
           {planStatus === 'planning' && <span style={{ color: '#8A868B', fontSize: '0.65rem', marginLeft: 4 }}>(planificando...)</span>}
         </div>
 

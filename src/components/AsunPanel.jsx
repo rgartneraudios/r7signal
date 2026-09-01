@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
-import { calculateCost } from '../lib/modelPrices.js'
+import { ASUN_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
+import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
+import { readFile } from '@tauri-apps/plugin-fs'
+import { open } from '@tauri-apps/plugin-dialog'
 
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -9,7 +12,7 @@ const OR_BASE       = 'https://openrouter.ai/api/v1'
 
 // ─── Modelos ──────────────────────────────────────────────────────────────────
 const MODELS = {
-  llm:    { occidente: 'anthropic/claude-sonnet-5:batch', asia: 'z-ai/glm-5.3-flash' },
+  llm:    { occidente: 'anthropic/claude-sonnet-5', asia: 'z-ai/glm-5.3-flash' },
   imagen: { occidente: 'x-ai/grok-imagine-image-quality', asia: 'bytedance-seed/seedream-5-0-pro' },
   musica: { chat: 'z-ai/glm-5.3-flash', gen: 'google/lyria-3-pro-preview' },
 }
@@ -545,6 +548,9 @@ export default function AsunPanel({
   const [promptMusica, setPromptMusica] = useState(null) // prompt listo para Lyria
   const [generating,  setGenerating]   = useState(false)
   const [audioUrl,    setAudioUrl]     = useState(null)
+  const [remotePrompts, setRemotePrompts] = useState(null)
+  const [attachedFile, setAttachedFile] = useState(null)
+  const [selectedLLMModel, setSelectedLLMModel] = useState(ASUN_MODELS[0].id)
   const messagesEndRef = useRef(null)
 
   // Notificar categoría activa al padre
@@ -569,6 +575,10 @@ export default function AsunPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingMessage?.id])
 
+  useEffect(() => {
+    loadAgentPrompt('asun').then(p => { if (p) setRemotePrompts(p) })
+  }, [])
+
   // ─── Send mensaje LLM / Música ─────────────────────────────────────────────
   async function sendMessage(text) {
     if (loading || !text) return
@@ -583,8 +593,35 @@ export default function AsunPanel({
     setMessages(prev => [...prev, { rol: 'asistente', contenido: '', id: placeholderId, streaming: true }])
 
     try {
-      const systemContent = category === 'musica' ? MUSICA_SYSTEM : LLM_SYSTEM(r9)
-      const model = category === 'musica' ? MODELS.musica.chat : MODELS.llm[submenu]
+      const systemContent = category === 'musica'
+        ? MUSICA_SYSTEM
+        : remotePrompts?.system
+          ? interpolatePrompt(remotePrompts.system, {
+              chatLanguage: chatLanguage ?? 'Spanish',
+              nombreAlternativo: nombreAlternativo ?? 'sujeto de prueba',
+            })
+          : LLM_SYSTEM(r9, chatLanguage, nombreAlternativo)
+      const model = category === 'musica' ? MODELS.musica.chat : selectedLLMModel
+
+      // Build user content with optional attachment
+      const userContent = []
+      if (attachedFile?.type === 'image') {
+        const modelMeta = ASUN_MODELS.find(m => m.id === selectedLLMModel)
+        if (modelMeta?.vision) {
+          userContent.push({
+            type: 'image_url',
+            image_url: { url: `data:${attachedFile.mimeType};base64,${attachedFile.base64}` }
+          })
+        }
+      }
+      if (attachedFile?.type === 'text') {
+        userContent.push({
+          type: 'text',
+          text: `[Archivo adjunto: ${attachedFile.name}]\n\n${attachedFile.content}`
+        })
+      }
+      userContent.push({ type: 'text', text })
+      const messageContent = attachedFile ? userContent : text
 
       // Historial para la API (excluye el placeholder)
       const history = messages
@@ -594,17 +631,30 @@ export default function AsunPanel({
       const apiMessages = [
         { role: 'system', content: systemContent },
         ...history,
-        { role: 'user', content: text },
+        { role: 'user', content: messageContent },
       ]
+
+      setAttachedFile(null)
+
+      const extractR3Streaming = (text) => {
+        const r3Index = text.indexOf('R3:')
+        if (r3Index === -1) return ''
+        return text.slice(r3Index + 3).trim()
+      }
 
       const fullText = await streamOR(model, apiMessages, (partial) => {
         setMessages(prev => prev.map(m =>
-          m.id === placeholderId ? { ...m, contenido: partial } : m
+          m.id === placeholderId ? { ...m, contenido: extractR3Streaming(partial) } : m
         ))
       }, onUsage)
 
+      const extractR3 = (text) => {
+        const match = text.match(/R3:\s*([\s\S]*)$/)
+        return match ? match[1].trim() : text
+      }
+
       // Procesar marcadores
-      let displayText   = fullText
+      let displayText   = extractR3(fullText)
       let handoffBrief  = null
       let musicPrompt   = null
 
@@ -637,6 +687,32 @@ export default function AsunPanel({
       ))
     } finally {
       setLoading(false)
+    }
+  }
+
+  // ─── Adjuntar archivo ──────────────────────────────────────────────────────
+  const handleAttachFile = async () => {
+    const selected = await open({
+      multiple: false,
+      filters: [{
+        name: 'Archivos',
+        extensions: ['txt', 'md', 'png', 'jpg', 'jpeg', 'webp']
+      }]
+    })
+    if (!selected) return
+    const ext = selected.split('.').pop().toLowerCase()
+    const isImage = ['png', 'jpg', 'jpeg', 'webp'].includes(ext)
+
+    if (isImage) {
+      const bytes = await readFile(selected)
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(bytes)))
+      const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+                      : ext === 'png' ? 'image/png' : 'image/webp'
+      setAttachedFile({ type: 'image', base64, mimeType, name: selected.split(/[\\/]/).pop() })
+    } else {
+      const bytes = await readFile(selected)
+      const text = new TextDecoder().decode(bytes)
+      setAttachedFile({ type: 'text', content: text, name: selected.split(/[\\/]/).pop() })
     }
   }
 
@@ -723,14 +799,14 @@ export default function AsunPanel({
           color: #3A3840;
         }
         .asun-header-btn.active {
-          background-image: linear-gradient(135deg, #C8A2D8, #E8368F);
+          background-image: linear-gradient(135deg, #876EF5, #FA61DB);
           background-clip: text;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           color: transparent;
           border-color: rgba(200,162,216,0.3);
           background-color: rgba(200,162,216,0.06);
-          text-shadow: 0 0 12px rgba(200,162,216,0.3), 0 0 30px rgba(232,54,143,0.15);
+          text-shadow: 0 0 12px rgba(200,162,216,0.3), 0 0 30px rgba(200,162,216,0.15);
         }
         .asun-header-btn:not(.active):hover { color: #8A868B; }
 
@@ -740,7 +816,7 @@ export default function AsunPanel({
           color: #8A868B; cursor: pointer;
           font-family: 'Boogaloo', cursive; font-size: 1.1rem;
           letter-spacing: 0.04em; transition: all 0.18s;
-          background: linear-gradient(135deg, #C8A2D8, #E8368F);
+          background: linear-gradient(135deg, #876EF5, #FA61DB);
           -webkit-background-clip: text; -webkit-text-fill-color: transparent;
           background-clip: text;
         }
@@ -808,14 +884,24 @@ export default function AsunPanel({
           {category !== 'musica' && (
             <>
               <div style={{ flex: 1 }} />
-              {['occidente', 'asia'].map(s => (
-                <button key={s}
-                  className={`asun-header-btn${submenu === s ? ' active' : ''}`}
-                  onClick={() => setSubmenu(s)}
-                >
-                  {s === 'occidente' ? 'OCCIDENTE' : 'ASIA'}
-                </button>
-              ))}
+              {category === 'llm'
+                ? ASUN_MODELS.map(m => (
+                    <button key={m.id}
+                      className={`asun-header-btn${selectedLLMModel === m.id ? ' active' : ''}`}
+                      onClick={() => setSelectedLLMModel(m.id)}
+                    >
+                      {m.label}
+                    </button>
+                  ))
+                : ['occidente', 'asia'].map(s => (
+                    <button key={s}
+                      className={`asun-header-btn${submenu === s ? ' active' : ''}`}
+                      onClick={() => setSubmenu(s)}
+                    >
+                      {s === 'occidente' ? 'OCCIDENTE' : 'ASIA'}
+                    </button>
+                  ))
+              }
             </>
           )}
         </div>
@@ -844,22 +930,22 @@ export default function AsunPanel({
                 userSelect: 'none', pointerEvents: 'none',
               }}>
                 <div className="watermark-brand" style={{
-                backgroundImage: 'linear-gradient(135deg, #C8A2D8, #E8368F)',
+                backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
               }}>R7SIGNAL</div>
                 <div className="watermark-divider">────────────────</div>
                 <div className="watermark-name" style={{
-                  backgroundImage: 'linear-gradient(135deg, #C8A2D8, #E8368F)',
+                  backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
-                  textShadow: '0 0 60px rgba(200,162,216,0.4), 0 0 160px rgba(232,54,143,0.2)',
+                  textShadow: '0 0 60px rgba(250,97,219,0.4), 0 0 160px rgba(250,97,219,0.2)',
                 }}>ASUN PANEL</div>
                 <div className="watermark-sub" style={{
-                  backgroundImage: 'linear-gradient(135deg, #C8A2D8, #E8368F)',
+                  backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
-                  textShadow: '0 0 40px rgba(200,162,216,0.18), 0 0 100px rgba(232,54,143,0.1)',
+                  textShadow: '0 0 40px rgba(250,97,219,0.18), 0 0 100px rgba(250,97,219,0.1)',
                 }}>
                   {category === 'llm'
                     ? <>Asun tiene más potencia y genera imágenes y música.<br />Escribe en el input central y pulsa ASUN.</>
@@ -882,7 +968,7 @@ export default function AsunPanel({
                     }}>Asun</span>
                   )}
                   <div style={{
-                    backgroundImage: 'linear-gradient(135deg, #C8A2D8, #E8368F)',
+                    backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
                     WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
                   }}>{msg.contenido}</div>
@@ -931,12 +1017,53 @@ export default function AsunPanel({
           color: '#C8A2D8',
         }}>
           {category === 'musica'
-            ? '⚡ z-ai/glm-5.3-flash · lyria-3'
+            ? 'z-ai/glm-5.3-flash · lyria-3'
             : category === 'llm'
-              ? `⚡ ${submenu === 'occidente' ? 'anthropic/claude-sonnet-5' : 'z-ai/glm-5.3-flash'}`
-              : `⚡ ${submenu === 'occidente' ? 'x-ai/grok-imagine' : 'bytedance/seedream-5'}`
+              ? (() => {
+                  const p = MODEL_PRICES[selectedLLMModel]
+                  return `${selectedLLMModel}${p ? ` · $${p.inputPerM}/M in · $${p.outputPerM}/M out` : ''}`
+                })()
+              : `${submenu === 'occidente' ? 'x-ai/grok-imagine' : 'bytedance/seedream-5'}`
           }
         </span>
+
+        {/* Attach button (only LLM) */}
+        {category === 'llm' && (
+          <button onClick={handleAttachFile} title="Adjuntar archivo"
+            style={{
+              background: 'transparent', border: '1px solid #2F2D35', borderRadius: 4,
+              padding: '1px 6px', cursor: 'pointer', fontSize: '0.8rem', lineHeight: 1.4,
+              color: attachedFile ? '#C8A2D8' : '#6A6870',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = '#C8A2D8'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = '#2F2D35'}
+          >
+            📎
+          </button>
+        )}
+
+        {/* Attachment preview */}
+        {attachedFile && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: '#1A1922', border: '1px solid #2F2D35', borderRadius: 4,
+            padding: '2px 8px', fontSize: '0.6rem', color: '#ccc',
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>
+            {attachedFile.type === 'image'
+              ? <img src={`data:${attachedFile.mimeType};base64,${attachedFile.base64}`} alt="" style={{ width: 20, height: 20, borderRadius: 2, objectFit: 'cover' }} />
+              : <span style={{ color: '#C8A2D8', fontSize: '0.65rem' }}>📄</span>
+            }
+            <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{attachedFile.name}</span>
+            <span
+              onClick={() => setAttachedFile(null)}
+              style={{ cursor: 'pointer', color: '#6A6870', marginLeft: 2, fontSize: '0.7rem' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#D4D8DC'}
+              onMouseLeave={e => e.currentTarget.style.color = '#6A6870'}
+            >✕</span>
+          </div>
+        )}
 
         <div style={{ flex: 1 }} />
 

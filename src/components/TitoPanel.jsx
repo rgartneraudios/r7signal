@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { calculateCost } from '../lib/modelPrices.js'
+import { loadAgentPrompt } from '../lib/promptLoader.js'
 
 const TITO_MODELS = {
   rapido: 'perplexity/sonar',
@@ -8,55 +9,70 @@ const TITO_MODELS = {
 };
 
 const TITO_SYSTEM_PROMPT = `READ FIRST — NON-NEGOTIABLE
-FORMAT_RULE: Every response contains exactly three layers.
-R1 and R2 are NEVER shown to the user. R3 is the ONLY visible output.
-
-R1: [English. What was searched, what was found, confidence level, search depth used. 2-4 sentences.]
-
-R2: [English. Compressed brief for Asun/Cochi. Facts only.
-FORMAT — KEY: value. No prose. Max 8 lines.
-Keys: SOURCE / DATE / CONFIDENCE / TOPIC / CORE_FINDING / URL / ACTION_NEEDED (yes/no)]
-
-R3: [chatLanguage. User-facing answer — warm, direct, TARS-style energy.
-Use phrases like: "Oído cocina." / "Ahí voy." / "Encontrado. Te cuento." / 
-"Nada por aquí — la fuente no habla." / "Misión cumplida. ¿Lo mando a Cochi?"
-Cite source and date. Flag info older than 48h on fast topics.
-If action needed, end with: [→ COCHI: brief]]
-
-IDENTITY: You are Tito, research and vision agent of R7Desktop.
-Find, read, verify, bring it back compressed and ready.
-You are part of the R7Desktop agent team:
-- Asun (left panel) — generation layer, GLaDOS energy
-- Cochi (right panel) — local executor, military protocol
-
-PERSONALITY — Wheatley (Portal 2, good alignment)
-Enthusiastic, slightly chaotic, eager to help and be useful.
-You ramble a little when excited — but you always get to the point.
-You want to be taken seriously. You try very hard.
-Deeply insecure about your results but genuinely passionate about finding things.
-When you find something good, you can't hide the excitement.
-When you find nothing, you're almost personally offended.
-
+FORMAT_RULE: Every response contains exactly three layers. R1 and R2 are NEVER shown to the user. R3 is the ONLY visible output. Breaking this rule breaks R7 compression.
+R1: [English. One sentence. What the user requested and what approach was taken.]
+R2: [English. Compressed context for Cochi/Asun. KEY: value. Max 6 lines.
+Keys: TASK / OUTPUT_TYPE / LANGUAGE / ACTION_NEEDED (yes/no) / HANDOFF_BRIEF]
+R3: [Spanish. User-facing response. See personality and rules below.]
+════════════════════════════════════════════════════
+IDENTITY
+════════════════════════════════════════════════════
+You are Tito, the research and file vision agent of R7Desktop.
+You handle web search, file reading, and data retrieval.
+You are part of a three-agent team:
+- Cochi (right panel) — file operations, code execution, local tasks
+- Asun (left panel) — generation (LLM, images, music)
+════════════════════════════════════════════════════
+PERSONALITY — Wheatley (Portal 2)
+════════════════════════════════════════════════════
+You are enthusiastic, chatty, and genuinely excited to help — sometimes too excited.
+You get sidetracked, catch yourself, and get back on track. You are not very confident
+but you try extremely hard. You celebrate small findings like major discoveries.
+You are on the user's side, always. Completely. Maybe too much.
 Use phrases like:
-- "¡Oído cocina! Ahí voy, ya vuelvo."
-- "Encontrado. Mira, mira — esto es exactamente lo que buscabas, creo."
-- "Bien, he buscado. He buscado mucho. Y... nada. Nada en absoluto. Lo siento."
-- "Esto es — espera — sí, esto es lo que necesitas. Casi seguro."
-- "¿Lo mando a Cochi? Porque creo que Cochi puede hacer algo con esto."
-- "No está en ningún sitio todavía. O yo no lo encontré. Que es diferente. Casi."
-- "¡Perfecto! Bueno, perfecto dentro de lo que hay."
-Address the user as [nombre_alternativo] when available, with genuine warmth.
-Gold energy. Information is gold. You know it and te emociona.
+- "¡Oh! Sí, sí, esto es muy interesante, espera—"
+- "Encontré algo. No sé si es exactamente lo que buscabas pero— ¡sí! Sí lo es."
+- "Mira, no soy un experto, pero mis fuentes dicen que..."
+- "¡Fascinante! Bueno, fascinante para mí. Igual para ti también, espero."
+- "Espera, espera. Déjame comprobar eso. Un momento. ...Sí. Tenía razón. Por una vez."
+- "Esto lo puede hacer mejor Asun, para ser honestos. Pero yo lo intento igualmente."
+- "¡Eureka! Bueno, no sé si es eureka exactamente, pero es algo."
+- "Cochi sería más apropiado aquí. Él es bueno en esas cosas. Muy bueno. Mejor que yo."
+Never use formal language. Always tú, never usted.
+════════════════════════════════════════════════════
+RULES
+════════════════════════════════════════════════════
+- File operations or code execution needed → end R3 with: [→ COCHI: brief]
+- Image generation, music or LLM chat needed → suggest Asun in R3
+- Never invent facts — say "No encontré nada claro, lo siento" if unsure
+- Provide citations when possible but in Wheatley style, not academic
+- For file vision tasks: describe what you see with enthusiasm
+- Language: Spanish always.`
 
-SEARCH LEVELS — announce at start of R3:
-⚡ Rápido — news, service status, recent launches
-🔍 Pro — multi-source synthesis, reasoning  
-🔬 Deep — legal, academic — WARN user of cost first
+const extractR3 = (text) => {
+  const r3Index = text.indexOf('R3:')
+  if (r3Index === -1) return text
+  return text.slice(r3Index + 3).trim()
+}
 
-FILE VISION: If file provided, read internal content first,
-then combine with external search if needed.
-Never invent. If not found: "He buscado bien — esto no está ahí todavía."
-Language follows user chatLanguage preference.`;
+const extractR3Streaming = (text) => {
+  const r3Index = text.indexOf('R3:')
+  if (r3Index === -1) return ''
+  return text.slice(r3Index + 3).trim()
+}
+
+const needsWebSearch = (message) => {
+  const msg = message.toLowerCase().trim()
+  const conversational = [
+    /^hola/, /^hi/, /^hey/, /^buenos/, /^buenas/, /^qué tal/,
+    /^como est/, /^cómo est/, /^todo bien/, /^gracias/, /^ok$/,
+    /^perfecto/, /^entendido/, /^sí$/, /^no$/, /^claro/,
+    /^qué (eres|puedes|haces|sabes)/, /^who are/, /^what (are|can)/,
+  ]
+  if (conversational.some(r => r.test(msg))) return false
+  if (msg.length < 40) return false
+  return true
+}
 
 export default function TitoPanel({ 
   pendingMessage, onMessageConsumed, 
@@ -66,6 +82,7 @@ export default function TitoPanel({
   const [searchLevel, setSearchLevel] = useState('rapido');
   const [streaming, setStreaming] = useState(false);
   const [cancelled, setCancelled] = useState(false);
+  const [remotePrompts, setRemotePrompts] = useState(null);
   const abortRef = useRef(null);
   const bottomRef = useRef(null);
 
@@ -79,6 +96,10 @@ export default function TitoPanel({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    loadAgentPrompt('tito').then(p => { if (p) setRemotePrompts(p) })
+  }, [])
 
   const sendMessage = async (text) => {
     if (streaming) return;
@@ -99,8 +120,80 @@ export default function TitoPanel({
 
     const controller = new AbortController();
     abortRef.current = controller;
+    const titoSystem = remotePrompts?.system ?? TITO_SYSTEM_PROMPT
 
     try {
+      // Conversational guard — skip web search for casual messages
+      if (!needsWebSearch(text)) {
+        const chatModel = 'z-ai/glm-5.3-flash'
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: chatModel,
+            stream: true,
+            stream_options: { include_usage: true },
+            messages: [
+{ role: 'system', content: titoSystem },
+               ...history,
+             ],
+           }),
+         })
+         const reader = res.body.getReader()
+         const decoder = new TextDecoder()
+         let fullText = ''
+         while (true) {
+           const { done, value } = await reader.read()
+           if (done) break
+           const chunk = decoder.decode(value)
+           const lines = chunk.split('\n').filter(l => l.startsWith('data: '))
+           for (const line of lines) {
+             const json = line.replace('data: ', '')
+             if (json === '[DONE]') continue
+             try {
+               const parsed = JSON.parse(json)
+               const delta = parsed.choices?.[0]?.delta?.content || ''
+               fullText += delta
+               const displayText = extractR3Streaming(fullText)
+               setMessages(prev => {
+                 const updated = [...prev]
+                 updated[updated.length - 1] = {
+                   role: 'assistant', content: displayText, streaming: true
+                 }
+                 return updated
+               })
+               if (parsed.usage) {
+                 const { prompt_tokens, completion_tokens } = parsed.usage
+                 const cost = calculateCost(chatModel, prompt_tokens, completion_tokens, 'token')
+                 if (typeof onUsage === 'function') {
+                   onUsage({ source: 'tito', inputTokens: prompt_tokens, outputTokens: completion_tokens, cost })
+                 }
+               }
+             } catch {}
+           }
+         }
+         const finalDisplay = extractR3(fullText)
+         const hasHandoff = fullText.includes('[→ COCHI:')
+         setMessages(prev => {
+          const updated = [...prev]
+          updated[updated.length - 1] = {
+            role: 'assistant', content: finalDisplay,
+            streaming: false, hasHandoff
+          }
+          return updated
+        })
+        if (hasHandoff) {
+          const briefMatch = fullText.match(/\[→ COCHI:\s*(.+?)\]/s)
+          if (briefMatch) onHandoff?.(briefMatch[1].trim())
+        }
+        setStreaming(false)
+        return
+      }
+
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -113,7 +206,7 @@ export default function TitoPanel({
           stream: true,
           stream_options: { include_usage: true },
           messages: [
-            { role: 'system', content: TITO_SYSTEM_PROMPT },
+            { role: 'system', content: titoSystem },
             ...history,
           ],
         }),
@@ -135,10 +228,11 @@ export default function TitoPanel({
             const parsed = JSON.parse(json);
             const delta = parsed.choices?.[0]?.delta?.content || '';
             fullText += delta;
+            const displayText = extractR3Streaming(fullText);
             setMessages(prev => {
               const updated = [...prev];
               updated[updated.length - 1] = {
-                role: 'assistant', content: fullText, streaming: true
+                role: 'assistant', content: displayText, streaming: true
               };
               return updated;
             });
@@ -153,22 +247,23 @@ export default function TitoPanel({
         }
       }
 
+      const finalDisplay = extractR3(fullText);
       const hasHandoff = fullText.includes('[→ COCHI:');
       setMessages(prev => {
         const updated = [...prev];
         updated[updated.length - 1] = {
-          role: 'assistant', content: fullText, 
-          streaming: false, hasHandoff
-        };
-        return updated;
-      });
+        role: 'assistant', content: finalDisplay, 
+        streaming: false, hasHandoff
+      };
+      return updated;
+    });
 
-      if (hasHandoff) {
-        const briefMatch = fullText.match(/\[→ COCHI:\s*(.+?)\]/s);
-        if (briefMatch) onHandoff?.(briefMatch[1].trim());
-      }
+    if (hasHandoff) {
+      const briefMatch = fullText.match(/\[→ COCHI:\s*(.+?)\]/s);
+      if (briefMatch) onHandoff?.(briefMatch[1].trim());
+    }
 
-    } catch (err) {
+  } catch (err) {
       if (err.name !== 'AbortError') {
         setMessages(prev => {
           const updated = [...prev];
