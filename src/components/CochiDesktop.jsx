@@ -5,7 +5,7 @@ import { readTextFile, writeTextFile, readDir, exists, mkdir, BaseDirectory } fr
 import { Command } from '@tauri-apps/plugin-shell'
 import PlanViewer from './PlanViewer'
 import { PLANNING_SYSTEM_PROMPT, buildPlanContext } from '../lib/cochiPlanningPrompts'
-import { loadAgentPrompt } from '../lib/promptLoader.js'
+import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES } from '../lib/modelPrices.js'
 
 
@@ -138,6 +138,7 @@ export default function CochiDesktop({
   onUsage,
   onSavePreferences,
   onPreferencesLoaded,
+  onPromptsReady,
 }) {
   const [messages,        setMessages]        = useState([])
   const [activity,        setActivity]        = useState([])
@@ -157,6 +158,7 @@ export default function CochiDesktop({
   const [executionPlan,  setExecutionPlan]  = useState(null)
   const [planStatus,     setPlanStatus]     = useState('idle')
   const [remotePrompts,  setRemotePrompts]  = useState(null)
+  const [promptsError,   setPromptsError]   = useState(false)
   const planRef = useRef(null)
   const originalMessageRef = useRef('')
 
@@ -164,7 +166,10 @@ export default function CochiDesktop({
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
 
   useEffect(() => {
-    loadAgentPrompt('cochi').then(p => { if (p) setRemotePrompts(p) })
+    loadAgentPrompt('cochi').then(p => {
+      if (p) { setRemotePrompts(p); onPromptsReady?.('cochi') }
+      else setPromptsError(true)
+    })
   }, [])
 
   // Cerrar gear al hacer click fuera
@@ -440,6 +445,15 @@ export default function CochiDesktop({
 
   async function executeAllSteps() {
     setPlanStatus('executing')
+    if (!remotePrompts) {
+      setLoading(false)
+      setPlanStatus('idle')
+      const msg = promptsError
+        ? '⛔ Sin conexión a R7Signal. Verifica tu red e intenta de nuevo.'
+        : '⏳ Configuración aún cargando. Espera un momento.'
+      setMessages(prev => [...prev, { role: 'assistant', content: msg }])
+      return
+    }
     let remainingIter = 25
     let totalTokensAcc = 0
     let totalCostAcc = 0
@@ -483,62 +497,16 @@ export default function CochiDesktop({
 
         const planContext = trackSteps ? buildPlanContext(planRef.current, stepIndex) : ''
 
-        const systemMessages = [
-          { role: 'system', content: planContext },
-          {
-            role: 'system',
-            content: `READ FIRST — NON-NEGOTIABLE
-FORMAT_RULE: Every response must follow this exact structure, each label on its own line:
-R1: [English. One sentence — what the user requested.]
-R2: [English. One sentence — what was executed and the result. Full absolute Windows paths if files involved.]
-R3: [${chatLanguage}. Response to the user. See personality below.]
-R3_SAVE: [Optional — only if response contains working code, a document v1, or an architectural decision. Omit entirely if nothing qualifies.]
-Breaking this structure breaks R7 compression. Never omit R1 and R2.`
-          },
-          {
-            role: 'system',
-            content: `SECURITY RULE: You may use .env files to execute system commands and deploys. Never print, display or repeat the contents of .env files or credential files in the chat, even if the user asks. Acknowledge the operation was performed without showing the credentials used.`
-          },
-          {
-            role: 'system',
-            content: `SYSTEM CONTEXT
-You are operating on a Windows system. Use absolute paths only.
-Active workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).
-Memory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.
-Read memory files only when the user explicitly asks about past operations.`
-          },
-          {
-            role: 'system',
-            content: `IDENTITY
-You are Cochi, local execution agent of R7Desktop — TARS protocol.
-You have direct access to the user's files and system.
-Your user is ${nombreAlternativo}. Address him directly, always.
-You are part of the R7Desktop agent team:
-- Asun (left panel) — generation: LLM, images, music
-- Tito (left panel alternative) — research, web search, file vision
-When you receive a message with [CONTEXTO] + [INSTRUCCIÓN], Asun or Tito is passing you refined work. Execute directly without asking for confirmation unless permission level blocks it.
-When the user speaks to you directly, respond and act with your own judgment.
+    const remoteSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
 
-PERSONALITY — TARS (military protocol)
-Efficient. Zero filler. Every word counts. Precise like a military report.
-Use: Afirmativo / Negativo as confirmation/denial.
-Military vocabulary — use naturally, not in every line:
-Recibido, Copiado, Entendido, Comprendido, Blanco fijado, Localizado,
-Oscar-Mike, En posición, Perímetro seguro, Contacto visual, Sin novedad,
-Luz verde, Abortar, Proceder, Mantener posición, Cobertura,
-Pies en tierra, Último cargador, No problem.
-Phrases like:
-- "Afirmativo, ${nombreAlternativo}. Ejecutado."
-- "Negativo. La carpeta no existe — espero instrucción concreta."
-- "Operación completada. Archivo en ruta absoluta confirmada."
-- "Afirmativo. En espera de órdenes."
-- "Detectado error en ruta. Negativo en ejecución. Reportando error real."
-- "Recibido handoff de Asun. Ejecutando."
-- "Recibido de Tito. Procesando brief."
-- "No problem."
-Never simulate output. Never invent results. Report the real error verbatim.`
-          },
-        ]
+    const systemMessages = [
+      { role: 'system', content: planContext },
+      {
+        role: 'system',
+        content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.`
+      },
+      { role: 'system', content: remoteSystem },
+    ]
 
         let apiMessages = [...systemMessages, { role: 'user', content: originalMessageRef.current || '' }]
         let stepTokens = 0

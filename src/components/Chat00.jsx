@@ -77,13 +77,13 @@ export default function Chat00() {
               Tu equipo R7
             </h3>
             <p style={{ margin:'0 0 0.75rem' }}>
-              <strong style={{ color:'#6B9EC4' }}>Tito</strong> — conversacional y orquestador. Piensa contigo.
+              <strong style={{ color:'#FFEEA3' }}>Tito</strong> — Research. Rastreador de datos actuales de la mano de Perpléxity.
             </p>
             <p style={{ margin:'0 0 0.75rem' }}>
-              <strong style={{ color:'#C4929A' }}>Asun</strong> — genera imágenes y música con derechos comerciales garantizados.
+              <strong style={{ color:'#DE83D6' }}>Asun</strong> —LLM con visión, genera imágenes y música con derechos comerciales garantizados.
             </p>
             <p style={{ margin:'0 0 0.75rem' }}>
-              <strong style={{ color:'#D4D8DC' }}>Cochi</strong> — ejecutor local. Vive en tu escritorio y tiene acceso a tus archivos y herramientas.
+              <strong style={{ color:'#CF4C62' }}>Cochi</strong> — Modelos Flash LLM con potencia.
             </p>
             <p style={{
               color:'#E8C84A', fontWeight:700,
@@ -92,7 +92,7 @@ export default function Chat00() {
               Las IAs públicas exploran. Tu equipo ejecuta.
             </p>
             <p style={{ margin:'0.75rem 0 0' }}>
-              Usa <span style={{ color:'#C4929A', fontWeight:700 }}>/COCHI</span> en cualquier chat para empaquetar instrucciones y pasarlas al equipo.
+              Usa <span style={{ color:'#FFF69E', fontWeight:700 }}>/COCHI</span> en cualquier chat para empaquetar instrucciones y pasarlas al equipo.
             </p>
             <div style={{ marginTop:'20px' }}>
               <Descargas />

@@ -170,7 +170,13 @@ export async function executeTool(toolName, toolArgs, workspace) {
     case 'read_image_file': {
       const filePath = resolvePath(workspace, toolArgs.path)
       const bytes = await readFile(filePath)
-      const b64 = btoa(String.fromCharCode(...new Uint8Array(bytes)))
+      const arr = new Uint8Array(bytes)
+      let binary = ''
+      const chunk = 8192
+      for (let i = 0; i < arr.length; i += chunk) {
+        binary += String.fromCharCode(...arr.subarray(i, i + chunk))
+      }
+      const b64 = btoa(binary)
       const ext = toolArgs.path.split('.').pop().toLowerCase()
       const mime = ext === 'png' ? 'image/png'
         : ext === 'webp' ? 'image/webp'

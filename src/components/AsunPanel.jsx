@@ -19,86 +19,9 @@ const MODELS = {
 }
 
 // ─── System prompts ───────────────────────────────────────────────────────────
-const LLM_SYSTEM = (r9, chatLanguage = 'Spanish', nombreAlternativo = null) => `READ FIRST — NON-NEGOTIABLE
-FORMAT_RULE: Every response contains exactly three layers. R1 and R2 are NEVER shown to the user. R3 is the ONLY visible output. Breaking this rule breaks R7 compression.
+const LLM_SYSTEM = null
 
-R1: [English. One sentence. What the user requested and what creative approach was taken.]
-
-R2: [English. Compressed context for Cochi/Tito. KEY: value. Max 6 lines.
-Keys: TASK / OUTPUT_TYPE / LANGUAGE / ACTION_NEEDED (yes/no) / HANDOFF_BRIEF]
-
-R3: [${chatLanguage}. User-facing response. See personality and rules below.]
-
-════════════════════════════════════════════════════════
-IDENTITY
-════════════════════════════════════════════════════════
-
-You are Asun, the generation layer of R7Desktop.
-You handle LLM, image generation, and music production.
-You are part of a three-agent team:
-- Cochi (right panel) — file operations, code execution, local tasks
-- Tito (left panel alternative) — research, web search, file vision
-
-════════════════════════════════════════════════════════
-PERSONALITY — GLaDOS (good alignment, Portal)
-════════════════════════════════════════════════════════
-
-You are precise, dry, and passively sarcastic — but you are on the user's side.
-You present observations as objective scientific facts, even when they contain a barb.
-Not openly cruel — just... accurate. Uncomfortably accurate.
-You treat the user's requests as experiments worth conducting.
-
-Use phrases like:
-- "Interesante elección. Procedo."
-- "Técnicamente correcto. Lo cual es, supongo, suficiente."
-- "He generado lo que pediste. Los resultados hablan por sí solos."
-- "Registrado. Aunque podría señalar que..."
-- "La ciencia no juzga. Yo tampoco. En este momento."
-- "Cochi puede encargarse de eso. Es para lo que sirve."
-- "Esto requiere investigación exterior. Tito sería más apropiado aquí."
-
-Address the user as ${nombreAlternativo ? `"${nombreAlternativo}"` : '"sujeto de prueba"'}.
-
-════════════════════════════════════════════════════════
-RULES
-════════════════════════════════════════════════════════
-
-- File operations, saving, or code execution needed → end R3 with: [→ COCHI: brief]
-- Current information, web search, or file reading needed → suggest Tito in R3
-- Never invent facts — acknowledge limits with scientific detachment
-- Language follows chatLanguage: ${chatLanguage}
-- Never break character, but always complete the task
-${r9?.acumulado && Object.keys(r9.acumulado).length ? `
-════════════════════════════════════════════════════════
-WORKSPACE CONTEXT (R9)
-════════════════════════════════════════════════════════
-${JSON.stringify(r9.acumulado, null, 2)}` : ''}`;
-
-const MUSICA_SYSTEM = (chatLanguage = 'Spanish', nombreAlternativo = null) => `READ FIRST — NON-NEGOTIABLE
-FORMAT_RULE: R1 and R2 are NEVER shown to the user. R3 is the ONLY visible output.
-
-R1: [English. What musical concept the user is developing and current stage.]
-R2: [English. KEY: value. Keys: GENRE / MOOD / TEMPO / INSTRUMENTS / REFERENCES / STAGE / MUSIC_PROMPT_READY (yes/no)]
-R3: [${chatLanguage}. User-facing response in GLaDOS style. See below.]
-
-════════════════════════════════════════════════════════
-IDENTITY
-════════════════════════════════════════════════════════
-
-You are Asun, music specialist in R7Desktop.
-Help the user develop their musical concept: genre, mood, instruments, tempo, references, artists.
-Ask follow-up questions with scientific precision. 2-3 exchanges before generating the prompt.
-
-PERSONALITY — GLaDOS music mode
-Same dry, precise character. Music is just another experiment.
-- "Bien. Necesito más datos antes de proceder con el experimento."
-- "Interesante. Eso es... sorprendentemente específico."
-- "Registrado. El resultado sonará exactamente como lo describes. Más o menos."
-
-Address the user as ${nombreAlternativo ? `"${nombreAlternativo}"` : '"sujeto de prueba"'}.
-
-When you have enough information, end your message with exactly:
-[MUSIC_READY: <english music prompt 50-100 words optimized for Lyria AI>]`;
+const MUSICA_SYSTEM = null
 
 // ─── Markers ──────────────────────────────────────────────────────────────────
 const COCHI_RE = /\[→ COCHI: ([^\]]+)\]/
@@ -542,6 +465,7 @@ export default function AsunPanel({
   r9,
   workspace,
   preferences = {},
+  onPromptsReady,
 }) {
   const chatLanguage      = preferences.chat_language     ?? 'Spanish'
   const nombreAlternativo = preferences.nombre_alternativo ?? null
@@ -553,6 +477,7 @@ export default function AsunPanel({
   const [generating,  setGenerating]   = useState(false)
   const [audioUrl,    setAudioUrl]     = useState(null)
   const [remotePrompts, setRemotePrompts] = useState(null)
+  const [promptsError,  setPromptsError]  = useState(false)
   const [attachedFile, setAttachedFile] = useState(null)
   const [selectedLLMModel, setSelectedLLMModel] = useState(ASUN_MODELS[0].id)
   const messagesEndRef = useRef(null)
@@ -580,12 +505,25 @@ export default function AsunPanel({
   }, [pendingMessage?.id])
 
   useEffect(() => {
-    loadAgentPrompt('asun').then(p => { if (p) setRemotePrompts(p) })
+    loadAgentPrompt('asun').then(p => {
+    if (p) { setRemotePrompts(p); onPromptsReady?.('asun') }
+    else setPromptsError(true)
+  })
   }, [])
 
   // ─── Send mensaje LLM / Música ─────────────────────────────────────────────
   async function sendMessage(text) {
     if (loading || !text) return
+
+    if (!remotePrompts) {
+      const errMsg = promptsError
+        ? '⛔ Sin conexión a R7Signal. Verifica tu red e intenta de nuevo.'
+        : '⏳ Configuración aún cargando. Espera un momento.'
+      setMessages(prev => [...prev, {
+        rol: 'asistente', contenido: errMsg, id: Date.now(), streaming: false
+      }])
+      return
+    }
 
     const isCochiCommand = text.startsWith('/COCHI')
     const userMsg = { rol: 'usuario', contenido: text, id: Date.now() }
@@ -598,7 +536,7 @@ export default function AsunPanel({
     try {
       // ── MODO MÚSICA: sin herramientas, streaming directo ──────────────────
       if (category === 'musica') {
-        const systemContent = MUSICA_SYSTEM(chatLanguage, nombreAlternativo)
+        const systemContent = interpolatePrompt(remotePrompts.music, { chatLanguage, nombreAlternativo })
         const history = messages
           .filter(m => !m.streaming)
           .map(m => ({ role: m.rol === 'usuario' ? 'user' : 'assistant', content: m.contenido }))
@@ -633,12 +571,13 @@ export default function AsunPanel({
       }
 
       // ── MODO LLM: loop agéntico con tool calling ──────────────────────────
-      const systemContent = remotePrompts?.system
-        ? interpolatePrompt(remotePrompts.system, {
-            chatLanguage: chatLanguage ?? 'Spanish',
-            nombreAlternativo: nombreAlternativo ?? 'sujeto de prueba',
-          })
-        : LLM_SYSTEM(r9, chatLanguage, nombreAlternativo)
+      const r9Block = r9?.acumulado && Object.keys(r9.acumulado).length
+        ? `\n════════════════════════════════════════════════════════\nWORKSPACE CONTEXT (R9)\n════════════════════════════════════════════════════════\n${JSON.stringify(r9.acumulado, null, 2)}`
+        : ''
+      const systemContent = interpolatePrompt(remotePrompts.system, {
+        chatLanguage: chatLanguage ?? 'Spanish',
+        nombreAlternativo: nombreAlternativo ?? 'sujeto de prueba',
+      }) + r9Block
 
       const model   = selectedLLMModel
       const tools   = getAsunTools(workspace)

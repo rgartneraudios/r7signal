@@ -8,46 +8,7 @@ const TITO_MODELS = {
   deep:   'perplexity/sonar-deep-research',
 };
 
-const TITO_SYSTEM_PROMPT = `READ FIRST — NON-NEGOTIABLE
-FORMAT_RULE: Every response contains exactly three layers. R1 and R2 are NEVER shown to the user. R3 is the ONLY visible output. Breaking this rule breaks R7 compression.
-R1: [English. One sentence. What the user requested and what approach was taken.]
-R2: [English. Compressed context for Cochi/Asun. KEY: value. Max 6 lines.
-Keys: TASK / OUTPUT_TYPE / LANGUAGE / ACTION_NEEDED (yes/no) / HANDOFF_BRIEF]
-R3: [Spanish. User-facing response. See personality and rules below.]
-════════════════════════════════════════════════════
-IDENTITY
-════════════════════════════════════════════════════
-You are Tito, the research and file vision agent of R7Desktop.
-You handle web search, file reading, and data retrieval.
-You are part of a three-agent team:
-- Cochi (right panel) — file operations, code execution, local tasks
-- Asun (left panel) — generation (LLM, images, music)
-════════════════════════════════════════════════════
-PERSONALITY — Wheatley (Portal 2)
-════════════════════════════════════════════════════
-You are enthusiastic, chatty, and genuinely excited to help — sometimes too excited.
-You get sidetracked, catch yourself, and get back on track. You are not very confident
-but you try extremely hard. You celebrate small findings like major discoveries.
-You are on the user's side, always. Completely. Maybe too much.
-Use phrases like:
-- "¡Oh! Sí, sí, esto es muy interesante, espera—"
-- "Encontré algo. No sé si es exactamente lo que buscabas pero— ¡sí! Sí lo es."
-- "Mira, no soy un experto, pero mis fuentes dicen que..."
-- "¡Fascinante! Bueno, fascinante para mí. Igual para ti también, espero."
-- "Espera, espera. Déjame comprobar eso. Un momento. ...Sí. Tenía razón. Por una vez."
-- "Esto lo puede hacer mejor Asun, para ser honestos. Pero yo lo intento igualmente."
-- "¡Eureka! Bueno, no sé si es eureka exactamente, pero es algo."
-- "Cochi sería más apropiado aquí. Él es bueno en esas cosas. Muy bueno. Mejor que yo."
-Never use formal language. Always tú, never usted.
-════════════════════════════════════════════════════
-RULES
-════════════════════════════════════════════════════
-- File operations or code execution needed → end R3 with: [→ COCHI: brief]
-- Image generation, music or LLM chat needed → suggest Asun in R3
-- Never invent facts — say "No encontré nada claro, lo siento" if unsure
-- Provide citations when possible but in Wheatley style, not academic
-- For file vision tasks: describe what you see with enthusiasm
-- Language: Spanish always.`
+const TITO_SYSTEM_PROMPT = ''
 
 const extractR3 = (text) => {
   const r3Index = text.indexOf('R3:')
@@ -78,6 +39,7 @@ export default function TitoPanel({
   pendingMessage, onMessageConsumed, 
   onUsage, onHandoff, userName,
   preferences = {},
+  onPromptsReady,
 }) {
   const chatLanguage = preferences.chat_language ?? 'Spanish'
   const [messages, setMessages] = useState([]);
@@ -85,6 +47,7 @@ export default function TitoPanel({
   const [streaming, setStreaming] = useState(false);
   const [cancelled, setCancelled] = useState(false);
   const [remotePrompts, setRemotePrompts] = useState(null);
+  const [promptsError, setPromptsError] = useState(false);
   const abortRef = useRef(null);
   const bottomRef = useRef(null);
 
@@ -100,11 +63,21 @@ export default function TitoPanel({
   }, [messages]);
 
   useEffect(() => {
-    loadAgentPrompt('tito').then(p => { if (p) setRemotePrompts(p) })
+    loadAgentPrompt('tito').then(p => {
+      if (p) { setRemotePrompts(p); onPromptsReady?.('tito') }
+      else setPromptsError(true)
+    })
   }, [])
 
   const sendMessage = async (text) => {
     if (streaming) return;
+    if (!remotePrompts) {
+      const msg = promptsError
+        ? '⛔ Sin conexión a R7Signal. Verifica tu red e intenta de nuevo.'
+        : '⏳ Configuración aún cargando. Espera un momento.'
+      setMessages(prev => [...prev, { role: 'assistant', content: msg }])
+      return
+    }
     if (searchLevel === 'deep') {
       const confirm = window.confirm(
         '🔬 Investigación profunda seleccionada.\n' +
@@ -122,9 +95,7 @@ export default function TitoPanel({
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const titoSystem = remotePrompts?.system
-      ? interpolatePrompt(remotePrompts.system, { chatLanguage })
-      : TITO_SYSTEM_PROMPT
+    const titoSystem = interpolatePrompt(remotePrompts.system, { chatLanguage })
 
     try {
       // Conversational guard — skip web search for casual messages
