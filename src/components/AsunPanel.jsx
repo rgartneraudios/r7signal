@@ -19,9 +19,9 @@ const MODELS = {
 }
 
 // ─── System prompts ───────────────────────────────────────────────────────────
-const LLM_SYSTEM = (r9, chatLanguage = 'Spanish', nombreAlternativo = null) => `[REDACTED PROMPT]`;
+const LLM_SYSTEM = null
 
-const MUSICA_SYSTEM = (chatLanguage = 'Spanish', nombreAlternativo = null) => `[REDACTED PROMPT]`;
+const MUSICA_SYSTEM = null
 
 // ─── Markers ──────────────────────────────────────────────────────────────────
 const COCHI_RE = /\[→ COCHI: ([^\]]+)\]/
@@ -465,6 +465,7 @@ export default function AsunPanel({
   r9,
   workspace,
   preferences = {},
+  onPromptsReady,
 }) {
   const chatLanguage      = preferences.chat_language     ?? 'Spanish'
   const nombreAlternativo = preferences.nombre_alternativo ?? null
@@ -476,6 +477,7 @@ export default function AsunPanel({
   const [generating,  setGenerating]   = useState(false)
   const [audioUrl,    setAudioUrl]     = useState(null)
   const [remotePrompts, setRemotePrompts] = useState(null)
+  const [promptsError,  setPromptsError]  = useState(false)
   const [attachedFile, setAttachedFile] = useState(null)
   const [selectedLLMModel, setSelectedLLMModel] = useState(ASUN_MODELS[0].id)
   const messagesEndRef = useRef(null)
@@ -503,12 +505,25 @@ export default function AsunPanel({
   }, [pendingMessage?.id])
 
   useEffect(() => {
-    loadAgentPrompt('asun').then(p => { if (p) setRemotePrompts(p) })
+    loadAgentPrompt('asun').then(p => {
+    if (p) { setRemotePrompts(p); onPromptsReady?.('asun') }
+    else setPromptsError(true)
+  })
   }, [])
 
   // ─── Send mensaje LLM / Música ─────────────────────────────────────────────
   async function sendMessage(text) {
     if (loading || !text) return
+
+    if (!remotePrompts) {
+      const errMsg = promptsError
+        ? '⛔ Sin conexión a R7Signal. Verifica tu red e intenta de nuevo.'
+        : '⏳ Configuración aún cargando. Espera un momento.'
+      setMessages(prev => [...prev, {
+        rol: 'asistente', contenido: errMsg, id: Date.now(), streaming: false
+      }])
+      return
+    }
 
     const isCochiCommand = text.startsWith('/COCHI')
     const userMsg = { rol: 'usuario', contenido: text, id: Date.now() }
@@ -521,7 +536,7 @@ export default function AsunPanel({
     try {
       // ── MODO MÚSICA: sin herramientas, streaming directo ──────────────────
       if (category === 'musica') {
-        const systemContent = MUSICA_SYSTEM(chatLanguage, nombreAlternativo)
+        const systemContent = interpolatePrompt(remotePrompts.music, { chatLanguage, nombreAlternativo })
         const history = messages
           .filter(m => !m.streaming)
           .map(m => ({ role: m.rol === 'usuario' ? 'user' : 'assistant', content: m.contenido }))
@@ -556,12 +571,13 @@ export default function AsunPanel({
       }
 
       // ── MODO LLM: loop agéntico con tool calling ──────────────────────────
-      const systemContent = remotePrompts?.system
-        ? interpolatePrompt(remotePrompts.system, {
-            chatLanguage: chatLanguage ?? 'Spanish',
-            nombreAlternativo: nombreAlternativo ?? 'sujeto de prueba',
-          })
-        : LLM_SYSTEM(r9, chatLanguage, nombreAlternativo)
+      const r9Block = r9?.acumulado && Object.keys(r9.acumulado).length
+        ? `\n════════════════════════════════════════════════════════\nWORKSPACE CONTEXT (R9)\n════════════════════════════════════════════════════════\n${JSON.stringify(r9.acumulado, null, 2)}`
+        : ''
+      const systemContent = interpolatePrompt(remotePrompts.system, {
+        chatLanguage: chatLanguage ?? 'Spanish',
+        nombreAlternativo: nombreAlternativo ?? 'sujeto de prueba',
+      }) + r9Block
 
       const model   = selectedLLMModel
       const tools   = getAsunTools(workspace)

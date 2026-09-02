@@ -8,7 +8,7 @@ const TITO_MODELS = {
   deep:   'perplexity/sonar-deep-research',
 };
 
-const TITO_SYSTEM_PROMPT = `[REDACTED PROMPT]`
+const TITO_SYSTEM_PROMPT = ''
 
 const extractR3 = (text) => {
   const r3Index = text.indexOf('R3:')
@@ -39,6 +39,7 @@ export default function TitoPanel({
   pendingMessage, onMessageConsumed, 
   onUsage, onHandoff, userName,
   preferences = {},
+  onPromptsReady,
 }) {
   const chatLanguage = preferences.chat_language ?? 'Spanish'
   const [messages, setMessages] = useState([]);
@@ -46,6 +47,7 @@ export default function TitoPanel({
   const [streaming, setStreaming] = useState(false);
   const [cancelled, setCancelled] = useState(false);
   const [remotePrompts, setRemotePrompts] = useState(null);
+  const [promptsError, setPromptsError] = useState(false);
   const abortRef = useRef(null);
   const bottomRef = useRef(null);
 
@@ -61,11 +63,21 @@ export default function TitoPanel({
   }, [messages]);
 
   useEffect(() => {
-    loadAgentPrompt('tito').then(p => { if (p) setRemotePrompts(p) })
+    loadAgentPrompt('tito').then(p => {
+      if (p) { setRemotePrompts(p); onPromptsReady?.('tito') }
+      else setPromptsError(true)
+    })
   }, [])
 
   const sendMessage = async (text) => {
     if (streaming) return;
+    if (!remotePrompts) {
+      const msg = promptsError
+        ? '⛔ Sin conexión a R7Signal. Verifica tu red e intenta de nuevo.'
+        : '⏳ Configuración aún cargando. Espera un momento.'
+      setMessages(prev => [...prev, { role: 'assistant', content: msg }])
+      return
+    }
     if (searchLevel === 'deep') {
       const confirm = window.confirm(
         '🔬 Investigación profunda seleccionada.\n' +
@@ -83,9 +95,7 @@ export default function TitoPanel({
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const titoSystem = remotePrompts?.system
-      ? interpolatePrompt(remotePrompts.system, { chatLanguage })
-      : TITO_SYSTEM_PROMPT
+    const titoSystem = interpolatePrompt(remotePrompts.system, { chatLanguage })
 
     try {
       // Conversational guard — skip web search for casual messages

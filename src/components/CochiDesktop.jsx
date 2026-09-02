@@ -5,7 +5,7 @@ import { readTextFile, writeTextFile, readDir, exists, mkdir, BaseDirectory } fr
 import { Command } from '@tauri-apps/plugin-shell'
 import PlanViewer from './PlanViewer'
 import { PLANNING_SYSTEM_PROMPT, buildPlanContext } from '../lib/cochiPlanningPrompts'
-import { loadAgentPrompt } from '../lib/promptLoader.js'
+import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES } from '../lib/modelPrices.js'
 
 
@@ -138,6 +138,7 @@ export default function CochiDesktop({
   onUsage,
   onSavePreferences,
   onPreferencesLoaded,
+  onPromptsReady,
 }) {
   const [messages,        setMessages]        = useState([])
   const [activity,        setActivity]        = useState([])
@@ -157,6 +158,7 @@ export default function CochiDesktop({
   const [executionPlan,  setExecutionPlan]  = useState(null)
   const [planStatus,     setPlanStatus]     = useState('idle')
   const [remotePrompts,  setRemotePrompts]  = useState(null)
+  const [promptsError,   setPromptsError]   = useState(false)
   const planRef = useRef(null)
   const originalMessageRef = useRef('')
 
@@ -164,7 +166,10 @@ export default function CochiDesktop({
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
 
   useEffect(() => {
-    loadAgentPrompt('cochi').then(p => { if (p) setRemotePrompts(p) })
+    loadAgentPrompt('cochi').then(p => {
+      if (p) { setRemotePrompts(p); onPromptsReady?.('cochi') }
+      else setPromptsError(true)
+    })
   }, [])
 
   // Cerrar gear al hacer click fuera
@@ -440,6 +445,15 @@ export default function CochiDesktop({
 
   async function executeAllSteps() {
     setPlanStatus('executing')
+    if (!remotePrompts) {
+      setLoading(false)
+      setPlanStatus('idle')
+      const msg = promptsError
+        ? '⛔ Sin conexión a R7Signal. Verifica tu red e intenta de nuevo.'
+        : '⏳ Configuración aún cargando. Espera un momento.'
+      setMessages(prev => [...prev, { role: 'assistant', content: msg }])
+      return
+    }
     let remainingIter = 25
     let totalTokensAcc = 0
     let totalCostAcc = 0
@@ -483,29 +497,16 @@ export default function CochiDesktop({
 
         const planContext = trackSteps ? buildPlanContext(planRef.current, stepIndex) : ''
 
-        const systemMessages = [
-          { role: 'system', content: planContext },
-          {
-            role: 'system',
-            content: `[REDACTED PROMPT]`
-          },
-          {
-            role: 'system',
-            content: `[REDACTED PROMPT]`
-          },
-          {
-            role: 'system',
-            content: `SYSTEM CONTEXT
-You are operating on a Windows system. Use absolute paths only.
-Active workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).
-Memory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.
-Read memory files only when the user explicitly asks about past operations.`
-          },
-          {
-            role: 'system',
-            content: `[REDACTED PROMPT]`
-          },
-        ]
+    const remoteSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
+
+    const systemMessages = [
+      { role: 'system', content: planContext },
+      {
+        role: 'system',
+        content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.`
+      },
+      { role: 'system', content: remoteSystem },
+    ]
 
         let apiMessages = [...systemMessages, { role: 'user', content: originalMessageRef.current || '' }]
         let stepTokens = 0

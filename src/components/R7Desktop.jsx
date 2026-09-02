@@ -37,6 +37,11 @@ export default function R7Desktop() {
   const [showPrefs, setShowPrefs] = useState(false)
   const [userName, setUserName] = useState('')
   const [preferences, setPreferences] = useState({ nombre_usuario: '', nombre_alternativo: '', chat_language: 'Español' })
+  const [promptsReady, setPromptsReady] = useState({ asun: false, tito: false, cochi: false })
+
+  const handlePromptsReady = useCallback((agent) => {
+    setPromptsReady(prev => ({ ...prev, [agent]: true }))
+  }, [])
 
   const leftInputRef = useRef(null)
   const cochiInputRef = useRef(null)
@@ -719,6 +724,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
                 r9={r9}
                 workspace={workspace}
                 preferences={preferences}
+                onPromptsReady={handlePromptsReady}
               />
             : <TitoPanel
                 pendingMessage={activeLeftPanel === 'tito' ? pendingAsun : null}
@@ -727,6 +733,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
                 onHandoff={(brief) => setHandoff({ type:'tito', brief, id: Date.now() })}
                 userName={userName}
                 preferences={preferences}
+                onPromptsReady={handlePromptsReady}
               />
           }
         </div>
@@ -747,6 +754,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
             onPreferencesLoaded={(prefs) => setPreferences(prefs)}
             onSavePreferences={(fn) => { cochiSavePrefsRef.current = fn }}
             r9={r9}
+            onPromptsReady={handlePromptsReady}
           />
         </div>
       </div>
@@ -788,7 +796,15 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
                 value={leftInput}
                 onChange={e => setLeftInput(e.target.value)}
                 onKeyDown={leftKeyDown}
-                placeholder="Asun / Tito"
+                placeholder={
+                  activeLeftPanel === 'asun' && !promptsReady.asun ? 'Conectando…' :
+                  activeLeftPanel === 'tito' && !promptsReady.tito ? 'Conectando…' :
+                  'Asun / Tito'
+                }
+                disabled={
+                  (activeLeftPanel === 'asun' && !promptsReady.asun) ||
+                  (activeLeftPanel === 'tito' && !promptsReady.tito)
+                }
                 onInput={e => {
                   e.target.style.height = 'auto'
                   e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px'
@@ -813,7 +829,8 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
               value={cochiInput}
               onChange={e => setCochiInput(e.target.value)}
               onKeyDown={cochiKeyDown}
-              placeholder="Cochi"
+              placeholder={!promptsReady.cochi ? 'Conectando…' : 'Cochi'}
+              disabled={!promptsReady.cochi}
               onInput={e => {
                 e.target.style.height = 'auto'
                 e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px'

@@ -1,4 +1,4 @@
-export const PLANNING_SYSTEM_PROMPT = `[REDACTED PROMPT]`
+export const PLANNING_SYSTEM_PROMPT = ''
 
 export function buildPlanContext(plan, currentStepIndex) {
   const currentStep = plan.steps[currentStepIndex]

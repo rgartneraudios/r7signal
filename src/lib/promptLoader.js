@@ -22,8 +22,8 @@ export async function loadAgentPrompt(agentId) {
     cache[agentId] = data
     return data
   } catch (err) {
-    console.warn(`[R7] promptLoader: fallback for ${agentId}`, err.message)
-    return null
+    console.warn(`[R7] promptLoader: failed for ${agentId}`, err.message)
+    return false
   }
 }
 
