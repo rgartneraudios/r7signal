@@ -1,0 +1,11 @@
+-Explicar R7 para Openrouter. 
+-Explicar IA Publica y su prompt. 
+-Explicar Tito + perpléxity
+-Explicar Cochi (Explicar que Asun y Cochi tienen acceso a los archivos y que solo Cochi tiene el Shell a mano.)
+-Explicar Asun (Explicar que Asun y Cochi tienen acceso a los archivos y que solo Cochi tiene el Shell a mano.)
+-Explicar que se pueden hacer varias tareas a la vez con Asun y Cochi funcionando al mismo tiempo.
+-Explicar que al seleccionar una carpeta grande se abarca más área de trabajo para Cochi y Asun
+-CLS sirve para limpiar el chat. Esto es importante para gastar mejos dinero en tokens. Mas corta la conversación o etapa, menos tokens gastados. Lo ideal es implementar micro etapas.
+-Explicar lo de R9
+-Explicar lo de /COCHI y su uso. 
+-Explicar los accesos directos a Openrouter.

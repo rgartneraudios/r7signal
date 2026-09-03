@@ -1,12 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { readTextFile, writeTextFile, readDir, exists, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { Command } from '@tauri-apps/plugin-shell'
+import { readTextFile, writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs'
 import PlanViewer from './PlanViewer'
 import { PLANNING_SYSTEM_PROMPT, buildPlanContext } from '../lib/cochiPlanningPrompts'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES } from '../lib/modelPrices.js'
+import { COCHI_TOOLS, TOOL_ICONS, executeTool } from '../lib/cochiTools.js'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -37,51 +37,7 @@ const COCHI_TIER_LABEL = {
   'z-ai/glm-5.3-flash':             'Terminator',
 }
 
-// ─── Tools ────────────────────────────────────────────────────────────────────
-const COCHI_TOOLS = [
-  { type:'function', function:{ name:'read_file',   description:'Read the full text content of a file on disk. Use this before modifying any file.', parameters:{ type:'object', properties:{ path:{ type:'string', description:'Absolute Windows path' } }, required:['path'] } } },
-  { type:'function', function:{ name:'write_file',  description:'Write or overwrite a file on disk with the given content.',                          parameters:{ type:'object', properties:{ path:{ type:'string' }, content:{ type:'string' } }, required:['path','content'] } } },
-  { type:'function', function:{ name:'list_dir',    description:'List all files and folders inside a directory.',                                      parameters:{ type:'object', properties:{ path:{ type:'string' } }, required:['path'] } } },
-  { type:'function', function:{ name:'run_command', description:'Run a PowerShell command on the local Windows system.',                               parameters:{ type:'object', properties:{ command:{ type:'string' } }, required:['command'] } } },
-  { type:'function', function:{ name:'file_exists', description:'Check if a file or folder exists at the given path.',                                 parameters:{ type:'object', properties:{ path:{ type:'string' } }, required:['path'] } } },
-]
 
-async function executeTool(name, args, permission = 'full') {
-  if (permission === 'read' && (name === 'write_file' || name === 'run_command'))
-    return `⛔ Bloqueado: permiso Solo Lectura. Cambia el nivel en Workspace.`
-  if (permission === 'write' && name === 'run_command')
-    return `⛔ Bloqueado: permiso L+Escritura. Activa Full Access para ejecutar comandos.`
-  switch (name) {
-    case 'read_file':   return await readTextFile(args.path)
-    case 'write_file': {
-      const parts = args.path.replace(/\\/g, '/').split('/')
-      parts.pop()
-      const dir = parts.join('\\')
-      if (!(await exists(dir))) await mkdir(dir, { recursive: true })
-      await writeTextFile(args.path, args.content)
-      return `✅ Escrito: ${args.path}`
-    }
-    case 'list_dir': {
-      const entries = await readDir(args.path)
-      return entries.map(e => `${e.isDirectory ? '[DIR]' : '[FILE]'} ${e.name}`).join('\n') || '(vacío)'
-    }
-    case 'run_command': {
-      const cmd    = Command.create('powershell', ['-Command', args.command])
-      const output = await cmd.execute()
-      const out    = (output.stdout || '').trim()
-      const err    = (output.stderr || '').trim()
-      if (err && !out) return `STDERR: ${err}`
-      if (err) return `${out}\nSTDERR: ${err}`
-      return out || '(sin output)'
-    }
-    case 'file_exists': {
-      const result = await exists(args.path)
-      return result ? `✅ Existe: ${args.path}` : `❌ No existe: ${args.path}`
-    }
-    default: return `Herramienta desconocida: ${name}`
-  }
-}
-const TOOL_ICONS = { read_file:'📖', write_file:'✏️', list_dir:'📂', run_command:'⚙️', file_exists:'🔍' }
 
 // ─── Syntax theme ─────────────────────────────────────────────────────────────
 const r7SyntaxTheme = {
@@ -155,10 +111,11 @@ export default function CochiDesktop({
   const gearRef                               = useRef(null)
   const messagesEndRef                        = useRef(null)
 
-  const [executionPlan,  setExecutionPlan]  = useState(null)
-  const [planStatus,     setPlanStatus]     = useState('idle')
-  const [remotePrompts,  setRemotePrompts]  = useState(null)
-  const [promptsError,   setPromptsError]   = useState(false)
+  const [executionPlan,        setExecutionPlan]        = useState(null)
+  const [planStatus,           setPlanStatus]           = useState('idle')
+  const [remotePrompts,        setRemotePrompts]        = useState(null)
+  const [promptsError,         setPromptsError]         = useState(false)
+  const [tokenWarningDismissed, setTokenWarningDismissed] = useState(false)
   const planRef = useRef(null)
   const originalMessageRef = useRef('')
 
@@ -267,7 +224,7 @@ export default function CochiDesktop({
   }
 
   function pruneApiMessages(messages) {
-    const MAX_NON_SYSTEM = 24
+    const MAX_NON_SYSTEM = 12
     const systemMsgs = messages.filter(m => m.role === 'system')
     const nonSystem  = messages.filter(m => m.role !== 'system')
     if (nonSystem.length <= MAX_NON_SYSTEM) return messages
@@ -498,12 +455,16 @@ export default function CochiDesktop({
         const planContext = trackSteps ? buildPlanContext(planRef.current, stepIndex) : ''
 
     const remoteSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
+    const sessionTotal = tokens + totalTokensAcc
+    const tokenAlert   = sessionTotal > 70000
+      ? '\nTOKEN_ALERT: Session context is large. If the user has not yet been informed, mention that a /R9 save is recommended before starting a new chat.'
+      : ''
 
     const systemMessages = [
       { role: 'system', content: planContext },
       {
         role: 'system',
-        content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.`
+        content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.\nSESSION_TOKENS: ${sessionTotal}${tokenAlert}`
       },
       { role: 'system', content: remoteSystem },
     ]
@@ -676,18 +637,31 @@ export default function CochiDesktop({
     ]
     if (conversational.some(r => r.test(msg))) return false
 
-    // Filesystem / agentic keywords — planning needed
-    const agentic = [
+    // Write/execute verbs — these are what actually justify step tracking
+    const writeVerbs = [
       'crea', 'crear', 'cre ', 'escribe', 'modifica', 'modif',
       'elimina', 'borra', 'mueve', 'copia', 'renombra',
       'ejecuta', 'instala', 'instalar', 'añade', 'agrega',
       'refactori', 'implement', 'migra', 'actualiza',
-      'lee el', 'lee la', 'leer', 'busca en', 'analiza',
+      'npm', 'yarn', 'pip', 'cargo', '/cochi',
+    ]
+    const hasWriteVerb = writeVerbs.some(k => msg.includes(k))
+
+    // Read-only queries — even if they mention files, a single pass covers it
+    const queryPatterns = [
+      /^qué/, /^que /, /^cuál/, /^cual/, /^cómo/, /^como /, /^dónde/, /^donde/,
+      /^dime/, /^decime/, /^muestra/, /^muéstrame/, /^cuánt/, /^cuant/,
+      /^lee el/, /^lee la/, /^leer/, /^busca en/, /^analiza/, /^revisa/,
+    ]
+    if (queryPatterns.some(r => r.test(msg)) && !hasWriteVerb) return false
+
+    // Filesystem / agentic keywords — planning needed
+    const agentic = [
+      ...writeVerbs,
       'archivo', 'carpeta', 'directorio', 'fichero',
       'package.json', 'jsx', 'tsx', 'js', 'ts', 'css',
-      '/cochi', 'npm', 'yarn', 'pip', 'cargo',
     ]
-    if (agentic.some(k => msg.includes(k))) return true
+    if (agentic.some(k => msg.includes(k)) && hasWriteVerb) return true
 
     // Default: if message is short and has no agentic keywords, skip planning
     if (msg.length < 60) return false
@@ -722,7 +696,16 @@ export default function CochiDesktop({
   }
 
   function handleEsc()   { abortRef.current?.abort(); setLoading(false) }
-  function handleClear() { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); setActivity([]); setTokens(0); setCost(0); setLoading(false) } }
+  function handleClear() {
+    if (window.confirm('¿Borrar toda la conversación?')) {
+      setMessages([]); setActivity([]); setTokens(0); setCost(0)
+      setLoading(false); setTokenWarningDismissed(false)
+    }
+  }
+  function handleSaveR9() {
+    handleSendText('[SISTEMA] El chat ha alcanzado 70.000 tokens. Genera un R3_SAVE completo con: resumen del trabajo realizado en esta sesión, archivos modificados con sus rutas absolutas, decisiones importantes tomadas, y estado actual de la tarea. Este R3_SAVE permitirá retomar el trabajo en una nueva sesión sin perder contexto.')
+    setTokenWarningDismissed(true)
+  }
 
   const activeModelPrice = MODEL_PRICES[selectedModel]
   const activeModelLabel = COCHI_MODELS.find(m => m.id === selectedModel)?.label
@@ -888,7 +871,7 @@ export default function CochiDesktop({
               ) : null
             ) : msg.role === 'user' ? (
               <div key={idx} className="cd-message-enter" style={{
-                background: 'rgba(107,158,196,0.06)', border: '1px solid rgba(107,158,196,0.15)',
+                background: '#0C1314', border: '1px solid rgba(107,158,196,0.15)',
                 borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               }}>
@@ -902,7 +885,7 @@ export default function CochiDesktop({
               </div>
             ) : (
               <div key={idx} className="cd-message-enter" style={{
-                background: '#18171C', border: '1px solid #232227', borderLeft: '3px solid #6A7A8A',
+                background: '#13151A', border: '1px solid #232227', borderLeft: '3px solid #6A7A8A',
                 borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               }}>
@@ -940,7 +923,7 @@ export default function CochiDesktop({
               <div style={{ fontSize: '0.68rem', color: '#6A7A8A', letterSpacing: '0.15em', fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' }}>🔄 Cochi trabajando…</div>
               {activity.map((a, i) => (
                 <div key={i} className="cd-activity-item" style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: '0.8rem' }}>{a.icon}</span>
+                  <span style={{ fontSize: '0.8rem', color: '#FF4466', textShadow: '0 0 8px rgba(255,68,102,0.6)' }}>{a.icon}</span>
                   <div>
                     <span style={{ fontSize: '0.65rem', color: '#8A868B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{a.label} </span>
                     <span style={{ fontSize: '0.65rem', color: '#D4D8DC', fontFamily: "'JetBrains Mono', monospace" }}>{a.detail}</span>
@@ -957,6 +940,29 @@ export default function CochiDesktop({
           <div ref={messagesEndRef} />
         </div>
       </div>
+
+      {/* ── Token warning banner ── */}
+      {tokens > 70000 && !tokenWarningDismissed && (
+        <div style={{
+          flexShrink: 0,
+          borderTop: '1px solid rgba(232,108,50,0.3)',
+          background: 'rgba(232,108,50,0.07)',
+          padding: '8px 14px',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: '0.7rem', color: '#E8762A', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
+            ⚠ 70k tokens — Tu contexto está completo. Guárdalo en R9 antes de empezar un chat nuevo: no perderás nada.
+          </span>
+          <button
+            onClick={handleSaveR9}
+            style={{ background: 'rgba(232,108,50,0.15)', border: '1px solid rgba(232,108,50,0.5)', borderRadius: 4, padding: '3px 10px', color: '#E8762A', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
+          >Guardar R9</button>
+          <button
+            onClick={() => setTokenWarningDismissed(true)}
+            style={{ background: 'transparent', border: 'none', color: '#6A7A8A', fontSize: '0.8rem', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
+          >×</button>
+        </div>
+      )}
 
       {/* ── Status bar (sustituye al input propio) ── */}
       <div style={{

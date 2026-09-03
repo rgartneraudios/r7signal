@@ -1,0 +1,141 @@
+Purpose & context
+
+Roberto ("Maravilla" / "Signor Roberto") is the founder and sole developer of R7Signal, a dual-surface AI platform (web portal + Tauri v2 desktop app) focused on token efficiency, privacy, and commercial rights for generated assets. The product's three pillars are Buen Precio, Privacidad, and Uso Comercial.
+
+Core product: R7Desktop — a multi-agent desktop workspace built with Tauri v2 + React, operating in a NOCOD model where Roberto directs architecture, Claude handles design/code generation, and Cochi (the local filesystem agent) executes all file changes via /COCHI instruction blocks.
+
+Agent trinity (frozen):
+
+Asun (left panel) — generation: LLM, images, music. Personality: GLaDOS (benevolent)
+Tito (left panel, alternate mode) — research, web search, file vision. Personality: Wheatley (Portal 2)
+Cochi (right panel) — local filesystem execution. Personality: TARS/military hybrid
+
+Product roadmap:
+
+Fase 0 (current): Roberto solo, no desktop login, anon key for prompt fetching
+Fase 0.5: Full Supabase migration, desktop login, license validation, landing page, security hardening
+Fase 1: Commercial launch — "R7Signal for OpenRouter" ~5–10€ one-time payment. User buys on web → Supabase Auth account → downloads binary → logs in with email+password → JWT validates license_valid → fetches protected prompts. Fase 1 users receive credits toward Fase 2 (crowdfunding model)
+Fase 2: Proprietary R7 API, direct provider payments, R7 credits system
+
+Business model (Fase 1): Sold as a configured OpenRouter workspace — user supplies their own OR API key, R7 provides the workspace, prompts, R7 compression architecture, and agentic system. Binary without Supabase prompts is non-functional (IP protection).
+
+Tech stack: Tauri v2 + React, Cloudflare Pages, Supabase (Edge Functions in Deno/TypeScript), OpenRouter for all AI calls. VITE env vars: VITE_OPENROUTER_API_KEY, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY. Supabase project: ovvpyotqstweqbrmeyme · User ID: e18327da-32e9-415c-9bf2-dfb00d64565c · Desktop app ID: com.r7signal.cochi · AppData: AppData\Local\com.r7signal.cochi\
+
+Current state
+
+Active Bridge version: v14 (1 Sep 2026)
+
+Agent model lineup (frozen):
+
+Agent	Tier	Model
+Asun LLM	Occidente	anthropic/claude-sonnet-5
+Asun LLM	Asia	z-ai/glm-5.3-flash
+Asun Imagen	Occidente	x-ai/grok-imagine-image-quality
+Asun Imagen	Asia	bytedance-seed/seedream-5-0-pro
+Asun Música chat	—	z-ai/glm-5.3-flash
+Asun Música gen	—	google/lyria-3-pro-preview
+Tito	Fast	perplexity/sonar
+Tito	Pro	perplexity/sonar-pro
+Tito	Deep Research	perplexity/sonar-deep-research
+Cochi	Occidental	google/gemini-2.5-flash-lite
+Cochi	Asia	deepseek/deepseek-v4-flash-0731
+Cochi	IA Local	Ollama (localhost:11434, configurable)
+Cochi	IA Local	LM Studio (localhost:1234, configurable)
+
+Recently implemented (Bridge v14 session):
+
+Mejora 3 Cochi: planning layer with needsPlanning() guard — conversational goes direct, agentic activates plan
+stream_options: { include_usage: true } on Asun LLM and all three Tito tiers
+extractR3 / extractR3Streaming in Asun and Tito — R1/R2 never visible to user
+Tito personality changed from GLaDOS-scientific to Wheatley (Portal 2)
+Model ID corrected: anthropic/claude-sonnet-5 (no :batch suffix)
+modelPrices.js centralized with calculateCost() helper
+Ollama and LM Studio endpoints configurable in PreferencesModal, saved to user_preferences.json
+needsWebSearch() guard in Tito — short/conversational messages don't trigger Perplexity
+All agent system prompts migrated from hardcoded code to Supabase agent_prompts table; zero fallbacks in code — if Supabase unreachable, product blocks entirely (IP protection strategy)
+onPromptsReady callbacks bubble from each agent panel to R7Desktop.jsx; inputs disabled with 'Conectando…' placeholder until all prompts loaded
+
+Top bar (frozen layout):
+
+│ R7SIGNAL │ ASUN 0 tok │ TITO 0 tok │ COCHI 0 tok │ OR Credits  OR Activity │
+TOTAL eliminated; OR Credits → https://openrouter.ai/settings/credits; OR Activity → https://openrouter.ai/activity
+Links open via @tauri-apps/plugin-opener (static import)
+
+R7 compression system: Responses structured as R1 (one-line English summary) / R2 (absolute Windows paths affected) / R3 (user-facing result in chatLanguage) / optional R3_SAVE for long-term memory. R1/R2/R7/R9 always in English; R3 in user's chatLanguage.
+
+Cochi agentic loop: MAX_ITER = 25, context pruning at 24 non-system messages (keeps 16 most recent). Tools: read_file, write_file, list_dir, run_command (PowerShell), file_exists. /COCHI block = full confirmation including destructive operations.
+
+Local memory files (at AppData\Local\com.r7signal.cochi\): cochi_memory.txt (append-only historical log), r3_history.txt (selective R3_SAVE fragments), r9_acumulado.json (per-tab R9 structured as {"CÓDIGO": "...", "TEXTO": "...", ...}), user_preferences.json (desktop preferences, no Supabase auth required in Fase 0).
+
+Supabase active tables: profiles, balances, user_preferences, estilos_imagen, estilos_imagen_public, agent_prompts (with get-agent-prompts Edge Function, service role key, in-memory cache via promptLoader.js)
+
+On the horizon
+
+Pending priorities (in order):
+
+Migrate remaining prompts to Supabase — Fase 0: anon key + RLS restricted to Roberto; Fase 0.5: desktop login + license_valid
+Polish greeting length — Asun and Tito: add "max 2–3 sentences in conversational mode" rule when migrating prompts
+Shared R9 — move .r9/ inside workspace folder, shared read access Asun↔Cochi
+Web preferences panel — UI for editing preferences from the web portal
+Onboarding flow — deferred until testing complete
+Desktop login screen — email+password login in R7Desktop (Fase 0.5)
+
+Longer horizon:
+
+Fase 0.5 security hardening: license_valid field + device_id anti-sharing mechanism in profiles table
+Landing page for Fase 1 launch
+English localization of the app
+Fase 1 commercial launch via Reddit, Product Hunt, social media
+Long-term: Fase 2 proprietary R7 API, negotiate direct provider contracts (Mistral, DeepSeek, ByteDance, xAI) to bypass OpenRouter margin
+
+Key learnings & principles
+
+IP protection via Supabase dependency: All agent system prompts, R7 compression rules, and image style prompts live in Supabase behind auth. A pirated binary without valid credentials is non-functional. Zero code fallbacks — degrading gracefully would expose the IP.
+SYSTEM CONTEXT block stays hardcoded in Cochi (contains dynamic workspace.path and permissionLabel); Supabase serves only static content. R9 accumulator stays in code as operational mechanics, not IP.
+R9 is local-only: "R9 es de Cochi" — multi-device sync is not a requirement at any phase. Cochi never deletes R9 without explicit confirmation.
+Occidente/Asia naming deprecated in favor of personality-based tier names (Sigilosa/Afilada for Asun, Centinela/Terminator for Cochi). Occidente/Asia labels retired from user-facing copy.
+Asun and Cochi are complementary "two arms": Asun (Sigilosa/Afilada) thinks and analyzes with full filesystem access; Cochi (Centinela/Terminator) executes. Neither is subordinate.
+onSave ref timing pattern: onSave={(data) => cochiSavePrefsRef.current?.(data)} — ref must be read at call time, not render time, to avoid null capture.
+Desktop preferences are local JSON, not Supabase — no Supabase auth session in Tauri during Fase 0; service role key used where Supabase access is needed.
+OpenCode vs. Cochi architectural difference: OpenCode has deeper iteration budgets and native filesystem tooling; Cochi's loop is intentionally bounded. Goal is not to depend on OpenCode long-term.
+Tito's needsWebSearch() guard prevents Perplexity from being triggered for conversational/short messages — important cost control.
+Rename decisions: R1/R2/R3 label renaming to opaque strings rejected — semantically meaningless without Supabase prompt context, creates internal confusion for no meaningful security gain.
+
+Approach & patterns
+
+NOCOD mode: Claude handles architecture decisions and produces /COCHI instruction blocks; Cochi executes all file system changes. Roberto executes SQL changes personally via the Supabase dashboard.
+/COCHI instruction block format: Direct imperative commands to Cochi. Used for all code changes. For non-code content (SQL, Edge Function TypeScript), Roberto prefers receiving raw content blocks to paste directly.
+Architecture freeze before code: Roberto freezes all decisions explicitly in structured lists before any code is generated. Tradeoffs and A/B options are presented before acting on ambiguous decisions.
+Bridge documents: Session continuity maintained via Bridge documents (currently v14). Each session opens by establishing the Bridge as source of truth.
+/COCHI confirmation protocol: A /COCHI block counts as full confirmation for all operations including destructive ones — no additional confirmation required.
+Tauri build workflow (Windows/PowerShell): Roberto is on Windows; PowerShell syntax used for terminal commands. Two terminals required for npx tauri dev + npm run dev.
+Communication style: Roberto communicates corrections directly and concisely. Prefers Claude to flag tradeoffs proactively. Uses callsigns "Maravilla" / "Signor Roberto."
+
+Absolute restrictions (hard constraints)
+
+NO "PRO" → use PLUS / MS / SUPERIOR
+NO "cheap model" → use MB / Modelo Base
+Frontend web never calls LLM APIs directly
+Cochi never shows .env contents
+Cochi never simulates output — reports the real error verbatim
+R1/R2/R7/R9 always in English — R3 in chatLanguage
+Cochi never deletes R9 without explicit confirmation
+/COCHI = complete confirmation, including destructive operations
+prompt_base from estilos_imagen never visible to the frontend
+
+Tools & resources
+
+OpenRouter — all AI API calls (current phase); platform branded as "R7Signal for OpenRouter" for Fase 1 launch
+Supabase — agent_prompts table + get-agent-prompts Edge Function (service role key); profiles, balances, user_preferences, estilos_imagen, estilos_imagen_public; project ref ovvpyotqstweqbrmeyme
+Tauri v2 — desktop app framework; capabilities file at src-tauri/capabilities/cochi-full-access.json
+@tauri-apps/plugin-opener — external link opening (static import)
+@tauri-apps/plugin-dialog — folder/file picker
+@tauri-apps/plugin-fs with BaseDirectory.AppLocalData — local file storage
+Cloudflare Pages — web frontend deployment
+Cloudflare Workers — video generation and content serving layer
+Ollama / LM Studio — local model options for Cochi (configurable endpoints)
+modelPrices.js — centralized pricing with calculateCost() helper
+promptLoader.js — Supabase prompt fetching with in-memory cache
+
+
+NOTA: Esto es lo que Claude tenia hasta el momento aunque hay modificaciones a hacer. Es para que tengas una idea del rollo. Aquí ya no hay mas Occidente ni Asia. Y tengo que cambiar Sonnet 5 por Kimi 2.6 , pero es para que tengas una idea base del proyecto. 

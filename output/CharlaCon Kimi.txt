@@ -1,0 +1,146 @@
+Sobre lo referente al tema que hablamos, tengo una APP que es una especie de Arnés también como opencode y que la conecto con la Api de Openrouter. Sin embargo hago una consulta en mi app para consultar mis archivos de PC y mi App gasta el doble de tokens que opencode. En donde piensas que debe estar el problema? En el input y el prompt que hago desde mi App o en el Out?
+Editar
+Copiar
+Compartir
+OpenCode optimiza
+El problema está casi seguro en el input (lo que tu app envía al modelo), no en el output. En arneses de codificación, el input suele representar 80–95% del consumo total de tokens. El output del modelo es solo el texto que genera; el input es todo lo que tú le envías: system prompt, historial de la conversación, descripciones de herramientas, contenido de archivos y resultados de comandos.
+Aquí te dejo un mapa de dónde buscar, ordenado de más probable a menos probable:
+1. Salidas de comandos sin truncar (el culpable #1)
+Cuando tu app ejecuta grep, cat, ls -R, find, etc., y envía la salida completa al modelo, eso puede ser miles de tokens de golpe. OpenCode trunca agresivamente:
+Hojas
+Lo que hace tu app (probable)	Lo que hace OpenCode
+Envía los 500 resultados de grep completos	Trunca a las primeras 20 líneas relevantes
+Envía un archivo de 300 líneas entero	Envía solo los 50 tokens alrededor del match
+Envía ls -R de un proyecto grande	Filtra por extensión o usa glob con patrón
+Revisa: Después de ejecutar un comando en tu app, ¿cuántos caracteres/texto envías al modelo? Si es más de ~2.000 caracteres por comando, ahí está gran parte del problema.
+2. Historial de conversación sin compaction
+Si tu app mantiene todo el historial de mensajes (user → assistant → user → assistant…) desde el inicio de la sesión, el contexto crece exponencialmente. Cada vuelta incluye no solo el nuevo prompt, sino todo lo anterior.
+OpenCode hace:
+Compaction automática cuando se acerca al límite de contexto.
+Comandos como /drop para eliminar archivos del contexto.
+Uso de small_model para tareas de resumen.
+Revisa: ¿Tu app recuerda toda la conversación desde el inicio? ¿Cuántos mensajes hay en el array messages que envías a OpenRouter?
+3. Descripciones de herramientas (function calling) infladas
+Si usas function calling / tools, cada herramienta que defines en el system prompt consume tokens en cada llamada. OpenCode usa plugins como OpenSlimedit que comprimen las descripciones de herramientas y las salidas de archivos, logrando reducciones del 11–45%.
+Revisa: ¿Cuántas herramientas defines? ¿Cuán largas son sus descripciones? ¿Las envías en cada request o las mantienes en el system prompt? OpenCode incluso permite definir un small_model para tareas simples, ahorrando tokens del modelo grande.
+4. Contexto de archivos redundante
+Cuando tu app lee archivos para "entender el proyecto", ¿los reenvía enteros en cada prompt? OpenCode:
+Usa grep y glob para leer solo lo necesario.
+Permite al usuario hacer /drop para quitar archivos del contexto.
+Tiene un límite consciente de cuánto contexto mantiene activo.
+Revisa: ¿Tu app reenvía el mismo contenido de archivo en cada mensaje nuevo? Eso es duplicar tokens innecesariamente.
+5. System prompt largo o ineficiente
+Un system prompt detallado es útil, pero si excedes los 500–1.000 tokens solo en instrucciones base, estás pagando eso en cada request.
+Revisa: ¿Cuántos tokens tiene tu system prompt? Puedes contarlos aproximadamente: en inglés, ~1 token ≈ 0.75 palabras.
+6. Formato de los mensajes
+OpenCode optimiza el formato de sus mensajes (probablemente usa un formato compacto para las herramientas). Si tu app envía JSON muy verboso, Markdown excesivo, o repite metadatos innecesarios, eso suma.
+Cómo diagnosticar paso a paso
+Intercepta un request de tu app a OpenRouter (o loguéalo).
+Cuenta los tokens del payload completo. Puedes usar la librería tiktoken o contar caracteres aproximados.
+Identifica qué sección pesa más:
+¿Es el system prompt?
+¿Es el historial de mensajes?
+¿Es la salida de un comando reciente?
+¿Son las descripciones de herramientas?
+Compara con OpenCode: Corre OpenCode con el mismo modelo y la misma tarea, y compara el tamaño del payload. OpenCode tiene opencode stats para ver esto.
+Mi diagnóstico
+Dado que dices que gasta el doble, el problema más probable es una combinación de:
+Salidas de herramientas sin truncar + historial sin compaction + descripciones de herramientas completas en cada llamada.
+El output rara vez duplica el consumo total en un arnés de codificación, porque el input siempre pesa mucho más. Tu app probablemente está enviando "demasiado contexto" en cada request.
+¿Tienes acceso al payload JSON que envías a OpenRouter? Si me describes cómo está estructurado, puedo señalarte exactamente dónde recortar.
+Estamos hablando de una sola consulta o input y un output. Mi App gastó 31.000 Tokens y Opencode 16.000 Tokens
+Editar
+Copiar
+Compartir
+Diagnóstico app
+En una sola consulta (un turno), la diferencia de 15.000 tokens está 100% en el input. El output del modelo (el código o respuesta que genera) es similar en ambos casos, así que esos 15.000 tokens extra vienen de lo que tu app envía al modelo antes de que responda.
+Aquí están los tres culpables más probables, ordenados de más a menos probable:
+1. Tu app lee archivos completos; OpenCode lee fragmentos (el más probable)
+Cuando pides "mira este archivo", la app probablemente hace algo como:
+Python
+# Tu app (mal)
+with open("archivo.js") as f:
+    contenido = f.read()  # 500 líneas = ~3.500 tokens
+OpenCode, en cambio, no envía el archivo entero. Usa grep para encontrar la sección relevante y envía solo un fragmento (las líneas alrededor del match) o trunca agresivamente.
+Diagnóstico rápido:
+Revisa tu payload. ¿Envías archivos de más de 100 líneas completos? Si sí, ahí está gran parte de los 15.000 tokens.
+Solución:
+Lee solo los primeros 50-100 tokens alrededor de la línea relevante.
+Si necesitas el archivo completo, divídelo en chunks y procesa solo el necesario.
+2. Tu system prompt es un monstruo
+OpenCode tiene un system prompt optimizado y relativamente corto. Tu app probablemente incluye:
+Descripciones largas de 10+ herramientas
+Ejemplos few-shot (ejemplos de cómo responder)
+Instrucciones de personalidad extensas
+Contexto del proyecto automático (árbol de directorios, resumen, etc.)
+Cada herramienta que defines en el system prompt puede costar 200-500 tokens. Si tienes 10 herramientas, eso son 2.000-5.000 tokens solo en descripciones.
+Diagnóstico:
+¿Cuántos tokens tiene tu system prompt? Si supera los 1.500-2.000 tokens, es excesivo para una sola consulta.
+Solución:
+Reduce las descripciones de herramientas a lo esencial.
+Elimina ejemplos few-shot; los modelos actuales (Claude, GPT-4o) no los necesitan para coding.
+No inyectes el árbol de directorios completo en el system prompt; búscalo bajo demanda.
+3. Los resultados de tus herramientas no están truncados
+Cuando tu app ejecuta grep, ls, find, etc., si envía la salida cruda completa al modelo, eso explota el input.
+Hojas
+Comando	Salida típica	Tokens
+grep -r "function" ./src	200 coincidencias	~4.000 tokens
+ls -R ./node_modules	miles de archivos	~10.000+ tokens
+cat log.txt	un log largo	~5.000 tokens
+OpenCode trunca estas salidas a un máximo razonable (primeras 20 líneas o primeros 2.000 caracteres).
+Diagnóstico:
+¿Alguno de los resultados de herramientas en tu payload supera las 50 líneas? Si sí, trunca.
+Solución:
+Limita salidas de comandos a 20-30 líneas.
+Para grep, muestra solo el nombre del archivo + la línea, no el contexto completo.
+Si la salida es muy larga, resume con un modelo pequeño antes de enviar al grande.
+¿Cómo confirmar exactamente dónde está el problema?
+Intercepta el payload JSON que tu app envía a OpenRouter y divídelo en partes:
+Text
+System prompt:        X tokens
+Historial previo:     X tokens  (debería ser 0 en tu caso)
+User prompt:           X tokens
+Resultados herramientas: X tokens
+─────────────────────────────
+Total input:          ~31.000 tokens
+Compara con OpenCode (puedes ver su uso con opencode stats o revisando su payload). Verás que en OpenCode:
+Los resultados de herramientas son cortos.
+El system prompt es compacto.
+No hay "contexto del proyecto" automático inyectado.
+Mi apuesta
+Dado que es exactamente el doble y en un solo turno, el problema es casi seguro una combinación de:
+Archivos leídos completos + system prompt inflado + salidas de herramientas sin truncar.
+El output no tiene nada que ver. Ambos modelos generan ~2.000-4.000 tokens de código; la diferencia está en los ~27.000 tokens de input de tu app vs los ~12.000 de OpenCode.
+¿Puedes compartir cuántas líneas tiene tu system prompt o si tu app inyecta automáticamente archivos/árbol de directorios al inicio de cada consulta?
+Y el system prompt de opencode+openrouter quién lo manda? O sea que si uso Openrouter siempre mi App tendrá mayor consumo de tokens porque mi system prompt se suma al de Openrouter?
+Editar
+Copiar
+Compartir
+OpenRouter no añade
+OpenRouter no manda ningún system prompt. Es solo un proxy: recibe tu JSON y lo pasa tal cual al modelo final. El system prompt que llega al modelo es exclusivamente el que envía tu app (o el que envía OpenCode).
+¿Quién manda el system prompt?
+Hojas
+Quién	Qué envía
+Tu app	Tu system prompt personalizado + user prompt + resultados de herramientas
+OpenCode	El system prompt interno de OpenCode (optimizado, compacto) + user prompt + resultados truncados
+OpenRouter	Nada. Solo reenvía lo que le mandes. No añade instrucciones, no modifica el system prompt.
+OpenRouter no es como un "intermediario que añade su propia voz". Es un pasamanos técnico. 
+¿Tu app siempre gastará más por culpa de OpenRouter?
+No. OpenRouter no suma tokens a tu system prompt. Si tu app gasta el doble, es porque tu app está enviando más contenido, no porque OpenRouter añada algo.
+La comparación real es:
+plain
+Tu app input  ≈  [Tu system prompt grande] + [Archivos completos] + [Salidas de comandos largas]
+OpenCode input ≈  [System prompt compacto] + [Fragmentos de archivos] + [Salidas truncadas]
+Entonces, ¿por qué OpenCode gasta la mitad?
+Porque el system prompt de OpenCode está diseñado para ser eficiente:
+Sin ejemplos few-shot: No gasta tokens en ejemplos de "cómo responder".
+Descripciones de herramientas comprimidas: Usan lenguaje técnico conciso.
+Sin inyección automática de contexto: No envía el árbol de directorios ni resúmenes del proyecto a menos que se los pidas explícitamente.
+Tu app, en cambio, probablemente está enviando un system prompt de 3.000–8.000 tokens (con ejemplos, personalidad, reglas, descripciones de herramientas extensas) mientras que el de OpenCode ronda los 1.000–1.500 tokens.
+Resumen
+Hojas
+Pregunta	Respuesta
+¿OpenRouter añade system prompt?	No.
+¿Por qué mi app gasta más?	Porque tu app envía más input (system prompt largo + archivos completos + salidas sin truncar).
+¿Es culpa de OpenRouter?	No. El culpable es la arquitectura de tu app.
+Si quieres reducir esos 31.000 tokens a ~16.000, el primer paso es acortar tu system prompt a la mitad y dejar de enviar archivos completos. OpenRouter no tiene nada que ver en eso.

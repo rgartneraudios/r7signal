@@ -1,0 +1,13 @@
+TitoPanel.jsx
+(Esta definido en R7Desktop.jsx)
+Gradiente: #F5D27A (dorado/ámbar) → #CED2DB (plateado/gris claro)
+
+Cochi
+CochiDesktop.jsx
+- linear-gradient(135deg, #E36873 15%, #C0C0C0 85%) — 2 veces (rojo/rosado a plateado)
+- linear-gradient(135deg, #CF444D, #C0C0C0) — 3 veces (rojo intenso a plateado)
+- linear-gradient(135deg, #E36873, #C0C0C0) — 2 veces (rojo/rosado a plateado)
+- linear-gradient(...) con rgba(255,255,255,0.012) para el patrón de cuadrícula ("leather grid")
+
+AsunPanel.jsx
+- linear-gradient(135deg, #876EF5, #FA61DB) — usado 6 veces (púrpura a rosa)

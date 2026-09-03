@@ -7,6 +7,7 @@ import {
   mkdir,
   remove,
   exists,
+  stat,
 } from '@tauri-apps/plugin-fs'
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
@@ -25,6 +26,26 @@ function resolvePath(workspace, relativePath) {
   if (!base) throw new Error('No hay workspace activo')
   if (!relativePath || relativePath === '.' || relativePath === '') return base
   return `${base}/${relativePath}`.replace(/\\/g, '/')
+}
+
+async function walkDir(dir, filePattern, results = [], depth = 0, maxFiles = 200) {
+  if (depth > 8 || results.length >= maxFiles) return results
+  try {
+    const entries = await readDir(dir)
+    for (const entry of entries) {
+      if (results.length >= maxFiles) break
+      if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === '.git') continue
+      const fullPath = `${dir}/${entry.name}`.replace(/\\/g, '/')
+      if (entry.isDirectory) {
+        await walkDir(fullPath, filePattern, results, depth + 1, maxFiles)
+      } else {
+        const matches = !filePattern || filePattern === '*' || filePattern === '*.*'
+          || new RegExp('^' + filePattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', 'i').test(entry.name)
+        if (matches) results.push(fullPath)
+      }
+    }
+  } catch {}
+  return results
 }
 
 // ─── Tool definitions (para OpenRouter function calling) ──────────────────────
@@ -74,6 +95,52 @@ export function getAsunTools(workspace) {
             path: { type: 'string', description: 'Ruta relativa al workspace.' },
           },
           required: ['path'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'search_in_files',
+        description: 'Busca texto dentro de archivos, recursivamente desde el workspace o una subcarpeta. Devuelve ruta, línea y texto coincidente. Úsala en vez de leer archivos completos para localizar algo específico. Máximo 50 resultados.',
+        parameters: {
+          type: 'object',
+          properties: {
+            pattern: { type: 'string', description: 'Texto a buscar (no distingue mayúsculas).' },
+            subpath: { type: 'string', description: 'Subcarpeta relativa al workspace. Vacío para buscar desde la raíz.' },
+            filePattern: { type: 'string', description: 'Filtro opcional de archivo, ej. "*.jsx".' },
+          },
+          required: ['pattern'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_file_info',
+        description: 'Obtiene metadata de un archivo: tamaño y cantidad de líneas, sin gastar contexto en contenido. Úsala antes de read_text_file en archivos desconocidos.',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'Ruta relativa al workspace.' },
+          },
+          required: ['path'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'read_file_chunk',
+        description: 'Lee un rango de líneas de un archivo sin cargarlo entero. Tope de 150 líneas por llamada — si endLine se omite o excede el tope, solo se devuelven 150 líneas desde startLine; llama de nuevo con otro startLine para continuar.',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'Ruta relativa al workspace.' },
+            startLine: { type: 'number', description: 'Primera línea (base 1).' },
+            endLine: { type: 'number', description: 'Última línea (base 1). Opcional, tope 150 líneas desde startLine.' },
+          },
+          required: ['path', 'startLine'],
         },
       },
     },
@@ -182,6 +249,59 @@ export async function executeTool(toolName, toolArgs, workspace) {
         : ext === 'webp' ? 'image/webp'
         : 'image/jpeg'
       return JSON.stringify({ base64: b64, mimeType: mime })
+    }
+
+    case 'search_in_files': {
+      const rootDir = resolvePath(workspace, toolArgs.subpath || '')
+      const filePaths = await walkDir(rootDir, toolArgs.filePattern || '*', [], 0, 200)
+      const results = []
+      const patternLow = toolArgs.pattern.toLowerCase()
+      for (const filePath of filePaths) {
+        if (results.length >= 50) break
+        try {
+          const fileStat = await stat(filePath)
+          if (fileStat.size > 2 * 1024 * 1024) continue
+          const bytes = await readFile(filePath)
+          const text = new TextDecoder().decode(bytes)
+          const lines = text.split('\n')
+          for (let i = 0; i < lines.length && results.length < 50; i++) {
+            if (lines[i].toLowerCase().includes(patternLow)) {
+              results.push(`${filePath}:${i + 1}: ${lines[i].trim()}`)
+            }
+          }
+        } catch {}
+      }
+      if (results.length === 0) return '(sin resultados)'
+      const note = results.length === 50 ? '\n[Máx. 50 resultados — refina con filePattern si necesitas más precisión]' : ''
+      return results.join('\n') + note
+    }
+
+    case 'get_file_info': {
+      const filePath = resolvePath(workspace, toolArgs.path)
+      try {
+        const bytes = await readFile(filePath)
+        const text  = new TextDecoder().decode(bytes)
+        const lines = text.split('\n').length
+        return JSON.stringify({ path: toolArgs.path, sizeBytes: bytes.length, sizeKB: (bytes.length / 1024).toFixed(1), lines })
+      } catch (err) {
+        return `ERROR: ${err.message}`
+      }
+    }
+
+    case 'read_file_chunk': {
+      const filePath = resolvePath(workspace, toolArgs.path)
+      const bytes = await readFile(filePath)
+      const text  = new TextDecoder().decode(bytes)
+      const lines = text.split('\n')
+      const start = Math.max(0, (toolArgs.startLine ?? 1) - 1)
+      const MAX_CHUNK_LINES = 150
+      const requestedEnd = toolArgs.endLine != null ? toolArgs.endLine : (start + MAX_CHUNK_LINES)
+      const end = Math.min(requestedEnd, start + MAX_CHUNK_LINES, lines.length)
+      const chunk = lines.slice(start, end)
+      const truncNote = (lines.length > end && (toolArgs.endLine == null || toolArgs.endLine > end))
+        ? `\n[Truncado a ${MAX_CHUNK_LINES} líneas — pide otro rango con startLine=${end + 1} para continuar]`
+        : ''
+      return `Lines ${start + 1}–${end} of ${lines.length}:\n` + chunk.join('\n') + truncNote
     }
 
     case 'write_text_file': {

@@ -246,7 +246,7 @@ function AsunImagenFlow({ submenu, onHandoff }) {
     <div style={{ padding: '16px 20px', maxWidth: 660, margin: '0 auto', width: '100%' }}>
       {/* Burbuja Asun */}
       <div style={{
-        background: '#131215', border: '1px solid #201F23',
+        background: '#15151C', border: '1px solid #201F23',
         borderLeft: '3px solid #C8A2D8', borderRadius: 12,
         padding: '18px 22px', marginBottom: 24,
         color: '#E8EAEC', fontSize: '1.35rem', lineHeight: 1.7,
@@ -885,11 +885,11 @@ export default function AsunPanel({
           letter-spacing: 0.02em; white-space: pre-wrap;
         }
         .asun-msg-bubble.usuario {
-          background: rgba(154,160,166,0.08); border: 1px solid rgba(154,160,166,0.15);
+          background: #120B07; border: 1px solid rgba(154,160,166,0.15);
           align-self: flex-end;
         }
         .asun-msg-bubble.asistente {
-          background: #131215; border: 1px solid #201F23;
+          background: #15151C; border: 1px solid #201F23;
           border-left: 3px solid #C8A2D8;
         }
 
