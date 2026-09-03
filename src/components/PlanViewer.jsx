@@ -29,7 +29,7 @@ export default function PlanViewer({ plan, planStatus, onConfirm, onCancel }) {
 
   return (
     <div style={{
-      background: '#18171C',
+      background: 'linear-gradient(135deg, #0A0C10, #182229, #1A1A24)',
       border: '1px solid #2A2830',
       borderLeft: '2px solid #39F7F5',
       borderRadius: 8,

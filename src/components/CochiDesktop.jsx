@@ -107,6 +107,11 @@ export default function CochiDesktop({
   const [lmStudioModel,   setLmStudioModel]   = useState('local-model')
   const [userName,        setUserName]        = useState('')
   const [preferences,     setPreferences]     = useState(null)
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('cochi-dark-mode') || 'DARK1')
+
+  useEffect(() => {
+    localStorage.setItem('cochi-dark-mode', darkMode)
+  }, [darkMode])
   const [showGearMenu,    setShowGearMenu]    = useState(false)
   const gearRef                               = useRef(null)
   const messagesEndRef                        = useRef(null)
@@ -475,6 +480,11 @@ export default function CochiDesktop({
         const MAX_INNER = 15
         let stepCompleted = false
 
+        const toolCallCounts = new Map()
+        const REPEAT_WARN_THRESHOLD = 3
+        const REPEAT_ABORT_THRESHOLD = 5
+        let repeatWarned = false
+
         while (innerIter < MAX_INNER && remainingIter > 0 && !controller.signal.aborted) {
           innerIter++
           remainingIter--
@@ -569,6 +579,38 @@ export default function CochiDesktop({
             toolResults.push({ role: 'tool', tool_call_id: toolCall.id, content: String(result) })
           }
           apiMessages.push(...toolResults)
+
+          // Guard anti-repetición: detecta si el modelo repite la misma llamada sin avanzar
+          let maxRepeatSignature = null
+          let maxRepeatCount = 0
+          for (const toolCall of assistantMsg.tool_calls) {
+            const name = toolCall.function.name
+            let args = {}
+            try { args = JSON.parse(toolCall.function.arguments) } catch {}
+            const signature = `${name}:${JSON.stringify(args)}`
+            const count = (toolCallCounts.get(signature) || 0) + 1
+            toolCallCounts.set(signature, count)
+            if (count > maxRepeatCount) { maxRepeatCount = count; maxRepeatSignature = signature }
+          }
+
+          if (maxRepeatCount >= REPEAT_ABORT_THRESHOLD) {
+            if (trackSteps) {
+              updateStepStatus(step.id, 'failed', 'Bucle de repetición detectado — misma llamada repetida sin progreso')
+            }
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: '⚠️ Cochi entró en un bucle repitiendo la misma búsqueda y se detuvo automáticamente. Intenta con instrucciones más específicas (ej. indicar el archivo exacto).'
+            }])
+            stepCompleted = false
+            break
+          } else if (maxRepeatCount >= REPEAT_WARN_THRESHOLD && !repeatWarned) {
+            repeatWarned = true
+            apiMessages.push({
+              role: 'system',
+              content: `⚠️ REPETITION_WARNING: Has llamado a "${maxRepeatSignature.split(':')[0]}" con argumentos casi idénticos ${maxRepeatCount} veces. No repitas la misma búsqueda. Usa la información que ya tienes para decidir la acción final, o si no es suficiente, responde con [STEP_FAILED: motivo claro] explicando qué falta.`
+            })
+          }
+
           apiMessages = pruneApiMessages(apiMessages)
         }
 
@@ -731,14 +773,31 @@ export default function CochiDesktop({
         padding: '10px 14px',
         display: 'flex', alignItems: 'center',
       }}>
-        <span style={{
-          fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
-          letterSpacing:'0.25em', fontWeight:700,
-          backgroundImage:'linear-gradient(135deg, #E36873 15%, #C0C0C0 85%)',
-          WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
-          backgroundClip:'text', opacity:0.8, flexShrink:0, marginRight: 8,
-        }}>LLM</span>
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 4, alignItems: 'center' }}>
+        <button
+          onClick={() => setDarkMode('DARK1')}
+          style={{
+            padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
+            fontFamily: "'Orbitron', sans-serif", fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em',
+            background: darkMode === 'DARK1' ? '#2a2a35' : 'transparent',
+            border: '1px solid',
+            borderColor: darkMode === 'DARK1' ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
+            color: darkMode === 'DARK1' ? '#C0C0C0' : 'rgba(207,68,77,0.5)',
+            transition: 'all 0.2s', marginRight: 4,
+          }}
+        >DARK1</button>
+        <button
+          onClick={() => setDarkMode('DARK2')}
+          style={{
+            padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
+            fontFamily: "'Orbitron', sans-serif", fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em',
+            background: darkMode === 'DARK2' ? '#2a2a35' : 'transparent',
+            border: '1px solid',
+            borderColor: darkMode === 'DARK2' ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
+            color: darkMode === 'DARK2' ? '#C0C0C0' : 'rgba(207,68,77,0.5)',
+            transition: 'all 0.2s', marginRight: 4,
+          }}
+        >DARK2</button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
           {COCHI_MODELS.map(m => (
             <button
               key={m.id}
@@ -870,40 +929,60 @@ export default function CochiDesktop({
                 />
               ) : null
             ) : msg.role === 'user' ? (
-              <div key={idx} className="cd-message-enter" style={{
+              <div key={idx} className="cd-message-enter" style={darkMode === 'DARK2' ? {
+                background: 'linear-gradient(135deg, #171716, #12100F, #24282B)',
+                border: '1px solid rgba(200,162,216,0.2)',
+                borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+              } : {
                 background: '#0C1314', border: '1px solid rgba(107,158,196,0.15)',
                 borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               }}>
                 <div style={{ fontSize: '0.92rem', lineHeight: 1.5, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                  backgroundImage: 'linear-gradient(135deg, #E36873, #C0C0C0)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
+                  ...(darkMode === 'DARK2' ? { color: '#D9C8C5' } : {
+                    backgroundImage: 'linear-gradient(135deg, #E36873, #C0C0C0)',
+                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }),
                 }}>
                   {msg.content}
                 </div>
               </div>
             ) : (
-              <div key={idx} className="cd-message-enter" style={{
+              <div key={idx} className="cd-message-enter" style={darkMode === 'DARK2' ? {
+                background: 'linear-gradient(135deg, #171716, #12100F, #24282B)',
+                border: '1px solid rgba(200,162,216,0.2)', borderLeft: '3px solid #C8A2D8',
+                borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+              } : {
                 background: '#13151A', border: '1px solid #232227', borderLeft: '3px solid #6A7A8A',
                 borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               }}>
-                <div style={{ fontSize: '0.68rem', color: '#6A7A8A', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase',
+                  color: darkMode === 'DARK2' ? '#D4B8D8' : '#6A7A8A',
+                }}>
                   COCHI
                 </div>
                 <div style={{ fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
-                  backgroundImage: 'linear-gradient(135deg, #E36873, #C0C0C0)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
+                  ...(darkMode === 'DARK2' ? { color: '#D9C8C5' } : {
+                    backgroundImage: 'linear-gradient(135deg, #E36873, #C0C0C0)',
+                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }),
                 }}>
                   <ReactMarkdown components={{
                     code({ node, inline, className, children, ...props }) {
                       const match = /language-(\w+)/.exec(className || '')
                       if (!inline && match) {
-                        return <SyntaxHighlighter style={r7SyntaxTheme} language={match[1]} PreTag="div" customStyle={{ borderRadius: 6, fontSize: '0.85rem', margin: '10px 0' }}>{String(children).replace(/\n$/, '')}</SyntaxHighlighter>
+                        return (
+                          <div style={{ WebkitTextFillColor: 'initial', WebkitBackgroundClip: 'initial', backgroundClip: 'initial' }}>
+                            <SyntaxHighlighter style={r7SyntaxTheme} language={match[1]} PreTag="div" customStyle={{ borderRadius: 6, fontSize: '0.85rem', margin: '10px 0' }}>{String(children).replace(/\n$/, '')}</SyntaxHighlighter>
+                          </div>
+                        )
                       }
-                      return <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 4, fontSize: '0.9em', color: '#E0E2E4' }} {...props}>{children}</code>
+                      return <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 4, fontSize: '0.9em', color: '#E0E2E4', WebkitTextFillColor: 'initial', WebkitBackgroundClip: 'initial', backgroundClip: 'initial' }} {...props}>{children}</code>
                     }
                   }}>
                     {msg.content}

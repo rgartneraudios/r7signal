@@ -28,6 +28,22 @@ function resolvePath(workspace, relativePath) {
   return `${base}/${relativePath}`.replace(/\\/g, '/')
 }
 
+const MAX_TEXT_BYTES = 5 * 1024 * 1024   // 5MB — lectura de texto
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024 // 15MB — lectura de imagen
+
+async function checkSizeOrThrow(filePath, maxBytes, label) {
+  try {
+    const fileStat = await stat(filePath)
+    if (fileStat.size > maxBytes) {
+      const mb = (fileStat.size / (1024 * 1024)).toFixed(1)
+      const capMb = (maxBytes / (1024 * 1024)).toFixed(0)
+      throw new Error(`Archivo demasiado grande para ${label} (${mb}MB, máximo ${capMb}MB). Usa read_file_chunk con un rango de líneas si es texto, o divide la tarea.`)
+    }
+  } catch (err) {
+    if (err.message.includes('demasiado grande')) throw err
+  }
+}
+
 async function walkDir(dir, filePattern, results = [], depth = 0, maxFiles = 200) {
   if (depth > 8 || results.length >= maxFiles) return results
   try {
@@ -229,6 +245,7 @@ export async function executeTool(toolName, toolArgs, workspace) {
 
     case 'read_text_file': {
       const filePath = resolvePath(workspace, toolArgs.path)
+      await checkSizeOrThrow(filePath, MAX_TEXT_BYTES, 'read_text_file')
       const bytes = await readFile(filePath)
       const text = new TextDecoder().decode(bytes)
       return text
@@ -236,6 +253,7 @@ export async function executeTool(toolName, toolArgs, workspace) {
 
     case 'read_image_file': {
       const filePath = resolvePath(workspace, toolArgs.path)
+      await checkSizeOrThrow(filePath, MAX_IMAGE_BYTES, 'read_image_file')
       const bytes = await readFile(filePath)
       const arr = new Uint8Array(bytes)
       let binary = ''
@@ -279,10 +297,15 @@ export async function executeTool(toolName, toolArgs, workspace) {
     case 'get_file_info': {
       const filePath = resolvePath(workspace, toolArgs.path)
       try {
+        const fileStat = await stat(filePath)
+        const sizeKB = (fileStat.size / 1024).toFixed(1)
+        if (fileStat.size > MAX_TEXT_BYTES) {
+          return JSON.stringify({ path: toolArgs.path, sizeBytes: fileStat.size, sizeKB, lines: null, warning: 'Archivo grande — usa read_file_chunk en vez de read_text_file' })
+        }
         const bytes = await readFile(filePath)
         const text  = new TextDecoder().decode(bytes)
         const lines = text.split('\n').length
-        return JSON.stringify({ path: toolArgs.path, sizeBytes: bytes.length, sizeKB: (bytes.length / 1024).toFixed(1), lines })
+        return JSON.stringify({ path: toolArgs.path, sizeBytes: bytes.length, sizeKB, lines })
       } catch (err) {
         return `ERROR: ${err.message}`
       }
@@ -290,6 +313,7 @@ export async function executeTool(toolName, toolArgs, workspace) {
 
     case 'read_file_chunk': {
       const filePath = resolvePath(workspace, toolArgs.path)
+      await checkSizeOrThrow(filePath, MAX_TEXT_BYTES, 'read_file_chunk')
       const bytes = await readFile(filePath)
       const text  = new TextDecoder().decode(bytes)
       const lines = text.split('\n')
