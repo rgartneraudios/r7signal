@@ -480,6 +480,11 @@ export default function AsunPanel({
   const [promptsError,  setPromptsError]  = useState(false)
   const [attachedFile, setAttachedFile] = useState(null)
   const [selectedLLMModel, setSelectedLLMModel] = useState(ASUN_MODELS[0].id)
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('asun-dark-mode') || 'DARK1')
+
+  useEffect(() => {
+    localStorage.setItem('asun-dark-mode', darkMode)
+  }, [darkMode])
   const messagesEndRef = useRef(null)
 
   // Notificar categoría activa al padre
@@ -885,7 +890,7 @@ export default function AsunPanel({
           letter-spacing: 0.02em; white-space: pre-wrap;
         }
         .asun-msg-bubble.usuario {
-          background: #120B07; border: 1px solid rgba(154,160,166,0.15);
+          background: #0F1112; border: 1px solid rgba(154,160,166,0.15);
           align-self: flex-end;
         }
         .asun-msg-bubble.asistente {
@@ -927,6 +932,15 @@ export default function AsunPanel({
       }}>
         {/* Categorías + Submenú en la misma fila */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button
+            className={`asun-header-btn${darkMode === 'DARK1' ? ' active' : ''}`}
+            onClick={() => setDarkMode('DARK1')}
+          >DARK1</button>
+          <button
+            className={`asun-header-btn${darkMode === 'DARK2' ? ' active' : ''}`}
+            onClick={() => setDarkMode('DARK2')}
+          >DARK2</button>
+          <div style={{ flex: 1 }} />
           {['llm', 'imagen', 'musica'].map(cat => (
             <button key={cat}
               className={`asun-header-btn${category === cat ? ' active' : ''}`}
@@ -935,9 +949,9 @@ export default function AsunPanel({
               {cat === 'llm' ? 'LLM' : cat === 'imagen' ? 'IMAGEN' : 'MÚSICA'}
             </button>
           ))}
+          <div style={{ flex: 1 }} />
           {category !== 'musica' && (
             <>
-              <div style={{ flex: 1 }} />
               {category === 'llm'
                 ? ASUN_MODELS.map(m => (
                     <button key={m.id}
@@ -1013,15 +1027,23 @@ export default function AsunPanel({
                 display: 'flex',
                 justifyContent: msg.rol === 'usuario' ? 'flex-end' : 'flex-start',
               }}>
-                <div className={`asun-msg-bubble ${msg.rol}`}>
+                <div className={`asun-msg-bubble ${msg.rol}`}
+                  style={darkMode === 'DARK2' ? {
+                    background: 'linear-gradient(135deg, #0C0B0D, #1B151F, #0C0B0D)',
+                    border: '1px solid rgba(200,162,216,0.2)',
+                  } : undefined}
+                >
                   {msg.rol === 'asistente' && (
                     <span style={{
                       fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.15em',
                       textTransform: 'uppercase', display: 'block', marginBottom: 4,
-                      color: '#C8A2D8', fontFamily: "'Space Grotesk', sans-serif",
+                      color: darkMode === 'DARK2' ? '#D4B8D8' : '#C8A2D8',
+                      fontFamily: "'Space Grotesk', sans-serif",
                     }}>Asun</span>
                   )}
-                  <div style={{
+                  <div style={darkMode === 'DARK2' ? {
+                    color: '#E3D3E3',
+                  } : {
                     backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
                     WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
