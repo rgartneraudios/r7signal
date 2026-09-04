@@ -1,12 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { readTextFile, writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs'
+import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
 import PlanViewer from './PlanViewer'
 import { PLANNING_SYSTEM_PROMPT, buildPlanContext } from '../lib/cochiPlanningPrompts'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES } from '../lib/modelPrices.js'
 import { COCHI_TOOLS, TOOL_ICONS, executeTool } from '../lib/cochiTools.js'
+import { writeR9File } from '../lib/r9Store.js'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -79,7 +80,6 @@ const css = `
 //   onMessageConsumed ()             — avisar al padre que se consumió
 //   handoff           { type, content, brief, id } — brief de Asun
 //   onHandoffConsumed ()             — avisar al padre que se consumió
-//   onR9Update        (r9)           — subir contexto r9 actualizado
 //   onWorkspaceChange (workspace)    — subir cambio de workspace
 //   onUsage           ({ source, inputTokens, outputTokens, cost }) — report cost
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -88,7 +88,6 @@ export default function CochiDesktop({
   onMessageConsumed,
   handoff,
   onHandoffConsumed,
-  onR9Update,
   workspace,
   onWorkspaceChange,
   onUsage,
@@ -123,6 +122,9 @@ export default function CochiDesktop({
   const [tokenWarningDismissed, setTokenWarningDismissed] = useState(false)
   const planRef = useRef(null)
   const originalMessageRef = useRef('')
+  const sessionPairsRef = useRef([]) // acumula {r1,r2} de cada turno — se resetea en CLS y Guardar R7
+  const chatContainerRef = useRef(null)
+  const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
 
   // Scroll al final
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
@@ -462,7 +464,7 @@ export default function CochiDesktop({
     const remoteSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
     const sessionTotal = tokens + totalTokensAcc
     const tokenAlert   = sessionTotal > 70000
-      ? '\nTOKEN_ALERT: Session context is large. If the user has not yet been informed, mention that a /R9 save is recommended before starting a new chat.'
+      ? '\nTOKEN_ALERT: Session context is large. If the user has not yet been informed, mention that saving R7 (session summary) is recommended before starting a new chat.'
       : ''
 
     const systemMessages = [
@@ -530,6 +532,7 @@ export default function CochiDesktop({
               const extractedResult = completeMatch[1].trim()
               if (trackSteps) updateStepStatus(step.id, 'completed', extractedResult)
               await appendToMemory(r1, r2)
+              sessionPairsRef.current.push({ r1, r2 })
               setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
               stepCompleted = true
               break
@@ -537,6 +540,7 @@ export default function CochiDesktop({
               const reason = failedMatch[1].trim()
               if (trackSteps) updateStepStatus(step.id, 'failed', reason)
               await appendToMemory(r1, r2)
+              sessionPairsRef.current.push({ r1, r2 })
               setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
               stepCompleted = true
               break
@@ -550,12 +554,14 @@ export default function CochiDesktop({
                 }
               }
               await appendToMemory(r1, r2)
+              sessionPairsRef.current.push({ r1, r2 })
               setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
               stepCompleted = true
               break
             } else {
               if (trackSteps) updateStepStatus(step.id, 'completed', 'Completado')
               await appendToMemory(r1, r2)
+              sessionPairsRef.current.push({ r1, r2 })
               setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
               stepCompleted = true
               break
@@ -574,7 +580,7 @@ export default function CochiDesktop({
               : (args.path?.split('\\').pop() || args.path || name)
             pushActivity(icon, name, shortLabel)
             let result = ''
-            try { result = await executeTool(name, args, workspace.permission) }
+            try { result = await executeTool(name, args, workspace.permission, workspace.path) }
             catch (err) { result = `ERROR: ${err.message}` }
             toolResults.push({ role: 'tool', tool_call_id: toolCall.id, content: String(result) })
           }
@@ -742,11 +748,42 @@ export default function CochiDesktop({
     if (window.confirm('¿Borrar toda la conversación?')) {
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
+      sessionPairsRef.current = []
     }
   }
-  function handleSaveR9() {
-    handleSendText('[SISTEMA] El chat ha alcanzado 70.000 tokens. Genera un R3_SAVE completo con: resumen del trabajo realizado en esta sesión, archivos modificados con sus rutas absolutas, decisiones importantes tomadas, y estado actual de la tarea. Este R3_SAVE permitirá retomar el trabajo en una nueva sesión sin perder contexto.')
-    setTokenWarningDismissed(true)
+  async function handleSaveR7() {
+    try {
+      const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')
+      const r3 = lastAssistant?.content || '(sin respuesta final en esta sesión)'
+      const pairsText = sessionPairsRef.current.length
+        ? sessionPairsRef.current.map((p, i) => `── Turno ${i + 1} ──\nR1: ${p.r1}\nR2: ${p.r2}`).join('\n\n') + '\n\n'
+        : ''
+      const content = pairsText + `── R3 final ──\n${r3}`
+      await writeR9File(workspace?.path, 'r7', content)
+      setMessages([]); setActivity([]); setTokens(0); setCost(0)
+      setLoading(false); setTokenWarningDismissed(false)
+      sessionPairsRef.current = []
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ No se pudo guardar R7: ${err.message}` }])
+    }
+  }
+
+  function handleSelectionMouseUp() {
+    const sel = window.getSelection()
+    const text = sel?.toString().trim()
+    if (!text || !chatContainerRef.current?.contains(sel.anchorNode)) { setR9Btn(null); return }
+    const range = sel.getRangeAt(0)
+    const rect = range.getBoundingClientRect()
+    const containerRect = chatContainerRef.current.getBoundingClientRect()
+    setR9Btn({ x: rect.left - containerRect.left + rect.width / 2, y: rect.top - containerRect.top - 30, text })
+  }
+
+  async function handleConfirmR9() {
+    if (!r9Btn) return
+    try { await writeR9File(workspace?.path, 'r9', r9Btn.text, { source: 'cochi' }) }
+    catch (err) { console.error('R9 write error:', err) }
+    window.getSelection()?.removeAllRanges()
+    setR9Btn(null)
   }
 
   const activeModelPrice = MODEL_PRICES[selectedModel]
@@ -885,7 +922,7 @@ export default function CochiDesktop({
         <div className="leather-grid" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.7 }} />
 
         {/* Historial */}
-        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 4, position: 'relative', zIndex: 1 }}>
+        <div ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 4, position: 'relative', zIndex: 1 }}>
 
           {/* Watermark estado vacío */}
           {messages.length === 0 && !loading && (
@@ -897,22 +934,36 @@ export default function CochiDesktop({
                 backgroundImage: 'linear-gradient(135deg, #CF444D, #C0C0C0)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
+                fontSize: '1.5rem',
               }}>R7SIGNAL</div>
-              <div className="watermark-divider">────────────────</div>
+              <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
               <div className="watermark-name" style={{
                 backgroundImage: 'linear-gradient(135deg, #CF444D, #C0C0C0)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
                 textShadow: '0 0 60px rgba(71,115,150,0.5), 0 0 160px rgba(71,115,150,0.2)',
+                fontSize: '1.9rem',
               }}>COCHI DESKTOP</div>
               <div className="watermark-sub" style={{
                 backgroundImage: 'linear-gradient(135deg, #CF444D, #C0C0C0)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
                 textShadow: '0 0 40px rgba(71,115,150,0.24), 0 0 100px rgba(71,115,150,0.12)',
+                fontSize: '0.8rem',
               }}>
-                Elige en los selectores tu modelo predeterminado.<br />
-                En la cabecera elige la carpeta a trabajar y los permisos.
+                Afirmativo.<br />
+Selecciona el modelo predeterminado en los selectores.<br />
+Con tus autorizaciones, asumo el control y administro tus archivos<br />
+desde la ventana Workspace en la cabecera.<br />
+¿Quieres borrar rastro? Sin problema.<br />
+Utiliza el botón CLS en la base del Panel para purgar el chat<br />
+y reiniciar la operación desde cero.<br />
+Para asegurar el informe de misión, activa R7<br />
+y guarda un resumen de la tarea junto al último mensaje.<br />
+Si necesitas extraer datos específicos<br />
+—párrafos o fragmentos de código—,<br />
+R9 te da luz verde para seleccionarlos puntualmente y asegurar el objetivo.<br />
+Operación en curso. A la espera de órdenes.
               </div>
             </div>
           )}
@@ -1017,6 +1068,18 @@ export default function CochiDesktop({
             </div>
           )}
           <div ref={messagesEndRef} />
+          {r9Btn && (
+            <button
+              onClick={handleConfirmR9}
+              style={{
+                position: 'absolute', left: r9Btn.x, top: r9Btn.y, transform: 'translateX(-50%)',
+                background: '#1A1920', border: '1px solid #C8A2D8', borderRadius: 6,
+                padding: '4px 10px', color: '#C8A2D8', fontSize: '0.68rem', fontWeight: 700,
+                cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", zIndex: 50,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.6)', whiteSpace: 'nowrap',
+              }}
+            >+R9</button>
+          )}
         </div>
       </div>
 
@@ -1030,12 +1093,12 @@ export default function CochiDesktop({
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <span style={{ fontSize: '0.7rem', color: '#E8762A', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
-            ⚠ 70k tokens — Tu contexto está completo. Guárdalo en R9 antes de empezar un chat nuevo: no perderás nada.
+            ⚠ 70k tokens — Tu contexto está completo. Guárdalo en R7 antes de empezar un chat nuevo: no perderás nada.
           </span>
           <button
-            onClick={handleSaveR9}
+            onClick={handleSaveR7}
             style={{ background: 'rgba(232,108,50,0.15)', border: '1px solid rgba(232,108,50,0.5)', borderRadius: 4, padding: '3px 10px', color: '#E8762A', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
-          >Guardar R9</button>
+          >Guardar R7</button>
           <button
             onClick={() => setTokenWarningDismissed(true)}
             style={{ background: 'transparent', border: 'none', color: '#6A7A8A', fontSize: '0.8rem', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}

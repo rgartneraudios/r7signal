@@ -3,19 +3,19 @@ import AsunPanel from './AsunPanel'
 import TitoPanel from './TitoPanel'
 import CochiDesktop from './CochiDesktop'
 import PreferencesModal from './PreferencesModal'
+import R9Drawer from './R9Drawer'
 import { supabase } from '../supabaseClient'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 
 const DEFAULT_WORKSPACE = { path: '', permission: 'read' }
-const DEFAULT_R9        = { acumulado: {}, memorySize: 0 }
 
 export default function R7Desktop() {
   // Estado compartido
   const [workspace,   setWorkspace]   = useState(DEFAULT_WORKSPACE)
-  const [r9,          setR9]          = useState(DEFAULT_R9)
   const [handoff,     setHandoff]     = useState(null)
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false)
+  const [showR9Drawer, setShowR9Drawer] = useState(false)
   const workspaceRef = useRef(null)
 
   // Inputs separados por panel
@@ -80,8 +80,9 @@ export default function R7Desktop() {
 
   // ─── Callbacks de paneles ─────────────────────────────────────────────────
   const handleAsunHandoff      = useCallback((brief)    => setHandoff({ ...brief, id: Date.now() }), [])
-  const handleR9Update         = useCallback((newR9)    => setR9(newR9), [])
   const handleWorkspaceChange  = useCallback((newWs)    => setWorkspace(newWs), [])
+  const handleInsertAsun  = useCallback((text) => { setActiveLeftPanel('asun'); setLeftInput(text) }, [])
+  const handleInsertCochi = useCallback((text) => { setCochiInput(text) }, [])
 const handleUsage            = useCallback(({ source, inputTokens = 0, outputTokens = 0, cost }) => {
       const total = (inputTokens || 0) + (outputTokens || 0)
       if (source === 'asun')  setAsunTokens(prev  => prev + total)
@@ -659,6 +660,22 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
         </div>
 
         <button
+          onClick={() => setShowR9Drawer(true)}
+          style={{
+            background:'none',
+            border:'none',
+            cursor:'pointer',
+            color:'#9BA3A8',
+            fontSize:'1.1rem',
+            padding:'0 8px',
+            transition:'color 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = '#D4D8DC'}
+          onMouseLeave={e => e.currentTarget.style.color = '#9BA3A8'}
+          title="R9 — Memoria compartida"
+        >🗂️</button>
+
+        <button
           onClick={() => setShowPrefs(true)}
           style={{
             background:'none',
@@ -682,6 +699,15 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
           onSave={(data) => cochiSavePrefsRef.current?.(data)}
           onSaved={(prefs) => setPreferences(prefs)}
           supabase={supabase}
+        />
+      )}
+
+      {showR9Drawer && (
+        <R9Drawer
+          workspace={workspace}
+          onClose={() => setShowR9Drawer(false)}
+          onInsertAsun={handleInsertAsun}
+          onInsertCochi={handleInsertCochi}
         />
       )}
 
@@ -721,7 +747,6 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
                 onCategoryChange={setAsunCategory}
                 onHandoff={handleAsunHandoff}
                 onUsage={handleUsage}
-                r9={r9}
                 workspace={workspace}
                 preferences={preferences}
                 onPromptsReady={handlePromptsReady}
@@ -734,6 +759,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
                 userName={userName}
                 preferences={preferences}
                 onPromptsReady={handlePromptsReady}
+                workspace={workspace}
               />
           }
         </div>
@@ -747,13 +773,11 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
             onMessageConsumed={() => setPendingCochi(null)}
             handoff={handoff}
             onHandoffConsumed={() => setHandoff(null)}
-            onR9Update={handleR9Update}
             workspace={workspace}
             onWorkspaceChange={handleWorkspaceChange}
             onUsage={handleUsage}
             onPreferencesLoaded={(prefs) => setPreferences(prefs)}
             onSavePreferences={(fn) => { cochiSavePrefsRef.current = fn }}
-            r9={r9}
             onPromptsReady={handlePromptsReady}
           />
         </div>

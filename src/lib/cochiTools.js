@@ -1,5 +1,6 @@
 import { readTextFile, writeTextFile, readDir, exists, mkdir } from '@tauri-apps/plugin-fs'
 import { Command } from '@tauri-apps/plugin-shell'
+import { writeR9File } from './r9Store.js'
 
 // ─── OS detection ─────────────────────────────────────────────────────────────
 function getPlatform() {
@@ -189,6 +190,21 @@ export const COCHI_TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'save_to_r9',
+      description: 'Save text to shared R9 memory so Asun (or another agent) can read it later. Use ONLY when the user explicitly asks (e.g. "guarda esto en R9"). Never use automatically.',
+      parameters: {
+        type: 'object',
+        properties: {
+          content: { type: 'string', description: 'Text to save.' },
+          label: { type: 'string', description: 'Optional short label.' },
+        },
+        required: ['content'],
+      },
+    },
+  },
 ]
 
 // ─── Tool icons (UI) ──────────────────────────────────────────────────────────
@@ -204,10 +220,11 @@ export const TOOL_ICONS = {
   get_file_info:    'STAT',
   file_exists:      'CHCK',
   run_command:      'EXEC',
+  save_to_r9:       'R9',
 }
 
 // ─── Executors ────────────────────────────────────────────────────────────────
-export async function executeTool(name, args, permission = 'full') {
+export async function executeTool(name, args, permission = 'full', workspaceRoot = '') {
   const canWrite = permission === 'write' || permission === 'readwrite' || permission === 'full'
   const canRun   = permission === 'full'
 
@@ -316,6 +333,11 @@ export async function executeTool(name, args, permission = 'full') {
     case 'file_exists': {
       const result = await exists(args.path)
       return result ? `✅ Existe: ${args.path}` : `❌ No existe: ${args.path}`
+    }
+
+    case 'save_to_r9': {
+      const entry = await writeR9File(workspaceRoot, 'r9', args.content, { source: 'cochi', label: args.label })
+      return `✅ Guardado en R9: ${entry.fileName}`
     }
 
     case 'run_command': {

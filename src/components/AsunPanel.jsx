@@ -4,6 +4,7 @@ import { ASUN_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { readFile } from '@tauri-apps/plugin-fs'
 import { getAsunTools, executeTool } from '../lib/asunTools.js'
+import { writeR9File } from '../lib/r9Store.js'
 import { open } from '@tauri-apps/plugin-dialog'
 
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
@@ -13,7 +14,7 @@ const OR_BASE       = 'https://openrouter.ai/api/v1'
 
 // ─── Modelos ──────────────────────────────────────────────────────────────────
 const MODELS = {
-  llm:    { occidente: 'anthropic/claude-sonnet-5', asia: 'z-ai/glm-5.3-flash' },
+  llm:    { occidente: 'google/gemini-3.8-flash', asia: 'z-ai/glm-5.3-flash' },
   imagen: { occidente: 'x-ai/grok-imagine-image-quality', asia: 'bytedance-seed/seedream-5-0-pro' },
   musica: { chat: 'z-ai/glm-5.3-flash', gen: 'google/lyria-3-pro-preview' },
 }
@@ -462,7 +463,6 @@ export default function AsunPanel({
   onCategoryChange,
   onHandoff,
   onUsage,
-  r9,
   workspace,
   preferences = {},
   onPromptsReady,
@@ -486,6 +486,26 @@ export default function AsunPanel({
     localStorage.setItem('asun-dark-mode', darkMode)
   }, [darkMode])
   const messagesEndRef = useRef(null)
+  const chatContainerRef = useRef(null)
+  const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
+
+  function handleSelectionMouseUp() {
+    const sel = window.getSelection()
+    const text = sel?.toString().trim()
+    if (!text || !chatContainerRef.current?.contains(sel.anchorNode)) { setR9Btn(null); return }
+    const range = sel.getRangeAt(0)
+    const rect = range.getBoundingClientRect()
+    const containerRect = chatContainerRef.current.getBoundingClientRect()
+    setR9Btn({ x: rect.left - containerRect.left + rect.width / 2, y: rect.top - containerRect.top - 30, text })
+  }
+
+  async function handleConfirmR9() {
+    if (!r9Btn) return
+    try { await writeR9File(workspace?.path, 'r9', r9Btn.text, { source: 'asun' }) }
+    catch (err) { console.error('R9 write error:', err) }
+    window.getSelection()?.removeAllRanges()
+    setR9Btn(null)
+  }
 
   // Notificar categoría activa al padre
   useEffect(() => {
@@ -556,7 +576,12 @@ export default function AsunPanel({
         }
         const extractR3 = (t) => {
           const m = t.match(/R3:\s*([\s\S]*)$/)
-          return m ? m[1].trim() : t
+          if (m) return m[1].trim()
+          // Salvavidas: el modelo no emiti\u00f3 el marcador "R3:" — jam\u00e1s mostrar R1/R2 crudos.
+          // HANDOFF_BRIEF es siempre el \u00faltimo campo de R2 (ver system prompt); cortamos justo despu\u00e9s.
+          const hb = t.match(/HANDOFF_BRIEF:\s*[^\n]*?(?:\s{2,}|\n)([\s\S]*)$/)
+          if (hb && hb[1].trim()) return hb[1].trim()
+          return 'Formato de respuesta inesperado — reintenta el mensaje.'
         }
         const fullText = await streamOR(MODELS.musica.chat, apiMessages, (partial) => {
           setMessages(prev => prev.map(m =>
@@ -576,13 +601,10 @@ export default function AsunPanel({
       }
 
       // ── MODO LLM: loop agéntico con tool calling ──────────────────────────
-      const r9Block = r9?.acumulado && Object.keys(r9.acumulado).length
-        ? `\n════════════════════════════════════════════════════════\nWORKSPACE CONTEXT (R9)\n════════════════════════════════════════════════════════\n${JSON.stringify(r9.acumulado, null, 2)}`
-        : ''
       const systemContent = interpolatePrompt(remotePrompts.system, {
         chatLanguage: chatLanguage ?? 'Spanish',
         nombreAlternativo: nombreAlternativo ?? 'sujeto de prueba',
-      }) + r9Block
+      })
 
       const model   = selectedLLMModel
       const tools   = getAsunTools(workspace)
@@ -714,7 +736,12 @@ export default function AsunPanel({
       // ── Procesar respuesta final ──────────────────────────────────────────
       const extractR3 = (t) => {
         const m = t.match(/R3:\s*([\s\S]*)$/)
-        return m ? m[1].trim() : t
+        if (m) return m[1].trim()
+        // Salvavidas: el modelo no emiti\u00f3 el marcador "R3:" — jam\u00e1s mostrar R1/R2 crudos.
+        // HANDOFF_BRIEF es siempre el \u00faltimo campo de R2 (ver system prompt); cortamos justo despu\u00e9s.
+        const hb = t.match(/HANDOFF_BRIEF:\s*[^\n]*?(?:\s{2,}|\n)([\s\S]*)$/)
+        if (hb && hb[1].trim()) return hb[1].trim()
+        return 'Formato de respuesta inesperado — reintenta el mensaje.'
       }
 
       let displayText  = extractR3(finalText)
@@ -985,10 +1012,10 @@ export default function AsunPanel({
 
         {/* ── LLM / MÚSICA: chat ── */}
         {category !== 'imagen' && (
-          <div style={{
+          <div ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{
             display: 'flex', flexDirection: 'column',
             gap: 14, padding: '16px 16px 24px',
-            flex: 1,
+            flex: 1, position: 'relative',
           }}>
             {messages.length === 0 && (
               <div className="asun-watermark" style={{
@@ -1001,23 +1028,26 @@ export default function AsunPanel({
                 backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
+                fontSize: '1.5rem',
               }}>R7SIGNAL</div>
-                <div className="watermark-divider">────────────────</div>
+                <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
                 <div className="watermark-name" style={{
                   backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
                   textShadow: '0 0 60px rgba(250,97,219,0.4), 0 0 160px rgba(250,97,219,0.2)',
+                  fontSize: '1.9rem',
                 }}>ASUN PANEL</div>
                 <div className="watermark-sub" style={{
                   backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
                   textShadow: '0 0 40px rgba(250,97,219,0.18), 0 0 100px rgba(250,97,219,0.1)',
+fontSize: '0.8rem',
                 }}>
-                  {category === 'llm'
-                    ? <>Asun tiene más potencia y genera imágenes y música.<br />Escribe en el input central y pulsa ASUN.</>
-                    : <>Cuéntale a Asun tu estilo musical.<br />Cuando tenga el concepto, genera con Lyria.</>}
+{category === 'llm'
+                      ? <>Mis LLM están operando a máxima potencia.<br />Con tu autorización, puedo administrar tus archivos<br />directamente desde la ventana Workspace en la cabecera.<br />También estoy capacitada para generar imágenes y música para ti.<br />Cuando necesites empezar de cero, usa el botón CLS al pie del Panel;<br />limpiará el chat por completo, sin dejar rastro.<br />Para guardar tus avances,<br />R7 creará un resumen de la tarea junto al último mensaje.<br />Y si prefieres conservar solo fragmentos específicos o líneas de código,<br />R9 te permitirá seleccionarlos con total precisión.</>
+                      : <>Cuéntale a Asun tu estilo musical.<br />Cuando tenga el concepto, genera con Lyria.</>}
                 </div>
               </div>
             )}
@@ -1075,6 +1105,18 @@ export default function AsunPanel({
               </div>
             )}
             <div ref={messagesEndRef} />
+            {r9Btn && (
+              <button
+                onClick={handleConfirmR9}
+                style={{
+                  position: 'absolute', left: r9Btn.x, top: r9Btn.y, transform: 'translateX(-50%)',
+                  background: '#1A1920', border: '1px solid #C8A2D8', borderRadius: 6,
+                  padding: '4px 10px', color: '#C8A2D8', fontSize: '0.68rem', fontWeight: 700,
+                  cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", zIndex: 50,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.6)', whiteSpace: 'nowrap',
+                }}
+              >+R9</button>
+            )}
           </div>
         )}
       </div>
