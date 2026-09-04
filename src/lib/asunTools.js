@@ -9,6 +9,7 @@ import {
   exists,
   stat,
 } from '@tauri-apps/plugin-fs'
+import { writeR9File } from './r9Store.js'
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
 
@@ -157,6 +158,21 @@ export function getAsunTools(workspace) {
             endLine: { type: 'number', description: 'Última línea (base 1). Opcional, tope 150 líneas desde startLine.' },
           },
           required: ['path', 'startLine'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'save_to_r9',
+        description: 'Guarda texto en la memoria compartida R9 para que Cochi (u otro agente) lo consulte después. Úsalo SOLO si el usuario te lo pide explícitamente (ej. "guarda esto en R9"). Nunca lo uses automáticamente.',
+        parameters: {
+          type: 'object',
+          properties: {
+            content: { type: 'string', description: 'Texto a guardar.' },
+            label: { type: 'string', description: 'Etiqueta corta opcional.' },
+          },
+          required: ['content'],
         },
       },
     },
@@ -326,6 +342,11 @@ export async function executeTool(toolName, toolArgs, workspace) {
         ? `\n[Truncado a ${MAX_CHUNK_LINES} líneas — pide otro rango con startLine=${end + 1} para continuar]`
         : ''
       return `Lines ${start + 1}–${end} of ${lines.length}:\n` + chunk.join('\n') + truncNote
+    }
+
+    case 'save_to_r9': {
+      const entry = await writeR9File(workspace?.path, 'r9', toolArgs.content, { source: 'asun', label: toolArgs.label })
+      return `Guardado en R9: ${entry.fileName}`
     }
 
     case 'write_text_file': {

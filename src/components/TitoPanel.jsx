@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { calculateCost } from '../lib/modelPrices.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
+import { writeR9File } from '../lib/r9Store.js'
 
 const TITO_MODELS = {
   rapido: 'perplexity/sonar',
@@ -12,8 +13,12 @@ const TITO_SYSTEM_PROMPT = ''
 
 const extractR3 = (text) => {
   const r3Index = text.indexOf('R3:')
-  if (r3Index === -1) return text
-  return text.slice(r3Index + 3).trim()
+  if (r3Index !== -1) return text.slice(r3Index + 3).trim()
+  // Salvavidas: el modelo no emiti\u00f3 el marcador "R3:" — jam\u00e1s mostrar R1/R2 crudos.
+  // HANDOFF_BRIEF es siempre el \u00faltimo campo de R2 (ver system prompt); cortamos justo despu\u00e9s.
+  const hb = text.match(/HANDOFF_BRIEF:\s*[^\n]*?(?:\s{2,}|\n)([\s\S]*)$/)
+  if (hb && hb[1].trim()) return hb[1].trim()
+  return 'Formato de respuesta inesperado — reintenta el mensaje.'
 }
 
 const extractR3Streaming = (text) => {
@@ -40,6 +45,7 @@ export default function TitoPanel({
   onUsage, onHandoff, userName,
   preferences = {},
   onPromptsReady,
+  workspace,
 }) {
   const chatLanguage = preferences.chat_language ?? 'Spanish'
   const [messages, setMessages] = useState([]);
@@ -50,6 +56,26 @@ export default function TitoPanel({
   const [promptsError, setPromptsError] = useState(false);
   const abortRef = useRef(null);
   const bottomRef = useRef(null);
+  const chatContainerRef = useRef(null);
+  const [r9Btn, setR9Btn] = useState(null); // {x,y,text} — botón flotante "+R9"
+
+  function handleSelectionMouseUp() {
+    const sel = window.getSelection();
+    const text = sel?.toString().trim();
+    if (!text || !chatContainerRef.current?.contains(sel.anchorNode)) { setR9Btn(null); return; }
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const containerRect = chatContainerRef.current.getBoundingClientRect();
+    setR9Btn({ x: rect.left - containerRect.left + rect.width / 2, y: rect.top - containerRect.top - 30, text });
+  }
+
+  async function handleConfirmR9() {
+    if (!r9Btn) return;
+    try { await writeR9File(workspace?.path, 'r9', r9Btn.text, { source: 'tito' }); }
+    catch (err) { console.error('R9 write error:', err); }
+    window.getSelection()?.removeAllRanges();
+    setR9Btn(null);
+  }
 
   useEffect(() => {
     if (pendingMessage?.text) {
@@ -283,14 +309,28 @@ export default function TitoPanel({
       </div>
 
       {/* Chat area */}
-      <div className="tito-chat">
+      <div className="tito-chat" ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{ position: 'relative' }}>
         {isEmpty ? (
           <div className="tito-watermark">
-            <div className="watermark-brand">R7SIGNAL</div>
-            <div className="watermark-divider">────────────────</div>
-            <div className="watermark-name">TITO RESEARCH</div>
-            <div className="watermark-sub">La información es Oro</div>
-            <div className="watermark-hint">Selecciona el nivel de búsqueda primero</div>
+            <div className="watermark-brand" style={{ fontSize: '1.5rem' }}>R7SIGNAL</div>
+            <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
+            <div className="watermark-name" style={{ fontSize: '1.9rem' }}>TITO RESEARCH</div>
+            <div className="watermark-sub" style={{ fontSize: '0.8rem' }}>¡Ehm, hola! O sea... ¡Atención investigando!</div>
+            <div className="watermark-hint" style={{ fontSize: '0.72rem' }}>Eh, ¿sabías que la información es oro? Creo que sí.<br />
+Primero, emm... selecciona el nivel de búsqueda en los selectores.<br />
+¡Sí, eso, haz eso! Luego, si metes la pata<br />
+—que, ejem, suele pasar, no te juzgo—,<br />
+tienes el botón CLS ahí abajito, al pie del Panel.<br />
+Lo aprietas y... ¡pum!<br />
+Se limpia el chat y empezamos de nuevo sin que nadie note nada. ¡Perfecto!<br />
+¿Y para no perder lo que descubramos? Eh, a ver...<br />
+con R7 puedes guardar un resumen de la tarea<br />
+justo al lado del último mensaje.<br />
+Y si solo quieres trocitos pequeños, ya sabes,<br />
+párrafos sueltos o pedazos de código secreto,<br />
+usamos R9 y los seleccionamos puntualmente.<br />
+¿Ves? ¡Soy un genio de la investigación! …<br />
+¿Verdad? Por favor dime que sí.</div>
           </div>
         ) : (
           messages.map((msg, i) => (
@@ -309,6 +349,18 @@ export default function TitoPanel({
           ))
         )}
         <div ref={bottomRef} />
+        {r9Btn && (
+          <button
+            onClick={handleConfirmR9}
+            style={{
+              position: 'absolute', left: r9Btn.x, top: r9Btn.y, transform: 'translateX(-50%)',
+              background: '#1A1920', border: '1px solid #E8C84A', borderRadius: 6,
+              padding: '4px 10px', color: '#E8C84A', fontSize: '0.68rem', fontWeight: 700,
+              cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", zIndex: 50,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.6)', whiteSpace: 'nowrap',
+            }}
+          >+R9</button>
+        )}
       </div>
 
       {/* Status bar */}

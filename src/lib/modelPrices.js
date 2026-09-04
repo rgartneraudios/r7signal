@@ -4,7 +4,7 @@
 export const MODEL_PRICES = {
   // Asun — LLM
   'deepseek/deepseek-v4-flash-vision-exp': { inputPerM: 0.22,    outputPerM: 0.66   },
-  'anthropic/claude-sonnet-5':             { inputPerM: 2,        outputPerM: 10     },
+  'google/gemini-3.8-flash':                  { inputPerM: 0.75,   outputPerM: 3.75 },
   // Asun — Imagen
   'x-ai/grok-imagine-image-quality':       { perImage: 0.05  },
   'bytedance-seed/seedream-5-0-pro':       { perImage: 0.045 },
@@ -42,7 +42,7 @@ export function calculateCost(modelId, inputTokens = 0, outputTokens = 0, type =
 // Asun LLM tier names
 export const ASUN_MODELS = [
   { id: 'deepseek/deepseek-v4-flash-vision-exp', label: 'Sigilosa', vision: true  },
-  { id: 'anthropic/claude-sonnet-5',             label: 'Afilada',  vision: false },
+  { id: 'google/gemini-3.8-flash',             label: 'Afilada',  vision: true },
 ]
 
 // Cochi tier names
