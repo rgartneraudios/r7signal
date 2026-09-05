@@ -463,6 +463,7 @@ export default function AsunPanel({
   onCategoryChange,
   onHandoff,
   onUsage,
+  onResetUsage,
   workspace,
   preferences = {},
   onPromptsReady,
@@ -577,7 +578,10 @@ export default function AsunPanel({
         const extractR3 = (t) => {
           const m = t.match(/R3:\s*([\s\S]*)$/)
           if (m) return m[1].trim()
-          // Salvavidas: el modelo no emiti\u00f3 el marcador "R3:" — jam\u00e1s mostrar R1/R2 crudos.
+          // Si no hay rastro de NING\u00daN marcador del contrato, es una respuesta directa
+          // (t\u00edpico tras tool calls) sin R1/R2 generados — nada que ocultar, se muestra tal cual.
+          if (!/R1:|R2:|HANDOFF_BRIEF:/.test(t)) return t.trim()
+          // Salvavidas: el modelo empez\u00f3 el contrato pero no emiti\u00f3 "R3:" — jam\u00e1s mostrar R1/R2 crudos.
           // HANDOFF_BRIEF es siempre el \u00faltimo campo de R2 (ver system prompt); cortamos justo despu\u00e9s.
           const hb = t.match(/HANDOFF_BRIEF:\s*[^\n]*?(?:\s{2,}|\n)([\s\S]*)$/)
           if (hb && hb[1].trim()) return hb[1].trim()
@@ -737,7 +741,10 @@ export default function AsunPanel({
       const extractR3 = (t) => {
         const m = t.match(/R3:\s*([\s\S]*)$/)
         if (m) return m[1].trim()
-        // Salvavidas: el modelo no emiti\u00f3 el marcador "R3:" — jam\u00e1s mostrar R1/R2 crudos.
+        // Si no hay rastro de NING\u00daN marcador del contrato, es una respuesta directa
+        // (t\u00edpico tras tool calls) sin R1/R2 generados — nada que ocultar, se muestra tal cual.
+        if (!/R1:|R2:|HANDOFF_BRIEF:/.test(t)) return t.trim()
+        // Salvavidas: el modelo empez\u00f3 el contrato pero no emiti\u00f3 "R3:" — jam\u00e1s mostrar R1/R2 crudos.
         // HANDOFF_BRIEF es siempre el \u00faltimo campo de R2 (ver system prompt); cortamos justo despu\u00e9s.
         const hb = t.match(/HANDOFF_BRIEF:\s*[^\n]*?(?:\s{2,}|\n)([\s\S]*)$/)
         if (hb && hb[1].trim()) return hb[1].trim()
@@ -1046,7 +1053,18 @@ export default function AsunPanel({
 fontSize: '0.8rem',
                 }}>
 {category === 'llm'
-                      ? <>Mis LLM están operando a máxima potencia.<br />Con tu autorización, puedo administrar tus archivos<br />directamente desde la ventana Workspace en la cabecera.<br />También estoy capacitada para generar imágenes y música para ti.<br />Cuando necesites empezar de cero, usa el botón CLS al pie del Panel;<br />limpiará el chat por completo, sin dejar rastro.<br />Para guardar tus avances,<br />R7 creará un resumen de la tarea junto al último mensaje.<br />Y si prefieres conservar solo fragmentos específicos o líneas de código,<br />R9 te permitirá seleccionarlos con total precisión.</>
+                      ? <>Mis LLM están operando a máxima potencia.<br />
+Con tu autorización, puedo administrar tus archivos<br />
+directamente desde la ventana Workspace en la cabecera.<br />
+También estoy capacitada para generar imágenes y música para ti.<br />
+Cuando necesites empezar de cero, usa el botón CLS al pie del Panel;<br />
+limpiará el chat por completo, sin dejar rastro.<br />
+A los 70.000 tokens aparecerá R7 para guardar tus avances.<br />
+R7 creará un resumen de la tarea junto al último mensaje.<br />
+Y si prefieres conservar solo fragmentos específicos o líneas de código,<br />
+R9 te permitirá seleccionarlos con total precisión.<br />
+Encontrarás el contenido de R7 y R9 en la carpeta<br />
+que está al lado de la rueda dentada</>
                       : <>Cuéntale a Asun tu estilo musical.<br />Cuando tenga el concepto, genera con Lyria.</>}
                 </div>
               </div>
@@ -1187,7 +1205,7 @@ fontSize: '0.8rem',
 
         {/* CLS */}
         <button
-          onClick={() => { if (window.confirm('¿Borrar toda la conversación?')) setMessages([]) }}
+          onClick={() => { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); onResetUsage?.('asun') } }}
           style={{ background: 'transparent', border: '1px solid #1F1E22', borderRadius: 4, padding: '2px 8px', color: '#8A868B', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#D4D8DC'; e.currentTarget.style.color = '#D4D8DC' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#1F1E22'; e.currentTarget.style.color = '#8A868B' }}

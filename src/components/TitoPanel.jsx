@@ -14,8 +14,11 @@ const TITO_SYSTEM_PROMPT = ''
 const extractR3 = (text) => {
   const r3Index = text.indexOf('R3:')
   if (r3Index !== -1) return text.slice(r3Index + 3).trim()
-  // Salvavidas: el modelo no emiti\u00f3 el marcador "R3:" — jam\u00e1s mostrar R1/R2 crudos.
-  // HANDOFF_BRIEF es siempre el \u00faltimo campo de R2 (ver system prompt); cortamos justo despu\u00e9s.
+  // Si no hay rastro de NINGÚN marcador del contrato, es una respuesta directa
+  // (típico tras resultados de búsqueda) sin R1/R2 generados — nada que ocultar.
+  if (!/R1:|R2:|HANDOFF_BRIEF:/.test(text)) return text.trim()
+  // Salvavidas: el modelo empezó el contrato pero no emitió "R3:" — jamás mostrar R1/R2 crudos.
+  // HANDOFF_BRIEF es siempre el último campo de R2 (ver system prompt); cortamos justo después.
   const hb = text.match(/HANDOFF_BRIEF:\s*[^\n]*?(?:\s{2,}|\n)([\s\S]*)$/)
   if (hb && hb[1].trim()) return hb[1].trim()
   return 'Formato de respuesta inesperado — reintenta el mensaje.'
@@ -42,7 +45,7 @@ const needsWebSearch = (message) => {
 
 export default function TitoPanel({ 
   pendingMessage, onMessageConsumed, 
-  onUsage, onHandoff, userName,
+  onUsage, onResetUsage, onHandoff, userName,
   preferences = {},
   onPromptsReady,
   workspace,
@@ -318,17 +321,19 @@ export default function TitoPanel({
             <div className="watermark-sub" style={{ fontSize: '0.8rem' }}>¡Ehm, hola! O sea... ¡Atención investigando!</div>
             <div className="watermark-hint" style={{ fontSize: '0.72rem' }}>Eh, ¿sabías que la información es oro? Creo que sí.<br />
 Primero, emm... selecciona el nivel de búsqueda en los selectores.<br />
-¡Sí, eso, haz eso! Luego, si metes la pata<br />
-—que, ejem, suele pasar, no te juzgo—,<br />
+¡Sí, eso, haz eso!<br />
+Luego, si metes la pata—que, ejem, suele pasar, no te juzgo—,<br />
 tienes el botón CLS ahí abajito, al pie del Panel.<br />
 Lo aprietas y... ¡pum!<br />
-Se limpia el chat y empezamos de nuevo sin que nadie note nada. ¡Perfecto!<br />
-¿Y para no perder lo que descubramos? Eh, a ver...<br />
-con R7 puedes guardar un resumen de la tarea<br />
-justo al lado del último mensaje.<br />
+Se limpia el chat y empezamos de nuevo sin que nadie note nada.<br />
+¡Perfecto!<br />
+A los 70.000 Tokens aparece R7 para no perder lo que descubramos.<br />
+Con R7 puedes guardar el resumen de la tarea junto con el último mensaje.<br />
 Y si solo quieres trocitos pequeños, ya sabes,<br />
 párrafos sueltos o pedazos de código secreto,<br />
 usamos R9 y los seleccionamos puntualmente.<br />
+El contenido de R7 y R9 vive en la carpeta<br />
+que está al lado de la rueda dentada<br />
 ¿Ves? ¡Soy un genio de la investigación! …<br />
 ¿Verdad? Por favor dime que sí.</div>
           </div>
@@ -368,7 +373,7 @@ usamos R9 y los seleccionamos puntualmente.<br />
         <span>⚡ {TITO_MODELS[searchLevel]}</span>
         <div style={{ flex: 1 }} />
         <button
-          onClick={() => { if (window.confirm('¿Borrar toda la conversación?')) setMessages([]) }}
+          onClick={() => { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); onResetUsage?.('tito') } }}
           style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}

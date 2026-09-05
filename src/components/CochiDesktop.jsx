@@ -91,6 +91,7 @@ export default function CochiDesktop({
   workspace,
   onWorkspaceChange,
   onUsage,
+  onResetUsage,
   onSavePreferences,
   onPreferencesLoaded,
   onPromptsReady,
@@ -634,13 +635,11 @@ export default function CochiDesktop({
           break
         }
 
-        if (trackSteps) {
-          const stepCost = (stepTokens / 1_000_000) * (MODEL_PRICES[selectedModel]?.inputPerM ?? 0)
+        const stepCost = (stepTokens / 1_000_000) * (MODEL_PRICES[selectedModel]?.inputPerM ?? 0)
           totalCostAcc += stepCost
           setTokens(prev => prev + stepTokens)
           setCost(prev => prev + stepCost)
           onUsage?.({ source: 'cochi', inputTokens: stepTokens, outputTokens: 0, cost: stepCost })
-        }
 
         // Single pass when no plan
         if (!trackSteps) break
@@ -703,6 +702,16 @@ export default function CochiDesktop({
     ]
     if (queryPatterns.some(r => r.test(msg)) && !hasWriteVerb) return false
 
+    // Mismo criterio que arriba pero sin anclar al inicio — cubre mensajes con
+    // preámbulo ("Cochi, vete a X y dime...") donde la intención de lectura
+    // no es la primera palabra de la frase.
+    const queryVerbsAnywhere = [
+      'dime', 'decime', 'muestra', 'muéstrame', 'explica', 'explícame', 'explicame',
+      'cuál es', 'cual es', 'qué es', 'que es', 'cuánto', 'cuanto', 'cuántos', 'cuantos',
+      'lee el', 'lee la', 'busca en', 'analiza', 'revisa', 'dónde está', 'donde esta',
+    ]
+    if (!hasWriteVerb && queryVerbsAnywhere.some(k => msg.includes(k))) return false
+
     // Filesystem / agentic keywords — planning needed
     const agentic = [
       ...writeVerbs,
@@ -749,6 +758,7 @@ export default function CochiDesktop({
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
       sessionPairsRef.current = []
+      onResetUsage?.('cochi')
     }
   }
   async function handleSaveR7() {
@@ -763,6 +773,7 @@ export default function CochiDesktop({
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
       sessionPairsRef.current = []
+      onResetUsage?.('cochi')
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ No se pudo guardar R7: ${err.message}` }])
     }
@@ -958,11 +969,13 @@ desde la ventana Workspace en la cabecera.<br />
 ¿Quieres borrar rastro? Sin problema.<br />
 Utiliza el botón CLS en la base del Panel para purgar el chat<br />
 y reiniciar la operación desde cero.<br />
-Para asegurar el informe de misión, activa R7<br />
+Para asegurar el informe de misión, activa R7 a los 70.000 Tokens<br />
 y guarda un resumen de la tarea junto al último mensaje.<br />
 Si necesitas extraer datos específicos<br />
 —párrafos o fragmentos de código—,<br />
 R9 te da luz verde para seleccionarlos puntualmente y asegurar el objetivo.<br />
+Localizas el contenido de R7 y R9 en el compartimento<br />
+que está al lado de la rueda dentada<br />
 Operación en curso. A la espera de órdenes.
               </div>
             </div>

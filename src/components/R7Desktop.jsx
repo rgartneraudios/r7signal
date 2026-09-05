@@ -30,7 +30,6 @@ export default function R7Desktop() {
   // Acumulador de coste total de sesión
   const [activeLeftPanel, setActiveLeftPanel] = useState('asun')
   const [totalTokens, setTotalTokens] = useState(0)
-  const [totalCost,   setTotalCost]   = useState(null) // null hasta el primer turno
   const [asunTokens,  setAsunTokens]  = useState(0)
   const [titoTokens, setTitoTokens] = useState(0)
   const [cochiTokens, setCochiTokens] = useState(0)
@@ -89,15 +88,18 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
       if (source === 'tito')  setTitoTokens(prev => prev + total)
       if (source === 'cochi') setCochiTokens(prev => prev + total)
       setTotalTokens(prev => prev + total)
-      setTotalCost(prev => (prev ?? 0) + (cost || 0))
     }, [])
 
-  const showFooter = asunCategory !== 'imagen'
+  // Reset del contador por agente cuando ese panel hace CLS (o Guardar R7 en Cochi).
+  // Resta del total lo que ese agente venía acumulando, en vez de tocar totalCost
+  // (el coste total de sesión sí queremos que persista aunque se limpie un chat).
+  const handleResetUsage = useCallback((source) => {
+    if (source === 'asun')  { setTotalTokens(prev => prev - asunTokens);  setAsunTokens(0) }
+    if (source === 'tito')  { setTotalTokens(prev => prev - titoTokens);  setTitoTokens(0) }
+    if (source === 'cochi') { setTotalTokens(prev => prev - cochiTokens); setCochiTokens(0) }
+  }, [asunTokens, titoTokens, cochiTokens])
 
-  // Formato coste total
-  const costDisplay = totalCost === null
-    ? null
-    : totalCost < 0.001 ? '~0,00€' : `~${totalCost.toFixed(3).replace('.', ',')}€`
+  const showFooter = asunCategory !== 'imagen'
 
   const openExternal = (url) => {
     openUrl(url).catch(() => window.open(url, '_blank'))
@@ -747,6 +749,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
                 onCategoryChange={setAsunCategory}
                 onHandoff={handleAsunHandoff}
                 onUsage={handleUsage}
+                onResetUsage={handleResetUsage}
                 workspace={workspace}
                 preferences={preferences}
                 onPromptsReady={handlePromptsReady}
@@ -755,6 +758,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
                 pendingMessage={activeLeftPanel === 'tito' ? pendingAsun : null}
                 onMessageConsumed={() => setPendingAsun(null)}
                 onUsage={handleUsage}
+                onResetUsage={handleResetUsage}
                 onHandoff={(brief) => setHandoff({ type:'tito', brief, id: Date.now() })}
                 userName={userName}
                 preferences={preferences}
@@ -776,6 +780,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
             workspace={workspace}
             onWorkspaceChange={handleWorkspaceChange}
             onUsage={handleUsage}
+            onResetUsage={handleResetUsage}
             onPreferencesLoaded={(prefs) => setPreferences(prefs)}
             onSavePreferences={(fn) => { cochiSavePrefsRef.current = fn }}
             onPromptsReady={handlePromptsReady}
@@ -795,16 +800,6 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
         }}>
           {/* Left section: cost + Asun/Tito input */}
           <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: 9 }}>
-            {costDisplay && (
-              <div style={{
-                flexShrink: 0, alignSelf: 'center',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: '0.52rem', letterSpacing: '0.08em',
-                color: '#3A3840', fontWeight: 700,
-              }}>
-                {totalTokens.toLocaleString('es')}t · {costDisplay}
-              </div>
-            )}
             <div style={{
               flex: 1,
               background: '#0C0B0F',
