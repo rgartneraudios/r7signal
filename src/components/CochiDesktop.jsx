@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
 import PlanViewer from './PlanViewer'
-import { PLANNING_SYSTEM_PROMPT, buildPlanContext } from '../lib/cochiPlanningPrompts'
+import { STEP_EXECUTION_PROMPT, buildPlanContext } from '../lib/cochiPlanningPrompts'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES } from '../lib/modelPrices.js'
 import { COCHI_TOOLS, TOOL_ICONS, executeTool } from '../lib/cochiTools.js'
@@ -124,6 +124,7 @@ export default function CochiDesktop({
   const planRef = useRef(null)
   const originalMessageRef = useRef('')
   const sessionPairsRef = useRef([]) // acumula {r1,r2} de cada turno — se resetea en CLS y Guardar R7
+const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_results crudos de steps intermedios completados, para inyectarlos en el siguiente step del mismo plan. Se resetea en CLS.
   const chatContainerRef = useRef(null)
   const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
 
@@ -462,26 +463,54 @@ export default function CochiDesktop({
 
         const planContext = trackSteps ? buildPlanContext(planRef.current, stepIndex) : ''
 
+    const isLastStep = !trackSteps || stepIndex === currentPlan.steps.length - 1
+
     const remoteSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
     const sessionTotal = tokens + totalTokensAcc
     const tokenAlert   = sessionTotal > 70000
       ? '\nTOKEN_ALERT: Session context is large. If the user has not yet been informed, mention that saving R7 (session summary) is recommended before starting a new chat.'
       : ''
 
-    const systemMessages = [
-      { role: 'system', content: planContext },
-      {
-        role: 'system',
-        content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.\nSESSION_TOKENS: ${sessionTotal}${tokenAlert}`
-      },
-      { role: 'system', content: remoteSystem },
-    ]
+    // Con plan multi-step, el step final tambi├®n ejecuta su parte t├®cnica sin personalidad;
+    // la personalidad se paga una sola vez, en la llamada de envoltorio separada (ver m├ís abajo).
+    const usesTwoPhaseFinal = trackSteps && isLastStep
+    const usesTechnicalPrompt = !isLastStep || usesTwoPhaseFinal
+    console.log('DEBUG STEP:', { trackSteps, isLastStep, usesTwoPhaseFinal, stepIndex, totalSteps: currentPlan?.steps?.length })
 
-        let apiMessages = [...systemMessages, { role: 'user', content: originalMessageRef.current || '' }]
+    const systemMessages = usesTechnicalPrompt
+      ? [
+          { role: 'system', content: planContext },
+          {
+            role: 'system',
+            content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).`
+          },
+          { role: 'system', content: STEP_EXECUTION_PROMPT },
+        ]
+      : [
+          { role: 'system', content: planContext },
+          {
+            role: 'system',
+            content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.\nSESSION_TOKENS: ${sessionTotal}${tokenAlert}`
+          },
+          { role: 'system', content: remoteSystem },
+        ]
+
+    const priorArtifacts = trackSteps
+      ? stepArtifactsRef.current.filter(a => a.stepId !== step.id)
+      : []
+    const artifactsMessage = priorArtifacts.length > 0
+      ? [{
+          role: 'system',
+          content: `PRIOR STEP RESULTS (raw data from earlier steps in this plan — use directly, do not re-fetch):\n\n${priorArtifacts.map(a => a.content).join('\n\n---\n\n')}`
+        }]
+      : []
+
+        let apiMessages = [...systemMessages, ...artifactsMessage, { role: 'user', content: originalMessageRef.current || '' }]
         let stepTokens = 0
         let innerIter = 0
         const MAX_INNER = 15
         let stepCompleted = false
+        let stepToolResultsAcc = []
 
         const toolCallCounts = new Map()
         const REPEAT_WARN_THRESHOLD = 3
@@ -491,6 +520,8 @@ export default function CochiDesktop({
         while (innerIter < MAX_INNER && remainingIter > 0 && !controller.signal.aborted) {
           innerIter++
           remainingIter--
+
+          const isWrapperCall = false
 
           const res = await fetch(apiUrl, {
             method: 'POST',
@@ -502,7 +533,7 @@ export default function CochiDesktop({
             },
             body: JSON.stringify({
               model: modelSlug, stream: false,
-              tools: COCHI_TOOLS, tool_choice: 'auto',
+              ...(isWrapperCall ? {} : { tools: COCHI_TOOLS, tool_choice: 'auto' }),
               messages: apiMessages,
             })
           })
@@ -522,50 +553,155 @@ export default function CochiDesktop({
 
           if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
             const rawContent = assistantMsg.content || ''
-            const { r1, r2, r3 } = parseR1R2R3(rawContent)
-            const displayContent = r3 || rawContent
 
-            const completeMatch = rawContent.match(/\[STEP_COMPLETE:\s*(.*?)\]/)
-            const failedMatch = rawContent.match(/\[STEP_FAILED:\s*(.*?)\]/)
-            const replanMatch = rawContent.match(/\[NEED_REPLAN:\s*(.*?)\]/)
+            if (isLastStep && !usesTwoPhaseFinal) {
+              const { r1, r2, r3 } = parseR1R2R3(rawContent)
+              const displayContent = (r3 || rawContent)
+                .replace(/\[STEP_COMPLETE:[\s\S]*?\]/, '')
+                .replace(/\[STEP_FAILED:[\s\S]*?\]/, '')
+                .replace(/\[NEED_REPLAN:[\s\S]*?\]/, '')
+                .trim()
 
-            if (completeMatch) {
-              const extractedResult = completeMatch[1].trim()
-              if (trackSteps) updateStepStatus(step.id, 'completed', extractedResult)
-              await appendToMemory(r1, r2)
-              sessionPairsRef.current.push({ r1, r2 })
-              setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
-              stepCompleted = true
-              break
-            } else if (failedMatch) {
-              const reason = failedMatch[1].trim()
-              if (trackSteps) updateStepStatus(step.id, 'failed', reason)
-              await appendToMemory(r1, r2)
-              sessionPairsRef.current.push({ r1, r2 })
-              setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
-              stepCompleted = true
-              break
-            } else if (replanMatch) {
-              const extractedReason = replanMatch[1].trim()
-              if (trackSteps) {
+              const completeMatch = rawContent.match(/\[STEP_COMPLETE:\s*(.*?)\]/)
+              const failedMatch = rawContent.match(/\[STEP_FAILED:\s*(.*?)\]/)
+              const replanMatch = rawContent.match(/\[NEED_REPLAN:\s*(.*?)\]/)
+
+              if (completeMatch) {
+                const extractedResult = completeMatch[1].trim()
+                if (trackSteps) updateStepStatus(step.id, 'completed', extractedResult)
+                await appendToMemory(r1, r2)
+                sessionPairsRef.current.push({ r1, r2 })
+                setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+                stepCompleted = true
+                break
+              } else if (failedMatch) {
+                const reason = failedMatch[1].trim()
+                if (trackSteps) updateStepStatus(step.id, 'failed', reason)
+                await appendToMemory(r1, r2)
+                sessionPairsRef.current.push({ r1, r2 })
+                setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+                stepCompleted = true
+                break
+              } else if (replanMatch) {
+                const extractedReason = replanMatch[1].trim()
+                if (trackSteps) {
+                  if (step.isReplanned) {
+                    updateStepStatus(step.id, 'failed', extractedReason)
+                  } else {
+                    await replanStep(step, extractedReason)
+                  }
+                }
+                await appendToMemory(r1, r2)
+                sessionPairsRef.current.push({ r1, r2 })
+                setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+                stepCompleted = true
+                break
+              } else {
+                if (trackSteps) updateStepStatus(step.id, 'completed', 'Completado')
+                await appendToMemory(r1, r2)
+                sessionPairsRef.current.push({ r1, r2 })
+                setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+                stepCompleted = true
+                break
+              }
+            } else {
+              const completeMatch = rawContent.match(/\[STEP_COMPLETE:\s*(.*?)\]/)
+              const failedMatch = rawContent.match(/\[STEP_FAILED:\s*(.*?)\]/)
+              const replanMatch = rawContent.match(/\[NEED_REPLAN:\s*(.*?)\]/)
+
+              const saveArtifact = () => {
+                if (stepToolResultsAcc.length > 0) {
+                  stepArtifactsRef.current.push({
+                    stepId: step.id,
+                    content: stepToolResultsAcc.map(t => t.content).join('\n\n')
+                  })
+                }
+              }
+
+              if (completeMatch) {
+                const extractedResult = completeMatch[1].trim()
+                console.log('DEBUG COMPLETE MATCH:', { extractedResult, usesTwoPhaseFinal })
+                updateStepStatus(step.id, 'completed', extractedResult)
+                saveArtifact()
+
+                if (usesTwoPhaseFinal) {
+                  console.log('DEBUG ENTERING WRAPPER CALL')
+                  try {
+                    const wrapperMessages = [
+                      {
+                        role: 'system',
+                        content: `SYSTEM CONTEXT\nYou are operating on a Windows system.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.\nSESSION_TOKENS: ${sessionTotal}${tokenAlert}`
+                      },
+                      { role: 'system', content: remoteSystem },
+                      {
+                        role: 'user',
+                        content: `TASK_RESULT (factual, already executed — report this to the user in your own voice, do not re-execute anything):\n${extractedResult}`
+                      }
+                    ]
+
+                    const wrapperRes = await fetch(apiUrl, {
+                      method: 'POST',
+                      signal: controller.signal,
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': authHeader,
+                        ...(!isLocal && !isLmStudio ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
+                      },
+                      body: JSON.stringify({
+                        model: modelSlug, stream: false,
+                        messages: wrapperMessages,
+                      })
+                    })
+
+                    if (!wrapperRes.ok) throw new Error(`Wrapper API ${wrapperRes.status}`)
+                    const wrapperData = await wrapperRes.json()
+                    if (wrapperData.usage?.total_tokens) {
+                      stepTokens += wrapperData.usage.total_tokens
+                      totalTokensAcc += wrapperData.usage.total_tokens
+                    }
+                    const wrapperRaw = wrapperData.choices?.[0]?.message?.content || ''
+                    console.log('WRAPPER RAW:', wrapperRaw)
+                    const { r1, r2, r3 } = parseR1R2R3(wrapperRaw)
+                    const displayContent = (r3 || wrapperRaw)
+                      .replace(/\[STEP_COMPLETE:[\s\S]*?\]/, '')
+                      .replace(/\[STEP_FAILED:[\s\S]*?\]/, '')
+                      .replace(/\[NEED_REPLAN:[\s\S]*?\]/, '')
+                      .trim()
+                    await appendToMemory(r1, r2)
+                    sessionPairsRef.current.push({ r1, r2 })
+                    setMessages(prev => [...prev, { role: 'assistant', content: displayContent || extractedResult }])
+                  } catch (wrapErr) {
+                    setMessages(prev => [...prev, { role: 'assistant', content: extractedResult }])
+                  }
+                }
+
+                stepCompleted = true
+                break
+              } else if (failedMatch) {
+                const reason = failedMatch[1].trim()
+                updateStepStatus(step.id, 'failed', reason)
+                if (usesTwoPhaseFinal) {
+                  setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${reason}` }])
+                }
+                stepCompleted = true
+                break
+              } else if (replanMatch) {
+                const extractedReason = replanMatch[1].trim()
                 if (step.isReplanned) {
                   updateStepStatus(step.id, 'failed', extractedReason)
                 } else {
                   await replanStep(step, extractedReason)
                 }
+                stepCompleted = true
+                break
+              } else {
+                updateStepStatus(step.id, 'failed', 'No control signal emitted')
+                if (usesTwoPhaseFinal) {
+                  setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ El paso final no emitió una señal de control válida.' }])
+                }
+                stepCompleted = true
+                break
               }
-              await appendToMemory(r1, r2)
-              sessionPairsRef.current.push({ r1, r2 })
-              setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
-              stepCompleted = true
-              break
-            } else {
-              if (trackSteps) updateStepStatus(step.id, 'completed', 'Completado')
-              await appendToMemory(r1, r2)
-              sessionPairsRef.current.push({ r1, r2 })
-              setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
-              stepCompleted = true
-              break
             }
           }
 
@@ -586,6 +722,7 @@ export default function CochiDesktop({
             toolResults.push({ role: 'tool', tool_call_id: toolCall.id, content: String(result) })
           }
           apiMessages.push(...toolResults)
+          stepToolResultsAcc.push(...toolResults)
 
           // Guard anti-repetición: detecta si el modelo repite la misma llamada sin avanzar
           let maxRepeatSignature = null
@@ -752,12 +889,21 @@ export default function CochiDesktop({
     setMessages(prev => [...prev, { role: 'assistant', content: 'Plan cancelado.' }])
   }
 
-  function handleEsc()   { abortRef.current?.abort(); setLoading(false) }
+  function handleEsc() {
+    abortRef.current?.abort()
+    setLoading(false)
+    if (planRef.current) {
+      const current = planRef.current.steps.find(s => s.status === 'running')
+      if (current) updateStepStatus(current.id, 'failed', 'Cancelado por el usuario')
+      setPlanStatus('completed')
+    }
+  }
   function handleClear() {
     if (window.confirm('¿Borrar toda la conversación?')) {
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
       sessionPairsRef.current = []
+      stepArtifactsRef.current = []
       onResetUsage?.('cochi')
     }
   }
@@ -773,6 +919,7 @@ export default function CochiDesktop({
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
       sessionPairsRef.current = []
+      stepArtifactsRef.current = []
       onResetUsage?.('cochi')
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ No se pudo guardar R7: ${err.message}` }])
