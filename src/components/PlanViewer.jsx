@@ -1,7 +1,7 @@
 const STATUS_DOT = {
   pending:   '#8A868B',
-  running:   '#39F7F5',
-  completed: '#39C4F7',
+  running:   '#FFC099',
+  completed: '#E8CEBE',
   failed:    '#B3D479',
   cancelled: '#3A3A3F',
 }
@@ -31,7 +31,7 @@ export default function PlanViewer({ plan, planStatus, onConfirm, onCancel }) {
     <div style={{
       background: 'linear-gradient(135deg, #0A0C10, #182229, #1A1A24)',
       border: '1px solid #2A2830',
-      borderLeft: '2px solid #39F7F5',
+      borderLeft: '2px solid #FFC099',
       borderRadius: 8,
       padding: '12px 16px',
       fontFamily: "'Space Grotesk', sans-serif",
@@ -42,7 +42,7 @@ export default function PlanViewer({ plan, planStatus, onConfirm, onCancel }) {
         fontSize: '0.85rem',
         fontWeight: 700,
         marginBottom: 12,
-        background: 'linear-gradient(135deg, #39F7F5, #C0C0C0)',
+        background: 'linear-gradient(135deg, #FFC099, #C0C0C0)',
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
         backgroundClip: 'text',
@@ -92,9 +92,9 @@ export default function PlanViewer({ plan, planStatus, onConfirm, onCancel }) {
       {planStatus === 'awaiting_confirmation' && (
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
           <button onClick={onConfirm} style={{
-            background: 'linear-gradient(135deg, #39F7F522, #39F7F511)',
-            border: '1px solid #39F7F5',
-            color: '#A890F0',
+            background: 'linear-gradient(135deg, #FFC09922, #FFC09911)',
+            border: '1px solid #FFC099',
+            color: '#E8CEBE',
             borderRadius: 5,
             padding: '5px 16px',
             fontSize: '0.78rem',
