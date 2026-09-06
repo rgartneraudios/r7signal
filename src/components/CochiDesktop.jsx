@@ -1109,10 +1109,14 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
                 textShadow: '0 0 40px rgba(71,115,150,0.24), 0 0 100px rgba(71,115,150,0.12)',
                 fontSize: '0.8rem',
               }}>
-                Afirmativo.<br />
-Selecciona el modelo predeterminado en los selectores.<br />
-Con tus autorizaciones, asumo el control y administro tus archivos<br />
+                Alto!. quién vive?.<br />
+Selecciona el nivel de potencia en los selectores:<br />
+Centinela para tareas técnicas, Terminator para decisiones de mayor calibre.<br />
+Con tus autorizaciones, asumo el control y administro tus archivos y código<br />
 desde la ventana Workspace en la cabecera.<br />
+Operaciones sensibles — borrado, sobreescritura<br />
+— requieren tu confirmación.<br />
+Ninguna se ejecuta sin tu autorización explícita.<br />
 ¿Quieres borrar rastro? Sin problema.<br />
 Utiliza el botón CLS en la base del Panel para purgar el chat<br />
 y reiniciar la operación desde cero.<br />
