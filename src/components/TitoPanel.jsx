@@ -319,9 +319,11 @@ export default function TitoPanel({
             <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
             <div className="watermark-name" style={{ fontSize: '1.9rem' }}>TITO RESEARCH</div>
             <div className="watermark-sub" style={{ fontSize: '0.8rem' }}>¡Ehm, hola! O sea... ¡Atención investigando!</div>
-            <div className="watermark-hint" style={{ fontSize: '0.72rem' }}>Eh, ¿sabías que la información es oro? Creo que sí.<br />
+<div className="watermark-hint" style={{ fontSize: '0.72rem' }}>Eh, ¿sabías que la información es oro? Creo que sí.<br />
 Primero, emm... selecciona el nivel de búsqueda en los selectores.<br />
 ¡Sí, eso, haz eso!<br />
+Yo solo vuelco lo que encuentro, ¿eh? No toco archivos ni nada raro,<br />
+para eso está Cochi, que es el que sabe de esas cosas.<br />
 Luego, si metes la pata—que, ejem, suele pasar, no te juzgo—,<br />
 tienes el botón CLS ahí abajito, al pie del Panel.<br />
 Lo aprietas y... ¡pum!<br />

@@ -29,6 +29,17 @@ function resolvePath(workspace, relativePath) {
   return `${base}/${relativePath}`.replace(/\\/g, '/')
 }
 
+// Chequeo de existencia expuesto para guardrails en el panel (confirmación
+// antes de sobreescribir). No lanza — devuelve false ante cualquier error.
+export async function pathExists(workspace, relativePath) {
+  try {
+    const filePath = resolvePath(workspace, relativePath)
+    return await exists(filePath)
+  } catch {
+    return false
+  }
+}
+
 const MAX_TEXT_BYTES = 5 * 1024 * 1024   // 5MB — lectura de texto
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024 // 15MB — lectura de imagen
 

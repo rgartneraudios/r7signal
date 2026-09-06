@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient'
 import { ASUN_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { readFile } from '@tauri-apps/plugin-fs'
-import { getAsunTools, executeTool } from '../lib/asunTools.js'
+import { getAsunTools, executeTool, pathExists } from '../lib/asunTools.js'
 import { writeR9File } from '../lib/r9Store.js'
 import { open } from '@tauri-apps/plugin-dialog'
 
@@ -698,6 +698,25 @@ export default function AsunPanel({
           const toolName = tc.function.name
           const toolArgs = JSON.parse(tc.function.arguments || '{}')
 
+          // ── Guardrail: operaciones destructivas requieren confirmación ────
+          let blocked = false
+          if (toolName === 'delete_file') {
+            blocked = !window.confirm(`Asun quiere ELIMINAR:\n${toolArgs.path}\n\n¿Confirmás?`)
+          } else if (toolName === 'write_text_file' && await pathExists(workspace, toolArgs.path)) {
+            blocked = !window.confirm(`Asun quiere SOBREESCRIBIR:\n${toolArgs.path}\n\n¿Confirmás?`)
+          } else if (toolName === 'move_file' && await pathExists(workspace, toolArgs.to)) {
+            blocked = !window.confirm(`Asun quiere MOVER Y SOBREESCRIBIR:\n${toolArgs.from} → ${toolArgs.to}\n\n¿Confirmás?`)
+          }
+          if (blocked) {
+            setMessages(prev => prev.map(m =>
+              m.id === placeholderId
+                ? { ...m, contenido: `✕ ${toolName} cancelado por el usuario` }
+                : m
+            ))
+            apiMessages.push({ role: 'tool', tool_call_id: tc.id, content: 'Cancelado por el usuario' })
+            continue
+          }
+
           // Mostrar actividad al usuario
           setMessages(prev => prev.map(m =>
             m.id === placeholderId
@@ -1053,16 +1072,19 @@ export default function AsunPanel({
 fontSize: '0.8rem',
                 }}>
 {category === 'llm'
-                      ? <>Mis LLM están operando a máxima potencia.<br />
-Con tu autorización, puedo administrar tus archivos<br />
-directamente desde la ventana Workspace en la cabecera.<br />
-También estoy capacitada para generar imágenes y música para ti.<br />
+                      ? <>Mis LLM están operando a máxima potencia conversacional.<br />
+Puedo leer y escribir dentro de mi propia área de trabajo,<br />
+siempre con tu confirmación antes de borrar o sobreescribir algo.<br />
+Si necesitas administrar archivos o generar código,<br />
+ese trabajo es de Cochi — cambia de panel y dile qué necesitas.<br />
+Yo me dedico a conversar contigo, generar imágenes y música.<br />
 Cuando necesites empezar de cero, usa el botón CLS al pie del Panel;<br />
 limpiará el chat por completo, sin dejar rastro.<br />
 A los 70.000 tokens aparecerá R7 para guardar tus avances.<br />
 R7 creará un resumen de la tarea junto al último mensaje.<br />
 Y si prefieres conservar solo fragmentos específicos o líneas de código,<br />
-R9 te permitirá seleccionarlos con total precisión.<br />
+R9 te permitirá seleccionarlos con total precisión —<br />
+o simplemente decime "guardá esto último en un txt" y lo hago.<br />
 Encontrarás el contenido de R7 y R9 en la carpeta<br />
 que está al lado de la rueda dentada</>
                       : <>Cuéntale a Asun tu estilo musical.<br />Cuando tenga el concepto, genera con Lyria.</>}
