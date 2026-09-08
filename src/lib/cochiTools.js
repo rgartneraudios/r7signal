@@ -1,4 +1,4 @@
-import { readTextFile, writeTextFile, readDir, exists, mkdir } from '@tauri-apps/plugin-fs'
+import { readTextFile, writeTextFile, readDir, exists, mkdir, remove } from '@tauri-apps/plugin-fs'
 import { Command } from '@tauri-apps/plugin-shell'
 import { writeR9File } from './r9Store.js'
 
@@ -198,6 +198,18 @@ export const COCHI_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'delete_file',
+      description: 'Delete a single file (not directories). Destructive — always requires user confirmation.',
+      parameters: {
+        type: 'object',
+        properties: { path: { type: 'string', description: 'Absolute path.' } },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'save_to_r9',
       description: 'Save text to shared R9 memory so Asun (or another agent) can read it later. Use ONLY when the user explicitly asks (e.g. "guarda esto en R9"). Never use automatically.',
       parameters: {
@@ -212,6 +224,19 @@ export const COCHI_TOOLS = [
   },
 ]
 
+// ─── Tools filtrados por nivel de permiso del workspace ───────────────────────
+// Evita mandar schemas de escritura/ejecución cuando el modelo no puede usarlos.
+export function getToolsForPermission(permission) {
+  const canWrite = permission === 'write' || permission === 'readwrite' || permission === 'full'
+  const canRun   = permission === 'full'
+  return COCHI_TOOLS.filter(t => {
+    const name = t.function.name
+    if (['write_file', 'replace_in_file', 'append_to_file'].includes(name)) return canWrite
+    if (['run_command', 'delete_file'].includes(name)) return canRun
+    return true
+  })
+}
+
 // ─── Tool icons (UI) ──────────────────────────────────────────────────────────
 export const TOOL_ICONS = {
   read_file:        'READ',
@@ -225,6 +250,7 @@ export const TOOL_ICONS = {
   get_file_info:    'STAT',
   file_exists:      'CHCK',
   run_command:      'EXEC',
+  delete_file:      'DEL',
   save_to_r9:       'R9',
 }
 
@@ -235,8 +261,8 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
 
   if (!canWrite && ['write_file', 'replace_in_file', 'append_to_file'].includes(name))
     return { modelResult: '⛔ Bloqueado: permiso Solo Lectura. Cambia el nivel en Workspace.', diff: null }
-  if (!canRun && name === 'run_command')
-    return { modelResult: '⛔ Bloqueado: activa Full Access para ejecutar run_command.', diff: null }
+  if (!canRun && (name === 'run_command' || name === 'delete_file'))
+    return { modelResult: '⛔ Bloqueado: activa Full Access para operaciones destructivas (run_command, delete_file).', diff: null }
 
   switch (name) {
 
@@ -370,6 +396,13 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       else if (err)     modelResult = `${out}\nSTDERR: ${err}`
       else              modelResult = out || '(sin output)'
       return { modelResult, diff: null }
+    }
+
+    case 'delete_file': {
+      const existed = await pathExistsCochi(args.path)
+      if (!existed) return { modelResult: `⚠️ No existe: ${args.path}`, diff: null }
+      await remove(args.path)
+      return { modelResult: `🗑️ Eliminado: ${args.path}`, diff: null }
     }
 
     default:
