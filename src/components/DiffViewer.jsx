@@ -69,14 +69,15 @@ export default function DiffViewer({ diff }) {
       </div>
       <div style={{ maxHeight: 340, overflowY: 'auto' }}>
         {numbered.map((h, idx) => {
-          const bg = h.type === 'add' ? 'rgba(107,158,196,0.14)'
-                   : h.type === 'del' ? 'rgba(179,77,77,0.16)'
+          const bg = h.type === 'add' ? 'rgba(34,211,238,0.12)'
+                   : h.type === 'del' ? 'rgba(255,68,102,0.16)'
                    : 'transparent'
           const marker = h.type === 'add' ? '+' : h.type === 'del' ? '-' : ' '
-          const markerColor = h.type === 'add' ? '#6B9EC4' : h.type === 'del' ? '#C97A7A' : '#5A5A64'
+          const markerColor = h.type === 'add' ? '#22D3EE' : h.type === 'del' ? '#FF4466' : '#5A5A64'
+          const borderColor = h.type === 'add' ? '#22D3EE' : h.type === 'del' ? '#FF4466' : 'transparent'
           const textColor = h.type === 'same' ? '#8A868B' : '#D4D8DC'
           return (
-            <div key={idx} style={{ display: 'flex', background: bg, padding: '0 8px' }}>
+            <div key={idx} style={{ display: 'flex', background: bg, padding: '0 8px', borderLeft: `2px solid ${borderColor}` }}>
               <span style={{ width: 40, textAlign: 'right', color: '#4A4A55', marginRight: 10, userSelect: 'none', flexShrink: 0 }}>{h.lineNo}</span>
               <span style={{ width: 12, color: markerColor, flexShrink: 0 }}>{marker}</span>
               <span style={{ color: textColor, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{h.text || ' '}</span>

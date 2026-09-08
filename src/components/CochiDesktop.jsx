@@ -6,7 +6,7 @@ import DiffViewer from './DiffViewer'
 import { STEP_EXECUTION_PROMPT, buildPlanContext } from '../lib/cochiPlanningPrompts'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES } from '../lib/modelPrices.js'
-import { COCHI_TOOLS, TOOL_ICONS, executeTool, pathExistsCochi } from '../lib/cochiTools.js'
+import { TOOL_ICONS, executeTool, pathExistsCochi, getToolsForPermission } from '../lib/cochiTools.js'
 import { writeR9File } from '../lib/r9Store.js'
 
 
@@ -458,6 +458,8 @@ export default function CochiDesktop({
 
     try {
       let apiMessages = null // conversación persistente para todo el plan — se arma UNA vez y se comprime al cerrar cada step, nunca se reconstruye desde cero.
+      let technicalSwapped = false // true cuando un turno sin plan (!trackSteps) pasó de Prompt A (personalidad completa) a Prompt B (STEP_EXECUTION_PROMPT, sin personalidad) por necesitar ping-pong de tools.
+      let personalitySystemMsgRef = null // referencia directa (no por contenido) al mensaje de Prompt A dentro de apiMessages, para poder swapearlo sin depender de que remoteSystem siga siendo el mismo string.
       while (remainingIter > 0 && !controller.signal.aborted) {
         const currentPlan = planRef.current
         const trackSteps = currentPlan !== null
@@ -505,6 +507,9 @@ export default function CochiDesktop({
                 { role: 'system', content: remoteSystem },
               ]
           apiMessages = [...baseSystemMessages, { role: 'user', content: originalMessageRef.current || '' }]
+          // Referencia directa al mensaje de personalidad (Prompt A), no su contenido — así el swap
+          // no depende de que remoteSystem siga interpolando igual entre vueltas del while.
+          if (!usesTechnicalPrompt) personalitySystemMsgRef = baseSystemMessages[1]
         }
 
         if (trackSteps) {
@@ -543,7 +548,8 @@ export default function CochiDesktop({
             },
             body: JSON.stringify({
               model: modelSlug, stream: false,
-              ...(isWrapperCall ? {} : { tools: COCHI_TOOLS, tool_choice: 'auto' }),
+              reasoning: { enabled: false },
+              ...(isWrapperCall ? {} : { tools: getToolsForPermission(workspace.permission), tool_choice: 'auto' }),
               messages: apiMessages,
               ...(isLocal || isLmStudio ? {} : { usage: { include: true }, session_id: cochiSessionId }),
             })
@@ -572,7 +578,8 @@ export default function CochiDesktop({
           if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
             const rawContent = assistantMsg.content || ''
 
-            if (isLastStep && !usesTwoPhaseFinal) {
+            const useDirectParse = trackSteps ? (isLastStep && !usesTwoPhaseFinal) : !technicalSwapped
+            if (useDirectParse) {
               const { r1, r2, r3 } = parseR1R2R3(rawContent)
               const displayContent = (r3 || rawContent)
                 .replace(/\[STEP_COMPLETE:[\s\S]*?\]/, '')
@@ -623,17 +630,18 @@ export default function CochiDesktop({
                 break
               }
             } else {
+              const shouldWrapperTranslate = trackSteps ? usesTwoPhaseFinal : true
               const completeMatch = rawContent.match(/\[STEP_COMPLETE:\s*(.*?)\]/)
               const failedMatch = rawContent.match(/\[STEP_FAILED:\s*(.*?)\]/)
               const replanMatch = rawContent.match(/\[NEED_REPLAN:\s*(.*?)\]/)
 
               if (completeMatch) {
                 const extractedResult = completeMatch[1].trim()
-                console.log('DEBUG COMPLETE MATCH:', { extractedResult, usesTwoPhaseFinal })
-                updateStepStatus(step.id, 'completed', extractedResult)
+                console.log('DEBUG COMPLETE MATCH:', { extractedResult, usesTwoPhaseFinal, shouldWrapperTranslate, technicalSwapped })
+                if (trackSteps) updateStepStatus(step.id, 'completed', extractedResult)
                 stepResultSummary = extractedResult
 
-                if (usesTwoPhaseFinal) {
+                if (shouldWrapperTranslate) {
                   console.log('DEBUG ENTERING WRAPPER CALL')
                   try {
                     const wrapperMessages = [
@@ -658,6 +666,7 @@ export default function CochiDesktop({
                       },
                       body: JSON.stringify({
                         model: modelSlug, stream: false,
+                        reasoning: { enabled: false },
                         messages: wrapperMessages,
                       })
                     })
@@ -694,33 +703,43 @@ export default function CochiDesktop({
                 break
               } else if (failedMatch) {
                 const reason = failedMatch[1].trim()
-                updateStepStatus(step.id, 'failed', reason)
+                if (trackSteps) updateStepStatus(step.id, 'failed', reason)
                 stepResultSummary = `FAILED: ${reason}`
-                if (usesTwoPhaseFinal) {
+                if (shouldWrapperTranslate) {
                   setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${reason}` }])
                 }
                 stepCompleted = true
                 break
               } else if (replanMatch) {
                 const extractedReason = replanMatch[1].trim()
-                if (step.isReplanned) {
+                if (!trackSteps) {
+                  stepResultSummary = `FAILED: ${extractedReason}`
+                  setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Esta tarea necesita dividirse en pasos y hoy no hay planner activo. Motivo: ${extractedReason}. Probá pedírmelo de forma más específica o en partes.` }])
+                } else if (step.isReplanned) {
                   updateStepStatus(step.id, 'failed', extractedReason)
+                  stepResultSummary = `REPLANNED: ${extractedReason}`
                 } else {
                   await replanStep(step, extractedReason)
+                  stepResultSummary = `REPLANNED: ${extractedReason}`
                 }
-                stepResultSummary = `REPLANNED: ${extractedReason}`
                 stepCompleted = true
                 break
               } else {
-                updateStepStatus(step.id, 'failed', 'No control signal emitted')
+                if (trackSteps) updateStepStatus(step.id, 'failed', 'No control signal emitted')
                 stepResultSummary = 'FAILED: No control signal emitted'
-                if (usesTwoPhaseFinal) {
+                if (shouldWrapperTranslate) {
                   setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ El paso final no emitió una señal de control válida.' }])
                 }
                 stepCompleted = true
                 break
               }
             }
+          }
+
+          if (!trackSteps && !technicalSwapped) {
+            technicalSwapped = true
+            const sysIdx = personalitySystemMsgRef ? apiMessages.indexOf(personalitySystemMsgRef) : -1
+            if (sysIdx !== -1) apiMessages[sysIdx] = { role: 'system', content: STEP_EXECUTION_PROMPT }
           }
 
           const toolResults = []
@@ -736,6 +755,8 @@ export default function CochiDesktop({
             let blocked = false
             if (name === 'run_command') {
               blocked = !window.confirm(`Cochi quiere EJECUTAR:\n${args.command}\n\n¿Confirmás?`)
+            } else if (name === 'delete_file') {
+              blocked = !window.confirm(`Cochi quiere BORRAR:\n${args.path}\n\n¿Confirmás?`)
             } else if (name === 'write_file' && await pathExistsCochi(args.path)) {
               blocked = !window.confirm(`Cochi quiere SOBREESCRIBIR:\n${args.path}\n\n¿Confirmás?`)
             }
