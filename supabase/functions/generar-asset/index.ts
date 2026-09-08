@@ -12,9 +12,9 @@ interface RequestBody {
   vista: string | null
   orientacion: string | null
   ubicacion: string | null
-  menu_numero: number
+  modelo_id: string
   imagen_b64: string | null
-  user_id: string
+  user_id: string | null
   path: string | null
   estilo_nombre: string | null
   tipo: string | null
@@ -25,6 +25,8 @@ interface RequestBody {
   epoca: string | null
   paleta_color: string | null
 }
+
+const DEFAULT_USER_ID = 'e18327da-32e9-415c-9bf2-dfb00d64565c' // Fase 0 — sin login, único usuario (Roberto)
 
 async function callOpenRouter(
   apiKey: string,
@@ -110,6 +112,12 @@ const UBICACION_MAP: Record<string, string> = {
   exterior_setting: 'set in an outdoor exterior environment',
 }
 
+const ASPECT_RATIO_MAP: Record<string, string> = {
+  horizontal: '16:9',
+  vertical:   '9:16',
+  cuadrado:   '1:1',
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -117,11 +125,12 @@ serve(async (req) => {
 
   try {
     const body: RequestBody = await req.json()
-    const { user_id, menu_numero, estilo_id, objetos, vista, orientacion, ubicacion, imagen_b64, momento_dia, clima, epoca, paleta_color } = body
+    const { estilo_id, objetos, vista, orientacion, ubicacion, modelo_id, imagen_b64, momento_dia, clima, epoca, paleta_color } = body
+    const user_id = body.user_id || DEFAULT_USER_ID
 
-    if (!user_id || !menu_numero) {
+    if (!modelo_id) {
       return new Response(
-        JSON.stringify({ error: 'user_id and menu_numero are required' }),
+        JSON.stringify({ error: 'modelo_id is required' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
@@ -134,31 +143,9 @@ serve(async (req) => {
     const apiKey = Deno.env.get('OPENROUTER_API_KEY')
     if (!apiKey) throw new Error('Missing OPENROUTER_API_KEY')
 
-    const MODULO_IMAGEN_ID = '4425984b-704e-472a-9b7c-965ae51c55b8'
-
-    // Step 2: Fetch Tito slug
-    const { data: titoItem, error: titoError } = await supabase
-      .from('menu_items')
-      .select('modelo_id')
-      .eq('menu_numero', menu_numero)
-      .eq('tipo', 'tito')
-      .eq('modulo_id', '592f5894-41d8-4191-90b7-b1e47e166626')
-      .limit(1)
-      .single()
-
-    if (titoError || !titoItem) throw new Error('Tito model not found for this menu')
-
-    // Step 3: Fetch Asun·Imagen slug
-    const { data: asunItem, error: asunError } = await supabase
-      .from('menu_items')
-      .select('modelo_id')
-      .eq('menu_numero', menu_numero)
-      .eq('tipo', 'asun_imagen')
-      .eq('modulo_id', MODULO_IMAGEN_ID)
-      .limit(1)
-      .single()
-
-    if (asunError || !asunItem) throw new Error('Asun·Imagen model not found for this menu')
+    // Modelo interno para armar el prompt_final en inglés — paso técnico de la función,
+    // sin relación con el Tito real de la app (Tito hoy es exclusivamente research/Perplexity).
+    const PROMPT_ENGINEER_MODEL = 'z-ai/glm-5.3-flash'
 
     // Step 4: Fetch prompt_base (service_role only)
     let promptBase: string | null = null
@@ -192,7 +179,7 @@ for an image generation model. Output only the final prompt, no explanations, no
 
     const titoResult = await callOpenRouter(
       apiKey,
-      titoItem.modelo_id,
+      PROMPT_ENGINEER_MODEL,
       titoSystemPrompt,
       titoUserMessage,
       300,
@@ -201,74 +188,124 @@ for an image generation model. Output only the final prompt, no explanations, no
 
     const promptFinal = titoResult.content.trim()
 
-    // Step 6: Call Asun·Imagen — direct call, no system prompt (image models reject empty system messages)
-    const asunUserContent = imagen_b64
-      ? [
-          { type: 'text', text: promptFinal },
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imagen_b64}` } }
-        ]
-      : promptFinal
-
-    const asunResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://r7signal.com',
-        'X-Title': 'R7Signal',
-      },
-      body: JSON.stringify({
-        model: asunItem.modelo_id,
-        messages: [{ 
-          role: 'user', 
-          content: typeof asunUserContent === 'string' 
-            ? `Generate an image: ${asunUserContent}`
-            : asunUserContent
-        }],
-        max_tokens: 1024,
-        response_modalities: ['IMAGE'],
-        include_reasoning: false,
-      }),
-    })
-
-    if (!asunResponse.ok) {
-      const errorText = await asunResponse.text()
-      throw new Error(`OpenRouter [${asunItem.modelo_id}]: ${asunResponse.status} - ${errorText}`)
-    }
-
-    const asunData = await asunResponse.json()
-    const message = asunData.choices?.[0]?.message
-    const messageContent = message?.content
-    const messageImages = message?.images
-
-    // Step 7: Parse image — OpenRouter image models return in message.images[], not content
+    // Step 6: Call Asun·Imagen — ruta según familia de modelo.
+    // ByteDance Seedream no soporta generación de imagen vía /chat/completions
+    // (por eso el 500 genérico); usa el endpoint dedicado /api/v1/images.
+    // Grok y otros modelos chat-nativos siguen usando /chat/completions + modalities.
     let imageUrl = ''
 
-    // Primary: check message.images array (OpenRouter non-standard field)
-    if (Array.isArray(messageImages) && messageImages.length > 0) {
-      const img = messageImages[0]
-      imageUrl = img?.image_url?.url || img?.url || ''
-      if (!imageUrl && img?.b64_json) imageUrl = `data:image/png;base64,${img.b64_json}`
-      if (!imageUrl && typeof img === 'string') imageUrl = img
-    }
+    if (modelo_id.startsWith('bytedance-seed/')) {
+      // ─── Ruta Seedream — Images API dedicada ───────────────────────────
+      const aspectRatio = ASPECT_RATIO_MAP[orientacion || ''] || 'auto'
 
-    // Fallback: check content as array of parts
-    if (!imageUrl && Array.isArray(messageContent)) {
-      const imagePart = messageContent.find((p: any) => 
-        p.type === 'image_url' || p.type === 'image'
-      )
-      if (imagePart) {
-        imageUrl = imagePart.image_url?.url || imagePart.url || ''
+      const imagesBody: Record<string, any> = {
+        model: modelo_id,
+        prompt: promptFinal,
+        resolution: '2K',
+        aspect_ratio: aspectRatio,
       }
-    }
+      if (imagen_b64) {
+        imagesBody.input_references = [
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imagen_b64}` } }
+        ]
+      }
 
-    // Fallback: content as plain string URL
-    if (!imageUrl && typeof messageContent === 'string' && messageContent.trim()) {
-      imageUrl = messageContent.trim()
-    }
+      const seedreamResponse = await fetch('https://openrouter.ai/api/v1/images', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://r7signal.com',
+          'X-Title': 'R7Signal',
+        },
+        body: JSON.stringify(imagesBody),
+      })
 
-    if (!imageUrl) {
-      throw new Error(`No image returned. images=${JSON.stringify(messageImages)?.substring(0,300)}`)
+      if (!seedreamResponse.ok) {
+        const errorText = await seedreamResponse.text()
+        throw new Error(`OpenRouter [${modelo_id}]: ${seedreamResponse.status} - ${errorText}`)
+      }
+
+      const seedreamData = await seedreamResponse.json()
+      const imgEntry = seedreamData.data?.[0]
+      if (imgEntry?.b64_json) {
+        const mediaType = imgEntry.media_type || 'image/png'
+        imageUrl = `data:${mediaType};base64,${imgEntry.b64_json}`
+      } else if (imgEntry?.url) {
+        imageUrl = imgEntry.url
+      }
+
+      if (!imageUrl) {
+        throw new Error(`No image returned from Seedream. data=${JSON.stringify(seedreamData)?.substring(0,300)}`)
+      }
+
+    } else {
+      // ─── Ruta Grok / chat-nativos — /chat/completions + modalities ─────
+      const asunUserContent = imagen_b64
+        ? [
+            { type: 'text', text: promptFinal },
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imagen_b64}` } }
+          ]
+        : promptFinal
+
+      const asunResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://r7signal.com',
+          'X-Title': 'R7Signal',
+        },
+        body: JSON.stringify({
+          model: modelo_id,
+          messages: [{ 
+            role: 'user', 
+            content: typeof asunUserContent === 'string' 
+              ? `Generate an image: ${asunUserContent}`
+              : asunUserContent
+          }],
+          max_tokens: 1024,
+          modalities: ['image'],
+          include_reasoning: false,
+        }),
+      })
+
+      if (!asunResponse.ok) {
+        const errorText = await asunResponse.text()
+        throw new Error(`OpenRouter [${modelo_id}]: ${asunResponse.status} - ${errorText}`)
+      }
+
+      const asunData = await asunResponse.json()
+      const message = asunData.choices?.[0]?.message
+      const messageContent = message?.content
+      const messageImages = message?.images
+
+      // Primary: check message.images array (OpenRouter non-standard field)
+      if (Array.isArray(messageImages) && messageImages.length > 0) {
+        const img = messageImages[0]
+        imageUrl = img?.image_url?.url || img?.url || ''
+        if (!imageUrl && img?.b64_json) imageUrl = `data:image/png;base64,${img.b64_json}`
+        if (!imageUrl && typeof img === 'string') imageUrl = img
+      }
+
+      // Fallback: check content as array of parts
+      if (!imageUrl && Array.isArray(messageContent)) {
+        const imagePart = messageContent.find((p: any) => 
+          p.type === 'image_url' || p.type === 'image'
+        )
+        if (imagePart) {
+          imageUrl = imagePart.image_url?.url || imagePart.url || ''
+        }
+      }
+
+      // Fallback: content as plain string URL
+      if (!imageUrl && typeof messageContent === 'string' && messageContent.trim()) {
+        imageUrl = messageContent.trim()
+      }
+
+      if (!imageUrl) {
+        throw new Error(`No image returned. images=${JSON.stringify(messageImages)?.substring(0,300)}`)
+      }
     }
 
     return new Response(
