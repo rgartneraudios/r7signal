@@ -2,6 +2,11 @@ import { readTextFile, writeTextFile, readDir, exists, mkdir } from '@tauri-apps
 import { Command } from '@tauri-apps/plugin-shell'
 import { writeR9File } from './r9Store.js'
 
+// ─── Guardrail helper ─────────────────────────────────────────────────────────
+export async function pathExistsCochi(path) {
+  try { return await exists(path) } catch { return false }
+}
+
 // ─── OS detection ─────────────────────────────────────────────────────────────
 function getPlatform() {
   const ua = navigator.userAgent.toLowerCase()
@@ -229,14 +234,14 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
   const canRun   = permission === 'full'
 
   if (!canWrite && ['write_file', 'replace_in_file', 'append_to_file'].includes(name))
-    return '⛔ Bloqueado: permiso Solo Lectura. Cambia el nivel en Workspace.'
+    return { modelResult: '⛔ Bloqueado: permiso Solo Lectura. Cambia el nivel en Workspace.', diff: null }
   if (!canRun && name === 'run_command')
-    return '⛔ Bloqueado: activa Full Access para ejecutar run_command.'
+    return { modelResult: '⛔ Bloqueado: activa Full Access para ejecutar run_command.', diff: null }
 
   switch (name) {
 
     case 'read_file':
-      return await readTextFile(args.path)
+      return { modelResult: await readTextFile(args.path), diff: null }
 
     case 'read_file_chunk': {
       const text  = await readTextFile(args.path)
@@ -249,16 +254,21 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       const truncNote = (lines.length > end && (args.endLine == null || args.endLine > end))
         ? `\n[Truncado a ${MAX_CHUNK_LINES} líneas — pide otro rango con startLine=${end + 1} para continuar]`
         : ''
-      return `Lines ${start + 1}–${end} of ${lines.length}:\n` + chunk.join('\n') + truncNote
+      return { modelResult: `Lines ${start + 1}–${end} of ${lines.length}:\n` + chunk.join('\n') + truncNote, diff: null }
     }
 
     case 'write_file': {
       const parts = args.path.replace(/\\/g, '/').split('/')
       parts.pop()
       const dir = parts.join('/')
+      const fileExisted = await pathExistsCochi(args.path)
+      const before = fileExisted ? await readTextFile(args.path).catch(() => null) : null
       if (dir && !(await exists(dir))) await mkdir(dir, { recursive: true })
       await writeTextFile(args.path, args.content)
-      return `✅ Escrito: ${args.path}`
+      return {
+        modelResult: `✅ Escrito: ${args.path}`,
+        diff: { path: args.path, before, after: args.content },
+      }
     }
 
     case 'replace_in_file': {
@@ -269,33 +279,40 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         updated = original.split(args.oldText).join(args.newText)
       } else {
         const idx = original.indexOf(args.oldText)
-        if (idx === -1) return `⚠️ Texto no encontrado en ${args.path}`
+        if (idx === -1) return { modelResult: `⚠️ Texto no encontrado en ${args.path}`, diff: null }
         updated = original.slice(0, idx) + args.newText + original.slice(idx + args.oldText.length)
       }
-      if (updated === original) return `⚠️ Texto no encontrado en ${args.path}`
+      if (updated === original) return { modelResult: `⚠️ Texto no encontrado en ${args.path}`, diff: null }
       await writeTextFile(args.path, updated)
       const count = doAll ? original.split(args.oldText).length - 1 : 1
-      return `✅ ${count} reemplazo(s) en ${args.path}`
+      return {
+        modelResult: `✅ ${count} reemplazo(s) en ${args.path}`,
+        diff: { path: args.path, before: original, after: updated },
+      }
     }
 
     case 'append_to_file': {
       let current = ''
       try { current = await readTextFile(args.path) } catch {}
-      await writeTextFile(args.path, current + args.content)
-      return `✅ Contenido añadido a ${args.path}`
+      const after = current + args.content
+      await writeTextFile(args.path, after)
+      return {
+        modelResult: `✅ Contenido añadido a ${args.path}`,
+        diff: { path: args.path, before: current, after },
+      }
     }
 
     case 'list_dir': {
       const entries = await readDir(args.path)
-      return entries
-        .map(e => `${e.isDirectory ? '[DIR] ' : '[FILE]'} ${e.name}`)
-        .join('\n') || '(vacío)'
+      return {
+        modelResult: entries.map(e => `${e.isDirectory ? '[DIR] ' : '[FILE]'} ${e.name}`).join('\n') || '(vacío)',
+        diff: null,
+      }
     }
 
     case 'find_files': {
       const matches = await walkDir(args.dirPath, args.namePattern)
-      if (matches.length === 0) return '(sin resultados)'
-      return matches.join('\n')
+      return { modelResult: matches.length === 0 ? '(sin resultados)' : matches.join('\n'), diff: null }
     }
 
     case 'search_in_files': {
@@ -314,9 +331,9 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
           }
         } catch {}
       }
-      if (results.length === 0) return '(sin resultados)'
+      if (results.length === 0) return { modelResult: '(sin resultados)', diff: null }
       const note = results.length === 50 ? '\n[Máx. 50 resultados — refina con filePattern si necesitas más precisión]' : ''
-      return results.join('\n') + note
+      return { modelResult: results.join('\n') + note, diff: null }
     }
 
     case 'get_file_info': {
@@ -324,20 +341,20 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         const text   = await readTextFile(args.path)
         const lines  = text.split('\n').length
         const bytes  = new TextEncoder().encode(text).length
-        return JSON.stringify({ path: args.path, sizeBytes: bytes, sizeKB: (bytes / 1024).toFixed(1), lines })
+        return { modelResult: JSON.stringify({ path: args.path, sizeBytes: bytes, sizeKB: (bytes / 1024).toFixed(1), lines }), diff: null }
       } catch (err) {
-        return `ERROR: ${err.message}`
+        return { modelResult: `ERROR: ${err.message}`, diff: null }
       }
     }
 
     case 'file_exists': {
       const result = await exists(args.path)
-      return result ? `✅ Existe: ${args.path}` : `❌ No existe: ${args.path}`
+      return { modelResult: result ? `✅ Existe: ${args.path}` : `❌ No existe: ${args.path}`, diff: null }
     }
 
     case 'save_to_r9': {
       const entry = await writeR9File(workspaceRoot, 'r9', args.content, { source: 'cochi', label: args.label })
-      return `✅ Guardado en R9: ${entry.fileName}`
+      return { modelResult: `✅ Guardado en R9: ${entry.fileName}`, diff: null }
     }
 
     case 'run_command': {
@@ -348,12 +365,14 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       const output = await cmd.execute()
       const out = (output.stdout || '').trim()
       const err = (output.stderr || '').trim()
-      if (err && !out) return `STDERR: ${err}`
-      if (err) return `${out}\nSTDERR: ${err}`
-      return out || '(sin output)'
+      let modelResult
+      if (err && !out) modelResult = `STDERR: ${err}`
+      else if (err)     modelResult = `${out}\nSTDERR: ${err}`
+      else              modelResult = out || '(sin output)'
+      return { modelResult, diff: null }
     }
 
     default:
-      return `Herramienta desconocida: ${name}`
+      return { modelResult: `Herramienta desconocida: ${name}`, diff: null }
   }
 }

@@ -481,11 +481,7 @@ export default function AsunPanel({
   const [promptsError,  setPromptsError]  = useState(false)
   const [attachedFile, setAttachedFile] = useState(null)
   const [selectedLLMModel, setSelectedLLMModel] = useState(ASUN_MODELS[0].id)
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('asun-dark-mode') || 'DARK1')
-
-  useEffect(() => {
-    localStorage.setItem('asun-dark-mode', darkMode)
-  }, [darkMode])
+  const isReveladora = selectedLLMModel === 'google/gemini-3.8-flash'
   const messagesEndRef = useRef(null)
   const chatContainerRef = useRef(null)
   const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
@@ -943,7 +939,7 @@ export default function AsunPanel({
           letter-spacing: 0.02em; white-space: pre-wrap;
         }
         .asun-msg-bubble.usuario {
-          background: #0F1112; border: 1px solid rgba(154,160,166,0.15);
+          background: #15151C; border: 1px solid #201F23;
           align-self: flex-end;
         }
         .asun-msg-bubble.asistente {
@@ -985,14 +981,6 @@ export default function AsunPanel({
       }}>
         {/* Categorías + Submenú en la misma fila */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button
-            className={`asun-header-btn${darkMode === 'DARK1' ? ' active' : ''}`}
-            onClick={() => setDarkMode('DARK1')}
-          >DARK1</button>
-          <button
-            className={`asun-header-btn${darkMode === 'DARK2' ? ' active' : ''}`}
-            onClick={() => setDarkMode('DARK2')}
-          >DARK2</button>
           <div style={{ flex: 1 }} />
           {['llm', 'imagen', 'musica'].map(cat => (
             <button key={cat}
@@ -1050,26 +1038,43 @@ export default function AsunPanel({
                 flex: 1, padding: '40px 20px', gap: 10,
                 userSelect: 'none', pointerEvents: 'none',
               }}>
-                <div className="watermark-brand" style={{
+                <div className="watermark-brand" style={isReveladora ? {
+                backgroundImage: 'linear-gradient(135deg, #E8DCE8, #866EE0)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                fontSize: '1.5rem',
+              } : {
                 backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
                 fontSize: '1.5rem',
               }}>R7SIGNAL</div>
                 <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
-                <div className="watermark-name" style={{
+                <div className="watermark-name" style={isReveladora ? {
+                  backgroundImage: 'linear-gradient(135deg, #E8DCE8, #866EE0)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  textShadow: '0 0 60px rgba(134,110,224,0.3), 0 0 160px rgba(134,110,224,0.15)',
+                  fontSize: '1.9rem',
+                } : {
                   backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
                   textShadow: '0 0 60px rgba(250,97,219,0.4), 0 0 160px rgba(250,97,219,0.2)',
                   fontSize: '1.9rem',
                 }}>ASUN PANEL</div>
-                <div className="watermark-sub" style={{
+                <div className="watermark-sub" style={isReveladora ? {
+                  backgroundImage: 'linear-gradient(135deg, #E8DCE8, #866EE0)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  textShadow: '0 0 40px rgba(134,110,224,0.12), 0 0 100px rgba(134,110,224,0.06)',
+                  fontSize: '0.8rem',
+                } : {
                   backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
                   textShadow: '0 0 40px rgba(250,97,219,0.18), 0 0 100px rgba(250,97,219,0.1)',
-fontSize: '0.8rem',
+                  fontSize: '0.8rem',
                 }}>
 {category === 'llm'
                       ? <>Mis LLM están operando a máxima potencia conversacional.<br />
@@ -1098,7 +1103,7 @@ que está al lado de la rueda dentada</>
                 justifyContent: msg.rol === 'usuario' ? 'flex-end' : 'flex-start',
               }}>
                 <div className={`asun-msg-bubble ${msg.rol}`}
-                  style={darkMode === 'DARK2' ? {
+                  style={isReveladora ? {
                     background: 'linear-gradient(135deg, #0C0B0D, #1B151F, #0C0B0D)',
                     border: '1px solid rgba(200,162,216,0.2)',
                   } : undefined}
@@ -1107,11 +1112,11 @@ que está al lado de la rueda dentada</>
                     <span style={{
                       fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.15em',
                       textTransform: 'uppercase', display: 'block', marginBottom: 4,
-                      color: darkMode === 'DARK2' ? '#D4B8D8' : '#C8A2D8',
+                      color: isReveladora ? '#D4B8D8' : '#C8A2D8',
                       fontFamily: "'Space Grotesk', sans-serif",
                     }}>Asun</span>
                   )}
-                  <div style={darkMode === 'DARK2' ? {
+                  <div style={isReveladora ? {
                     color: '#E3D3E3',
                   } : {
                     backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',

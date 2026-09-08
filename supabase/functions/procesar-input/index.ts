@@ -27,27 +27,44 @@ function parsearR1R2R3(content: string): { r1: string; r2: string; r3: string; p
     return m ? content.indexOf(m[0]) : -1
   }
 
+  const findLabelEnd = (label: string): number => {
+    const re = new RegExp(`\\*{0,2}${label}:\\*{0,2}`, 'i')
+    const m = content.match(re)
+    return m ? content.indexOf(m[0]) + m[0].length : -1
+  }
+
+  const stripLabelLines = (text: string): string =>
+    text
+      .split('\n')
+      .filter(line => !/^\s*\*{0,2}R[123]:\*{0,2}/i.test(line))
+      .join('\n')
+      .trim()
+
   const idxR1 = findLabelIndex('R1')
   const idxR2 = findLabelIndex('R2')
   const idxR3 = findLabelIndex('R3')
-  const idxSave = findLabelIndex('R3_SAVE')
   const idxPrompt = content.indexOf('PROMPT_ASUN:')
 
   const promptAsunMatch = content.match(/PROMPT_ASUN:\s*([\s\S]*)$/)
   const promptAsun = promptAsunMatch ? promptAsunMatch[1].trim() : null
 
-  if (idxR1 === -1 || idxR2 === -1 || idxR3 === -1) {
-    const r3fallback = content.replace(/PROMPT_ASUN:[\s\S]*$/, '').trim()
-    return { r1: '', r2: '', r3: r3fallback, promptAsun }
+  const r3end = idxPrompt !== -1 ? idxPrompt : content.length
+
+  if (idxR2 === -1 && idxR3 === -1) {
+    const withoutPrompt = content.replace(/PROMPT_ASUN:[\s\S]*$/, '')
+    const cleaned = stripLabelLines(withoutPrompt)
+    return { r1: '', r2: '', r3: cleaned || 'Respuesta sin formato reconocido.', promptAsun }
   }
 
-  const r1raw = content.slice(idxR1, idxR2)
-  const r2raw = content.slice(idxR2, idxR3)
-  const r3end = idxSave !== -1 ? idxSave : (idxPrompt !== -1 ? idxPrompt : content.length)
-  const r3raw = content.slice(idxR3, r3end)
+  const r2end = idxR3 !== -1 ? idxR3 : r3end
+  const r1end = idxR2 !== -1 ? idxR2 : r2end
 
-  const r1 = clean(r1raw.replace(/^\*{0,2}R1:\*{0,2}/i, ''))
-  const r2 = clean(r2raw.replace(/^\*{0,2}R2:\*{0,2}/i, ''))
+  const r1raw = idxR1 !== -1 ? content.slice(idxR1, r1end) : ''
+  const r2raw = idxR2 !== -1 ? content.slice(idxR2, r2end) : ''
+  const r3raw = idxR3 !== -1 ? content.slice(idxR3, r3end) : content.slice(findLabelEnd('R2'), r3end)
+
+  const r1 = idxR1 !== -1 ? clean(r1raw.replace(/^\*{0,2}R1:\*{0,2}/i, '')) : ''
+  const r2 = idxR2 !== -1 ? clean(r2raw.replace(/^\*{0,2}R2:\*{0,2}/i, '')) : ''
   const r3 = clean(r3raw.replace(/^\*{0,2}R3:\*{0,2}/i, ''))
 
   return { r1, r2, r3, promptAsun }
