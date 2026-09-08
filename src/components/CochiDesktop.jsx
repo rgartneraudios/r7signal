@@ -2,11 +2,11 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
-import PlanViewer from './PlanViewer'
+import DiffViewer from './DiffViewer'
 import { STEP_EXECUTION_PROMPT, buildPlanContext } from '../lib/cochiPlanningPrompts'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES } from '../lib/modelPrices.js'
-import { COCHI_TOOLS, TOOL_ICONS, executeTool } from '../lib/cochiTools.js'
+import { COCHI_TOOLS, TOOL_ICONS, executeTool, pathExistsCochi } from '../lib/cochiTools.js'
 import { writeR9File } from '../lib/r9Store.js'
 
 
@@ -34,8 +34,8 @@ const appendToMemory = async (r1, r2) => {
 
 // ─── Modelos ──────────────────────────────────────────────────────────────────
 const COCHI_TIER_LABEL = {
-  'deepseek/deepseek-v4-flash-0731': 'Centinela',
-  'z-ai/glm-5.3-flash':             'Terminator',
+  '~deepseek/deepseek-v4-flash-latest': 'Centinela',
+  'deepseek/deepseek-v4-pro-0813':  'Terminator',
 }
 
 
@@ -107,11 +107,6 @@ export default function CochiDesktop({
   const [lmStudioModel,   setLmStudioModel]   = useState('local-model')
   const [userName,        setUserName]        = useState('')
   const [preferences,     setPreferences]     = useState(null)
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('cochi-dark-mode') || 'DARK1')
-
-  useEffect(() => {
-    localStorage.setItem('cochi-dark-mode', darkMode)
-  }, [darkMode])
   const [showGearMenu,    setShowGearMenu]    = useState(false)
   const gearRef                               = useRef(null)
   const messagesEndRef                        = useRef(null)
@@ -124,7 +119,6 @@ export default function CochiDesktop({
   const planRef = useRef(null)
   const originalMessageRef = useRef('')
   const sessionPairsRef = useRef([]) // acumula {r1,r2} de cada turno — se resetea en CLS y Guardar R7
-const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_results crudos de steps intermedios completados, para inyectarlos en el siguiente step del mismo plan. Se resetea en CLS.
   const chatContainerRef = useRef(null)
   const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
 
@@ -214,31 +208,38 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
-  function pushActivity(icon, label, detail = '') {
-    setActivity(prev => [...prev, { icon, label, detail, ts: Date.now() }])
+  function pushActivity(icon, label, detail = '', diff = null) {
+    setActivity(prev => [...prev, { icon, label, detail, diff, ts: Date.now() }])
   }
 
+  const stripLabelLines = (text) => text
+    .split('\n')
+    .filter(line => !/^\s*\*{0,2}R[123]:\*{0,2}/i.test(line))
+    .join('\n')
+    .trim()
+
   const parseR1R2R3 = (content) => {
-    const r1Match    = content.match(/\*{0,2}R1:\*{0,2}\s*([^\n]*?)(?=\s*\*{0,2}R2:|$)/m)
-    const r2Match    = content.match(/\*{0,2}R2:\*{0,2}\s*([^\n]*)/m)
-    const r3Match    = content.match(/\*{0,2}R3:\*{0,2}\s*([\s\S]*?)(?=\*{0,2}R3_SAVE:|$)/)
-    const r3SaveMatch= content.match(/\*{0,2}R3_SAVE:\*{0,2}\s*([\s\S]*?)$/)
+    const r1Match    = content.match(/\*{0,2}R1:\*{0,2}\s*([^\n]*?)(?=\s*\*{0,2}R2:|$)/im)
+    const r2Match    = content.match(/\*{0,2}R2:\*{0,2}\s*([^\n]*)/im)
+    const r3Match    = content.match(/\*{0,2}R3:\*{0,2}\s*([\s\S]*?)$/im)
     const r1 = r1Match ? r1Match[1].trim() : ''
     const r2 = r2Match ? r2Match[1].trim() : ''
     let r3   = ''
     if (r3Match)      { r3 = r3Match[1].trim() }
-    else if (r2Match) { const r2End = content.indexOf(r2Match[0]) + r2Match[0].length; r3 = content.slice(r2End).replace(/\*{0,2}R3_SAVE:\*{0,2}[\s\S]*$/, '').trim() }
-    else              { r3 = content }
-    return { r1, r2, r3, r3Save: r3SaveMatch ? r3SaveMatch[1].trim() : null }
+    else if (r2Match) { const r2End = content.indexOf(r2Match[0]) + r2Match[0].length; r3 = content.slice(r2End).trim() }
+    else              { r3 = stripLabelLines(content) || 'Respuesta sin formato reconocido.' }
+    return { r1, r2, r3 }
   }
 
   function pruneApiMessages(messages) {
-    const MAX_NON_SYSTEM = 12
+    const KEEP_RECENT = 14
     const systemMsgs = messages.filter(m => m.role === 'system')
     const nonSystem  = messages.filter(m => m.role !== 'system')
-    if (nonSystem.length <= MAX_NON_SYSTEM) return messages
-    const firstUser  = nonSystem[0]
-    const recent     = nonSystem.slice(-16)
+    if (nonSystem.length <= KEEP_RECENT + 1) return messages
+    const firstUser = nonSystem[0]
+    const rest       = nonSystem.slice(1)
+    const recent     = rest.slice(-KEEP_RECENT)
+    if (rest.length - recent.length <= 0) return messages
     const compressed = {
       role: 'user',
       content: '[MEMORY] Previous tool results compressed to save context. Continue task from current state.'
@@ -290,14 +291,23 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
             { role: 'system', content: planningPrompt },
             { role: 'user', content: userMessage }
           ],
-          max_tokens: 600,
+          max_tokens: 1400,
+          reasoning: { enabled: false },
           stream: false,
         })
       })
-
       if (!res.ok) throw new Error(`API ${res.status}`)
-
       const data = await res.json()
+      const finishReason = data.choices?.[0]?.finish_reason
+      if (finishReason === 'length') {
+        console.warn('generatePlan: respuesta cortada por max_tokens (finish_reason=length)')
+      }
+      console.log('TOKEN BREAKDOWN [planning]', {
+        prompt: data.usage?.prompt_tokens,
+        completion: data.usage?.completion_tokens,
+        reasoning: data.usage?.completion_tokens_details?.reasoning_tokens ?? 0,
+        total: data.usage?.total_tokens,
+      })
       const text = data.choices[0].message.content
 
       const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
@@ -311,6 +321,7 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
           status: 'pending',
           iterationsUsed: 0,
         }))
+        console.log('DEBUG GENERATED PLAN:', mappedSteps.map(s => s.description))
         syncPlan({
           taskSummary: parsed.taskSummary,
           steps: mappedSteps,
@@ -323,7 +334,7 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
         throw new Error('Invalid plan shape')
       }
     } catch (err) {
-      console.warn('generatePlan: fallback to 1-step plan')
+      console.warn('generatePlan: fallback to 1-step plan —', err.message)
       const fallback = {
         taskSummary: userMessage.slice(0, 100),
         steps: [{
@@ -336,6 +347,7 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
         currentStepIndex: 0,
         totalIterationsUsed: 0,
       }
+      console.log('DEBUG GENERATED PLAN:', fallback.steps.map(s => s.description))
       syncPlan(fallback)
       setPlanStatus('awaiting_confirmation')
       setMessages(prev => [...prev, { role: 'plan' }])
@@ -439,11 +451,13 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
 
     const controller = new AbortController()
     abortRef.current = controller
+    const cochiSessionId = `cochi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
     setLoading(true)
     setActivity([])
 
     try {
+      let apiMessages = null // conversación persistente para todo el plan — se arma UNA vez y se comprime al cerrar cada step, nunca se reconstruye desde cero.
       while (remainingIter > 0 && !controller.signal.aborted) {
         const currentPlan = planRef.current
         const trackSteps = currentPlan !== null
@@ -461,56 +475,51 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
           planRef.current.currentStepIndex = stepIndex
         }
 
-        const planContext = trackSteps ? buildPlanContext(planRef.current, stepIndex) : ''
+        const isLastStep = !trackSteps || stepIndex === currentPlan.steps.length - 1
 
-    const isLastStep = !trackSteps || stepIndex === currentPlan.steps.length - 1
+        const remoteSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
+        const sessionTotal = tokens + totalTokensAcc
+        const tokenAlert   = sessionTotal > 70000
+          ? '\nTOKEN_ALERT: Session context is large. If the user has not yet been informed, mention that saving R7 (session summary) is recommended before starting a new chat.'
+          : ''
 
-    const remoteSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
-    const sessionTotal = tokens + totalTokensAcc
-    const tokenAlert   = sessionTotal > 70000
-      ? '\nTOKEN_ALERT: Session context is large. If the user has not yet been informed, mention that saving R7 (session summary) is recommended before starting a new chat.'
-      : ''
+        const usesTwoPhaseFinal = trackSteps && isLastStep
+        const usesTechnicalPrompt = !isLastStep || usesTwoPhaseFinal
+        console.log('DEBUG STEP:', { trackSteps, isLastStep, usesTwoPhaseFinal, stepIndex, totalSteps: currentPlan?.steps?.length })
 
-    // Con plan multi-step, el step final tambi├®n ejecuta su parte t├®cnica sin personalidad;
-    // la personalidad se paga una sola vez, en la llamada de envoltorio separada (ver m├ís abajo).
-    const usesTwoPhaseFinal = trackSteps && isLastStep
-    const usesTechnicalPrompt = !isLastStep || usesTwoPhaseFinal
-    console.log('DEBUG STEP:', { trackSteps, isLastStep, usesTwoPhaseFinal, stepIndex, totalSteps: currentPlan?.steps?.length })
+        if (apiMessages === null) {
+          // Arranca la conversación (del plan, o del turno único si no hay plan) — UNA sola vez.
+          const baseSystemMessages = usesTechnicalPrompt
+            ? [
+                {
+                  role: 'system',
+                  content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).`
+                },
+                { role: 'system', content: STEP_EXECUTION_PROMPT },
+              ]
+            : [
+                {
+                  role: 'system',
+                  content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.\nSESSION_TOKENS: ${sessionTotal}${tokenAlert}`
+                },
+                { role: 'system', content: remoteSystem },
+              ]
+          apiMessages = [...baseSystemMessages, { role: 'user', content: originalMessageRef.current || '' }]
+        }
 
-    const systemMessages = usesTechnicalPrompt
-      ? [
-          { role: 'system', content: planContext },
-          {
+        if (trackSteps) {
+          apiMessages.push({
             role: 'system',
-            content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).`
-          },
-          { role: 'system', content: STEP_EXECUTION_PROMPT },
-        ]
-      : [
-          { role: 'system', content: planContext },
-          {
-            role: 'system',
-            content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.\nSESSION_TOKENS: ${sessionTotal}${tokenAlert}`
-          },
-          { role: 'system', content: remoteSystem },
-        ]
+            content: `NEXT STEP (${stepIndex + 1}/${currentPlan.steps.length}): ${step.description}`
+          })
+        }
 
-    const priorArtifacts = trackSteps
-      ? stepArtifactsRef.current.filter(a => a.stepId !== step.id)
-      : []
-    const artifactsMessage = priorArtifacts.length > 0
-      ? [{
-          role: 'system',
-          content: `PRIOR STEP RESULTS (raw data from earlier steps in this plan — use directly, do not re-fetch):\n\n${priorArtifacts.map(a => a.content).join('\n\n---\n\n')}`
-        }]
-      : []
-
-        let apiMessages = [...systemMessages, ...artifactsMessage, { role: 'user', content: originalMessageRef.current || '' }]
+        const stepStartIndex = apiMessages.length
         let stepTokens = 0
         let innerIter = 0
         const MAX_INNER = 15
         let stepCompleted = false
-        let stepToolResultsAcc = []
+        let stepResultSummary = 'Completado'
 
         const toolCallCounts = new Map()
         const REPEAT_WARN_THRESHOLD = 3
@@ -523,6 +532,7 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
 
           const isWrapperCall = false
 
+          console.log(`DEBUG APIMESSAGES [step ${stepIndex + 1} / iter ${innerIter}]`, apiMessages.map(m => ({ role: m.role, preview: (m.content || '').toString().slice(0, 80) })))
           const res = await fetch(apiUrl, {
             method: 'POST',
             signal: controller.signal,
@@ -535,6 +545,7 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
               model: modelSlug, stream: false,
               ...(isWrapperCall ? {} : { tools: COCHI_TOOLS, tool_choice: 'auto' }),
               messages: apiMessages,
+              ...(isLocal || isLmStudio ? {} : { usage: { include: true }, session_id: cochiSessionId }),
             })
           })
 
@@ -544,6 +555,13 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
           if (data.usage?.total_tokens) {
             stepTokens += data.usage.total_tokens
             totalTokensAcc += data.usage.total_tokens
+            console.log(`TOKEN BREAKDOWN [step ${stepIndex + 1}]`, {
+              prompt: data.usage.prompt_tokens,
+              completion: data.usage.completion_tokens,
+              reasoning: data.usage.completion_tokens_details?.reasoning_tokens ?? 0,
+              cached: data.usage.prompt_tokens_details?.cached_tokens ?? 0,
+              total: data.usage.total_tokens,
+            })
           }
 
           const choice = data.choices?.[0]
@@ -609,20 +627,11 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
               const failedMatch = rawContent.match(/\[STEP_FAILED:\s*(.*?)\]/)
               const replanMatch = rawContent.match(/\[NEED_REPLAN:\s*(.*?)\]/)
 
-              const saveArtifact = () => {
-                if (stepToolResultsAcc.length > 0) {
-                  stepArtifactsRef.current.push({
-                    stepId: step.id,
-                    content: stepToolResultsAcc.map(t => t.content).join('\n\n')
-                  })
-                }
-              }
-
               if (completeMatch) {
                 const extractedResult = completeMatch[1].trim()
                 console.log('DEBUG COMPLETE MATCH:', { extractedResult, usesTwoPhaseFinal })
                 updateStepStatus(step.id, 'completed', extractedResult)
-                saveArtifact()
+                stepResultSummary = extractedResult
 
                 if (usesTwoPhaseFinal) {
                   console.log('DEBUG ENTERING WRAPPER CALL')
@@ -658,6 +667,12 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
                     if (wrapperData.usage?.total_tokens) {
                       stepTokens += wrapperData.usage.total_tokens
                       totalTokensAcc += wrapperData.usage.total_tokens
+                      console.log('TOKEN BREAKDOWN [wrapper]', {
+                        prompt: wrapperData.usage.prompt_tokens,
+                        completion: wrapperData.usage.completion_tokens,
+                        reasoning: wrapperData.usage.completion_tokens_details?.reasoning_tokens ?? 0,
+                        total: wrapperData.usage.total_tokens,
+                      })
                     }
                     const wrapperRaw = wrapperData.choices?.[0]?.message?.content || ''
                     console.log('WRAPPER RAW:', wrapperRaw)
@@ -680,6 +695,7 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
               } else if (failedMatch) {
                 const reason = failedMatch[1].trim()
                 updateStepStatus(step.id, 'failed', reason)
+                stepResultSummary = `FAILED: ${reason}`
                 if (usesTwoPhaseFinal) {
                   setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${reason}` }])
                 }
@@ -692,10 +708,12 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
                 } else {
                   await replanStep(step, extractedReason)
                 }
+                stepResultSummary = `REPLANNED: ${extractedReason}`
                 stepCompleted = true
                 break
               } else {
                 updateStepStatus(step.id, 'failed', 'No control signal emitted')
+                stepResultSummary = 'FAILED: No control signal emitted'
                 if (usesTwoPhaseFinal) {
                   setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ El paso final no emitió una señal de control válida.' }])
                 }
@@ -711,18 +729,39 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
             const name = toolCall.function.name
             let args = {}
             try { args = JSON.parse(toolCall.function.arguments) } catch {}
+
+            console.log(`DEBUG TOOL CALL [step ${trackSteps ? stepIndex + 1 : '—'} / iter ${innerIter}]`, { name, args })
+
+            // ── Guardrail: operaciones destructivas requieren confirmación ────
+            let blocked = false
+            if (name === 'run_command') {
+              blocked = !window.confirm(`Cochi quiere EJECUTAR:\n${args.command}\n\n¿Confirmás?`)
+            } else if (name === 'write_file' && await pathExistsCochi(args.path)) {
+              blocked = !window.confirm(`Cochi quiere SOBREESCRIBIR:\n${args.path}\n\n¿Confirmás?`)
+            }
+            if (blocked) {
+              pushActivity(TOOL_ICONS[name] || '🔧', name, 'cancelado')
+              toolResults.push({ role: 'tool', tool_call_id: toolCall.id, content: 'Cancelado por el usuario' })
+              continue
+            }
+
             const icon = TOOL_ICONS[name] || '🔧'
             const shortLabel = name === 'run_command'
               ? (args.command?.slice(0, 60) + (args.command?.length > 60 ? '…' : ''))
               : (args.path?.split('\\').pop() || args.path || name)
-            pushActivity(icon, name, shortLabel)
-            let result = ''
-            try { result = await executeTool(name, args, workspace.permission, workspace.path) }
-            catch (err) { result = `ERROR: ${err.message}` }
-            toolResults.push({ role: 'tool', tool_call_id: toolCall.id, content: String(result) })
+            let modelResult = ''
+            let diff = null
+            try {
+              const execResult = await executeTool(name, args, workspace.permission, workspace.path)
+              modelResult = execResult.modelResult
+              diff = execResult.diff
+            } catch (err) { modelResult = `ERROR: ${err.message}` }
+            pushActivity(icon, name, shortLabel, diff)
+            if (diff) setMessages(prev => [...prev, { role: 'diff', diff }])
+            console.log(`DEBUG TOOL RESULT [step ${trackSteps ? stepIndex + 1 : '—'} / iter ${innerIter}]`, { name, modelResult })
+            toolResults.push({ role: 'tool', tool_call_id: toolCall.id, content: String(modelResult) })
           }
           apiMessages.push(...toolResults)
-          stepToolResultsAcc.push(...toolResults)
 
           // Guard anti-repetición: detecta si el modelo repite la misma llamada sin avanzar
           let maxRepeatSignature = null
@@ -756,6 +795,13 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
           }
 
           apiMessages = pruneApiMessages(apiMessages)
+        }
+
+        if (trackSteps && stepCompleted) {
+          // Colapsa el diálogo técnico crudo de este step a un solo mensaje resumen.
+          apiMessages = apiMessages.slice(0, stepStartIndex).concat([
+            { role: 'assistant', content: `[STEP ${stepIndex + 1} RESULT: ${stepResultSummary}]` }
+          ])
         }
 
         if (!stepCompleted) {
@@ -810,7 +856,11 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
 
   // ─── Guard de intención — clasificador ligero ──────────────────────────
   const needsPlanning = (message) => {
+    // Normaliza acentos (NFD + strip de marcas diacríticas) para que el voseo
+    // argentino ("creá", "ejecutá", "borrá") calce con los verbos base de las
+    // listas de abajo sin tener que enumerar cada conjugación por separado.
     const msg = message.toLowerCase().trim()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
     // Conversational — no planning needed
     const conversational = [
@@ -870,12 +920,8 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
     originalMessageRef.current = sent
     setMessages(prev => [...prev, { role: 'user', content: sent }])
 
-    if (needsPlanning(sent)) {
-      await generatePlan(sent)
-    } else {
-      setPlanStatus('idle')
-      await executeAllSteps()
-    }
+    setPlanStatus('idle')
+    await executeAllSteps()
   }
 
   function confirmPlan() {
@@ -903,7 +949,6 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
       sessionPairsRef.current = []
-      stepArtifactsRef.current = []
       onResetUsage?.('cochi')
     }
   }
@@ -919,7 +964,6 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
       sessionPairsRef.current = []
-      stepArtifactsRef.current = []
       onResetUsage?.('cochi')
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ No se pudo guardar R7: ${err.message}` }])
@@ -944,6 +988,7 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
     setR9Btn(null)
   }
 
+  const isTerminator = selectedModel === 'deepseek/deepseek-v4-pro-0813'
   const activeModelPrice = MODEL_PRICES[selectedModel]
   const activeModelLabel = COCHI_MODELS.find(m => m.id === selectedModel)?.label
     ?? (selectedModel === 'ollama' ? 'Ollama' : 'LM Studio')
@@ -968,30 +1013,6 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
         padding: '10px 14px',
         display: 'flex', alignItems: 'center',
       }}>
-        <button
-          onClick={() => setDarkMode('DARK1')}
-          style={{
-            padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
-            fontFamily: "'Orbitron', sans-serif", fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em',
-            background: darkMode === 'DARK1' ? '#2a2a35' : 'transparent',
-            border: '1px solid',
-            borderColor: darkMode === 'DARK1' ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
-            color: darkMode === 'DARK1' ? '#C0C0C0' : 'rgba(207,68,77,0.5)',
-            transition: 'all 0.2s', marginRight: 4,
-          }}
-        >DARK1</button>
-        <button
-          onClick={() => setDarkMode('DARK2')}
-          style={{
-            padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
-            fontFamily: "'Orbitron', sans-serif", fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em',
-            background: darkMode === 'DARK2' ? '#2a2a35' : 'transparent',
-            border: '1px solid',
-            borderColor: darkMode === 'DARK2' ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
-            color: darkMode === 'DARK2' ? '#C0C0C0' : 'rgba(207,68,77,0.5)',
-            transition: 'all 0.2s', marginRight: 4,
-          }}
-        >DARK2</button>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
           {COCHI_MODELS.map(m => (
             <button
@@ -1088,21 +1109,38 @@ const stepArtifactsRef = useRef([]) // acumula {stepId, content} con tool_result
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               flex: 1, padding: '40px 20px', gap: 10, userSelect: 'none', pointerEvents: 'none',
             }}>
-              <div className="watermark-brand" style={{
+              <div className="watermark-brand" style={isTerminator ? {
+                backgroundImage: 'linear-gradient(135deg, #E3A983, #B9733F)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                fontSize: '1.5rem',
+              } : {
                 backgroundImage: 'linear-gradient(135deg, #CF444D, #C0C0C0)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
                 fontSize: '1.5rem',
               }}>R7SIGNAL</div>
               <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
-              <div className="watermark-name" style={{
+              <div className="watermark-name" style={isTerminator ? {
+                backgroundImage: 'linear-gradient(135deg, #E3A983, #B9733F)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                textShadow: '0 0 60px rgba(185,115,63,0.4), 0 0 160px rgba(185,115,63,0.2)',
+                fontSize: '1.9rem',
+              } : {
                 backgroundImage: 'linear-gradient(135deg, #CF444D, #C0C0C0)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
                 textShadow: '0 0 60px rgba(71,115,150,0.5), 0 0 160px rgba(71,115,150,0.2)',
                 fontSize: '1.9rem',
               }}>COCHI DESKTOP</div>
-              <div className="watermark-sub" style={{
+              <div className="watermark-sub" style={isTerminator ? {
+                backgroundImage: 'linear-gradient(135deg, #E3A983, #B9733F)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                textShadow: '0 0 40px rgba(185,115,63,0.24), 0 0 100px rgba(185,115,63,0.12)',
+                fontSize: '0.8rem',
+              } : {
                 backgroundImage: 'linear-gradient(135deg, #CF444D, #C0C0C0)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -1133,29 +1171,25 @@ Operación en curso. A la espera de órdenes.
           )}
 
           {messages.map((msg, idx) => (
-            msg.role === 'plan' ? (
-              executionPlan ? (
-                <PlanViewer
-                  key={`plan-${idx}`}
-                  plan={executionPlan}
-                  planStatus={planStatus}
-                  onConfirm={confirmPlan}
-                  onCancel={cancelPlan}
-                />
-              ) : null
+            msg.role === 'diff' ? (
+              <DiffViewer key={`diff-${idx}`} diff={msg.diff} />
             ) : msg.role === 'user' ? (
-              <div key={idx} className="cd-message-enter" style={darkMode === 'DARK2' ? {
+              <div key={idx} className="cd-message-enter" style={isTerminator ? {
                 background: 'linear-gradient(135deg, #171716, #12100F, #24282B)',
                 border: '1px solid rgba(200,162,216,0.2)',
                 borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               } : {
-                background: '#0C1314', border: '1px solid rgba(107,158,196,0.15)',
+                background: '#13151A', border: '1px solid rgba(107,158,196,0.15)',
                 borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               }}>
                 <div style={{ fontSize: '0.92rem', lineHeight: 1.5, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                  ...(darkMode === 'DARK2' ? { color: '#D9C8C5' } : {
+                  ...(isTerminator ? {
+                    backgroundImage: 'linear-gradient(135deg, #E3A983, #B9733F)',
+                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  } : {
                     backgroundImage: 'linear-gradient(135deg, #E36873, #C0C0C0)',
                     WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
@@ -1165,9 +1199,9 @@ Operación en curso. A la espera de órdenes.
                 </div>
               </div>
             ) : (
-              <div key={idx} className="cd-message-enter" style={darkMode === 'DARK2' ? {
+              <div key={idx} className="cd-message-enter" style={isTerminator ? {
                 background: 'linear-gradient(135deg, #171716, #12100F, #24282B)',
-                border: '1px solid rgba(200,162,216,0.2)', borderLeft: '3px solid #C8A2D8',
+                border: '1px solid rgba(201,128,84,0.4)', borderLeft: '3px solid #C98054',
                 borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               } : {
@@ -1176,12 +1210,16 @@ Operación en curso. A la espera de órdenes.
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
               }}>
                 <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase',
-                  color: darkMode === 'DARK2' ? '#D4B8D8' : '#6A7A8A',
+                  color: isTerminator ? '#D4B8D8' : '#6A7A8A',
                 }}>
                   COCHI
                 </div>
                 <div style={{ fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
-                  ...(darkMode === 'DARK2' ? { color: '#D9C8C5' } : {
+                  ...(isTerminator ? {
+                    backgroundImage: 'linear-gradient(135deg, #E3A983, #B9733F)',
+                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  } : {
                     backgroundImage: 'linear-gradient(135deg, #E36873, #C0C0C0)',
                     WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
@@ -1283,12 +1321,14 @@ Operación en curso. A la espera de órdenes.
           {loading && <span className="cd-spinner" />}
           <span style={{
             fontWeight: 700,
-            backgroundImage:'linear-gradient(135deg, #E36873 15%, #C0C0C0 85%)',
+            ...(isTerminator
+              ? { backgroundImage:'linear-gradient(135deg, #E3A983 15%, #B9733F 85%)' }
+              : { backgroundImage:'linear-gradient(135deg, #CF444D 15%, #C0C0C0 85%)' }),
             WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
             backgroundClip:'text',
           }}>{selectedModel}</span>
           {activeModelPrice && (
-            <span style={{ color: 'rgba(207,68,77,0.6)', fontSize: '0.55rem' }}>
+            <span style={{ color: isTerminator ? 'rgba(201,128,84,0.8)' : 'rgba(207,68,77,0.75)', fontSize: '0.55rem' }}>
               · {activeModelPrice.inputPerM}$/M in · {activeModelPrice.outputPerM}$/M out
             </span>
           )}
