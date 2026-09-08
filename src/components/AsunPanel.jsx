@@ -435,15 +435,6 @@ function AsunImagenFlow({ submenu, onHandoff }) {
             <img src={resultUrl} alt="Resultado" style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid #201F23' }} />
             <div style={{ marginTop: 14, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
               <WizardBtn label="Nueva imagen" onClick={() => { reset(); setUiState('path_select') }} />
-              {onHandoff && (
-                <button onClick={() => onHandoff({ type: 'image', content: resultUrl, brief: 'Guardar imagen generada por Asun' })}
-                  style={{
-                    padding: '12px 20px', background: 'rgba(107,158,196,0.1)',
-                    border: '1px solid rgba(107,158,196,0.4)', borderRadius: 10,
-                    color: '#6B9EC4', cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif",
-                    fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.08em',
-                  }}>→ Enviar a Cochi</button>
-              )}
             </div>
           </div>
         )}

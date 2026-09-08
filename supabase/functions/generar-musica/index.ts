@@ -9,9 +9,11 @@ const corsHeaders = {
 
 interface RequestBody {
   prompt_musica: string
-  menu_numero: number
-  user_id: string
+  modelo_id: string
+  user_id: string | null
 }
+
+const DEFAULT_USER_ID = 'e18327da-32e9-415c-9bf2-dfb00d64565c' // Fase 0 — sin login, único usuario (Roberto)
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -20,11 +22,12 @@ serve(async (req) => {
 
   try {
     const body: RequestBody = await req.json()
-    const { prompt_musica, menu_numero, user_id } = body
+    const { prompt_musica, modelo_id } = body
+    const user_id = body.user_id || DEFAULT_USER_ID
 
-    if (!prompt_musica || !menu_numero || !user_id) {
+    if (!prompt_musica || !modelo_id) {
       return new Response(
-        JSON.stringify({ error: 'prompt_musica, menu_numero, and user_id are required' }),
+        JSON.stringify({ error: 'prompt_musica and modelo_id are required' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
@@ -37,18 +40,7 @@ serve(async (req) => {
     const apiKey = Deno.env.get('OPENROUTER_API_KEY')
     if (!apiKey) throw new Error('Missing OPENROUTER_API_KEY')
 
-    // Fetch Asun·Música model slug for this menu
-    const { data: asunItem, error: asunError } = await supabase
-      .from('menu_items')
-      .select('modelo_id')
-      .eq('menu_numero', menu_numero)
-      .eq('tipo', 'asun_musica')
-      .limit(1)
-      .single()
-
-    if (asunError || !asunItem) throw new Error('Asun·Música model not found for this menu')
-
-    const modelId = asunItem.modelo_id
+    const modelId = modelo_id
 
     const systemPrompt = `You are Asun, an expert music generation model. 
 Create a detailed music generation prompt based on the user's description. 

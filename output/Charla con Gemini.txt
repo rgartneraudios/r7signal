@@ -1,0 +1,173 @@
+YO
+Gemini necesito cambiar dos conceptos descriptivos de un personaje, Antes estaba basado en GLados de Portal y utilizaba, "Sigilosa" y "Afilada" para referirme a suave y fuerte, pero ahora el personaje esta basado en el Oráculo de Matrix entonces no quedan bien Sigilosa y Afilada, lo tengo que cambiar. Sigilosa quizas pero afilada es puro Glados 
+
+
+GEMINI
+Para un personaje inspirado en el Oráculo de Matrix, el lenguaje debe alejarse de la tensión mecánica, fría o amenazante (como GlaDOS) e ir hacia la certeza serena, el misticismo cotidiano, la calidez maternal y lo inexorable.
+
+Aquí tienes pares de conceptos alternativos para sustituir la dualidad suave / fuerte:
+
+Opciones principales (Conceptos sugeridos)
+
+Envolvente / Inexorable
+
+Sustituye a Sigilosa: Envolvente. No busca esconderse; su presencia te rodea de forma natural, cómoda y reconfortante.
+
+Sustituye a Afilada: Inexorable. Su firmeza no corta ni heri; simplemente es. La fuerza del destino que ocurre sí o sí, sin alzar la voz.
+
+Pausada / Evidente
+
+Sustituye a Sigilosa: Pausada. Revela las cosas a su propio ritmo, ofreciendo espacio para asimilar la información (como ofrecer un caramelo o una galleta).
+
+Sustituye a Afilada: Evidente. La fuerza reside en la verdad irrefutable. No necesita atacar porque la realidad termina dándole la razón.
+
+Sutil / Absoluta
+
+Sustituye a Sigilosa: Sutil. Trabaja en los matices, la intuición y las pequeñas decisiones que parecen insignificantes.
+
+Sustituye a Afilada: Absoluta. Cuando muestra autoridad, no deja margen de duda ni réplica.
+
+Acogedora / Inamovible
+
+Sustituye a Sigilosa: Acogedora. Suavidad basada en la empatía y la cercanía doméstica.
+
+Sustituye a Afilada: Inamovible. Fuerza rooted en la convicción; nada de lo que ocurra puede alterar su centro.
+
+¿Cuál de estos matices encaja mejor con la función que cumple este personaje en tu historia?
+
+
+YO
+Quedó Intuitiva / Reveladora
+
+No gracias, ya lo tengo cambiado, gracias Gemini. Lo que necesito es concretar con estos dos modelos ciertas tareas que quiero que me orientes. En el prompt especifiqué ciertas cosas aunque quiero que me orientes . Te paso el contexto?
+
+GEMINI
+¡Claro que sí, pásame el contexto cuando quieras!
+
+Muestra cómo tienes estructurado el flujo o las instrucciones y lo revisamos juntos para afinar el reparto de tareas entre el rol Intuitivo y el Revelador. ¿Qué parte del proceso te gustaría optimizar primero?
+
+YO
+Como yo no quiero usar modelos muy potentes que consumen muchos tokens y dinero, lo que quiero es escalar con Intuitiva y Reveladora la hoja de ruta, el mapa para que modelos especiales en código pero pequeños hagan cosas. O sea, en ves de pedirle a Fable 5.1 que me haga un video juego en 3D completo con un prompt sin tanto detalle, lo que quiero es suplantar eso con una hoja de ruta hecha por Intuitiva y Reveladora para que los modelos de código lo ejecuten el plan por separado. 
+
+
+GEMINI
+Tiene todo el sentido del mundo. Es la arquitectura clásica de Orquestador-Ejecutor (Plan & Execute), y para optimizar costos/tokens es la estrategia más inteligente. En lugar de pagar por un modelo de razonamiento gigante que intente "imaginar" todo el código de un tirón, usas tu dupla eficiente para construir un plano de ingeniería quirúrgico y luego se lo repartes a modelos de código especializados y baratos.
+
+Distribución de responsabilidades en la Hoja de Ruta
+Para que los modelos ejecutores no alucinen ni se queden a medias, el plan debe dividirse en 3 fases de abstracción:
+
+[Entrada/Idea del usuario]
+         │
+         ▼
+ 1. INTUITIVA (Lectura e Intención)
+    ↳ Desglosa requerimientos, detecta vacíos y estructura módulos
+         │
+         ▼
+ 2. REVELADORA (Arquitectura y Contratos)
+    ↳ Define la Hoja de Ruta, archivos, interfaces y orden de ejecución
+         │
+         ▼
+ 3. MODELOS CÓDIGO (Ejecución Aislada)
+    ↳ Reciben 1 tarea con contexto cerrado -> Devuelven código limpio
+    
+    Cómo debe procesar cada agente la Hoja de Ruta1. El rol Intuitivo (Análisis y Desglose Modular)Objetivo: Recibir la idea bruta ("Quiero un videojuego 3D de naves en la web") y convertirla en una lista de necesidades técnicas.Salida que debe generar:Scope técnico: Motor (Three.js/Babylon), físicas, estado, assets requeridos.Fronteras: Qué queda dentro del MVP y qué no.Listado de Subsistemas: Control de nave, loop de juego, spawner de enemigos, renderizador, UI/HUD.2. El rol Revelador (Contratos de Código y Plan de Trabajo)Objetivo: Convertir los subsistemas de la etapa Intuitiva en especificaciones atómicas para los modelos ejecutores.Salida que debe generar:Estructura de archivos exacta: Nombres de ficheros y exportaciones esperadas.Contratos / Interfaces: Tipos de datos que se pasan entre módulos para que el modelo ejecutante no invente nombres de variables ni métodos.Secuencia de Pasos Interdependientes: Orden estricto de construcción (Paso 1: Configurar escena base; Paso 2: Crear clase Player Controls que reciba la cámara del Paso 1, etc.).La regla de oro para los Prompts de los Modelos EjecutoresCuando le pases las tareas de la hoja de ruta a los modelos pequeños de código, la instrucción debe contener únicamente 3 elementos:Contexto inmediato: Las interfaces/contratos creados por el agente Revelador (nada más del resto del proyecto).Entrada/Salida esperada: Qué funciones o clases debe exportar ese archivo concreto.Restricción estricta: "Implementa ÚNICAMENTE este archivo. No agregues librerías externas no especificadas ni asumas lógica fuera de este contrato."
+    
+    YO
+    No no, espera
+    
+    GEMINI
+    Yo tengo una App que tiene tres agentes, una hace exclusivo research asi que no aplica o colabora de afuera, y luego tengo a Asun y Cochi. Asun tiene un modelo base "Intuitiva" y un modelo Plus "Reveladora" a elección , y Cochi lo mismo pero para código y con otro perfil, es el ejecutor. Ambos los tengo en local y se comunican por detrás, o es posible que se comuniquen no automáticamente pero si a elección del usuario.
+
+Entonces: Si quiero desarrollar un juego en 3D que requieren tareas pesadas y planificaciones serias para que no haya errores, y NO usar un modelo pesado como Astra o Fable 5.1, propongo usar mi App R7Signal para desarrollarlo por partes con modelos más livianos pero muy eficientes, por pedazos.
+
+Pero necesito que Asun haga el trabajo de planificación por partes. Ejemplo, primero definimos el lenguaje, y el mapa ....etc Asun puede ser Intuitiva o Reveladora dependiendo de la complegidad del proyecto, pero tiene que desarrollar esos prompts específicos para que Cochi los vaya metiendo. Pillas el rollo? 
+
+
+GEMINI
+
+Entendido perfectamente. El enfoque es impecable: en lugar de gastar créditos y contexto en un modelo omnisciente que trate de escupir todo el código de un tirón (y termine alucinando), usas a Asun como la mente arquitecta que trocea el problema en especificaciones quirúrgicas, y a Cochi como el motor ejecutor que procesa esos prompts pequeños y específicos.
+
+Al meter R7Signal en la ecuación, puedes almacenar las entregas o el contexto técnico intermedio sin saturar la memoria de trabajo de las ventanas de chat.
+
+Cómo se distribuye la responsabilidad en tu flujo
+Fase de Asun (Planificación y Desglose):
+
+Modo Intuitivo (Modelo Base): Ideal si la tarea es sencilla o una iteración rápida. Captura la idea global y genera el primer borrador de la hoja de ruta.
+
+Modo Revelador (Modelo Plus): Se activa para la arquitectura inicial del juego 3D. Define la pila tecnológica (Three.js, Babylon.js, WebGL, etc.), el motor de físicas, la arquitectura de archivos y los contratos entre módulos.
+
+Salida de Asun: No genera código del juego. Su producto final es un prompt de ejecución estructurado y atómico listo para enviarse a Cochi.
+
+Fase de Cochi (Ejecución de Código):
+
+Modo Intuitivo / Plus (según complejidad del archivo): Recibe el prompt específico que redactó Asun.
+
+Regla de Cochi: Solo se enfoca en resolver un componente a la vez (ej. Controlador de cámara orbital, Loop de render y luces, Spawner de asteroides).
+
+Salida de Cochi: Código funcional listo para integrarse en el proyecto o subirse a R7Signal.
+
+Esquema del Prompt que Asun debe generar para Cochi
+Para que Cochi no cometa errores de integración, el prompt que Asun redacte para cada paso debe seguir este patrón rígido:
+
+Objetivo de la tarea: Qué módulo se va a construir en este paso concreto.
+
+Dependencias previas: Qué clases, variables o eventos creados en pasos anteriores debe asumir que ya existen.
+
+Contrato / Interfaz: Nombres exactos de funciones, props o métodos que ese código DEBE exponer hacia el resto del juego.
+
+Entregable: Archivo único con código limpio, sin explicaciones extensas ni rellenos.
+
+Ejemplo de flujo para un Juego 3D
+Paso 1 (Asun): Define la pila tecnológica y redacta el Prompt 1 para Cochi: "Crea el boilerplate base HTML/JS con el lienzo de Canvas, escena de Three.js y el bucle de animación principal."
+
+Paso 1 (Cochi): Ejecuta el Prompt 1 y entrega el archivo scene.js.
+
+Paso 2 (Asun): Toma lo construido y redacta el Prompt 2 para Cochi: "Utilizando la escena de scene.js, crea una clase Player que cargue una geometría 3D y responda a las teclas WASD."
+
+Paso 2 (Cochi): Ejecuta el Prompt 2 centrándose únicamente en esa lógica.
+
+De esta forma, mantienes a Cochi en una franja de consumo de tokens muy baja y con cero margen de desviación respecto a la arquitectura global.
+
+
+YO
+
+Y esto sería como un Skill que debería meter a Asun? o sea Promt con esteroides a usar cuando requiera trabajo específico como estos? Entonces el usuario sabe que si quiere desarrollar de a poco X proyecto sabe si tirar de "Promt Proyecto" o caso contrario usar el Standard que tengo en la App? 
+
+
+GEMINI
+
+Exacto, lo has clavado. Es la forma más limpia y mantenible de resolverlo.
+
+Si metes esa capacidad en el prompt estándar de Asun, terminarás inflando el contexto para conversaciones cotidianas y desperdiciando tokens innecesariamente. Crear esto como una Skill / Modo "Prompt Proyecto" le da al usuario el control total:
+
+Modo Standard (Por defecto): Asun responde, sugiere ideas, investiga y conversa de forma ágil y directa.
+
+Skill "Prompt Proyecto" (Trigger / Activación): Asun cambia automáticamente su mentalidad. Deja de responder como un chatbot común y adopta el rol de Arquitecta de Software / Diseñadora de Prompts para Cochi.
+
+Cómo funciona la Skill "Prompt Proyecto" en la App
+Cuando el usuario activa este modo (mediante un selector en la UI o un comando/botón), el prompt de sistema de Asun se enriquece con estas reglas específicas:
+
+ROL: Arquitecta de Software y Generadora de Prompts para Cochi.
+OBJETIVO: Desglosar proyectos complejos en pasos atómicos y redactar la instrucción exacta (Prompt) que el modelo ejecutor (Cochi) debe recibir en cada fase.
+
+REGLAS DE ACTUACIÓN:
+1. NUNCA generes el código final del proyecto. Tu producto es el PLAN y los PROMPTS DE INSTRUCCIÓN para Cochi.
+2. Analiza el estado actual del proyecto (almacenado o provisto por el usuario/R7Signal).
+3. Determina el SIGUIENTE paso lógico y redacta un "Prompt de Ejecución para Cochi".
+4. El prompt generado para Cochi debe incluir siempre:
+   - Módulo a construir.
+   - Contrato de datos/interfaces previas.
+   - Restricciones (solo ese código, sin librerías no especificadas).
+   
+   La Experiencia de Usuario (UX en tu App)
+El usuario activa la Skill: Selecciona "Modo Proyecto / Planificador".
+
+Plantea la idea: "Quiero un juego 3D de naves tipo arcade."
+
+Asun (Modo Reveladora): Genera la Hoja de Ruta general y te entrega ÚNICAMENTE el Prompt 1 en una caja formateada (listo para copiar o enviar directamente a Cochi en el backend/interfaz).
+
+Cochi ejecuta: El usuario o la app le manda ese prompt a Cochi, quien devuelve el archivo/módulo listo.
+
+Siguiente iteración: El usuario le confirma a Asun: "Paso 1 completado (o pegas el resultado en R7Signal). Dame el Prompt 2", y Asun genera la instrucción para el siguiente bloque.
+
+De esta forma la interfaz queda súper clara, no mezclas comportamientos y aseguras que Cochi reciba siempre prompts hiper-específicos y optimizados para modelos livianos.
