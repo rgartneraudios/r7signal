@@ -14,9 +14,9 @@ const OR_BASE       = 'https://openrouter.ai/api/v1'
 
 // ─── Modelos ──────────────────────────────────────────────────────────────────
 const MODELS = {
-  llm:    { occidente: 'google/gemini-3.8-flash', asia: 'z-ai/glm-5.3-flash' },
+  llm:    { occidente: 'google/gemini-3.8-flash', asia: 'deepseek/deepseek-v4-flash-vision-exp' },
   imagen: { occidente: 'x-ai/grok-imagine-image-quality', asia: 'bytedance-seed/seedream-5-0-pro' },
-  musica: { chat: 'z-ai/glm-5.3-flash', gen: 'google/lyria-3-pro-preview' },
+  musica: { chat: '~deepseek/deepseek-v4-flash-latest', gen: 'google/lyria-3-pro-preview' },
 }
 
 // ─── System prompts ───────────────────────────────────────────────────────────
@@ -1171,7 +1171,7 @@ que está al lado de la rueda dentada</>
           color: '#C8A2D8',
         }}>
           {category === 'musica'
-            ? 'z-ai/glm-5.3-flash · lyria-3'
+            ? '~deepseek/deepseek-v4-flash-latest · lyria-3'
             : category === 'llm'
               ? (() => {
                   const p = MODEL_PRICES[selectedLLMModel]

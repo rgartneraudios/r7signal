@@ -653,11 +653,11 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
           <span style={{
             fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
             letterSpacing:'0.25em', fontWeight:700,
-            color:'#CF444D', opacity:0.8,
+            color:'#C47460', opacity:0.8,
           }}>COCHI</span>
           <span style={{
             fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
-            fontWeight:700, color:'#CF444D', letterSpacing:'0.04em', lineHeight:1,
+            fontWeight:700, color:'#C47460', letterSpacing:'0.04em', lineHeight:1,
           }}>{cochiTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
         </div>
 

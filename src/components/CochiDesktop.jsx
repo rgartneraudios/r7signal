@@ -35,7 +35,7 @@ const appendToMemory = async (r1, r2) => {
 // ─── Modelos ──────────────────────────────────────────────────────────────────
 const COCHI_TIER_LABEL = {
   '~deepseek/deepseek-v4-flash-latest': 'Centinela',
-  'deepseek/deepseek-v4-pro-0813':  'Terminator',
+  'tencent/hy4-preview':  'Terminator',
 }
 
 
@@ -1009,7 +1009,7 @@ export default function CochiDesktop({
     setR9Btn(null)
   }
 
-  const isTerminator = selectedModel === 'deepseek/deepseek-v4-pro-0813'
+  const isTerminator = selectedModel === 'tencent/hy4-preview'
   const activeModelPrice = MODEL_PRICES[selectedModel]
   const activeModelLabel = COCHI_MODELS.find(m => m.id === selectedModel)?.label
     ?? (selectedModel === 'ollama' ? 'Ollama' : 'LM Studio')
@@ -1131,41 +1131,41 @@ export default function CochiDesktop({
               flex: 1, padding: '40px 20px', gap: 10, userSelect: 'none', pointerEvents: 'none',
             }}>
               <div className="watermark-brand" style={isTerminator ? {
-                backgroundImage: 'linear-gradient(135deg, #E3A983, #B9733F)',
+                backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
                 fontSize: '1.5rem',
               } : {
-                backgroundImage: 'linear-gradient(135deg, #CF444D, #C0C0C0)',
+                backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
                 fontSize: '1.5rem',
               }}>R7SIGNAL</div>
               <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
               <div className="watermark-name" style={isTerminator ? {
-                backgroundImage: 'linear-gradient(135deg, #E3A983, #B9733F)',
+                backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                textShadow: '0 0 60px rgba(185,115,63,0.4), 0 0 160px rgba(185,115,63,0.2)',
+                textShadow: '0 0 60px rgba(127,141,163,0.4), 0 0 160px rgba(127,141,163,0.2)',
                 fontSize: '1.9rem',
               } : {
-                backgroundImage: 'linear-gradient(135deg, #CF444D, #C0C0C0)',
+                backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                textShadow: '0 0 60px rgba(71,115,150,0.5), 0 0 160px rgba(71,115,150,0.2)',
+                textShadow: '0 0 60px rgba(196,116,96,0.5), 0 0 160px rgba(196,116,96,0.2)',
                 fontSize: '1.9rem',
               }}>COCHI DESKTOP</div>
               <div className="watermark-sub" style={isTerminator ? {
-                backgroundImage: 'linear-gradient(135deg, #E3A983, #B9733F)',
+                backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                textShadow: '0 0 40px rgba(185,115,63,0.24), 0 0 100px rgba(185,115,63,0.12)',
+                textShadow: '0 0 40px rgba(127,141,163,0.24), 0 0 100px rgba(127,141,163,0.12)',
                 fontSize: '0.8rem',
               } : {
-                backgroundImage: 'linear-gradient(135deg, #CF444D, #C0C0C0)',
+                backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                textShadow: '0 0 40px rgba(71,115,150,0.24), 0 0 100px rgba(71,115,150,0.12)',
+                textShadow: '0 0 40px rgba(196,116,96,0.24), 0 0 100px rgba(196,116,96,0.12)',
                 fontSize: '0.8rem',
               }}>
                 Alto!. quién vive?.<br />
@@ -1196,7 +1196,7 @@ Operación en curso. A la espera de órdenes.
               <DiffViewer key={`diff-${idx}`} diff={msg.diff} />
             ) : msg.role === 'user' ? (
               <div key={idx} className="cd-message-enter" style={isTerminator ? {
-                background: 'linear-gradient(135deg, #171716, #12100F, #24282B)',
+                background: 'linear-gradient(135deg, #1C1A1A, #3B4145, #1C1A1A)',
                 border: '1px solid rgba(200,162,216,0.2)',
                 borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
@@ -1207,11 +1207,11 @@ Operación en curso. A la espera de órdenes.
               }}>
                 <div style={{ fontSize: '0.92rem', lineHeight: 1.5, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                   ...(isTerminator ? {
-                    backgroundImage: 'linear-gradient(135deg, #E3A983, #B9733F)',
+                    backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
                     WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
                   } : {
-                    backgroundImage: 'linear-gradient(135deg, #E36873, #C0C0C0)',
+                    backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
                     WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
                   }),
@@ -1221,7 +1221,7 @@ Operación en curso. A la espera de órdenes.
               </div>
             ) : (
               <div key={idx} className="cd-message-enter" style={isTerminator ? {
-                background: 'linear-gradient(135deg, #171716, #12100F, #24282B)',
+                background: 'linear-gradient(135deg, #1C1A1A, #3B4145, #1C1A1A)',
                 border: '1px solid rgba(201,128,84,0.4)', borderLeft: '3px solid #C98054',
                 borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
@@ -1237,11 +1237,11 @@ Operación en curso. A la espera de órdenes.
                 </div>
                 <div style={{ fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
                   ...(isTerminator ? {
-                    backgroundImage: 'linear-gradient(135deg, #E3A983, #B9733F)',
+                    backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
                     WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
                   } : {
-                    backgroundImage: 'linear-gradient(135deg, #E36873, #C0C0C0)',
+                    backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
                     WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
                   }),
@@ -1343,13 +1343,13 @@ Operación en curso. A la espera de órdenes.
           <span style={{
             fontWeight: 700,
             ...(isTerminator
-              ? { backgroundImage:'linear-gradient(135deg, #E3A983 15%, #B9733F 85%)' }
-              : { backgroundImage:'linear-gradient(135deg, #CF444D 15%, #C0C0C0 85%)' }),
+              ? { backgroundImage:'linear-gradient(135deg, #D5DBDB 15%, #7F8DA3 85%)' }
+              : { backgroundImage:'linear-gradient(135deg, #C47460 15%, #C2C3C4 85%)' }),
             WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
             backgroundClip:'text',
           }}>{selectedModel}</span>
           {activeModelPrice && (
-            <span style={{ color: isTerminator ? 'rgba(201,128,84,0.8)' : 'rgba(207,68,77,0.75)', fontSize: '0.55rem' }}>
+            <span style={{ color: isTerminator ? 'rgba(127,141,163,0.8)' : 'rgba(196,116,96,0.8)', fontSize: '0.55rem' }}>
               · {activeModelPrice.inputPerM}$/M in · {activeModelPrice.outputPerM}$/M out
             </span>
           )}
