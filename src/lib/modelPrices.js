@@ -10,14 +10,14 @@ export const MODEL_PRICES = {
   'bytedance-seed/seedream-5-0-pro':       { perImage: 0.045 },
   // Asun — Música
   'google/lyria-3-pro-preview':            { perSong: 0.08 },
-  'z-ai/glm-5.3-flash':                    { inputPerM: 0.07125, outputPerM: 0.2375 },
+  '~deepseek/deepseek-v4-flash-latest':       { inputPerM: 0.05, outputPerM: 0.16 },
   // Tito
   'perplexity/sonar':                      { inputPerM: 1, outputPerM: 1  },
   'perplexity/sonar-deep-research':        { inputPerM: 2, outputPerM: 8  },
   'perplexity/sonar-pro':                  { inputPerM: 3, outputPerM: 15 },
   // Cochi
-  '~deepseek/deepseek-v4-flash-latest':       { inputPerM: 0.045, outputPerM: 0.09 },
-  'deepseek/deepseek-v4-pro-0813':            { inputPerM: 0.99,  outputPerM: 2.97 },
+  '~deepseek/deepseek-v4-flash-latest':       { inputPerM: 0.05, outputPerM: 0.16 },
+  'tencent/hy4-preview':            { inputPerM: 0.834,  outputPerM: 2.501 },
   // Local (free)
   'ollama':    { inputPerM: 0, outputPerM: 0 },
   'lmstudio':  { inputPerM: 0, outputPerM: 0 },
@@ -48,5 +48,5 @@ export const ASUN_MODELS = [
 // Cochi tier names
 export const COCHI_MODELS = [
   { id: '~deepseek/deepseek-v4-flash-latest', label: 'Centinela' },
-  { id: 'deepseek/deepseek-v4-pro-0813',  label: 'Terminator' },
+  { id: 'tencent/hy4-preview',  label: 'Terminator' },
 ]

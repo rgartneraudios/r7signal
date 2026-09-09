@@ -145,7 +145,7 @@ serve(async (req) => {
 
     // Modelo interno para armar el prompt_final en inglés — paso técnico de la función,
     // sin relación con el Tito real de la app (Tito hoy es exclusivamente research/Perplexity).
-    const PROMPT_ENGINEER_MODEL = 'z-ai/glm-5.3-flash'
+    const PROMPT_ENGINEER_MODEL = '~deepseek/deepseek-v4-flash-latest'
 
     // Step 4: Fetch prompt_base (service_role only)
     let promptBase: string | null = null
