@@ -69,12 +69,12 @@ export default function DiffViewer({ diff }) {
       </div>
       <div style={{ maxHeight: 340, overflowY: 'auto' }}>
         {numbered.map((h, idx) => {
-          const bg = h.type === 'add' ? 'rgba(34,211,238,0.12)'
-                   : h.type === 'del' ? 'rgba(255,68,102,0.16)'
+          const bg = h.type === 'add' ? 'rgba(47,92,120,0.16)'
+                   : h.type === 'del' ? 'rgba(166,12,89,0.16)'
                    : 'transparent'
           const marker = h.type === 'add' ? '+' : h.type === 'del' ? '-' : ' '
-          const markerColor = h.type === 'add' ? '#22D3EE' : h.type === 'del' ? '#FF4466' : '#5A5A64'
-          const borderColor = h.type === 'add' ? '#22D3EE' : h.type === 'del' ? '#FF4466' : 'transparent'
+          const markerColor = h.type === 'add' ? '#2F5C78' : h.type === 'del' ? '#A60C59' : '#5A5A64'
+          const borderColor = h.type === 'add' ? '#2F5C78' : h.type === 'del' ? '#A60C59' : 'transparent'
           const textColor = h.type === 'same' ? '#8A868B' : '#D4D8DC'
           return (
             <div key={idx} style={{ display: 'flex', background: bg, padding: '0 8px', borderLeft: `2px solid ${borderColor}` }}>

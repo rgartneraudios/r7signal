@@ -1196,7 +1196,7 @@ Operación en curso. A la espera de órdenes.
               <DiffViewer key={`diff-${idx}`} diff={msg.diff} />
             ) : msg.role === 'user' ? (
               <div key={idx} className="cd-message-enter" style={isTerminator ? {
-                background: 'linear-gradient(135deg, #1C1A1A, #3B4145, #1C1A1A)',
+                background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
                 border: '1px solid rgba(200,162,216,0.2)',
                 borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
@@ -1221,7 +1221,7 @@ Operación en curso. A la espera de órdenes.
               </div>
             ) : (
               <div key={idx} className="cd-message-enter" style={isTerminator ? {
-                background: 'linear-gradient(135deg, #1C1A1A, #3B4145, #1C1A1A)',
+                background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
                 border: '1px solid rgba(201,128,84,0.4)', borderLeft: '3px solid #C98054',
                 borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
