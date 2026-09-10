@@ -473,6 +473,7 @@ export default function AsunPanel({
   const [attachedFile, setAttachedFile] = useState(null)
   const [selectedLLMModel, setSelectedLLMModel] = useState(ASUN_MODELS[0].id)
   const isReveladora = selectedLLMModel === 'google/gemini-3.8-flash'
+  const [projectMode, setProjectMode] = useState(false) // Modo Proyecto — Arquitecto Senior, toggle ortogonal
   const messagesEndRef = useRef(null)
   const chatContainerRef = useRef(null)
   const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
@@ -538,6 +539,13 @@ export default function AsunPanel({
       return
     }
 
+    if (projectMode && !remotePrompts.project) {
+      setMessages(prev => [...prev, {
+        rol: 'asistente', contenido: '⏳ Modo Proyecto aún no configurado en el servidor.', id: Date.now(), streaming: false
+      }])
+      return
+    }
+
     const isCochiCommand = text.startsWith('/COCHI')
     const userMsg = { rol: 'usuario', contenido: text, id: Date.now() }
     setMessages(prev => [...prev, userMsg])
@@ -592,13 +600,16 @@ export default function AsunPanel({
       }
 
       // ── MODO LLM: loop agéntico con tool calling ──────────────────────────
-      const systemContent = interpolatePrompt(remotePrompts.system, {
-        chatLanguage: chatLanguage ?? 'Spanish',
-        nombreAlternativo: nombreAlternativo ?? 'sujeto de prueba',
-      })
+      const systemContent = interpolatePrompt(
+        projectMode ? remotePrompts.project : remotePrompts.system,
+        {
+          chatLanguage: chatLanguage ?? 'Spanish',
+          nombreAlternativo: nombreAlternativo ?? 'sujeto de prueba',
+        }
+      )
 
       const model   = selectedLLMModel
-      const tools   = getAsunTools(workspace)
+      const tools   = projectMode ? [] : getAsunTools(workspace) // Proyecto es puro texto — sin tool calls
 
       // Construir contenido inicial del usuario
       const userContent = []
@@ -650,8 +661,7 @@ export default function AsunPanel({
           body: JSON.stringify({
             model,
             messages: apiMessages,
-            tools,
-            tool_choice: 'auto',
+            ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
             max_tokens: 4096,
           }),
         })
@@ -864,6 +874,7 @@ export default function AsunPanel({
 
   // ─── Cambio de categoría ───────────────────────────────────────────────────
   function changeCategory(cat) {
+    if (cat !== 'llm' && projectMode) setProjectMode(false) // Imagen/Música desactivan Proyecto automáticamente
     setCategory(cat)
     // Submenú: Música no tiene occidente/asia
     if (cat === 'musica') setSubmenu('occidente') // irrelevante pero limpio
@@ -981,6 +992,15 @@ export default function AsunPanel({
               {cat === 'llm' ? 'LLM' : cat === 'imagen' ? 'IMAGEN' : 'MÚSICA'}
             </button>
           ))}
+          {category === 'llm' && (
+            <button
+              className={`asun-header-btn${projectMode ? ' active' : ''}`}
+              onClick={() => setProjectMode(v => !v)}
+              title="Arquitecto Senior — entrevista y arma el plan segmentado"
+            >
+              PROYECTO
+            </button>
+          )}
           <div style={{ flex: 1 }} />
           {category !== 'musica' && (
             <>

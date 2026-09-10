@@ -1,119 +1,91 @@
-🌉 BRIDGE: R7Signal — v23 (8 Septiembre 2026)
+🌉 BRIDGE: R7Signal — v24 (9 Septiembre 2026)
 
 🧠 Qué es R7Signal
 
-Plataforma AI dual (Web + Desktop) con foco en ahorro de tokens, privacidad y derechos comerciales. Tres pilares: Buen Precio · Privacidad · Uso Comercial. Roberto (Signor Roberto / Maravilla) es el fundador y único desarrollador. Modo NOCOD: Claude arquitectura y decisiones, Cochi ejecuta todos los cambios. Regla de oro: nunca proponer código ni prompts sin ver el contenido real primero.
+Sin cambios desde v23. Ver v23 para descripción completa.
 
 🗺️ Fases del producto — sin cambios desde v19
 
-Fase 0 (actual) → Fase 0.5 → Fase 1 (~5-10€, R7Signal for OpenRouter) → Fase 2 (API propia). Ver v19 para detalle completo.
-
 🏗️ Arquitectura — sin cambios de fondo desde v21
 
-Rediseño de roles de v21 sigue vigente y congelado (Asun/Tito/Cochi, guardrails de confirmación). Esta sesión no tocó roles ni scope — fue enteramente performance/tokens del loop de ejecución de Cochi.
+✅ Sesión v24 — Auditoría del pipeline de prompt de imagen + migración de modelos + cierre de DiffViewer
 
-✅ Sesión v23 — Optimización de tokens de Cochi: de diagnóstico a validado en vivo
+Auditoría del sistema de creación de prompt (pendiente abierto en v23)
+Se revisaron dos archivos legacy (Chat00ImgVid.jsx, Chat00Music.jsx, sistema web-admin viejo con Tito) que Roberto conservaba sin saber si eran necesarios. Se confirmó con el código real actual (AsunPanel.jsx + Edge Function index.ts de generar-asset) que el pipeline de refinamiento de prompt no se perdió en la migración:
+El wizard de imagen sigue completo en AsunPanel.jsx (AsunImagenFlow): lore_select → vista → formato → ubicación → momento_dia → clima → epoca → paleta → objetos.
+handleGenerate manda el brief completo a generar-asset.
+La Edge Function busca prompt_base por estilo_id en la tabla estilos_imagen, lo combina con las respuestas del wizard vía un modelo intermedio (PROMPT_ENGINEER_MODEL), y ese es el prompt que llega al modelo de imagen.
+Se confirmó además con un row real de Supabase que estilos_imagen.prompt_base sí tiene contenido poblado por estilo — no era solo lógica de código, el dato está.
+Decisión: los dos archivos legacy se pueden borrar, ya no aportan información que no esté confirmada en el código vivo (pendiente que Roberto los borre cuando quiera, no bloqueante).
+Migración de modelos — de z-ai/glm-5.3-flash a DeepSeek (en pruebas)
+PROMPT_ENGINEER_MODEL en index.ts (generar-asset): z-ai/glm-5.3-flash → ~deepseek/deepseek-v4-flash-latest. Deployado manualmente y revisado por Roberto — cerrado.
+MODELS.musica.chat en AsunPanel.jsx: mismo cambio. Cerrado.
+Slug real confirmado con el ~ inicial: ~deepseek/deepseek-v4-flash-latest — no es typo, es el slug real de OpenRouter para esa variante. Anotado como aprendizaje para no asumir error la próxima vez que aparezca un ~.
+deepseek/deepseek-v4-pro-0813 (Cochi Terminator) no corre — reemplazado por tencent/hy4-preview en pruebas.
+Estado general: salvo música de Asun (cerrado), todo el resto de la migración de modelos sigue en fase de prueba activa — esperables más cambios según comportamiento.
+modelPrices.js actualizado
+Agregado tencent/hy4-preview (0.834 / 2.501 por M in/out).
+COCHI_MODELS actualizado: Terminator ahora apunta a tencent/hy4-preview.
+Pendiente menor sin resolver (no bloqueante, decisión de Roberto de dejarlo así): key ~deepseek/deepseek-v4-flash-latest duplicada bajo comentarios // Asun — Música y // Cochi — mismos valores, no rompe nada, solo redundante.
+DiffViewer.jsx — cerrado y validado en vivo
+El bridge v23 decía "corregido" pero no se había visto en producción. Esta sesión se confirmó con captura real: la franja roja de del sí funciona correctamente — el motivo por el que antes no se veía es que solo aparece en ediciones sobre archivo existente (replace_in_file/write_file con before no nulo); en creación de archivo nuevo (isNewFile) todas las líneas son add por diseño, nunca hay rojo, y eso es comportamiento esperado, no bug. Cerrado sin cambios de código.
+Validación de consumo de tokens — caso real de edición simple
+Se auditó en consola una tarea de "reemplazar contenido de resumen.txt" (~8.700 tokens, 3 iteraciones: find_files → read_file → write_file + wrapper). Se confirmó que las 3 vueltas son necesarias y correctas, no hay tanteo fallido ni fuga de tokens:
+find_files fue necesario porque la instrucción no daba ruta completa.
+read_file es lo que permite mostrar el diff con contenido "antes" real (rojo) — parte deseada del flujo de verificación antes de una escritura destructiva.
+write_file es la acción.
+reasoning: 0 confirmado en las 4 iteraciones — el fix del wrapper sigue activo.
+Nuevo dato de Sink 2: cached: 2048 visto en iter3/iter4 sin cache_control manual — refuerza el caching automático de DeepSeek ya reportado en v23.
+Aprendizaje nuevo (no requiere cambio de código): dar la ruta completa del archivo cuando se la conoce ahorra la iteración de find_files (~2.500 tokens) por operación. Es un hábito de cómo pedirle las cosas a Cochi, no un bug.
 
-Disparada porque Roberto le pidió a Kimi (otro asistente) que auditara el loop de Cochi tras ver picos de ~20-24k tokens por turno. Kimi entregó un diagnóstico con 6 puntos y ofreció implementar 3 fixes mínimos. Roberto reportó que Cochi ya los había aplicado — pero al revisar el código real (regla de oro), se confirmó que casi nada de eso había llegado al camino de ejecución que efectivamente corre.
+🎨 Modelos — actualización v24
 
-0. Se cambió Sigilosa por Intuitiva y Afilada por Reveladora para AsunPanel.jsx. También se cambié IsAfilada por IsReveladora. 
+Agente	Uso	Modelo anterior	Modelo actual	Estado
+Prompt Engineer (imagen)	generar-asset Edge Function	z-ai/glm-5.3-flash	~deepseek/deepseek-v4-flash-latest	✅ Cerrado
+Asun Música chat	AsunPanel.jsx	z-ai/glm-5.3-flash	~deepseek/deepseek-v4-flash-latest	✅ Cerrado
+Cochi Terminator	AsyncPanel/Cochi	deepseek/deepseek-v4-pro-0813 (no corre)	tencent/hy4-preview	🧪 En pruebas
 
-1. Auditoría del estado real vs. lo reportado como aplicado
+Resto de la tabla de modelos: sin cambios desde v21.
 
-needsPlanning() / generatePlan(): 0 invocaciones confirmadas por grep. handleSendText sigue yendo directo a executeAllSteps() sin clasificar nada — código muerto, igual que antes.
-reasoning: { enabled: false } estaba puesto solo dentro de generatePlan (nunca se ejecuta) — el loop real (executeAllSteps) no lo tenía. Este era el mayor sospechoso del gasto extra en DeepSeek.
-PLANNING_SYSTEM_PROMPT seguía referenciado en el archivo sin estar importado ni definido — bomba de tiempo latente, no disparada hoy porque remotePrompts.planning siempre está presente.
-COCHI_TOOLS completo (sin filtrar por permission) se mandaba en cada iteración.
-delete_file no existía en cochiTools.js — confirmado con el archivo real, contradiciendo lo reportado.
+🔐 Prompts en Supabase — sin cambios de contenido esta sesión
 
-2. Fixes de bajo riesgo aplicados (ronda B, sin tocar el planner)
-
-reasoning: { enabled: false } puesto en el fetch real del loop de ejecución.
-getToolsForPermission() nuevo en cochiTools.js — filtra write_file/replace_in_file/append_to_file (requieren canWrite) y run_command/delete_file (requieren canRun/full) antes de mandarlos como tools:.
-delete_file agregado como tool real (import de remove de @tauri-apps/plugin-fs, guardrail de window.confirm() igual que run_command, ícono DEL, bloqueado fuera de Full Access).
-No se tocó needsPlanning/generatePlan/PLANNING_SYSTEM_PROMPT — quedan igual, a la espera del pendiente de Planning.
-
-3. Reconexión del patrón A/B/wrapper — aplicado al single-pass, no al planner
-El diseño de "Prompt A completo / Prompt B técnico / wrapper final con A" ya existía en el código pero solo servía al planner (muerto). Se decidió con Roberto reutilizarlo para el camino que sí corre siempre, sin reconectar el planner:
-
-1ª llamada del turno: siempre Prompt A (remoteSystem, personalidad completa).
-Si esa llamada devuelve tool_calls, desde la 2ª iteración el system de personalidad se reemplaza por STEP_EXECUTION_PROMPT (Prompt B, ~370 tokens vs ~1000 de A) — flag technicalSwapped.
-Al terminar (control signal [STEP_COMPLETE]/[STEP_FAILED]/[NEED_REPLAN]), una llamada wrapper liviana con Prompt A traduce el resultado a la voz de Cochi (R1/R2/R3), sin tools.
-Bug latente detectado y corregido de paso: la rama técnica (antes solo alcanzable con plan activo) llamaba updateStepStatus(step.id, ...) y step.isReplanned sin guard — con step === null en modo single-pass esto hubiera tirado TypeError la primera vez que el modelo emitiera una señal de control en modo B. Se agregaron guards if (trackSteps) y un fallback específico para [NEED_REPLAN] en single-pass (falla con mensaje al usuario en vez de intentar replanStep sobre un step inexistente).
-Fix de una línea post-validación: al wrapper call le faltaba reasoning: { enabled: false } — se detectó en el primer test real (377 tokens de reasoning de más) y se corrigió.
-
-4. Robustez del swap — hallazgo del propio Cochi
-Cochi, al auditar el flujo completo antes de este bridge, señaló que el swap matcheaba el system message por contenido interpolado (m.content === remoteSystem), lo cual en teoría podía fallar si remoteSystem se reinterpolaba distinto entre el momento de construcción y el del swap. Riesgo bajo en la práctica (el single-pass corre una sola vuelta del while externo), pero se reemplazó por algo estructuralmente más sólido: capturar la referencia del objeto (personalitySystemMsgRef) al construir apiMessages, y usar apiMessages.indexOf(personalitySystemMsgRef) en el swap — ya no depende de contenido ni de posición fija.
-
-5. Validado en vivo — dos corridas reales en R7Desktop
-Misma tarea (leer package.json → contar dependencias → borrar resumen.txt si existe → crear uno nuevo) corrida dos veces con las sucesivas rondas de fixes:
-
-1ª corrida: 13.732 tokens totales (vs ~20-24k del benchmark de Kimi pre-fix). technicalSwapped: true confirmado en consola, wrapper con reasoning: 377 (bug detectado ahí mismo).
-2ª corrida (con el fix del wrapper aplicado): 15.124 tokens, wrapper con reasoning: 0 confirmado. La suma de tokens de consola cuadra exacto contra el contador de la UI en ambos casos.
-Dato nuevo para el Sink 2: en ambas corridas aparece cached: 2560/2816/2048 en varias iteraciones sin haber implementado ningún cache_control manual — refuerza que DeepSeek/OpenRouter ya hace caching automático de prefijo. El Sink 2 debería arrancar auditando cómo se factura ese cached antes de escribir código de caching manual.
-
-6. Compresión del system prompt de Cochi en Supabase
-Pedido explícito de Roberto: bajar el tamaño del prompt sin perder comportamiento.
-
-Sacados los separadores decorativos ═══ (6 líneas, ~78 tokens sin función semántica real).
-Corregida la línea de IDENTITY que afirmaba que "el Planning module maneja checkpoints upstream" — no es cierto hoy (planner muerto, confirmado por grep). Reemplazada por una descripción honesta: tareas corren en pase único, la confirmación de acciones destructivas la hace la UI (window.confirm()), no un módulo de planning.
-Unificado el idioma: dos párrafos de instrucciones anti-desperdicio (get_file_info/search_in_files/read_file_chunk) estaban en español en medio de un prompt casi todo en inglés — pasados a inglés, coherente con el resto de instrucciones técnicas. El español queda solo donde el modelo debe hablarle así al usuario (ejemplos de personalidad).
-PERSONALITY recortado: de 27 palabras de vocabulario militar + 8 frases de ejemplo a 9 palabras + 4 frases — redundante contra sí mismo, las frases ya mostraban el vocabulario en uso.
-Resultado medido: ~1.076 → ~877 tokens (~200 tokens menos), sin tocar FORMAT_RULE, SECURITY RULE, IDENTITY funcional ni SHARED MEMORY — R9/R7.
-
-7. DiffViewer.jsx — colores de banda corregidos
-Pendiente de una sesión anterior (visualizar borrado en rojo, agregado en cyan) que no se había aplicado. Colores viejos (
-#6B9EC4 azul acento / 
-#C97A7A rojo apagado) reemplazados por 
-#22D3EE (cyan) para add y 
-#FF4466 (rojo banda, coherente con el resto de la paleta destructiva de la app) para del, más borderLeft de 2px por línea para que se vea como banda real, no solo tinte de fondo sutil.
-
-🎨 Modelos — sin cambios desde v21
-
-Ver v21 para tabla completa. Sin cambios esta sesión.
-
-🔐 Prompts en Supabase — actualización v23
-
-Tabla agent_prompts, proyecto ovvpyotqstweqbrmeyme. Se tocó el system de Cochi (compresión + corrección de la línea de Planning + unificación de idioma). El planning de Cochi no se tocó — sigue igual que en v22, sin uso (código muerto).
-
-Se tocó el system de Asun para cambiar nombres de modos . Sigilosa por Intuitiva y Afilada por Reveladora.
-
-📝 Nota de estilo — sin cambios desde v22
-
-Prompts de agentes en español de España cuando corresponde que queden en español (contenido user-facing); instrucciones técnicas al modelo pueden ir en inglés siempre que sea consistente con el resto del prompt — este criterio se aplicó explícitamente esta sesión para resolver la mezcla de idioma en el system de Cochi.
+Solo se tocaron model IDs en código (index.ts, AsunPanel.jsx, modelPrices.js), no prompts de personalidad.
 
 ⏭️ Pendientes — orden de prioridad
 
-✅ Token optimization de Cochi: cerrado y validado en vivo esta sesión (fixes de ronda B + swap A/B/wrapper + robustez del match + compresión del system prompt).
-✅ DiffViewer.jsx: colores de banda de borrado/agregado corregidos.
+✅ Sistema de creación de prompt sin Tito: auditado y confirmado sano — cerrado.
+✅ DiffViewer.jsx: validado en vivo — cerrado.
+✅ Validación de tokens en edición simple de archivo — cerrado, comportamiento correcto confirmado.
 
 Con eso, la lista queda así:
 
-[De v20] Sink 2 — prompt caching de OpenRouter. Dato nuevo de esta sesión: el caching automático de DeepSeek ya está activo sin cache_control manual — arrancar auditando el pricing de cached_tokens antes de implementar nada.
-[De v20] Validar Cochi Planning con caso de 3+ pasos, delete_file/run_command en el medio — el planner (needsPlanning/generatePlan) sigue 100% sin conectar, deliberadamente no tocado esta sesión.
-PLANNING_SYSTEM_PROMPT referenciado sin existir en CochiDesktop.jsx (líneas 280/369 originales) — sigue latente, se resuelve solo cuando se encare el pendiente #2.
+[NUEVO v24] Modo Proyecto para Asun — diseño conceptual ya cerrado en sesión anterior (ver bloque de contexto abajo), pendiente de definir prioridad y redactar prompt Supabase. Se retoma en chat nuevo.
+[De v23] Sink 2 — prompt caching de OpenRouter. Reforzado con nuevo dato de esta sesión (cached: 2048 en DeepSeek sin cache_control manual) — arrancar auditando pricing de cached_tokens antes de implementar nada.
+[De v20] Validar Cochi Planning con caso de 3+ pasos — el planner sigue 100% sin conectar, deliberadamente no tocado.
+PLANNING_SYSTEM_PROMPT referenciado sin existir en CochiDesktop.jsx — sigue latente.
 Deprecar botón "→ Enviar a Cochi".
 Landing page.
 Panel de preferencias web.
 Login desktop (Fase 0.5).
 Onboarding (diferido).
-[Nuevo, de la auditoría de Cochi] readwrite no es seleccionable en la UI de Workspace (R7Desktop.jsx) aunque los guards de permiso sí lo contemplan — deuda preexistente, no bloqueante, revisar si se agrega al selector o se saca de los guards.
+[De v23] readwrite no seleccionable en UI de Workspace — deuda preexistente, no bloqueante.
+[Opcional, no bloqueante] Borrar Chat00ImgVid.jsx y Chat00Music.jsx — confirmado que ya no aportan info no cubierta por el código vivo.
+[Opcional, no bloqueante] Unificar key duplicada de ~deepseek/deepseek-v4-flash-latest en modelPrices.js.
 
 🚫 Restricciones absolutas — sin cambios desde v19
 
-Ver v19 para lista completa — todas siguen vigentes.
+🧠 Aprendizajes clave v24
 
-🧠 Aprendizajes clave v23
+Un pendiente marcado como "incógnita" puede resolverse con una sola pasada de regla de oro contra el código real — la ansiedad de "creo que lo perdimos" no siempre corresponde con el estado real del sistema.
+Los slugs de OpenRouter no siempre siguen convención esperable (~ como prefijo real, no error) — verificar con la fuente antes de asumir typo.
+Un número de tokens alto no es automáticamente un problema: hay que descomponerlo en sus tool calls antes de juzgar si hay fuga o si es trabajo legítimo.
+Dar contexto de más (ej. ruta completa de archivo) en el pedido inicial reduce el número de iteraciones sin tocar una sola línea de código — el ahorro de tokens no siempre vive en la arquitectura, a veces vive en cómo se formula el pedido.
 
-"Ya lo apliqué" hay que verificarlo con el archivo real, no con el reporte. El diagnóstico de Kimi era correcto, pero lo que terminó en el código no coincidía con lo reportado como aplicado — reasoning:false en una función muerta, delete_file inexistente. La regla de oro no es un formalismo: cada vez que se saltó, la sesión perdió tiempo corrigiendo sobre una base falsa.
+📋 Contexto para pegar en el chat nuevo — "Modo Proyecto" de Asun
 
-Reutilizar un diseño de código muerto en el camino vivo, sin resucitar el código muerto en sí, es una forma válida de progreso incremental. El patrón A/B/wrapper ya estaba construido para el planner; aplicarlo al single-pass dio el ahorro real sin el riesgo de reconectar checkpoints todavía no validados (que sigue siendo un pendiente aparte, deliberadamente separado).
+Vengo a retomar el diseño de "Modo Proyecto" para Asun, ya cerrado conceptualmente en sesión anterior (ver bridge v24 de R7Signal para contexto completo del proyecto). Resumen del diseño ya acordado:
 
-Matchear estado por contenido de string es frágil; matchear por referencia de objeto no. El hallazgo lo hizo la propia auditoría de Cochi, no una sesión de arquitectura — señal de que vale la pena pedirle estas revisiones de coherencia antes de cerrar un bloque de trabajo.
-
-Comprimir un prompt no es solo cortar función — separadores decorativos, mezcla de idioma inconsistente y vocabulario redundante son "grasa" que se saca sin tocar comportamiento. ~200 tokens de ahorro en el system de Cochi sin arriesgar nada del lado de personalidad o instrucciones reales.
-
-Validar en producción, no solo en el diseño. Los números de consola (13.732 y 15.124 tokens) confirmaron el diseño en la práctica, y de paso expusieron el bug del wrapper sin reasoning:false que ningún análisis estático hubiera detectado tan rápido.
-
-Bridge v23 — 8 Septiembre 2026
-Sesión: auditoría completa del loop de tokens de Cochi tras diagnóstico de Kimi (confirmando con grep que la mayoría de los fixes reportados no habían llegado al código real), aplicación de fixes de bajo riesgo (reasoning:false real, tools filtradas por permission, delete_file), reconexión del patrón Prompt A/Prompt B/wrapper al camino single-pass (sin tocar el planner, que sigue muerto deliberadamente), fix de un bug latente de null-pointer expuesto por el cambio, endurecimiento del swap por referencia de objeto (hallazgo de la auditoría de Cochi), compresión del system prompt de Cochi en Supabase (~200 tokens), corrección de colores en DiffViewer.jsx, y validación en vivo con dos corridas reales (20-24k del benchmark original → 13.732 → 15.124 con el fix del wrapper). Pendiente prioritario para v24: Sink 2 (con el dato nuevo del caching automático de DeepSeek ya activo) y, cuando corresponda, validar Cochi Planning con un caso real de 3+ pasos.
+Orquestación de proyectos grandes vía R9 (que ya es legible/escribible por Asun y Cochi).
+Sin agente nuevo, sin llamadas automáticas entre agentes — el usuario sigue siendo el mensajero entre Asun y Cochi.
+Pendiente: definir prioridad en el backlog y redactar el prompt Supabase correspondiente para este modo.
+Regla de oro sigue vigente: no proponer prompt ni código sin ver el estado real actual del sistema de prompts de Asun en Supabase primero.

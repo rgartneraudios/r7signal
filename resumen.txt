@@ -1,1 +1,6 @@
-Dependencias en package.json: 32 en total (19 dependencies + 13 devDependencies).
+Gracias Cochi quedó de lujo!. Vamos a corregir el color de Centinela. 
+     Background
+     sigue igual
+     
+     Y el color de texto un gradiente entre
+     #C47460 #C2C3C4
