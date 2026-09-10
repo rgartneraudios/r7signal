@@ -668,6 +668,7 @@ export default function CochiDesktop({
                         model: modelSlug, stream: false,
                         reasoning: { enabled: false },
                         messages: wrapperMessages,
+                        ...(isLocal || isLmStudio ? {} : { usage: { include: true }, session_id: cochiSessionId }),
                       })
                     })
 
