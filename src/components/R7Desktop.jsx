@@ -3,8 +3,10 @@ import AsunPanel from './AsunPanel'
 import TitoPanel from './TitoPanel'
 import CochiDesktop from './CochiDesktop'
 import PreferencesModal from './PreferencesModal'
+import ApiKeyModal from './ApiKeyModal'
 import R9Drawer from './R9Drawer'
 import { supabase } from '../supabaseClient'
+import { loadLocalConfig, hasOpenRouterKey } from '../lib/localConfig.js'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 
@@ -37,10 +39,27 @@ export default function R7Desktop() {
   const [userName, setUserName] = useState('')
   const [preferences, setPreferences] = useState({ nombre_usuario: '', nombre_alternativo: '', chat_language: 'Español' })
   const [promptsReady, setPromptsReady] = useState({ asun: false, tito: false, cochi: false })
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false)
 
   const handlePromptsReady = useCallback((agent) => {
     setPromptsReady(prev => ({ ...prev, [agent]: true }))
   }, [])
+
+  // First-run: hidratar la config local (AppLocalData) y, si no hay key
+  // guardada, abrir el modal propio del desktop antes de cualquier fetch.
+  useEffect(() => {
+    let alive = true
+    loadLocalConfig().then(() => {
+      if (!alive) return
+      const has = hasOpenRouterKey()
+      setApiKeyConfigured(has)
+      if (!has) setShowApiKey(true)
+    })
+    return () => { alive = false }
+  }, [])
+
+  const handleApiKeySaved = useCallback(() => setApiKeyConfigured(true), [])
 
   const leftInputRef = useRef(null)
   const cochiInputRef = useRef(null)
@@ -662,6 +681,20 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
         </div>
 
         <button
+          onClick={() => setShowApiKey(true)}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: apiKeyConfigured ? '#B0F527' : '#E8C84A',
+            fontSize: '1.05rem',
+            padding: '0 8px',
+            transition: 'color 0.2s',
+          }}
+          title={apiKeyConfigured ? 'API key configurada — click para cambiarla' : 'Falta tu API key de OpenRouter — click para cargarla'}
+        >🔑</button>
+
+        <button
           onClick={() => setShowR9Drawer(true)}
           style={{
             background:'none',
@@ -701,6 +734,14 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
           onSave={(data) => cochiSavePrefsRef.current?.(data)}
           onSaved={(prefs) => setPreferences(prefs)}
           supabase={supabase}
+        />
+      )}
+
+      {showApiKey && (
+        <ApiKeyModal
+          required={!apiKeyConfigured}
+          onClose={() => setShowApiKey(false)}
+          onSaved={handleApiKeySaved}
         />
       )}
 
