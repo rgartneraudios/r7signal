@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { calculateCost } from '../lib/modelPrices.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { writeR9File } from '../lib/r9Store.js'
+import { getOpenRouterKey } from '../lib/localConfig.js'
 
 const TITO_MODELS = {
   rapido: 'perplexity/sonar',
@@ -107,6 +108,16 @@ export default function TitoPanel({
       setMessages(prev => [...prev, { role: 'assistant', content: msg }])
       return
     }
+
+    // Estado vacío: sin API key local no se dispara ningún fetch.
+    if (!getOpenRouterKey()) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '🔑 Todavía no cargaste tu API key de OpenRouter. Usá el botón de la llave en la barra superior y pegala para poder buscar.'
+      }])
+      return
+    }
+
     if (searchLevel === 'deep') {
       const confirm = window.confirm(
         '🔬 Investigación profunda seleccionada.\n' +
@@ -115,6 +126,7 @@ export default function TitoPanel({
       );
       if (!confirm) return;
     }
+
 
     const userMsg = { role: 'user', content: text };
     const history = [...messages, userMsg];
@@ -133,7 +145,7 @@ export default function TitoPanel({
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`,
+            'Authorization': `Bearer ${getOpenRouterKey()}`,
             'Content-Type': 'application/json',
           },
           signal: controller.signal,
@@ -201,7 +213,7 @@ export default function TitoPanel({
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`,
+          'Authorization': `Bearer ${getOpenRouterKey()}`,
           'Content-Type': 'application/json',
         },
         signal: controller.signal,
@@ -318,26 +330,25 @@ export default function TitoPanel({
             <div className="watermark-brand" style={{ fontSize: '1.5rem' }}>R7SIGNAL</div>
             <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
             <div className="watermark-name" style={{ fontSize: '1.9rem' }}>TITO RESEARCH</div>
-            <div className="watermark-sub" style={{ fontSize: '0.8rem' }}>¡Ehm, hola! O sea... ¡Atención investigando!</div>
-<div className="watermark-hint" style={{ fontSize: '0.72rem' }}>Eh, ¿sabías que la información es oro? Creo que sí.<br />
-Primero, emm... selecciona el nivel de búsqueda en los selectores.<br />
-¡Sí, eso, haz eso!<br />
-Yo solo vuelco lo que encuentro, ¿eh? No toco archivos ni nada raro,<br />
-para eso está Cochi, que es el que sabe de esas cosas.<br />
-Luego, si metes la pata—que, ejem, suele pasar, no te juzgo—,<br />
-tienes el botón CLS ahí abajito, al pie del Panel.<br />
-Lo aprietas y... ¡pum!<br />
-Se limpia el chat y empezamos de nuevo sin que nadie note nada.<br />
-¡Perfecto!<br />
-A los 70.000 Tokens aparece R7 para no perder lo que descubramos.<br />
-Con R7 puedes guardar el resumen de la tarea junto con el último mensaje.<br />
-Y si solo quieres trocitos pequeños, ya sabes,<br />
-párrafos sueltos o pedazos de código secreto,<br />
-usamos R9 y los seleccionamos puntualmente.<br />
-El contenido de R7 y R9 vive en la carpeta<br />
-que está al lado de la rueda dentada<br />
-¿Ves? ¡Soy un genio de la investigación! …<br />
-¿Verdad? Por favor dime que sí.</div>
+            <div className="watermark-sub" style={{ fontSize: '0.8rem' }}>Tito es un agente especializado en buscar información,<br />
+con modelos de Perplexity en distintos niveles<br />
+según la profundidad que necesite tu búsqueda.<br />
+Selecciona el nivel de búsqueda en los selectores del Panel.<br />
+Tito no administra archivos ni código — para eso está Cochi.<br />
+El botón CLS, al pie del Panel, limpia el chat<br />
+y reinicia la búsqueda desde cero.<br />
+A los 70.000 tokens aparece R7 para guardar el resumen<br />
+de la tarea junto al último mensaje.<br />
+Y si solo necesitás fragmentos puntuales <br />
+párrafos sueltos o pedazos de código, <br />
+R9 permite seleccionarlos con precisión.<br />
+El contenido de R7 y R9 se encuentra en el compartimento<br />
+junto a la rueda dentada.<br />
+<br />
+NOTA: Tito tiene incorporado un tono de personalidad específico vía prompt<br />
+que no es posible cambiar en esta versión.<br />
+RGartner by R7Signal
+	</div>
           </div>
         ) : (
           messages.map((msg, i) => (

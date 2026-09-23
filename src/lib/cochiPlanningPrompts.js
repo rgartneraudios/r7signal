@@ -1,3 +1,100 @@
+// Prompt de planificación (Bloque J). Usado como fallback local cuando el
+// prompt remoto de Supabase (remotePrompts.planning) no está disponible; el
+// formato de salida debe ser idéntico al que consume generatePlan().
+export const PLANNING_SYSTEM_PROMPT = `You are the planning module of an autonomous file/code agent running on Windows. Given a user request, decide the minimal sequence of concrete steps required to complete it and return a JSON plan.
+
+RULES:
+- Respond with ONLY a JSON object. No prose, no explanations, no markdown code fences.
+- Exact shape: {"taskSummary": "<one line>", "steps": [{"id": "step_1", "description": "<imperative concrete action>", "type": "execute"}]}
+- Every step is a single actionable unit (one tool-level intent), not a paragraph.
+- Order steps so each depends only on the ones before it. Put read/inspect steps before the writes that need them.
+- Destructive operations (delete, overwrite, move, run_command) must be their own step, placed after the steps they depend on.
+- Do NOT add verification or summary-only steps; the runtime already reports results.
+- Return between 2 and 7 steps. If the request is atomic, return a single step.
+- Write descriptions in the same language as the user request.`
+
+// Clasificador ligero de intención (Bloque J): decide si un mensaje amerita
+// planificación multi-paso o si alcanza con un single-pass. Puro y sin estado,
+// por eso vive acá y no dentro del componente.
+export function needsPlanning(message) {
+  // Normaliza acentos (NFD + strip de marcas diacríticas) para que el voseo
+  // argentino ("creá", "ejecutá", "borrá") calce con los verbos base de las
+  // listas de abajo sin tener que enumerar cada conjugación por separado.
+  const msg = String(message ?? '').toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+  // Conversational — no planning needed
+  const conversational = [
+    /^hola/, /^hi/, /^hey/, /^buenos/, /^buenas/, /^qué tal/,
+    /^como est/, /^cómo est/, /^todo bien/, /^gracias/, /^ok$/, /^okay/,
+    /^perfecto/, /^entendido/, /^de acuerdo/, /^sí$/, /^no$/, /^claro/,
+    /^qué (eres|puedes|haces|sabes)/, /^who are/, /^what (are|can)/,
+  ]
+  if (conversational.some(r => r.test(msg))) return false
+
+  // Write/execute verbs — these are what actually justify step tracking
+  const writeVerbs = [
+    'crea', 'crear', 'cre ', 'escribe', 'modifica', 'modif',
+    'elimina', 'borra', 'mueve', 'copia', 'renombra',
+    'ejecuta', 'instala', 'instalar', 'añade', 'agrega',
+    'refactori', 'implement', 'migra', 'actualiza',
+    'npm', 'yarn', 'pip', 'cargo', '/cochi',
+  ]
+  const hasWriteVerb = writeVerbs.some(k => msg.includes(k))
+
+  // Read-only queries — even if they mention files, a single pass covers it
+  const queryPatterns = [
+    /^qué/, /^que /, /^cuál/, /^cual/, /^cómo/, /^como /, /^dónde/, /^donde/,
+    /^dime/, /^decime/, /^muestra/, /^muéstrame/, /^cuánt/, /^cuant/,
+    /^lee el/, /^lee la/, /^leer/, /^busca en/, /^analiza/, /^revisa/,
+  ]
+  if (queryPatterns.some(r => r.test(msg)) && !hasWriteVerb) return false
+
+  // Mismo criterio que arriba pero sin anclar al inicio — cubre mensajes con
+  // preámbulo ("Cochi, vete a X y dime...") donde la intención de lectura
+  // no es la primera palabra de la frase.
+  const queryVerbsAnywhere = [
+    'dime', 'decime', 'muestra', 'muéstrame', 'explica', 'explícame', 'explicame',
+    'cuál es', 'cual es', 'qué es', 'que es', 'cuánto', 'cuanto', 'cuántos', 'cuantos',
+    'lee el', 'lee la', 'busca en', 'analiza', 'revisa', 'dónde está', 'donde esta',
+  ]
+  if (!hasWriteVerb && queryVerbsAnywhere.some(k => msg.includes(k))) return false
+
+  // Filesystem / agentic keywords — planning needed
+  const agentic = [
+    ...writeVerbs,
+    'archivo', 'carpeta', 'directorio', 'fichero',
+    'package.json', 'jsx', 'tsx', 'js', 'ts', 'css',
+  ]
+  if (agentic.some(k => msg.includes(k)) && hasWriteVerb) return true
+
+  // Default: if message is short and has no agentic keywords, skip planning
+  if (msg.length < 60) return false
+
+  return true
+}
+
+// Parsea la respuesta cruda del planner (JSON, con o sin fences) al shape que
+// consume el loop. Lanza si la forma es inválida para que generatePlan caiga a
+// su plan de fallback.
+export function parsePlanResponse(text) {
+  const clean = String(text ?? '').replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+  const parsed = JSON.parse(clean)
+  if (!parsed || !parsed.taskSummary || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
+    throw new Error('Invalid plan shape')
+  }
+  return {
+    taskSummary: parsed.taskSummary,
+    steps: parsed.steps.map((s, i) => ({
+      id: s.id || `step_${i + 1}`,
+      description: s.description,
+      type: s.type || 'execute',
+      status: 'pending',
+      iterationsUsed: 0,
+    })),
+  }
+}
+
 export const STEP_EXECUTION_PROMPT = `You are executing one technical step within a multi-step task plan. This is an internal execution step — no user is reading your output directly. Your only audience is the system itself and, if applicable, the next step in the plan.
 
 RULES:

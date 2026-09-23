@@ -5,11 +5,11 @@ import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { readFile } from '@tauri-apps/plugin-fs'
 import { getAsunTools, executeTool, pathExists } from '../lib/asunTools.js'
 import { writeR9File } from '../lib/r9Store.js'
+import { getOpenRouterKey } from '../lib/localConfig.js'
 import { open } from '@tauri-apps/plugin-dialog'
 
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
-const OR_KEY        = import.meta.env.VITE_OPENROUTER_API_KEY
 const OR_BASE       = 'https://openrouter.ai/api/v1'
 
 // ─── Modelos ──────────────────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ async function streamOR(model, messages, onChunk, onUsage) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OR_KEY}`,
+            'Authorization': `Bearer ${getOpenRouterKey()}`,
       'HTTP-Referer': 'https://r7signal.com',
       'X-Title': 'R7Desktop · Asun',
     },
@@ -546,6 +546,17 @@ export default function AsunPanel({
       return
     }
 
+    // Estado vacío: LLM y Música van directo a OpenRouter y necesitan la key
+    // local. Imagen usa el edge function server-side, así que no la requiere.
+    if (category !== 'imagen' && !getOpenRouterKey()) {
+      setMessages(prev => [...prev, {
+        rol: 'asistente',
+        contenido: '🔑 Todavía no cargaste tu API key de OpenRouter. Usá el botón de la llave en la barra superior y pegala para poder conversar.',
+        id: Date.now(), streaming: false
+      }])
+      return
+    }
+
     const isCochiCommand = text.startsWith('/COCHI')
     const userMsg = { rol: 'usuario', contenido: text, id: Date.now() }
     setMessages(prev => [...prev, userMsg])
@@ -654,7 +665,7 @@ export default function AsunPanel({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${OR_KEY}`,
+      'Authorization': `Bearer ${getOpenRouterKey()}`,
             'HTTP-Referer': 'https://r7signal.com',
             'X-Title': 'R7Desktop · Asun',
           },
@@ -1088,21 +1099,31 @@ export default function AsunPanel({
                   fontSize: '0.8rem',
                 }}>
 {category === 'llm'
-                      ? <>Mis LLM están operando a máxima potencia conversacional.<br />
-Puedo leer y escribir dentro de mi propia área de trabajo,<br />
+                      ? <>Asun es un agente diseñado para conversar, generar imágenes y música.<br />
+Tiene dos selectores con dos modelos distintos:<br />
+Intuitiva y Reveladora, según el tipo de conversación que necesites.<br />
+Las imágenes y la música se generan <br />
+con modelos aptos y testeados para cada tipo de contenido.<br />
+Asun puede leer y escribir dentro de su propia área de trabajo,<br />
 siempre con tu confirmación antes de borrar o sobreescribir algo.<br />
 Si necesitas administrar archivos o generar código,<br />
-ese trabajo es de Cochi — cambia de panel y dile qué necesitas.<br />
-Yo me dedico a conversar contigo, generar imágenes y música.<br />
+ese trabajo es de Cochi — cambia de panel y decile qué necesitás.<br />
+La función Proyecto activa un modo de planificación:<br />
+Asun entrevista la tarea y arma un plan segmentado<br />
+para que lo ejecuten Cochi, Tito y el propio Asun en modo Standard.<br />
 Cuando necesites empezar de cero, usa el botón CLS al pie del Panel;<br />
 limpiará el chat por completo, sin dejar rastro.<br />
 A los 70.000 tokens aparecerá R7 para guardar tus avances.<br />
 R7 creará un resumen de la tarea junto al último mensaje.<br />
-Y si prefieres conservar solo fragmentos específicos o líneas de código,<br />
+Y si preferís conservar solo fragmentos específicos o líneas de código,<br />
 R9 te permitirá seleccionarlos con total precisión —<br />
-o simplemente decime "guardá esto último en un txt" y lo hago.<br />
-Encontrarás el contenido de R7 y R9 en la carpeta<br />
-que está al lado de la rueda dentada</>
+o simplemente pedile a Asun que guarde lo último en un txt.<br />
+Encontrarás el contenido de R7 y R9 en el compartimento<br />
+junto a la rueda dentada.<br />
+<br />
+NOTA: Asun tiene incorporado un tono de personalidad específico vía prompt<br />
+que no es posible cambiar en esta versión.<br />
+RGartner by R7Signal</>
                       : <>Cuéntale a Asun tu estilo musical.<br />Cuando tenga el concepto, genera con Lyria.</>}
                 </div>
               </div>

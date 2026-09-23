@@ -3,10 +3,14 @@ import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
 import DiffViewer from './DiffViewer'
-import { STEP_EXECUTION_PROMPT, buildPlanContext } from '../lib/cochiPlanningPrompts'
+import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, needsPlanning, parsePlanResponse } from '../lib/cochiPlanningPrompts'
+import PlanViewer from './PlanViewer'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
-import { COCHI_MODELS, MODEL_PRICES } from '../lib/modelPrices.js'
-import { TOOL_ICONS, executeTool, pathExistsCochi, getToolsForPermission } from '../lib/cochiTools.js'
+import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
+import { resolveProvider, streamChat } from '../lib/llmClient.js'
+import { getOpenRouterKey } from '../lib/localConfig.js'
+import { TOOL_ICONS, executeTool, getToolsForPermission } from '../lib/cochiTools.js'
+import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
 import { writeR9File } from '../lib/r9Store.js'
 
 
@@ -32,10 +36,105 @@ const appendToMemory = async (r1, r2) => {
   } catch (err) { console.error('Memory write error:', err) }
 }
 
+// ─── Extracción de texto mostrable durante el streaming ───────────────────────
+// Solo pinta R3 (respuesta al usuario) o respuestas directas. Oculta R1/R2,
+// señales de control técnico y el contrato a medio emitir.
+const extractStreamingDisplay = (text) => {
+  const i = text.indexOf('R3:')
+  if (i !== -1) return text.slice(i + 3).trim()
+  if (!/R1:|R2:|STEP_COMPLETE|STEP_FAILED|NEED_REPLAN/.test(text)) return text.trim()
+  return ''
+}
+
+// Respuesta que recibe el modelo cuando el usuario cancela una pregunta de ask_user.
+const ASK_CANCELLED = 'Cancelado por el usuario.'
+
 // ─── Modelos ──────────────────────────────────────────────────────────────────
 const COCHI_TIER_LABEL = {
   '~deepseek/deepseek-v4-flash-latest': 'Centinela',
   'tencent/hy4-preview':  'Terminator',
+}
+
+// ─── Compactación de contexto token-aware (Bloque H) ──────────────────────────
+// Distinto del pairing guard de pruneApiMessages (Bloque A), que se mantiene
+// intacto como red de seguridad estructural. Acá, cuando la conversación supera
+// el presupuesto de tokens, la porción vieja se reemplaza por un resumen REAL
+// generado por el modelo en vez de solo descartarse con un placeholder.
+const CONTEXT_TOKEN_BUDGET   = 60000 // tokens estimados que disparan la compactación
+const CONTEXT_KEEP_RECENT_MSGS = 14  // tope de mensajes recientes conservados (red de seguridad)
+const CONTEXT_RECENT_TOKEN_CAP = CONTEXT_TOKEN_BUDGET / 2 // tramo reciente a preservar sin resumir
+const CONTEXT_SUMMARY_MAX_TOKENS = 900
+
+const CONTEXT_COMPACTION_PROMPT = `You compress an agentic conversation to save context. You receive a transcript of older messages (user requests, assistant reasoning, tool calls and their results). Produce a dense, factual summary that preserves everything needed to continue the task.
+
+RULES:
+- Preserve: the original task/goal, decisions made, files created/modified/deleted with their exact paths, command outputs that matter, errors encountered and how they were resolved, and any pending/next action.
+- Keep exact identifiers: file paths, function names, IDs, URLs, values.
+- Discard: conversational filler, repeated tool results, and anything already superseded.
+- Write in the same language as the transcript.
+- Be concise but complete. No preamble, no meta-commentary, no markdown headers. A few short paragraphs or a tight bullet list is fine.`
+
+// Estimación heurística de tokens (~4 chars/token) para decidir la compactación
+// antes de que el proveedor rechace por contexto excedido.
+function estimateTokens(messages) {
+  let chars = 0
+  for (const m of messages) {
+    if (typeof m.content === 'string') chars += m.content.length
+    else if (m.content != null) { try { chars += JSON.stringify(m.content).length } catch {} }
+    if (Array.isArray(m.tool_calls)) {
+      for (const tc of m.tool_calls) {
+        chars += (tc.function?.name?.length || 0) + (tc.function?.arguments?.length || 0)
+      }
+    }
+    chars += 16 // overhead por mensaje
+  }
+  return Math.ceil(chars / 4)
+}
+
+// Herramientas de solo lectura que pueden ejecutarse en paralelo sin efectos
+// de borde ni confirmaciones (ver paralelización en el loop de tools).
+const READ_ONLY_TOOLS = new Set([
+  'read_file', 'read_file_chunk', 'list_dir', 'find_files',
+  'search_in_files', 'get_file_info', 'file_exists', 'web_fetch',
+])
+
+// Genera un resumen real de los mensajes descartados por la compactación.
+// Se apoya en el proveedor activo y, si falla, devuelve null para caer al
+// placeholder estático sin romper el loop.
+async function summarizeDropped(dropped, { provider, sessionId, signal, onUsage }) {
+  if (!dropped.length) return null
+  const transcript = dropped.map(m => {
+    const label = m.role === 'tool' ? 'TOOL' : String(m.role).toUpperCase()
+    let text = typeof m.content === 'string'
+      ? m.content
+      : (m.content != null ? JSON.stringify(m.content) : '')
+    if (Array.isArray(m.tool_calls)) {
+      text += ' ' + m.tool_calls
+        .map(tc => `[llamada ${tc.function?.name}(${tc.function?.arguments})]`)
+        .join(' ')
+    }
+    return `${label}: ${text}`
+  }).join('\n')
+
+  try {
+    const res = await streamChat({
+      provider,
+      stream: false,
+      signal,
+      sessionId,
+      retries: 2,
+      maxTokens: CONTEXT_SUMMARY_MAX_TOKENS,
+      messages: [
+        { role: 'system', content: CONTEXT_COMPACTION_PROMPT },
+        { role: 'user', content: transcript },
+      ],
+      onUsage,
+    })
+    const summary = (res.content || '').trim()
+    return summary || null
+  } catch {
+    return null
+  }
 }
 
 
@@ -101,6 +200,7 @@ export default function CochiDesktop({
   const [tokens,          setTokens]          = useState(0)
   const [cost,            setCost]            = useState(0)
   const [loading,         setLoading]         = useState(false)
+  const [liveStream,      setLiveStream]      = useState('')
   const abortRef                              = useRef(null)
   const [selectedModel,   setSelectedModel]   = useState(COCHI_MODELS[0].id)
   const [ollamaModel,     setOllamaModel]     = useState('llama3.2')
@@ -121,9 +221,23 @@ export default function CochiDesktop({
   const sessionPairsRef = useRef([]) // acumula {r1,r2} de cada turno — se resetea en CLS y Guardar R7
   const chatContainerRef = useRef(null)
   const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
+  const [todos, setTodos] = useState([])   // lista de tareas del tool todowrite
+  const [pendingQuestion, setPendingQuestion] = useState(null) // {question,options,multiple,header} — tool ask_user
+  const [askInput, setAskInput] = useState('')
+  const [askChecks, setAskChecks] = useState([])
+  const askResolverRef = useRef(null)
+
+  // ─── Permisos (Bloque I) ───────────────────────────────────────────────────
+  const [pendingPermission, setPendingPermission] = useState(null) // solicitud de permiso activa
+  const permissionResolverRef = useRef(null)
+  const sessionAllowRef = useRef(new Set()) // firmas aprobadas "siempre en esta sesión"
+  const permissionRules = normalizeRules(preferences?.permissions)
 
   // Scroll al final
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading, liveStream])
+
+  // Reset del input de ask_user al abrir una nueva pregunta
+  useEffect(() => { setAskInput(''); setAskChecks([]) }, [pendingQuestion])
 
   useEffect(() => {
     loadAgentPrompt('cochi').then(p => {
@@ -165,7 +279,7 @@ export default function CochiDesktop({
 
   const savePreferences = async (prefs) => {
     try {
-      const merged = { ...prefs, ollamaModel, lmStudioModel }
+      const merged = { ...preferences, ...prefs, ollamaModel, lmStudioModel }
       await writeTextFile('user_preferences.json', JSON.stringify(merged, null, 2), { baseDir: BaseDirectory.AppLocalData })
       setPreferences(merged)
     } catch (err) { console.error('Error saving preferences:', err) }
@@ -173,7 +287,7 @@ export default function CochiDesktop({
 
   useEffect(() => {
     if (onSavePreferences) onSavePreferences(savePreferences)
-  }, [])
+  })
 
   // ─── Consumir mensaje del input central ───────────────────────────────────
   useEffect(() => {
@@ -212,6 +326,78 @@ export default function CochiDesktop({
     setActivity(prev => [...prev, { icon, label, detail, diff, ts: Date.now() }])
   }
 
+  // ─── ask_user: pausa real del loop ────────────────────────────────────────
+  // Devuelve una promesa que se resuelve cuando el usuario responde (o cancela
+  // con el botón CANCELAR / Esc, que aborta el controller).
+  function askUser(payload, signal) {
+    return new Promise((resolve) => {
+      if (signal?.aborted) { resolve(ASK_CANCELLED); return }
+      const onAbort = () => {
+        askResolverRef.current = null
+        setPendingQuestion(null)
+        resolve(ASK_CANCELLED)
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
+      askResolverRef.current = (value) => {
+        signal?.removeEventListener('abort', onAbort)
+        askResolverRef.current = null
+        setPendingQuestion(null)
+        resolve(value)
+      }
+      setMessages(prev => [...prev, { role: 'assistant', content: `❓ ${payload.question}` }])
+      setPendingQuestion({ ...payload })
+    })
+  }
+
+  function submitAsk(answer) {
+    const text = String(answer ?? '').trim()
+    if (!text) return
+    setMessages(prev => [...prev, { role: 'user', content: text }])
+    askResolverRef.current?.(`USER ANSWER: ${text}`)
+  }
+
+  function toggleAskCheck(option) {
+    setAskChecks(prev => prev.includes(option) ? prev.filter(o => o !== option) : [...prev, option])
+  }
+
+  // ─── Permisos: pausa del loop esperando decisión del usuario ──────────────
+  // Igual que ask_user: devuelve una promesa resuelta por el panel (o 'deny' si
+  // se aborta con CANCELAR/Esc). Decisiones: 'allow' | 'allow_session' | 'deny'.
+  function requestPermission(request, signal) {
+    return new Promise((resolve) => {
+      if (signal?.aborted) { resolve('deny'); return }
+      const onAbort = () => {
+        permissionResolverRef.current = null
+        setPendingPermission(null)
+        resolve('deny')
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
+      permissionResolverRef.current = (choice) => {
+        signal?.removeEventListener('abort', onAbort)
+        permissionResolverRef.current = null
+        setPendingPermission(null)
+        resolve(choice)
+      }
+      setPendingPermission(request)
+    })
+  }
+
+  function resolvePermission(choice) {
+    permissionResolverRef.current?.(choice)
+  }
+
+  // Guarda una regla allow permanente en las preferencias del usuario.
+  async function addPermanentRule(request) {
+    const rule = buildRuleFromRequest(request)
+    if (!rule) return
+    const current = normalizeRules(preferences?.permissions)
+    if (current.allow.includes(rule)) return
+    await savePreferences({
+      ...(preferences || {}),
+      permissions: { ...current, allow: [...current.allow, rule] },
+    })
+  }
+
   const stripLabelLines = (text) => text
     .split('\n')
     .filter(line => !/^\s*\*{0,2}R[123]:\*{0,2}/i.test(line))
@@ -231,18 +417,53 @@ export default function CochiDesktop({
     return { r1, r2, r3 }
   }
 
-  function pruneApiMessages(messages) {
-    const KEEP_RECENT = 14
+  // Compactación de contexto (Bloque H): el disparador es token-aware y la
+  // porción descartada se resume de verdad. El pairing guard del Bloque A se
+  // conserva textualmente intacto.
+  async function pruneApiMessages(messages, { provider, sessionId, signal, onUsage } = {}) {
     const systemMsgs = messages.filter(m => m.role === 'system')
     const nonSystem  = messages.filter(m => m.role !== 'system')
-    if (nonSystem.length <= KEEP_RECENT + 1) return messages
+
+    const tooManyMessages = nonSystem.length > CONTEXT_KEEP_RECENT_MSGS + 1
+    const tooManyTokens   = estimateTokens(messages) > CONTEXT_TOKEN_BUDGET
+    if (!tooManyMessages && !tooManyTokens) return messages
+
     const firstUser = nonSystem[0]
-    const rest       = nonSystem.slice(1)
-    const recent     = rest.slice(-KEEP_RECENT)
-    if (rest.length - recent.length <= 0) return messages
+    const rest      = nonSystem.slice(1)
+
+    // Punto de corte por cantidad de mensajes (red de seguridad) y por tokens
+    // (token-aware): se conserva lo más reciente hasta cubrir el presupuesto.
+    const byMessages = Math.max(0, rest.length - CONTEXT_KEEP_RECENT_MSGS)
+    let byTokens = rest.length
+    let acc = 0
+    while (byTokens > 0) {
+      const nextAcc = acc + estimateTokens([rest[byTokens - 1]])
+      // Consumimos siempre al menos el último mensaje, aunque él solo supere el
+      // cap, para no quedarnos sin estado reciente.
+      if (byTokens < rest.length && nextAcc > CONTEXT_RECENT_TOKEN_CAP) break
+      acc = nextAcc
+      byTokens--
+    }
+    let start = tooManyTokens
+      ? (tooManyMessages ? Math.min(byMessages, byTokens) : byTokens)
+      : byMessages
+
+    // Pairing guard: la poda NUNCA debe cortar entre un assistant.tool_calls y sus
+    // tool results. Si el corte cae sobre un mensaje 'tool', retrocedemos hasta
+    // incluír el assistant que lo originó (y el resto de sus tool results).
+    while (start > 0 && rest[start].role === 'tool') start--
+    if (start <= 0) return messages
+
+    const recent  = rest.slice(start)
+    const dropped = rest.slice(0, start)
+
+    // Resumen REAL de lo descartado (antes: solo placeholder estático).
+    const summary = await summarizeDropped(dropped, { provider, sessionId, signal, onUsage })
     const compressed = {
       role: 'user',
-      content: '[MEMORY] Previous tool results compressed to save context. Continue task from current state.'
+      content: summary
+        ? `[CONTEXT SUMMARY] Earlier turns were compacted to save context. Real summary of what happened:\n${summary}`
+        : '[MEMORY] Previous tool results compressed to save context. Continue task from current state.'
     }
     return [...systemMsgs, firstUser, compressed, ...recent]
   }
@@ -266,73 +487,24 @@ export default function CochiDesktop({
 
   async function generatePlan(userMessage) {
     setPlanStatus('planning')
-    const isLocal = selectedModel === 'ollama'
-    const isLmStudio = selectedModel === 'lmstudio'
-    const apiUrl = isLocal
-      ? `${preferences?.ollamaEndpoint || 'http://localhost:11434'}/v1/chat/completions`
-      : isLmStudio
-        ? `${preferences?.lmStudioEndpoint || 'http://localhost:1234'}/v1/chat/completions`
-        : 'https://openrouter.ai/api/v1/chat/completions'
-    const modelSlug = isLocal ? ollamaModel : isLmStudio ? lmStudioModel : selectedModel
-    const authHeader = isLocal || isLmStudio ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
+    const provider = resolveProvider(selectedModel, { preferences, ollamaModel, lmStudioModel })
 
     try {
       const planningPrompt = remotePrompts?.planning ?? PLANNING_SYSTEM_PROMPT
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authHeader,
-          ...(!isLocal && !isLmStudio ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
-        },
-        body: JSON.stringify({
-          model: modelSlug,
-          messages: [
-            { role: 'system', content: planningPrompt },
-            { role: 'user', content: userMessage }
-          ],
-          max_tokens: 1400,
-          reasoning: { enabled: false },
-          stream: false,
-        })
+      const result = await streamChat({
+        provider,
+        stream: false,
+        messages: [
+          { role: 'system', content: planningPrompt },
+          { role: 'user', content: userMessage }
+        ],
+        maxTokens: 1400,
       })
-      if (!res.ok) throw new Error(`API ${res.status}`)
-      const data = await res.json()
-      const finishReason = data.choices?.[0]?.finish_reason
-      if (finishReason === 'length') {
-        console.warn('generatePlan: respuesta cortada por max_tokens (finish_reason=length)')
-      }
-      console.log('TOKEN BREAKDOWN [planning]', {
-        prompt: data.usage?.prompt_tokens,
-        completion: data.usage?.completion_tokens,
-        reasoning: data.usage?.completion_tokens_details?.reasoning_tokens ?? 0,
-        total: data.usage?.total_tokens,
-      })
-      const text = data.choices[0].message.content
 
-      const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
-
-      const parsed = JSON.parse(clean)
-      if (parsed.taskSummary && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-        const mappedSteps = parsed.steps.map((s, i) => ({
-          id: s.id || `step_${i + 1}`,
-          description: s.description,
-          type: s.type || 'execute',
-          status: 'pending',
-          iterationsUsed: 0,
-        }))
-        console.log('DEBUG GENERATED PLAN:', mappedSteps.map(s => s.description))
-        syncPlan({
-          taskSummary: parsed.taskSummary,
-          steps: mappedSteps,
-          currentStepIndex: 0,
-          totalIterationsUsed: 0,
-        })
-        setPlanStatus('awaiting_confirmation')
-        setMessages(prev => [...prev, { role: 'plan' }])
-      } else {
-        throw new Error('Invalid plan shape')
-      }
+      const plan = parsePlanResponse(result.content)
+      console.log('DEBUG GENERATED PLAN:', plan.steps.map(s => s.description))
+      syncPlan({ ...plan, currentStepIndex: 0, totalIterationsUsed: 0 })
+      setPlanStatus('awaiting_confirmation')
     } catch (err) {
       console.warn('generatePlan: fallback to 1-step plan —', err.message)
       const fallback = {
@@ -350,45 +522,25 @@ export default function CochiDesktop({
       console.log('DEBUG GENERATED PLAN:', fallback.steps.map(s => s.description))
       syncPlan(fallback)
       setPlanStatus('awaiting_confirmation')
-      setMessages(prev => [...prev, { role: 'plan' }])
     }
   }
 
   async function replanStep(step, reason) {
-    const isLocal = selectedModel === 'ollama'
-    const isLmStudio = selectedModel === 'lmstudio'
-    const apiUrl = isLocal
-      ? `${preferences?.ollamaEndpoint || 'http://localhost:11434'}/v1/chat/completions`
-      : isLmStudio
-        ? `${preferences?.lmStudioEndpoint || 'http://localhost:1234'}/v1/chat/completions`
-        : 'https://openrouter.ai/api/v1/chat/completions'
-    const modelSlug = isLocal ? ollamaModel : isLmStudio ? lmStudioModel : selectedModel
-    const authHeader = isLocal || isLmStudio ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
+    const provider = resolveProvider(selectedModel, { preferences, ollamaModel, lmStudioModel })
 
     try {
       const planningPrompt = remotePrompts?.planning ?? PLANNING_SYSTEM_PROMPT
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authHeader,
-          ...(!isLocal && !isLmStudio ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
-        },
-        body: JSON.stringify({
-          model: modelSlug,
-          messages: [
-            { role: 'system', content: planningPrompt },
-            { role: 'user', content: `Necesito dividir este paso en sub-pasos: '${step.description}'. Motivo: ${reason}. Devuelve máximo 3 sub-pasos en el mismo formato JSON.` }
-          ],
-          max_tokens: 600,
-          stream: false,
-        })
+      const result = await streamChat({
+        provider,
+        stream: false,
+        messages: [
+          { role: 'system', content: planningPrompt },
+          { role: 'user', content: `Necesito dividir este paso en sub-pasos: '${step.description}'. Motivo: ${reason}. Devuelve máximo 3 sub-pasos en el mismo formato JSON.` }
+        ],
+        maxTokens: 600,
       })
 
-      if (!res.ok) throw new Error(`API ${res.status}`)
-
-      const data = await res.json()
-      const text = data.choices[0].message.content
+      const text = result.content || ''
       const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
       const parsed = JSON.parse(clean)
 
@@ -432,19 +584,24 @@ export default function CochiDesktop({
       setMessages(prev => [...prev, { role: 'assistant', content: msg }])
       return
     }
+
+    // Estado vacío: sin API key local no se dispara ningún fetch.
+    // Ollama / LM Studio son locales y no necesitan key.
+    const usesOpenRouter = selectedModel !== 'ollama' && selectedModel !== 'lmstudio'
+    if (usesOpenRouter && !getOpenRouterKey()) {
+      setLoading(false)
+      setPlanStatus('idle')
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '🔑 Todavía no cargaste tu API key de OpenRouter. Usá el botón de la llave en la barra superior y pegala para poder trabajar.'
+      }])
+      return
+    }
     let remainingIter = 25
     let totalTokensAcc = 0
     let totalCostAcc = 0
 
-    const isLocal = selectedModel === 'ollama'
-    const isLmStudio = selectedModel === 'lmstudio'
-    const apiUrl = isLocal
-      ? `${preferences?.ollamaEndpoint || 'http://localhost:11434'}/v1/chat/completions`
-      : isLmStudio
-        ? `${preferences?.lmStudioEndpoint || 'http://localhost:1234'}/v1/chat/completions`
-        : 'https://openrouter.ai/api/v1/chat/completions'
-    const modelSlug = isLocal ? ollamaModel : isLmStudio ? lmStudioModel : selectedModel
-    const authHeader = isLocal || isLmStudio ? 'Bearer ollama' : `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
+    const provider = resolveProvider(selectedModel, { preferences, ollamaModel, lmStudioModel })
     const permissionLabel = workspace.permission === 'read' ? 'read-only' : workspace.permission === 'write' ? 'write' : 'full access'
     const nombreAlternativo = preferences?.nombre_alternativo || 'Signor Roberto'
     const chatLanguage = preferences?.chat_language || 'Spanish'
@@ -455,6 +612,7 @@ export default function CochiDesktop({
 
     setLoading(true)
     setActivity([])
+    setLiveStream('')
 
     try {
       let apiMessages = null // conversación persistente para todo el plan — se arma UNA vez y se comprime al cerrar cada step, nunca se reconstruye desde cero.
@@ -515,12 +673,14 @@ export default function CochiDesktop({
         if (trackSteps) {
           apiMessages.push({
             role: 'system',
-            content: `NEXT STEP (${stepIndex + 1}/${currentPlan.steps.length}): ${step.description}`
+            content: buildPlanContext(currentPlan, stepIndex)
           })
         }
 
         const stepStartIndex = apiMessages.length
         let stepTokens = 0
+        let stepInputTokens = 0
+        let stepOutputTokens = 0
         let innerIter = 0
         const MAX_INNER = 15
         let stepCompleted = false
@@ -537,42 +697,48 @@ export default function CochiDesktop({
 
           const isWrapperCall = false
 
-          console.log(`DEBUG APIMESSAGES [step ${stepIndex + 1} / iter ${innerIter}]`, apiMessages.map(m => ({ role: m.role, preview: (m.content || '').toString().slice(0, 80) })))
-          const res = await fetch(apiUrl, {
-            method: 'POST',
+          const streamed = await streamChat({
+            provider,
+            messages: apiMessages,
+            ...(isWrapperCall ? {} : { tools: getToolsForPermission(workspace.permission), toolChoice: 'auto' }),
             signal: controller.signal,
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': authHeader,
-              ...(!isLocal && !isLmStudio ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
+            sessionId: cochiSessionId,
+            retries: 3,
+            onDelta: (partial) => setLiveStream(extractStreamingDisplay(partial)),
+            onUsage: (usage) => {
+              const promptTokens = usage.prompt_tokens ?? 0
+              const completionTokens = usage.completion_tokens ?? 0
+              const total = usage.total_tokens ?? (promptTokens + completionTokens)
+              stepTokens += total
+              totalTokensAcc += total
+              stepInputTokens += promptTokens
+              stepOutputTokens += completionTokens
+              console.log(`TOKEN BREAKDOWN [step ${stepIndex + 1}]`, {
+                prompt: promptTokens,
+                completion: completionTokens,
+                reasoning: usage.completion_tokens_details?.reasoning_tokens ?? 0,
+                cached: usage.prompt_tokens_details?.cached_tokens ?? 0,
+                total,
+              })
             },
-            body: JSON.stringify({
-              model: modelSlug, stream: false,
-              reasoning: { enabled: false },
-              ...(isWrapperCall ? {} : { tools: getToolsForPermission(workspace.permission), tool_choice: 'auto' }),
-              messages: apiMessages,
-              ...(isLocal || isLmStudio ? {} : { usage: { include: true }, session_id: cochiSessionId }),
-            })
           })
+          setLiveStream('')
 
-          if (!res.ok) { const errText = await res.text(); throw new Error(`API ${res.status}: ${errText}`) }
-
-          const data = await res.json()
-          if (data.usage?.total_tokens) {
-            stepTokens += data.usage.total_tokens
-            totalTokensAcc += data.usage.total_tokens
-            console.log(`TOKEN BREAKDOWN [step ${stepIndex + 1}]`, {
-              prompt: data.usage.prompt_tokens,
-              completion: data.usage.completion_tokens,
-              reasoning: data.usage.completion_tokens_details?.reasoning_tokens ?? 0,
-              cached: data.usage.prompt_tokens_details?.cached_tokens ?? 0,
-              total: data.usage.total_tokens,
-            })
+          if (streamed.finishReason === 'length') {
+            if (trackSteps) updateStepStatus(step.id, 'failed', 'Respuesta cortada por límite de tokens (finish_reason=length)')
+            stepResultSummary = 'FAILED: respuesta cortada por límite de tokens'
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: '⚠️ La respuesta del modelo se cortó por el límite de tokens. Probá con una instrucción más acotada o un archivo más pequeño.'
+            }])
+            stepCompleted = true
+            break
           }
-
-          const choice = data.choices?.[0]
-          if (!choice) throw new Error('Sin respuesta del modelo')
-          const assistantMsg = choice.message
+          const assistantMsg = {
+            role: 'assistant',
+            content: streamed.content || '',
+            ...(streamed.toolCalls?.length ? { tool_calls: streamed.toolCalls } : {}),
+          }
           apiMessages.push(assistantMsg)
 
           if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
@@ -656,36 +822,31 @@ export default function CochiDesktop({
                       }
                     ]
 
-                    const wrapperRes = await fetch(apiUrl, {
-                      method: 'POST',
+                    const wrapperStreamed = await streamChat({
+                      provider,
+                      messages: wrapperMessages,
                       signal: controller.signal,
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': authHeader,
-                        ...(!isLocal && !isLmStudio ? { 'HTTP-Referer': 'https://r7signal.com', 'X-Title': 'R7Signal · Cochi Desktop' } : {})
+                      sessionId: cochiSessionId,
+                      retries: 3,
+                      onDelta: (partial) => setLiveStream(extractStreamingDisplay(partial)),
+                      onUsage: (usage) => {
+                        const promptTokens = usage.prompt_tokens ?? 0
+                        const completionTokens = usage.completion_tokens ?? 0
+                        const total = usage.total_tokens ?? (promptTokens + completionTokens)
+                        stepTokens += total
+                        totalTokensAcc += total
+                        stepInputTokens += promptTokens
+                        stepOutputTokens += completionTokens
+                        console.log('TOKEN BREAKDOWN [wrapper]', {
+                          prompt: promptTokens,
+                          completion: completionTokens,
+                          reasoning: usage.completion_tokens_details?.reasoning_tokens ?? 0,
+                          total,
+                        })
                       },
-                      body: JSON.stringify({
-                        model: modelSlug, stream: false,
-                        reasoning: { enabled: false },
-                        messages: wrapperMessages,
-                        ...(isLocal || isLmStudio ? {} : { usage: { include: true }, session_id: cochiSessionId }),
-                      })
                     })
-
-                    if (!wrapperRes.ok) throw new Error(`Wrapper API ${wrapperRes.status}`)
-                    const wrapperData = await wrapperRes.json()
-                    if (wrapperData.usage?.total_tokens) {
-                      stepTokens += wrapperData.usage.total_tokens
-                      totalTokensAcc += wrapperData.usage.total_tokens
-                      console.log('TOKEN BREAKDOWN [wrapper]', {
-                        prompt: wrapperData.usage.prompt_tokens,
-                        completion: wrapperData.usage.completion_tokens,
-                        reasoning: wrapperData.usage.completion_tokens_details?.reasoning_tokens ?? 0,
-                        total: wrapperData.usage.total_tokens,
-                      })
-                    }
-                    const wrapperRaw = wrapperData.choices?.[0]?.message?.content || ''
-                    console.log('WRAPPER RAW:', wrapperRaw)
+                    setLiveStream('')
+                    const wrapperRaw = wrapperStreamed.content || ''
                     const { r1, r2, r3 } = parseR1R2R3(wrapperRaw)
                     const displayContent = (r3 || wrapperRaw)
                       .replace(/\[STEP_COMPLETE:[\s\S]*?\]/, '')
@@ -743,47 +904,96 @@ export default function CochiDesktop({
             if (sysIdx !== -1) apiMessages[sysIdx] = { role: 'system', content: STEP_EXECUTION_PROMPT }
           }
 
-          const toolResults = []
-          for (const toolCall of assistantMsg.tool_calls) {
-            if (controller.signal.aborted) break
+          const executeToolCall = async (toolCall) => {
             const name = toolCall.function.name
             let args = {}
             try { args = JSON.parse(toolCall.function.arguments) } catch {}
 
             console.log(`DEBUG TOOL CALL [step ${trackSteps ? stepIndex + 1 : '—'} / iter ${innerIter}]`, { name, args })
 
-            // ── Guardrail: operaciones destructivas requieren confirmación ────
-            let blocked = false
-            if (name === 'run_command') {
-              blocked = !window.confirm(`Cochi quiere EJECUTAR:\n${args.command}\n\n¿Confirmás?`)
-            } else if (name === 'delete_file') {
-              blocked = !window.confirm(`Cochi quiere BORRAR:\n${args.path}\n\n¿Confirmás?`)
-            } else if (name === 'write_file' && await pathExistsCochi(args.path)) {
-              blocked = !window.confirm(`Cochi quiere SOBREESCRIBIR:\n${args.path}\n\n¿Confirmás?`)
+            // ── ask_user: pausa el loop y espera la respuesta del usuario ────
+            if (name === 'ask_user') {
+              pushActivity(TOOL_ICONS.ask_user || '❓', 'ask_user', String(args.question || '').slice(0, 60))
+              const answer = await askUser({
+                question: String(args.question || '¿Puedes aclararme algo?'),
+                options: Array.isArray(args.options) ? args.options.map(String) : [],
+                multiple: args.multiple === true,
+                header: args.header ? String(args.header) : '',
+              }, controller.signal)
+              return { role: 'tool', tool_call_id: toolCall.id, content: String(answer) }
             }
-            if (blocked) {
-              pushActivity(TOOL_ICONS[name] || '🔧', name, 'cancelado')
-              toolResults.push({ role: 'tool', tool_call_id: toolCall.id, content: 'Cancelado por el usuario' })
-              continue
+
+            // ── Permisos: reglas allow/deny + memoria de sesión + diff ────────
+            const permRequest = buildPermissionRequest(name, args)
+            const permDecision = evaluatePermission(permRequest, permissionRules)
+            if (permDecision === 'deny') {
+              pushActivity(TOOL_ICONS[name] || '🔧', name, 'denegado por regla')
+              return { role: 'tool', tool_call_id: toolCall.id, content: '⛔ Bloqueado: una regla de permisos (deny) impide esta acción.' }
+            }
+            if (permRequest.guarded && permDecision !== 'allow' && !sessionAllowRef.current.has(permRequest.signature)) {
+              // Aprobación por diff: se previsualiza la edición sin escribir nada.
+              if (permRequest.kind === 'edit') {
+                try {
+                  const preview = await executeTool(name, args, workspace.permission, workspace.path, { dryRun: true })
+                  if (preview?.diff) permRequest.diff = preview.diff
+                  if (typeof preview?.modelResult === 'string' && preview.modelResult.startsWith('⛔')) {
+                    pushActivity(TOOL_ICONS[name] || '🔧', name, 'bloqueado')
+                    return { role: 'tool', tool_call_id: toolCall.id, content: preview.modelResult }
+                  }
+                } catch {}
+              }
+              const choice = await requestPermission(permRequest, controller.signal)
+              if (choice === 'deny') {
+                pushActivity(TOOL_ICONS[name] || '🔧', name, 'cancelado')
+                return { role: 'tool', tool_call_id: toolCall.id, content: 'Cancelado por el usuario' }
+              }
+              if (choice === 'allow_session') sessionAllowRef.current.add(permRequest.signature)
             }
 
             const icon = TOOL_ICONS[name] || '🔧'
-            const shortLabel = name === 'run_command'
+            let shortLabel = name === 'run_command'
               ? (args.command?.slice(0, 60) + (args.command?.length > 60 ? '…' : ''))
-              : (args.path?.split('\\').pop() || args.path || name)
+              : ((args.path || args.fromPath)?.split('\\').pop() || args.path || args.fromPath || name)
             let modelResult = ''
             let diff = null
             try {
               const execResult = await executeTool(name, args, workspace.permission, workspace.path)
               modelResult = execResult.modelResult
               diff = execResult.diff
+              if (name === 'todowrite' && execResult.todos) {
+                setTodos(execResult.todos)
+                shortLabel = `${execResult.todos.length} tarea(s)`
+              }
             } catch (err) { modelResult = `ERROR: ${err.message}` }
             pushActivity(icon, name, shortLabel, diff)
             if (diff) setMessages(prev => [...prev, { role: 'diff', diff }])
             console.log(`DEBUG TOOL RESULT [step ${trackSteps ? stepIndex + 1 : '—'} / iter ${innerIter}]`, { name, modelResult })
-            toolResults.push({ role: 'tool', tool_call_id: toolCall.id, content: String(modelResult) })
+            return { role: 'tool', tool_call_id: toolCall.id, content: String(modelResult) }
           }
-          apiMessages.push(...toolResults)
+
+          // Los tool calls de solo lectura e independientes se ejecutan en
+          // paralelo (agrupando tramos contiguos); cualquier llamada con efectos
+          // de borde, confirmación o pausa (ask_user) actúa como barrera y se
+          // ejecuta en serie, preservando el orden original de los resultados.
+          const calls = assistantMsg.tool_calls
+          const toolResults = new Array(calls.length)
+          let ci = 0
+          while (ci < calls.length) {
+            if (controller.signal.aborted) break
+            if (READ_ONLY_TOOLS.has(calls[ci].function.name)) {
+              let cj = ci
+              while (cj < calls.length && READ_ONLY_TOOLS.has(calls[cj].function.name)) cj++
+              const batch = []
+              for (let k = ci; k < cj; k++) batch.push(executeToolCall(calls[k]))
+              const settled = await Promise.all(batch)
+              settled.forEach((r, k) => { toolResults[ci + k] = r })
+              ci = cj
+            } else {
+              toolResults[ci] = await executeToolCall(calls[ci])
+              ci++
+            }
+          }
+          apiMessages.push(...toolResults.filter(Boolean))
 
           // Guard anti-repetición: detecta si el modelo repite la misma llamada sin avanzar
           let maxRepeatSignature = null
@@ -816,7 +1026,20 @@ export default function CochiDesktop({
             })
           }
 
-          apiMessages = pruneApiMessages(apiMessages)
+          apiMessages = await pruneApiMessages(apiMessages, {
+            provider,
+            sessionId: cochiSessionId,
+            signal: controller.signal,
+            onUsage: (usage) => {
+              const promptTokens = usage.prompt_tokens ?? 0
+              const completionTokens = usage.completion_tokens ?? 0
+              const total = usage.total_tokens ?? (promptTokens + completionTokens)
+              stepTokens += total
+              totalTokensAcc += total
+              stepInputTokens += promptTokens
+              stepOutputTokens += completionTokens
+            },
+          })
         }
 
         if (trackSteps && stepCompleted) {
@@ -840,11 +1063,11 @@ export default function CochiDesktop({
           break
         }
 
-        const stepCost = (stepTokens / 1_000_000) * (MODEL_PRICES[selectedModel]?.inputPerM ?? 0)
-          totalCostAcc += stepCost
-          setTokens(prev => prev + stepTokens)
-          setCost(prev => prev + stepCost)
-          onUsage?.({ source: 'cochi', inputTokens: stepTokens, outputTokens: 0, cost: stepCost })
+        const stepCost = calculateCost(selectedModel, stepInputTokens, stepOutputTokens)
+        totalCostAcc += stepCost
+        setTokens(prev => prev + stepTokens)
+        setCost(prev => prev + stepCost)
+        onUsage?.({ source: 'cochi', inputTokens: stepInputTokens, outputTokens: stepOutputTokens, cost: stepCost })
 
         // Single pass when no plan
         if (!trackSteps) break
@@ -853,6 +1076,7 @@ export default function CochiDesktop({
       setPlanStatus('completed')
       setLoading(false)
       setActivity([])
+      setLiveStream('')
 
       const finalPlan = planRef.current
       if (finalPlan) {
@@ -869,70 +1093,12 @@ export default function CochiDesktop({
     } catch (err) {
       setLoading(false)
       setActivity([])
+      setLiveStream('')
       setPlanStatus('completed')
       if (err.name !== 'AbortError') {
         setMessages(prev => [...prev, { role: 'assistant', content: `❌ Error en ejecución del plan: ${err.message}` }])
       }
     }
-  }
-
-  // ─── Guard de intención — clasificador ligero ──────────────────────────
-  const needsPlanning = (message) => {
-    // Normaliza acentos (NFD + strip de marcas diacríticas) para que el voseo
-    // argentino ("creá", "ejecutá", "borrá") calce con los verbos base de las
-    // listas de abajo sin tener que enumerar cada conjugación por separado.
-    const msg = message.toLowerCase().trim()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-
-    // Conversational — no planning needed
-    const conversational = [
-      /^hola/, /^hi/, /^hey/, /^buenos/, /^buenas/, /^qué tal/,
-      /^como est/, /^cómo est/, /^todo bien/, /^gracias/, /^ok$/, /^okay/,
-      /^perfecto/, /^entendido/, /^de acuerdo/, /^sí$/, /^no$/, /^claro/,
-      /^qué (eres|puedes|haces|sabes)/, /^who are/, /^what (are|can)/,
-    ]
-    if (conversational.some(r => r.test(msg))) return false
-
-    // Write/execute verbs — these are what actually justify step tracking
-    const writeVerbs = [
-      'crea', 'crear', 'cre ', 'escribe', 'modifica', 'modif',
-      'elimina', 'borra', 'mueve', 'copia', 'renombra',
-      'ejecuta', 'instala', 'instalar', 'añade', 'agrega',
-      'refactori', 'implement', 'migra', 'actualiza',
-      'npm', 'yarn', 'pip', 'cargo', '/cochi',
-    ]
-    const hasWriteVerb = writeVerbs.some(k => msg.includes(k))
-
-    // Read-only queries — even if they mention files, a single pass covers it
-    const queryPatterns = [
-      /^qué/, /^que /, /^cuál/, /^cual/, /^cómo/, /^como /, /^dónde/, /^donde/,
-      /^dime/, /^decime/, /^muestra/, /^muéstrame/, /^cuánt/, /^cuant/,
-      /^lee el/, /^lee la/, /^leer/, /^busca en/, /^analiza/, /^revisa/,
-    ]
-    if (queryPatterns.some(r => r.test(msg)) && !hasWriteVerb) return false
-
-    // Mismo criterio que arriba pero sin anclar al inicio — cubre mensajes con
-    // preámbulo ("Cochi, vete a X y dime...") donde la intención de lectura
-    // no es la primera palabra de la frase.
-    const queryVerbsAnywhere = [
-      'dime', 'decime', 'muestra', 'muéstrame', 'explica', 'explícame', 'explicame',
-      'cuál es', 'cual es', 'qué es', 'que es', 'cuánto', 'cuanto', 'cuántos', 'cuantos',
-      'lee el', 'lee la', 'busca en', 'analiza', 'revisa', 'dónde está', 'donde esta',
-    ]
-    if (!hasWriteVerb && queryVerbsAnywhere.some(k => msg.includes(k))) return false
-
-    // Filesystem / agentic keywords — planning needed
-    const agentic = [
-      ...writeVerbs,
-      'archivo', 'carpeta', 'directorio', 'fichero',
-      'package.json', 'jsx', 'tsx', 'js', 'ts', 'css',
-    ]
-    if (agentic.some(k => msg.includes(k)) && hasWriteVerb) return true
-
-    // Default: if message is short and has no agentic keywords, skip planning
-    if (msg.length < 60) return false
-
-    return true
   }
 
   // ─── Envío principal ──────────────────────────────────────────────────────
@@ -942,8 +1108,17 @@ export default function CochiDesktop({
     originalMessageRef.current = sent
     setMessages(prev => [...prev, { role: 'user', content: sent }])
 
-    setPlanStatus('idle')
-    await executeAllSteps()
+    // Planner revivido (Bloque J): si la intención amerita varios pasos, se
+    // genera un plan y se espera confirmación en PlanViewer antes de ejecutar;
+    // si es atómica/lectura, se ejecuta single-pass como antes.
+    if (needsPlanning(sent)) {
+      syncPlan(null)
+      await generatePlan(sent)
+    } else {
+      syncPlan(null)
+      setPlanStatus('idle')
+      await executeAllSteps()
+    }
   }
 
   function confirmPlan() {
@@ -970,7 +1145,10 @@ export default function CochiDesktop({
     if (window.confirm('¿Borrar toda la conversación?')) {
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
+      setTodos([])
+      syncPlan(null); setPlanStatus('idle')
       sessionPairsRef.current = []
+      sessionAllowRef.current = new Set()
       onResetUsage?.('cochi')
     }
   }
@@ -985,7 +1163,10 @@ export default function CochiDesktop({
       await writeR9File(workspace?.path, 'r7', content)
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
+      setTodos([])
+      syncPlan(null); setPlanStatus('idle')
       sessionPairsRef.current = []
+      sessionAllowRef.current = new Set()
       onResetUsage?.('cochi')
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ No se pudo guardar R7: ${err.message}` }])
@@ -1169,25 +1350,29 @@ export default function CochiDesktop({
                 textShadow: '0 0 40px rgba(196,116,96,0.24), 0 0 100px rgba(196,116,96,0.12)',
                 fontSize: '0.8rem',
               }}>
-                Alto!. quién vive?.<br />
-Selecciona el nivel de potencia en los selectores:<br />
-Centinela para tareas técnicas, Terminator para decisiones de mayor calibre.<br />
-Con tus autorizaciones, asumo el control y administro tus archivos y código<br />
+              Cochi es un agente diseñado para administrar tus archivos y tu código.<br />
+Tiene dos selectores con dos modelos distintos : <br />
+Centinela para tareas técnicas cotidianas,<br />
+Terminator para decisiones de mayor calibre.<br />
+Ambos modelos fueron seleccionados conscientemente <br />
+para equilibrar velocidad y capacidad según la exigencia de cada tarea.<br />
+También puedes operar a Cochi <br />
+con tus propios modelos locales vía Ollama o LM Studio.<br />
+Con tu autorización, Cochi administra archivos y código <br />
 desde la ventana Workspace en la cabecera.<br />
-Operaciones sensibles — borrado, sobreescritura<br />
-— requieren tu confirmación.<br />
-Ninguna se ejecuta sin tu autorización explícita.<br />
-¿Quieres borrar rastro? Sin problema.<br />
-Utiliza el botón CLS en la base del Panel para purgar el chat<br />
-y reiniciar la operación desde cero.<br />
-Para asegurar el informe de misión, activa R7 a los 70.000 Tokens<br />
-y guarda un resumen de la tarea junto al último mensaje.<br />
-Si necesitas extraer datos específicos<br />
-—párrafos o fragmentos de código—,<br />
-R9 te da luz verde para seleccionarlos puntualmente y asegurar el objetivo.<br />
-Localizas el contenido de R7 y R9 en el compartimento<br />
-que está al lado de la rueda dentada<br />
-Operación en curso. A la espera de órdenes.
+Las operaciones sensibles —borrado, sobreescritura—<br />
+requieren siempre tu confirmación explícita. Ninguna se ejecuta sin ella.<br />
+El botón CLS, en la base del Panel, <br />
+purga el chat y reinicia la operación desde cero.<br />
+A los 70.000 tokens, R7 guarda un resumen de la tarea junto al último mensaje.<br />
+R9 permite seleccionar puntualmente párrafos o fragmentos de código <br />
+para extraer datos específicos.<br />
+El contenido de R7 y R9 se encuentra <br />
+en el compartimento junto a la rueda dentada.<br />
+<br />
+NOTA: Cochi tiene incorporado un tono de personalidad específico vía prompt<br />
+que no es posible cambiar en esta versión. <br />
+RGartner by R7Signal
               </div>
             </div>
           )}
@@ -1267,6 +1452,16 @@ Operación en curso. A la espera de órdenes.
             )
           ))}
 
+          {/* Plan activo (Bloque J) — confirmar/cancelar y progreso en vivo */}
+          {executionPlan && planStatus !== 'idle' && (
+            <PlanViewer
+              plan={executionPlan}
+              planStatus={planStatus}
+              onConfirm={confirmPlan}
+              onCancel={cancelPlan}
+            />
+          )}
+
           {/* Activity feed */}
           {loading && activity.length > 0 && (
             <div style={{
@@ -1291,6 +1486,31 @@ Operación en curso. A la espera de órdenes.
               <div className="cd-pulse" style={{ display: 'inline-block', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Procesando turno…</div>
             </div>
           )}
+          {loading && liveStream && (
+            <div className="cd-message-enter" style={isTerminator ? {
+              background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
+              border: '1px solid rgba(201,128,84,0.4)', borderLeft: '3px solid #C98054',
+              borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            } : {
+              background: '#13151A', border: '1px solid #232227', borderLeft: '3px solid #6A7A8A',
+              borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            }}>
+              <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase', color: isTerminator ? '#D4B8D8' : '#6A7A8A' }}>COCHI</div>
+              <div style={{ fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                ...(isTerminator ? {
+                  backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                } : {
+                  backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                }),
+              }}>
+                {liveStream}
+              </div>
+            </div>
+          )}
           <div ref={messagesEndRef} />
           {r9Btn && (
             <button
@@ -1306,6 +1526,38 @@ Operación en curso. A la espera de órdenes.
           )}
         </div>
       </div>
+
+      {/* ── Lista de tareas (todowrite) ── */}
+      {todos.length > 0 && (
+        <div style={{
+          flexShrink: 0,
+          borderTop: '1px solid rgba(255,255,255,0.04)',
+          background: 'rgba(9,8,10,0.6)',
+          padding: '8px 14px',
+          maxHeight: 150,
+          overflowY: 'auto',
+        }}>
+          <div style={{ fontSize: '0.62rem', letterSpacing: '0.15em', fontWeight: 700, color: '#6A7A8A', textTransform: 'uppercase', marginBottom: 4 }}>
+            📋 Plan de tareas
+          </div>
+          {todos.map(t => (
+            <div key={t.id} style={{
+              display: 'flex', gap: 6, alignItems: 'flex-start',
+              fontFamily: "'JetBrains Mono', monospace", fontSize: '0.7rem', lineHeight: 1.5,
+              color: t.status === 'completed' ? '#5A585C'
+                : t.status === 'in_progress' ? '#D4D8DC'
+                : t.status === 'cancelled' ? '#5A585C'
+                : '#8A868B',
+              textDecoration: t.status === 'completed' ? 'line-through' : 'none',
+            }}>
+              <span style={{ color: t.status === 'in_progress' ? '#E8C84A' : t.status === 'completed' ? '#6A9A6A' : '#6A7A8A' }}>
+                {t.status === 'completed' ? '☑' : t.status === 'in_progress' ? '▶' : t.status === 'cancelled' ? '✖' : '☐'}
+              </span>
+              <span style={{ wordBreak: 'break-word' }}>{t.content}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Token warning banner ── */}
       {tokens > 70000 && !tokenWarningDismissed && (
@@ -1327,6 +1579,123 @@ Operación en curso. A la espera de órdenes.
             onClick={() => setTokenWarningDismissed(true)}
             style={{ background: 'transparent', border: 'none', color: '#6A7A8A', fontSize: '0.8rem', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
           >×</button>
+        </div>
+      )}
+
+      {/* ── Permisos — aprobación en sesión y por diff (Bloque I) ── */}
+      {pendingPermission && (
+        <div style={{
+          flexShrink: 0,
+          borderTop: '1px solid rgba(255,68,102,0.35)',
+          background: 'rgba(255,68,102,0.05)',
+          padding: '10px 14px',
+          display: 'flex', flexDirection: 'column', gap: 8,
+        }}>
+          <div style={{ fontSize: '0.62rem', letterSpacing: '0.15em', fontWeight: 700, color: '#FF4466', textTransform: 'uppercase' }}>
+            🔐 Cochi solicita permiso · {pendingPermission.title}
+          </div>
+          <div style={{ fontSize: '0.78rem', color: '#D4D8DC', fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+            {pendingPermission.detail}
+          </div>
+          {pendingPermission.diff && (
+            <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+              <DiffViewer diff={pendingPermission.diff} />
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => resolvePermission('deny')}
+              style={{ background: 'rgba(255,68,102,0.12)', border: '1px solid #FF4466', borderRadius: 4, padding: '6px 12px', color: '#FF4466', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+            >Denegar</button>
+            <button
+              onClick={() => resolvePermission('allow')}
+              style={{ background: 'rgba(106,122,138,0.15)', border: '1px solid #6A7A8A', borderRadius: 4, padding: '6px 12px', color: '#C0C0C0', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+            >Permitir una vez</button>
+            <button
+              onClick={() => resolvePermission('allow_session')}
+              style={{ background: 'rgba(176,245,39,0.12)', border: '1px solid #B0F527', borderRadius: 4, padding: '6px 12px', color: '#B0F527', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+            >Permitir siempre en esta sesión</button>
+            <button
+              onClick={() => { addPermanentRule(pendingPermission).then(() => resolvePermission('allow')) }}
+              style={{ background: 'transparent', border: '1px solid #2F2D35', borderRadius: 4, padding: '6px 12px', color: '#8A868B', fontSize: '0.72rem', cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+            >＋ Guardar regla allow</button>
+          </div>
+          <div style={{ fontSize: '0.6rem', color: '#6A7A8A', fontFamily: "'JetBrains Mono', monospace" }}>
+            Sesión: {sessionAllowRef.current.size} acción(es) autorizada(s) · Reglas: {permissionRules.allow.length} allow / {permissionRules.deny.length} deny
+          </div>
+        </div>
+      )}
+
+      {/* ── ask_user panel — pausa y espera respuesta ── */}
+      {pendingQuestion && (
+        <div style={{
+          flexShrink: 0,
+          borderTop: '1px solid rgba(232,200,74,0.35)',
+          background: 'rgba(232,200,74,0.05)',
+          padding: '10px 14px',
+          display: 'flex', flexDirection: 'column', gap: 8,
+        }}>
+          <div style={{ fontSize: '0.62rem', letterSpacing: '0.15em', fontWeight: 700, color: '#E8C84A', textTransform: 'uppercase' }}>
+            ❓ Cochi pregunta{pendingQuestion.header ? ` · ${pendingQuestion.header}` : ''}
+          </div>
+          <div style={{ fontSize: '0.85rem', color: '#D4D8DC', fontFamily: "'Inter', sans-serif", lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+            {pendingQuestion.question}
+          </div>
+          {pendingQuestion.options?.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {pendingQuestion.options.map((opt, i) => {
+                const selected = askChecks.includes(opt)
+                return (
+                  <button
+                    key={i}
+                    onClick={() => pendingQuestion.multiple ? toggleAskCheck(opt) : submitAsk(opt)}
+                    style={{
+                      background: selected ? 'rgba(232,200,74,0.2)' : 'transparent',
+                      border: `1px solid ${selected ? '#E8C84A' : '#424045'}`,
+                      borderRadius: 4, padding: '4px 10px', cursor: 'pointer',
+                      color: selected ? '#E8C84A' : '#C0C0C0', fontSize: '0.72rem',
+                      fontFamily: "'Space Grotesk', sans-serif",
+                    }}
+                  >{opt}</button>
+                )
+              })}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              autoFocus
+              value={askInput}
+              onChange={e => setAskInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') submitAsk(askInput) }}
+              placeholder={pendingQuestion.multiple ? 'O escribe tu respuesta…' : 'Escribe tu respuesta…'}
+              style={{
+                flex: 1, background: '#131215', border: '1px solid #232227', borderRadius: 4,
+                padding: '6px 10px', color: '#D4D8DC', fontSize: '0.8rem', outline: 'none',
+                fontFamily: "'Inter', sans-serif",
+              }}
+            />
+            {pendingQuestion.multiple && (
+              <button
+                onClick={() => submitAsk(askChecks.join(', '))}
+                disabled={askChecks.length === 0}
+                style={{
+                  background: 'rgba(232,200,74,0.15)', border: '1px solid #E8C84A', borderRadius: 4,
+                  padding: '6px 12px', color: '#E8C84A', fontSize: '0.72rem', fontWeight: 700,
+                  cursor: askChecks.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: askChecks.length === 0 ? 0.5 : 1,
+                  fontFamily: "'Space Grotesk', sans-serif",
+                }}
+              >Enviar</button>
+            )}
+            <button
+              onClick={() => submitAsk(askInput)}
+              style={{ background: 'rgba(106,122,138,0.15)', border: '1px solid #6A7A8A', borderRadius: 4, padding: '6px 12px', color: '#C0C0C0', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+            >Responder</button>
+            <button
+              onClick={() => submitAsk('(sin respuesta)')}
+              style={{ background: 'transparent', border: '1px solid #1F1E22', borderRadius: 4, padding: '6px 10px', color: '#8A868B', fontSize: '0.72rem', cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+            >Omitir</button>
+          </div>
         </div>
       )}
 

@@ -1,0 +1,149 @@
+================================================================================
+== ESTADO ==  (actualizar al cerrar cada sesión)
+================================================================================
+Metodología: trabajar por bloques cerrados. Una sesión = un bloque. Al terminar,
+actualizar este bloque de ESTADO y reiniciar sesión para limpiar contexto.
+
+
+================================================================================
+== ESTADO ==  (actualizar al cerrar cada sesión)
+================================================================================
+Metodología: trabajar por bloques cerrados. Una sesión = un bloque. Al terminar,
+actualizar este bloque de ESTADO y reiniciar sesión para limpiar contexto.
+
+FASE 1 (A-D): COMPLETA. Ver historial de sesiones anteriores.
+
+FASE 2 — ORDEN ACORDADO: E → F → G → H → I → J (K aparte, sin dependencia)
+
+[x] BLOQUE E — Herramientas núcleo de archivos  <-- COMPLETO
+      · grep con regex real (hoy es substring literal) en cochiTools.js
+      · glob avanzado
+      · move/rename
+      · copy
+      · create_dir
+      Verificación: npm run build  ✅ OK
+
+[x] BLOQUE F — Hardening de ejecución  <-- COMPLETO
+      · run_command: agregar cwd, timeout y cap de output (hoy puede meter
+        megabytes al contexto sin límite)
+      · Sumar tool todowrite (lista de tareas visible al modelo)
+      Verificación: npm run build  ✅ OK
+
+[x] BLOQUE G — Primitivas nuevas de interacción  <-- COMPLETO
+      · Tool ask_user (pausa la ejecución y espera respuesta del usuario —
+        toca el loop, no es solo agregar una function más)
+      · Tool web fetch
+      Nota: web_fetch usa tauri-plugin-http (agregado a Cargo.toml, lib.rs y
+      capability cochi-full-access.json) para evitar CORS; el paquete npm
+      @tauri-apps/plugin-http quedó instalado. Requiere rebuild de Tauri.
+      Verificación: npm run build  ✅ OK
+
+[x] BLOQUE H — Contexto y paralelismo  <-- COMPLETO
+      · Compactación token-aware con resumen real: pruneApiMessages ahora
+        dispara por presupuesto de tokens (~60k estimados, ~4 chars/token)
+        además del cap de mensajes. La porción descartada se resume de verdad
+        vía el modelo (summarizeDropped → streamChat sin streaming, 900 tok
+        máx, con fallback al placeholder si falla). El pairing guard del
+        Bloque A quedó textualmente intacto.
+      · Paralelización: los tool calls de solo lectura (read_file,
+        read_file_chunk, list_dir, find_files, search_in_files,
+        get_file_info, file_exists, web_fetch) se ejecutan en paralelo por
+        tramos contiguos (Promise.all), preservando el orden de resultados.
+        Escrituras, confirmaciones y ask_user actúan como barrera serial.
+      Verificación: npm run build  ✅ OK
+
+[x] BLOQUE I — Permisos  <-- COMPLETO
+      · Reglas allow/deny configurables: nuevo src/lib/cochiPermissions.js
+        (precedencia deny > allow, formato tool:patrón glob) + editor de dos
+        textareas (allow/deny) en PreferencesModal, persistido en
+        user_preferences.json bajo permissions:{allow,deny}.
+      · "Permitir siempre en esta sesión": el window.confirm bloqueante por
+        acción se reemplazó por un panel in-app NO bloqueante (promesa, igual
+        patrón que ask_user) con memoria de sesión (sessionAllowRef) por firma
+        tool:target / tool:programa. Se reinicia en CLS y Guardar R7. Botón
+        "Guardar regla allow" para persistir una regla permanente.
+      · Aprobación por diff: executeTool acepta { dryRun } y previsualiza
+        write_file/replace_in_file/append_to_file sin escribir; el panel
+        reutiliza DiffViewer antes de aplicar. run_command/delete/move/copy
+        muestran detalle textual.
+      Verificación: npm run build  ✅ OK
+
+[x] BLOQUE J — Planner revivido  <-- COMPLETO
+      · needsPlanning() extraído del componente a src/lib/cochiPlanningPrompts.js
+        (función pura, testable) y ahora DESPACHADO desde handleSendText:
+        intención multi-paso → generatePlan() + PlanViewer (confirmar/cancelar)
+        antes de ejecutar; intención atómica/lectura → single-pass como antes.
+      · PLANNING_SYSTEM_PROMPT definido como fallback local del prompt remoto
+        (remotePrompts.planning). generatePlan()/replanStep() ya no usan fetch
+        crudo: van por streamChat() del Bloque B, con parsePlanResponse() puro
+        (limpia fences y valida el shape). Se eliminó el ReferenceError latente
+        al no existir la constante.
+      · buildPlanContext() (antes importado sin uso) ahora alimenta el loop por
+        cada paso en lugar del NEXT STEP mínimo.
+      · PlanViewer renderizado en el chat (el role:'plan' huérfano se eliminó):
+        muestra estado de pasos en vivo y botones ejecutar/cancelar. El plan se
+        resetea en CLS y Guardar R7.
+      · Validación: npm run build ✅ OK. Harness Node con 10/10 comprobaciones:
+        needsPlanning clasifica bien el caso multi-paso con borrado (y descarta
+        charla/lectura), parsePlanResponse mapea 3 pasos, buildPlanContext
+        describe actual/completados/pendientes, y el gate del Bloque I sostiene
+        el flujo: primer toque pide permiso, "siempre en sesión" destraba los
+        pasos siguientes sin re-traba, deny bloquea, allow ejecuta directo;
+        además se ejecutó un borrado REAL en sandbox tras la autorización.
+        Nota: el e2e con modelo real requiere la app + API key de OpenRouter
+        (no ejecutable headless), pero la lógica de plan+permisos quedó cubierta.
+
+[ ] BLOQUE K — Sesiones persistentes + resume + undo (Grupo 3, sin dependencia
+      con E-J, se puede hacer en cualquier momento)
+      · Resume, undo, regenerate, message IDs
+      · Probablemente merezca su propio mini-refactor de varias sesiones
+
+
+
+--------------------------------------------------------------------------------
+Análisis original completo (referencia):
+--------------------------------------------------------------------------------
+
+Signor Roberto, revisé CochiDesktop.jsx (1382 líneas), cochiTools.js, cochiPlanningPrompts.js, promptLoader.js, modelPrices.js, la integración en R7Desktop.jsx y las capacidades de Tauri. Te lo doy crudo y ordenado.
+Veredicto general
+No está "mal construido", pero es un MVP que se quedó a mitad de camino. Tiene un loop agéntico real con tools, control signals y buena UI, pero le faltan las tres cosas que hacen que Opencode se sienta fluido: streaming, gestión de contexto seria y sandbox de verdad. Además hay bastante código muerto que confunde. Hoy es "correcto pero táctil"; Opencode es "un motor".
+Lo que ya está bien
+- Loop de tools con tool_calls, señales [STEP_COMPLETE/FAILED/NEED_REPLAN] y anti-bucle (CochiDesktop.jsx:788).
+- 13 tools de archivos razonables y bien descritas (cochiTools.js:43).
+- Niveles de permiso por workspace y confirmación de operaciones destructivas (CochiDesktop.jsx:757).
+- Prompts remotos vía Supabase con interpolación (promptLoader.js), DiffViewer, activity feed, R7/R9.
+Bugs y deuda concreta (verificados)
+1. El planner está muerto. handleSendText (:939) llama directo a executeAllSteps; generatePlan (:267) y needsPlanning (:880) nunca se invocan. Peor: PLANNING_SYSTEM_PROMPT no está importado (:280, :369) → si lo reactivas, explota con ReferenceError. buildPlanContext importado sin uso (:6), COCHI_TIER_LABEL (:36) sin uso, y el role:'plan'/PlanViewer quedaron huérfanos.
+2. El pruning rompe el pairing de tool calls. pruneApiMessages (:234) corta por cantidad de mensajes (14), no por tokens, y puede separar un assistant.tool_calls de su tool result → error de API. Y no resume: solo descarta.
+3. Costo mal calculado. :843 aplica solo inputPerM sobre total_tokens, ignora output, y onUsage manda siempre outputTokens: 0 (:847).
+4. read_file sin tope de tamaño (cochiTools.js:269) → puede reventar el contexto. Asun sí tiene checkSizeOrThrow (asunTools.js:46).
+5. replace_in_file reemplaza TODAS las coincidencias por defecto (cochiTools.js:302) → ediciones peligrosas. Opencode exige match único salvo que pidas replaceAll.
+6. finish_reason === 'length' no se maneja en el loop de ejecución → turno cortado = fallo silencioso (:573).
+7. Sin timeout, retry ni backoff en ningún fetch; un 429 tumba la tarea.
+8. Debug filtrado: console.log con apiMessages completos en cada iteración (:540) → ruido y fuga de datos.
+Lo que le falta respecto a Opencode
+Brecha #1 — no hay streaming. Las cuatro llamadas usan stream:false (:296, :384, :550, :668). Asun y Tito ya streamean (AsunPanel.jsx:32, TitoPanel.jsx:142). Sin streaming, la sensación es de app congelada.
+Sandbox inexistente. executeTool usa args.path absoluto crudo, sin verificar que esté dentro de workspace.path (cochiTools.js:258). La capability cochi-full-access.json da $HOME/** y powershell con validador .* (comando arbitrario sin scope de ruta). Tampoco hay deny-list (C:\Windows, AppData). Opencode confina al cwd y tiene modelo de permisos.
+Seguridad — API key en el bundle. VITE_OPENROUTER_API_KEY (:277, :447) viaja al frontend. En una app Tauri esto debería ir por sidecar Rust o edge function, nunca en el bundle. Además csp: null en tauri.conf.json.
+Permisos tipo Opencode. Hoy es window.confirm bloqueante por acción (:758), sin "permitir siempre en esta sesión", sin reglas allow/deny, sin aprobación por diff.
+Herramientas incompletas. Falta: edit con unicidad, grep con regex (hoy es substring literal), glob avanzado, move/rename, copy, create_dir, todowrite (lista de tareas visible al modelo), ask_user, web fetch. Y run_command no tiene cwd, timeout ni cap de output (puede meter megabytes al contexto).
+Sin paralelismo. Los tool calls se ejecutan en serie (:747), incluso lecturas independientes.
+Sin sesiones persistentes. Al cerrar la app se pierde todo; no hay resume, undo, regenerate ni message IDs. La memoria es append-only y nunca se lee salvo que el usuario lo pida, y r3_history.txt se promete en el prompt (:505) pero jamás se escribe.
+Recomendación priorizada
+Fase 1 — alto impacto / bajo riesgo
+- Streaming SSE (reusar el patrón de AsunPanel.jsx:32) acumulando tool_calls.
+- Extraer un llmClient.js con provider/model/auth/retry/stream para matar la duplicación de apiUrl/modelSlug/authHeader.
+- Costos, tope en read_file, unicidad en replace_in_file, quitar logs, manejar finish_reason.
+- Validar que toda ruta esté dentro del workspace + deny-list.
+- Sacar la API key del frontend.
+// FASE 1 YA RESUELTA.
+
+Fase 2 — arquitectura agéntica
+- Revivir el planner bien (conectarlo) o borrarlo del todo para no confundir.
+- Compactación de contexto token-aware con resumen y pairing seguro.
+- Permisos con reglas allow/deny/sesión y aprobación por diff.
+- Ampliar tools y paralelizar lecturas.
+- Sesiones persistentes + resume + undo.
+Fase 3 — sofisticación
+- Prompt caching / reasoning por modelo, subagentes, snapshots con revert vía git, diagnósticos.
+Resumen honesto: la base sirve, pero está en modo "asistente con funciones" y no en modo "agente con runtime". Lo que más te va a hacer sentir que se comporta como Opencode, en orden, es: streaming → sandbox real → contexto/costos → permisos finos.

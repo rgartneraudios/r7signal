@@ -18,6 +18,13 @@
       ]
     },
     "fs:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://**" },
+        { "url": "http://**" }
+      ]
+    },
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-read-dir",

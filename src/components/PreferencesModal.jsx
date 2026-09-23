@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { THEME } from '../theme'
+import { rulesToText, textToRules, PERMISSION_RULE_HINT } from '../lib/cochiPermissions'
 
 const IDIOMAS = [
   'Español', 'English', 'Français', 'Deutsch', 'Italiano',
@@ -17,6 +18,8 @@ export default function PreferencesModal({ onClose, userId, supabase, preference
   const [ollamaEndpoint, setOllamaEndpoint] = useState(preferences?.ollamaEndpoint || 'http://localhost:11434')
   const [lmStudioEndpoint, setLmStudioEndpoint] = useState(preferences?.lmStudioEndpoint || 'http://localhost:1234')
   const [lmStudioModel, setLmStudioModel] = useState(preferences?.lmStudioModel || 'local-model')
+  const [allowRules, setAllowRules] = useState(rulesToText(preferences?.permissions?.allow))
+  const [denyRules, setDenyRules] = useState(rulesToText(preferences?.permissions?.deny))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -60,7 +63,7 @@ export default function PreferencesModal({ onClose, userId, supabase, preference
     setSaving(true)
     setError(null)
     if (onSave) {
-      const newPrefs = { nombre_usuario: nombreUsuario, nombre_alternativo: nombreAlternativo, chat_language: chatLanguage, ollamaEndpoint, lmStudioEndpoint, lmStudioModel }
+      const newPrefs = { nombre_usuario: nombreUsuario, nombre_alternativo: nombreAlternativo, chat_language: chatLanguage, ollamaEndpoint, lmStudioEndpoint, lmStudioModel, permissions: { allow: textToRules(allowRules), deny: textToRules(denyRules) } }
       await onSave(newPrefs)
       onSaved?.(newPrefs)
       onClose()
@@ -108,6 +111,22 @@ export default function PreferencesModal({ onClose, userId, supabase, preference
     fontFamily: "'Exo 2', sans-serif",
     marginBottom: 20,
     boxSizing: 'border-box'
+  }
+
+  const areaStyle = {
+    width: '100%',
+    minHeight: 62,
+    background: '#131215',
+    border: `1px solid ${THEME.borderSubtle}`,
+    borderRadius: 8,
+    color: THEME.textHigh,
+    fontSize: '0.72rem',
+    fontFamily: "'JetBrains Mono', monospace",
+    padding: '8px 10px',
+    outline: 'none',
+    resize: 'vertical',
+    boxSizing: 'border-box',
+    marginBottom: 14,
   }
 
   return (
@@ -199,7 +218,30 @@ export default function PreferencesModal({ onClose, userId, supabase, preference
               value={lmStudioModel}
               onChange={e => setLmStudioModel(e.target.value)}
               placeholder="local-model"
-              style={{ ...inputStyle, marginBottom: 28 }}
+              style={{ ...inputStyle, marginBottom: 20 }}
+            />
+
+            <div style={{ height: 1, background: '#201F23', margin: '4px 0 16px' }} />
+
+            <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Permisos de Cochi</div>
+            <div style={{ fontSize: '0.62rem', color: '#6B9EC4', lineHeight: 1.4, marginBottom: 10 }}>{PERMISSION_RULE_HINT}</div>
+
+            <div style={{ fontSize: '0.65rem', color: '#B0F527', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>Reglas ALLOW</div>
+            <textarea
+              value={allowRules}
+              onChange={e => setAllowRules(e.target.value)}
+              placeholder={'run_command:npm *\nreplace_in_file:**/*.md'}
+              spellCheck={false}
+              style={areaStyle}
+            />
+
+            <div style={{ fontSize: '0.65rem', color: '#FF4466', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>Reglas DENY</div>
+            <textarea
+              value={denyRules}
+              onChange={e => setDenyRules(e.target.value)}
+              placeholder={'run_command:rm *\ndelete_file:**/package.json'}
+              spellCheck={false}
+              style={{ ...areaStyle, marginBottom: 28 }}
             />
 
             {error && (

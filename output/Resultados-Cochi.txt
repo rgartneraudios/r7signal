@@ -1,0 +1,52 @@
+Bloque F hecho. npm run build ✅ OK.
+Cambios:
+src/lib/cochiTools.js
+- run_command ahora acepta cwd (opcional, validado dentro del workspace por el sandbox), timeoutMs (default 120s, techo 600s) y capea la salida a 64KB con aviso de truncado. Se reescribió con spawn() + evento close: al expirar el timeout mata el proceso (child.kill()) y reporta ⏱️ timeout con el output parcial. También antepone (exit N) cuando el comando falla. Usa plugin:shell|spawn, ya habilitado en cochi-full-access.json.
+- Nueva tool todowrite (cochiTools.js:404) + normalizeTodos/formatTodos/TODO_STATUSES: normaliza la lista (status válidos, una sola in_progress), la espeja en el modelResult para que el modelo la vea, y la devuelve en el resultado. Icono TODO agregado.
+src/components/CochiDesktop.jsx
+- Estado todos; el loop captura execResult.todos y actualiza la activity con el conteo.
+- Panel "📋 Plan de tareas" persistente sobre la barra de estado (con tachado para completadas, marca de in_progress).
+- cwd incluido en el diálogo de confirmación de run_command.
+- Reset del listado en CLS y Guardar R7.
+Nota: npm run lint sigue fallando por algo preexistente (no hay eslint.config.js), no por este cambio.
+
+
+
+Listo. Bloque G implementado.
+Qué hice
+- ask_user (cochiTools.js:466): tool disponible en todos los permisos. En el loop (CochiDesktop.jsx:782) se intercepta: pausa con await una promesa, muestra un panel de pregunta con opciones (simple/múltiple), input libre y botones Responder/Omitir. La respuesta vuelve al modelo como USER ANSWER. CANCELAR/Esc aborta y resuelve como cancelado.
+- web_fetch (cochiTools.js:483, ejecutor en :838): GET http(s) con timeout (30s def), cap de salida (100KB def) y conversión HTML→texto; deja JSON tal cual. Icons ASK/FETCH agregados.
+Cambios de infraestructura (necesarios para que web_fetch no choque con CORS):
+- npm install @tauri-apps/plugin-http
+- src-tauri/Cargo.toml, src-tauri/src/lib.rs y capability cochi-full-access.json (permiso http:default con http(s)://**).
+- Esto requiere recompilar Tauri (npm run tauri dev/build), no basta npm run build.
+Verificación: npm run build ✅ OK. (El lint falla por config de ESLint ausente, algo preexistente del repo, no por estos cambios.)
+Nota: marqué Bloque G como COMPLETO en Analisis-Cochi.txt. 
+
+
+Listo . Bloque H implementado y verificado.
+1. Compactación token-aware con resumen real (CochiDesktop.jsx:374)
+- estimateTokens() (~4 chars/token) dispara la poda por presupuesto (~60k) además del cap de 14 mensajes.
+- summarizeDropped() (:96) genera un resumen real vía streamChat (900 tok máx) de lo viejo; si falla, cae al placeholder anterior.
+- El pairing guard del Bloque A quedó textualmente idéntico (:406).
+- La llamada al resumen cuenta sus tokens en totalTokensAcc/costo.
+2. Paralelización de lecturas (CochiDesktop.jsx:940)
+- READ_ONLY_TOOLS (:86): read_file, read_file_chunk, list_dir, find_files, search_in_files, get_file_info, file_exists, web_fetch.
+- Tramos contiguos de lectura corren con Promise.all, preservando el índice/orden de resultados; escrituras, confirmaciones y ask_user quedan como barrera serial.
+
+
+Listo. Bloque I completado y marcado como hecho en Analisis-Cochi.txt.
+Qué hice:
+- src/lib/cochiPermissions.js (nuevo): clasifica cada tool call en una solicitud de permiso, evalúa reglas allow/deny (glob, precedencia deny > allow, formato tool:patrón) y genera las firmas de sesión.
+- cochiTools.js: executeTool acepta { dryRun: true } y previsualiza write_file / replace_in_file / append_to_file sin escribir (diff anticipado).
+- CochiDesktop.jsx: eliminé el window.confirm por acción, reemplazado por un panel in-app no bloqueante (mismo patrón promesa que ask_user) con memoria de sesión (sessionAllowRef), botón "Permitir siempre en esta sesión", "＋ Guardar regla allow" y aprobación por diff reutilizando DiffViewer. La sesión se limpia en CLS y Guardar R7.
+- PreferencesModal.jsx: editor de reglas ALLOW/DENY (una por línea) persistido en user_preferences.json bajo permissions:{allow,deny}.
+- Arreglé de paso el savePreferences para que no perdiera campos y usara el closure actualizado.
+Verificación: npm run build ✅ OK. Lint no está configurado en el repo (sin eslint.config.js), así que el criterio del proyecto (npm run build) es el que se aplica.
+
+
+Listo. Bloque J cerrado.
+- needsPlanning() ahora despacha desde handleSendText: multi-paso → generatePlan() + PlanViewer (confirmar/cancelar) → loop; atómico → single-pass. La función se extrajo pura a cochiPlanningPrompts.js.
+- PLANNING_SYSTEM_PROMPT quedó definido como fallback local del prompt remoto; generatePlan()/replanStep() van por streamChat (Bloque B) con parsePlanResponse() puro (adiós fetch crudo y adiós role:'plan' huérfano). buildPlanContext ya alimenta el loop.
+- Verificación: npm run build ✅ y harness Node con 10/10: caso de 3 pasos con borrado real en sandbox, donde el gate del Bloque I pide permiso una vez, allow_session destraba los siguientes sin re-trabarse, deny bloquea y allow ejecuta directo.
+Único punto a tener en cuenta: el e2e con modelo real necesita la app + API key (no corre headless), pero la lógica de plan + permisos quedó cubierta. Bloque J marcado como hecho en Analisis-Cochi.txt.
