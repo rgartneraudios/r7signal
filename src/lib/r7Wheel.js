@@ -49,6 +49,23 @@ export function appendR7Pair(r7, turnNumber, r1, r2) {
   return r7 ? `${r7}\n${block}` : block
 }
 
+// Des-sella el ÚLTIMO bloque "── Turno N ──" de R7 (undo/regenerate, K1/K3).
+// Devuelve { r7, pair } con el cuerpo restante y el par {r1,r2} quitado (o null
+// si la rueda no tenía turnos). NO toca el resto de la rueda.
+export function popR7Turn(r7) {
+  if (!r7) return { r7: r7 || '', pair: null }
+  const idx = r7.lastIndexOf('── Turno')
+  if (idx === -1) return { r7, pair: null }
+  const block = r7.slice(idx)
+  const before = r7.slice(0, idx).replace(/\s+$/, '')
+  const r1Match = block.match(/R1:\s*([^\n]*)/)
+  const r2Match = block.match(/R2:\s*([\s\S]*)$/)
+  const pair = (r1Match || r2Match)
+    ? { r1: r1Match ? r1Match[1].trim() : '', r2: r2Match ? r2Match[1].trim() : '' }
+    : null
+  return { r7: before, pair }
+}
+
 // ─── Estado de la rueda por agente ────────────────────────────────────────────
 // { r7, lastTurn }  ·  lastTurn = { user, assistant, pairs:[{r1,r2}] } | null
 export function createWheelState(r7 = '') {

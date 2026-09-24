@@ -4,6 +4,7 @@ import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
+import { newMessageId } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 
 const TITO_MODELS = {
@@ -105,7 +106,7 @@ export default function TitoPanel({
       sessionIdRef.current = null
       onResetUsage?.('tito')
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ No se pudo guardar R7: ${err.message}` }])
+      setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: `⚠️ No se pudo guardar R7: ${err.message}` }])
     }
   }
 
@@ -138,13 +139,14 @@ export default function TitoPanel({
       const msg = promptsError
         ? '⛔ Sin conexión a R7Signal. Verifica tu red e intenta de nuevo.'
         : '⏳ Configuración aún cargando. Espera un momento.'
-      setMessages(prev => [...prev, { role: 'assistant', content: msg }])
+      setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: msg }])
       return
     }
 
     // Estado vacío: sin API key local no se dispara ningún fetch.
     if (!getOpenRouterKey()) {
       setMessages(prev => [...prev, {
+        id: newMessageId('tito'),
         role: 'assistant',
         content: '🔑 Todavía no cargaste tu API key de OpenRouter. Usá el botón de la llave en la barra superior y pegala para poder buscar.'
       }])
@@ -161,9 +163,10 @@ export default function TitoPanel({
     }
 
 
-    const userMsg = { role: 'user', content: text };
+    const userMsg = { id: newMessageId('tito'), role: 'user', content: text };
+    const placeholderId = newMessageId('tito');
     const history = [...messages, userMsg];
-    setMessages([...history, { role: 'assistant', content: '', streaming: true }]);
+    setMessages([...history, { id: placeholderId, role: 'assistant', content: '', streaming: true }]);
     setStreaming(true);
     setCancelled(false);
 
@@ -218,13 +221,11 @@ export default function TitoPanel({
                const delta = parsed.choices?.[0]?.delta?.content || ''
                fullText += delta
                const displayText = extractR3Streaming(fullText)
-               setMessages(prev => {
-                 const updated = [...prev]
-                 updated[updated.length - 1] = {
-                   role: 'assistant', content: displayText, streaming: true
-                 }
-                 return updated
-               })
+                setMessages(prev => prev.map(m =>
+                  m.id === placeholderId
+                    ? { ...m, content: displayText, streaming: true }
+                    : m
+                ))
                if (parsed.usage) {
                  const { prompt_tokens, completion_tokens } = parsed.usage
                  const cost = calculateCost(chatModel, prompt_tokens, completion_tokens, 'token')
@@ -246,14 +247,11 @@ export default function TitoPanel({
            assistant: finalDisplay,
            pairs: (r7Pair.r1 || r7Pair.r2) ? [{ r1: r7Pair.r1, r2: r7Pair.r2 }] : [],
          })
-         setMessages(prev => {
-          const updated = [...prev]
-          updated[updated.length - 1] = {
-            role: 'assistant', content: finalDisplay,
-            streaming: false, hasHandoff
-          }
-          return updated
-        })
+         setMessages(prev => prev.map(m =>
+           m.id === placeholderId
+             ? { ...m, content: finalDisplay, streaming: false, hasHandoff }
+             : m
+         ))
         if (hasHandoff) {
           const briefMatch = fullText.match(/\[→ COCHI:\s*(.+?)\]/s)
           if (briefMatch) onHandoff?.(briefMatch[1].trim())
@@ -297,13 +295,11 @@ export default function TitoPanel({
             const delta = parsed.choices?.[0]?.delta?.content || '';
             fullText += delta;
             const displayText = extractR3Streaming(fullText);
-            setMessages(prev => {
-              const updated = [...prev];
-              updated[updated.length - 1] = {
-                role: 'assistant', content: displayText, streaming: true
-              };
-              return updated;
-            });
+            setMessages(prev => prev.map(m =>
+              m.id === placeholderId
+                ? { ...m, content: displayText, streaming: true }
+                : m
+            ));
             if (parsed.usage) {
               const { prompt_tokens, completion_tokens } = parsed.usage
               const cost = calculateCost(TITO_MODELS[searchLevel], prompt_tokens, completion_tokens, 'token')
@@ -326,14 +322,11 @@ export default function TitoPanel({
         assistant: finalDisplay,
         pairs: (r7Pair.r1 || r7Pair.r2) ? [{ r1: r7Pair.r1, r2: r7Pair.r2 }] : [],
       });
-      setMessages(prev => {
-        const updated = [...prev];
-        updated[updated.length - 1] = {
-        role: 'assistant', content: finalDisplay, 
-        streaming: false, hasHandoff
-      };
-      return updated;
-    });
+      setMessages(prev => prev.map(m =>
+        m.id === placeholderId
+          ? { ...m, content: finalDisplay, streaming: false, hasHandoff }
+          : m
+      ));
 
     if (hasHandoff) {
       const briefMatch = fullText.match(/\[→ COCHI:\s*(.+?)\]/s);
@@ -342,15 +335,11 @@ export default function TitoPanel({
 
   } catch (err) {
       if (err.name !== 'AbortError') {
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            role: 'assistant', 
-            content: `Error: ${err.message}`, 
-            streaming: false
-          };
-          return updated;
-        });
+        setMessages(prev => prev.map(m =>
+          m.id === placeholderId
+            ? { ...m, content: `Error: ${err.message}`, streaming: false }
+            : m
+        ));
       }
     } finally {
       setStreaming(false);
@@ -412,8 +401,8 @@ RGartner by R7Signal
 	</div>
           </div>
         ) : (
-          messages.map((msg, i) => (
-            <div key={i} className={`tito-msg tito-msg--${msg.role}`}>
+          messages.map((msg) => (
+            <div key={msg.id} className={`tito-msg tito-msg--${msg.role}`}>
               <div className="tito-msg-content">{msg.content}</div>
               {msg.hasHandoff && (
                 <button 

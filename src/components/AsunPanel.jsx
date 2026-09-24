@@ -7,6 +7,7 @@ import { getAsunTools, executeTool, pathExists } from '../lib/asunTools.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
+import { newMessageId } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { open } from '@tauri-apps/plugin-dialog'
 
@@ -527,7 +528,7 @@ export default function AsunPanel({
       sessionIdRef.current = null
       onResetUsage?.('asun')
     } catch (err) {
-      setMessages(prev => [...prev, { rol: 'asistente', contenido: `⚠️ No se pudo guardar R7: ${err.message}`, id: Date.now(), streaming: false }])
+      setMessages(prev => [...prev, { rol: 'asistente', contenido: `⚠️ No se pudo guardar R7: ${err.message}`, id: newMessageId('asun'), streaming: false }])
     }
   }
 
@@ -574,14 +575,14 @@ export default function AsunPanel({
         ? '⛔ Sin conexión a R7Signal. Verifica tu red e intenta de nuevo.'
         : '⏳ Configuración aún cargando. Espera un momento.'
       setMessages(prev => [...prev, {
-        rol: 'asistente', contenido: errMsg, id: Date.now(), streaming: false
+        rol: 'asistente', contenido: errMsg, id: newMessageId('asun'), streaming: false
       }])
       return
     }
 
     if (projectMode && !remotePrompts.project) {
       setMessages(prev => [...prev, {
-        rol: 'asistente', contenido: '⏳ Modo Proyecto aún no configurado en el servidor.', id: Date.now(), streaming: false
+        rol: 'asistente', contenido: '⏳ Modo Proyecto aún no configurado en el servidor.', id: newMessageId('asun'), streaming: false
       }])
       return
     }
@@ -592,17 +593,17 @@ export default function AsunPanel({
       setMessages(prev => [...prev, {
         rol: 'asistente',
         contenido: '🔑 Todavía no cargaste tu API key de OpenRouter. Usá el botón de la llave en la barra superior y pegala para poder conversar.',
-        id: Date.now(), streaming: false
+        id: newMessageId('asun'), streaming: false
       }])
       return
     }
 
     const isCochiCommand = text.startsWith('/COCHI')
-    const userMsg = { rol: 'usuario', contenido: text, id: Date.now() }
+    const userMsg = { rol: 'usuario', contenido: text, id: newMessageId('asun') }
     setMessages(prev => [...prev, userMsg])
     setLoading(true)
 
-    const placeholderId = Date.now() + 1
+    const placeholderId = newMessageId('asun')
     setMessages(prev => [...prev, { rol: 'asistente', contenido: '', id: placeholderId, streaming: true }])
 
     try {
@@ -895,7 +896,7 @@ export default function AsunPanel({
   async function generateMusic() {
     if (!promptMusica || generating) return
     setGenerating(true)
-    setMessages(prev => [...prev, { rol: 'usuario', contenido: '🎵 Generar canción', id: Date.now() }])
+    setMessages(prev => [...prev, { rol: 'usuario', contenido: '🎵 Generar canción', id: newMessageId('asun') }])
     try {
       const { data: authData } = await supabase.auth.getUser()
       const res = await fetch(`${SUPABASE_URL}/functions/v1/generar-musica`, {
@@ -921,7 +922,7 @@ export default function AsunPanel({
       if (finalUrl) {
         setAudioUrl(finalUrl)
         setMessages(prev => [...prev, {
-          rol: 'asistente', id: Date.now(),
+          rol: 'asistente', id: newMessageId('asun'),
           contenido: 'Aquí tienes tu canción:',
           audioUrl: finalUrl,
         }])
@@ -932,7 +933,7 @@ export default function AsunPanel({
       }
       setPromptMusica(null)
     } catch (err) {
-      setMessages(prev => [...prev, { rol: 'asistente', id: Date.now(), contenido: `Error: ${err.message}` }])
+      setMessages(prev => [...prev, { rol: 'asistente', id: newMessageId('asun'), contenido: `Error: ${err.message}` }])
     } finally {
       setGenerating(false)
     }
