@@ -137,7 +137,39 @@ async function summarizeDropped(dropped, { provider, sessionId, signal, onUsage 
   }
 }
 
+// L1.2: en apiMessages, un step completado se colapsa a un único mensaje
+// "[STEP N RESULT: …]" (ver collapse en el loop). Una ventana descartada es "de
+// steps completos" si empieza y termina en un marker (o empieza en el bloque
+// compactado de una poda previa) y no mezcla ningún mensaje crudo. En ese caso
+// el tramo se resume concatenando los markers, sin llamar al modelo.
+const STEP_RESULT_RE = /^\s*\[STEP (\d+) RESULT:([\s\S]*?)\]\s*$/
+const COMPACT_BLOCK_RE = /^\[(?:CONTEXT SUMMARY|MEMORY)\]/
 
+const matchStepResult = (m) =>
+  m.role === 'assistant' && typeof m.content === 'string'
+    ? m.content.match(STEP_RESULT_RE)
+    : null
+const isCompactBlock = (m) =>
+  m.role === 'user' && typeof m.content === 'string' && COMPACT_BLOCK_RE.test(m.content)
+
+// Devuelve { markers: [{ stepId, result }], prefix } si la ventana son steps
+// completos; null si hay un step cortado a mitad (mensaje crudo mezclado).
+function extractCompleteSteps(dropped) {
+  let firstMarker = -1
+  for (let i = 0; i < dropped.length; i++) {
+    if (matchStepResult(dropped[i])) { firstMarker = i; break }
+  }
+  if (firstMarker === -1 || firstMarker > 1) return null
+  if (firstMarker === 1 && !isCompactBlock(dropped[0])) return null
+
+  const markers = []
+  for (let i = firstMarker; i < dropped.length; i++) {
+    const match = matchStepResult(dropped[i])
+    if (!match) return null // mensaje crudo en medio → tramo parcial
+    markers.push({ stepId: Number(match[1]), result: match[2].trim() })
+  }
+  return { markers, prefix: firstMarker === 1 ? dropped[0].content : null }
+}
 
 // ─── Syntax theme ─────────────────────────────────────────────────────────────
 const r7SyntaxTheme = {
@@ -218,7 +250,8 @@ export default function CochiDesktop({
   const [tokenWarningDismissed, setTokenWarningDismissed] = useState(false)
   const planRef = useRef(null)
   const originalMessageRef = useRef('')
-  const sessionPairsRef = useRef([]) // acumula {r1,r2} de cada turno — se resetea en CLS y Guardar R7
+  const sessionPairsRef = useRef([]) // acumula {r1,r2,stepId} de cada turno — stepId = ordinal del step (stepIndex+1) o null sin plan; se resetea en CLS y Guardar R7
+  const cochiSessionIdRef = useRef(null) // session_id estable por conversación; se resetea en CLS y Guardar R7
   const chatContainerRef = useRef(null)
   const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
   const [todos, setTodos] = useState([])   // lista de tareas del tool todowrite
@@ -457,13 +490,35 @@ export default function CochiDesktop({
     const recent  = rest.slice(start)
     const dropped = rest.slice(0, start)
 
-    // Resumen REAL de lo descartado (antes: solo placeholder estático).
-    const summary = await summarizeDropped(dropped, { provider, sessionId, signal, onUsage })
+    // L1.2: si la ventana descartada son steps ya completos, se resume
+    // concatenando el texto de sus markers "[STEP N RESULT: …]" (cero llamadas
+    // al modelo). Si algún step queda cortado a mitad, se cae al resumen real.
+    const complete = extractCompleteSteps(dropped)
+    let summary = null
+    let carried = null
+    if (complete) {
+      const planSteps = planRef.current?.steps
+      // Con replan los ordinales se corren respecto de las descripciones: se
+      // omiten y queda solo el resultado del marker (siempre correcto).
+      const hasReplanned = Array.isArray(planSteps) && planSteps.some(s => s.isReplanned)
+      carried = complete.prefix
+      summary = complete.markers
+        .map(({ stepId, result }) => {
+          const desc = hasReplanned ? null : planSteps?.[stepId - 1]?.description
+          return desc ? `- ${desc}: ${result}` : `- ${result}`
+        })
+        .join('\n')
+    }
+    if (summary === null) {
+      summary = await summarizeDropped(dropped, { provider, sessionId, signal, onUsage })
+    }
     const compressed = {
       role: 'user',
-      content: summary
-        ? `[CONTEXT SUMMARY] Earlier turns were compacted to save context. Real summary of what happened:\n${summary}`
-        : '[MEMORY] Previous tool results compressed to save context. Continue task from current state.'
+      content: carried
+        ? `${carried}\n\n${summary}`
+        : summary
+          ? `[CONTEXT SUMMARY] Earlier turns were compacted to save context. Real summary of what happened:\n${summary}`
+          : '[MEMORY] Previous tool results compressed to save context. Continue task from current state.'
     }
     return [...systemMsgs, firstUser, compressed, ...recent]
   }
@@ -608,7 +663,10 @@ export default function CochiDesktop({
 
     const controller = new AbortController()
     abortRef.current = controller
-    const cochiSessionId = `cochi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    if (!cochiSessionIdRef.current) {
+      cochiSessionIdRef.current = `cochi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    }
+    const cochiSessionId = cochiSessionIdRef.current
 
     setLoading(true)
     setActivity([])
@@ -761,7 +819,7 @@ export default function CochiDesktop({
                 const extractedResult = completeMatch[1].trim()
                 if (trackSteps) updateStepStatus(step.id, 'completed', extractedResult)
                 await appendToMemory(r1, r2)
-                sessionPairsRef.current.push({ r1, r2 })
+                sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
                 stepCompleted = true
                 break
@@ -769,7 +827,7 @@ export default function CochiDesktop({
                 const reason = failedMatch[1].trim()
                 if (trackSteps) updateStepStatus(step.id, 'failed', reason)
                 await appendToMemory(r1, r2)
-                sessionPairsRef.current.push({ r1, r2 })
+                sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
                 stepCompleted = true
                 break
@@ -783,14 +841,14 @@ export default function CochiDesktop({
                   }
                 }
                 await appendToMemory(r1, r2)
-                sessionPairsRef.current.push({ r1, r2 })
+                sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
                 stepCompleted = true
                 break
               } else {
                 if (trackSteps) updateStepStatus(step.id, 'completed', 'Completado')
                 await appendToMemory(r1, r2)
-                sessionPairsRef.current.push({ r1, r2 })
+                sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
                 stepCompleted = true
                 break
@@ -854,7 +912,7 @@ export default function CochiDesktop({
                       .replace(/\[NEED_REPLAN:[\s\S]*?\]/, '')
                       .trim()
                     await appendToMemory(r1, r2)
-                    sessionPairsRef.current.push({ r1, r2 })
+                    sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                     setMessages(prev => [...prev, { role: 'assistant', content: displayContent || extractedResult }])
                   } catch (wrapErr) {
                     setMessages(prev => [...prev, { role: 'assistant', content: extractedResult }])
@@ -1148,6 +1206,7 @@ export default function CochiDesktop({
       setTodos([])
       syncPlan(null); setPlanStatus('idle')
       sessionPairsRef.current = []
+      cochiSessionIdRef.current = null
       sessionAllowRef.current = new Set()
       onResetUsage?.('cochi')
     }
@@ -1166,6 +1225,7 @@ export default function CochiDesktop({
       setTodos([])
       syncPlan(null); setPlanStatus('idle')
       sessionPairsRef.current = []
+      cochiSessionIdRef.current = null
       sessionAllowRef.current = new Set()
       onResetUsage?.('cochi')
     } catch (err) {

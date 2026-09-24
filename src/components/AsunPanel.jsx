@@ -29,7 +29,7 @@ const COCHI_RE = /\[→ COCHI: ([^\]]+)\]/
 const MUSIC_RE  = /\[MUSIC_READY: ([\s\S]+?)\]/
 
 // ─── OpenRouter streaming ─────────────────────────────────────────────────────
-async function streamOR(model, messages, onChunk, onUsage) {
+async function streamOR(model, messages, onChunk, onUsage, sessionId) {
   const res = await fetch(`${OR_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -38,7 +38,13 @@ async function streamOR(model, messages, onChunk, onUsage) {
       'HTTP-Referer': 'https://r7signal.com',
       'X-Title': 'R7Desktop · Asun',
     },
-    body: JSON.stringify({ model, messages, stream: true, max_tokens: 4096, stream_options: { include_usage: true } }),
+    body: JSON.stringify({
+      model, messages, stream: true, max_tokens: 4096,
+      stream_options: { include_usage: true },
+      usage: { include: true },
+      reasoning: { enabled: false },
+      ...(sessionId ? { session_id: sessionId } : {}),
+    }),
   })
   if (!res.ok) throw new Error(`OpenRouter ${res.status}`)
   const reader  = res.body.getReader()
@@ -476,6 +482,13 @@ export default function AsunPanel({
   const [projectMode, setProjectMode] = useState(false) // Modo Proyecto — Arquitecto Senior, toggle ortogonal
   const messagesEndRef = useRef(null)
   const chatContainerRef = useRef(null)
+  const sessionIdRef = useRef(null)
+  function getAsunSessionId() {
+    if (!sessionIdRef.current) {
+      sessionIdRef.current = `asun-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    }
+    return sessionIdRef.current
+  }
   const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
 
   function handleSelectionMouseUp() {
@@ -597,7 +610,7 @@ export default function AsunPanel({
           setMessages(prev => prev.map(m =>
             m.id === placeholderId ? { ...m, contenido: extractR3Streaming(partial) } : m
           ))
-        }, onUsage)
+        }, onUsage, getAsunSessionId())
         const musicMatch = MUSIC_RE.exec(fullText)
         if (musicMatch) {
           setPromptMusica(musicMatch[1].trim())
@@ -674,6 +687,9 @@ export default function AsunPanel({
             messages: apiMessages,
             ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
             max_tokens: 4096,
+            usage: { include: true },
+            reasoning: { enabled: false },
+            session_id: getAsunSessionId(),
           }),
         })
 
@@ -1264,7 +1280,7 @@ RGartner by R7Signal</>
 
         {/* CLS */}
         <button
-          onClick={() => { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); onResetUsage?.('asun') } }}
+          onClick={() => { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); sessionIdRef.current = null; onResetUsage?.('asun') } }}
           style={{ background: 'transparent', border: '1px solid #1F1E22', borderRadius: 4, padding: '2px 8px', color: '#8A868B', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#D4D8DC'; e.currentTarget.style.color = '#D4D8DC' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#1F1E22'; e.currentTarget.style.color = '#8A868B' }}
