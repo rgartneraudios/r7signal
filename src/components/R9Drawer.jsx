@@ -1,27 +1,39 @@
 import { useState, useEffect, useCallback } from 'react'
 import { listR9Files, readR9File } from '../lib/r9Store.js'
+import { listSessions, deleteSession } from '../lib/sessionStore.js'
 
 const TABS = [
   { key: 'r7', label: 'R7 · Chats', accent: '#E8762A' },
   { key: 'r9', label: 'R9 · Selecciones', accent: '#C8A2D8' },
+  { key: 'sessions', label: 'Sesiones', accent: '#6B9EC4' },
 ]
 
-export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi }) {
+const AGENT_ACCENT = { cochi: '#CF444D', asun: '#C8A2D8', tito: '#E8C84A' }
+
+function formatWhen(iso) {
+  try { return new Date(iso).toLocaleString('es-ES') } catch { return '' }
+}
+
+export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenSession }) {
   const [tab, setTab] = useState('r7')
   const [files, setFiles] = useState({ r7: [], r9: [] })
+  const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(null)
   const [contentCache, setContentCache] = useState({})
 
   // Bloque L4: R7/R9 son GLOBALES (AppLocalData), no dependen del workspace.
+  // Bloque K2: las sesiones también (Sessions/), mismas rutas relativas.
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const [r7, r9] = await Promise.all([
+      const [r7, r9, sess] = await Promise.all([
         listR9Files('r7'),
         listR9Files('r9'),
+        listSessions({}),
       ])
       setFiles({ r7, r9 })
+      setSessions(sess)
     } catch (err) {
       console.error('R9Drawer refresh error:', err)
     } finally {
@@ -52,6 +64,17 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi }) {
     if (target === 'asun') onInsertAsun?.(text)
     else onInsertCochi?.(text)
     onClose?.()
+  }
+
+  function handleOpenSession(session) {
+    onOpenSession?.(session.agent, session.id)
+    onClose?.()
+  }
+
+  async function handleDeleteSession(session) {
+    if (!window.confirm(`¿Borrar la sesión "${session.title}"?`)) return
+    const ok = await deleteSession(session.id)
+    if (ok) setSessions(prev => prev.filter(s => s.id !== session.id))
   }
 
   const list = files[tab]
@@ -99,7 +122,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi }) {
                 fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.75rem',
                 fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
               }}
-            >{t.label} ({files[t.key].length})</button>
+            >{t.label} ({t.key === 'sessions' ? sessions.length : files[t.key].length})</button>
           ))}
         </div>
 
@@ -109,12 +132,41 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi }) {
               Cargando…
             </div>
           )}
-          {!loading && list.length === 0 && (
+          {!loading && (tab === 'sessions' ? sessions.length === 0 : list.length === 0) && (
             <div style={{ color: '#6B7075', fontSize: '0.8rem', textAlign: 'center', marginTop: 30 }}>
-              {tab === 'r7' ? 'Sin chats guardados todavía.' : 'Sin selecciones guardadas todavía.'}
+              {tab === 'r7' ? 'Sin chats guardados todavía.'
+                : tab === 'r9' ? 'Sin selecciones guardadas todavía.'
+                : 'Sin sesiones guardadas todavía.'}
             </div>
           )}
-          {list.map(file => (
+          {tab === 'sessions' && sessions.map(session => (
+            <div key={session.id} style={{
+              border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8,
+              background: '#131215', padding: '9px 10px',
+              display: 'flex', flexDirection: 'column', gap: 6,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{
+                  fontSize: '0.55rem', fontWeight: 700, letterSpacing: '0.1em',
+                  textTransform: 'uppercase', color: AGENT_ACCENT[session.agent] || '#9BA3A8',
+                }}>{session.agent}</span>
+                <span style={{ flex: 1 }} />
+                <button onClick={() => handleOpenSession(session)} style={miniBtnStyle(activeAccent)}>Abrir</button>
+                <button
+                  onClick={() => handleDeleteSession(session)}
+                  style={{ background: 'transparent', border: '1px solid #CF444D55', borderRadius: 5, padding: '3px 7px', color: '#CF444D', fontSize: '0.62rem', fontWeight: 700, cursor: 'pointer' }}
+                >🗑</button>
+              </div>
+              <span style={{
+                fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.8rem',
+                color: '#D4D8DC', lineHeight: 1.35,
+              }}>{session.title}</span>
+              <span style={{
+                fontFamily: "'JetBrains Mono', monospace", fontSize: '0.62rem', color: '#6B7075',
+              }}>{formatWhen(session.updatedAt)}</span>
+            </div>
+          ))}
+          {tab !== 'sessions' && list.map(file => (
             <div key={file.path} style={{
               border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8,
               background: '#131215', overflow: 'hidden',

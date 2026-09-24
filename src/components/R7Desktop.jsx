@@ -29,6 +29,9 @@ export default function R7Desktop() {
   const [pendingAsun,  setPendingAsun]  = useState(null)
   const [pendingCochi, setPendingCochi] = useState(null)
 
+  // Bloque K2: sesión a retomar desde el drawer (mismo patrón que pendingMessage).
+  const [pendingSession, setPendingSession] = useState(null) // { agent, id, nonce }
+
   // Acumulador de coste total de sesión
   const [activeLeftPanel, setActiveLeftPanel] = useState('asun')
   const [totalTokens, setTotalTokens] = useState(0)
@@ -101,6 +104,14 @@ export default function R7Desktop() {
   const handleWorkspaceChange  = useCallback((newWs)    => setWorkspace(newWs), [])
   const handleInsertAsun  = useCallback((text) => { setActiveLeftPanel('asun'); setLeftInput(text) }, [])
   const handleInsertCochi = useCallback((text) => { setCochiInput(text) }, [])
+
+  // Bloque K2: abrir una sesión guardada. Activa el panel izquierdo correcto
+  // (Asun/Tito) y encola la sesión; Cochi vive en el panel derecho y no cambia
+  // el selector.
+  const handleOpenSession = useCallback((agent, id) => {
+    if (agent === 'asun' || agent === 'tito') setActiveLeftPanel(agent)
+    setPendingSession({ agent, id, nonce: Date.now() })
+  }, [])
 const handleUsage            = useCallback(({ source, inputTokens = 0, outputTokens = 0, cost }) => {
       const total = (inputTokens || 0) + (outputTokens || 0)
       if (source === 'asun')  setAsunTokens(prev  => prev + total)
@@ -751,6 +762,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
           onClose={() => setShowR9Drawer(false)}
           onInsertAsun={handleInsertAsun}
           onInsertCochi={handleInsertCochi}
+          onOpenSession={handleOpenSession}
         />
       )}
 
@@ -787,6 +799,8 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
             ? <AsunPanel
                 pendingMessage={pendingAsun}
                 onMessageConsumed={() => setPendingAsun(null)}
+                pendingSession={pendingSession?.agent === 'asun' ? pendingSession : null}
+                onSessionConsumed={() => setPendingSession(null)}
                 onCategoryChange={setAsunCategory}
                 onHandoff={handleAsunHandoff}
                 onUsage={handleUsage}
@@ -798,6 +812,8 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
             : <TitoPanel
                 pendingMessage={activeLeftPanel === 'tito' ? pendingAsun : null}
                 onMessageConsumed={() => setPendingAsun(null)}
+                pendingSession={pendingSession?.agent === 'tito' ? pendingSession : null}
+                onSessionConsumed={() => setPendingSession(null)}
                 onUsage={handleUsage}
                 onResetUsage={handleResetUsage}
                 onHandoff={(brief) => setHandoff({ type:'tito', brief, id: Date.now() })}
@@ -816,6 +832,8 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
           <CochiDesktop
             pendingMessage={pendingCochi}
             onMessageConsumed={() => setPendingCochi(null)}
+            pendingSession={pendingSession?.agent === 'cochi' ? pendingSession : null}
+            onSessionConsumed={() => setPendingSession(null)}
             handoff={handoff}
             onHandoffConsumed={() => setHandoff(null)}
             workspace={workspace}

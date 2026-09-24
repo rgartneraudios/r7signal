@@ -4,7 +4,7 @@ import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
-import { newMessageId } from '../lib/sessionStore.js'
+import { newMessageId, makeSession, saveSession, loadSession, fromCanonical } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 
 const TITO_MODELS = {
@@ -49,6 +49,7 @@ const needsWebSearch = (message) => {
 
 export default function TitoPanel({ 
   pendingMessage, onMessageConsumed, 
+  pendingSession, onSessionConsumed,
   onUsage, onResetUsage, onHandoff, userName,
   preferences = {},
   onPromptsReady,
@@ -73,6 +74,9 @@ export default function TitoPanel({
   const [r9Btn, setR9Btn] = useState(null); // {x,y,text} — botón flotante "+R9"
   const sessionPairsRef = useRef([]);
   const wheelRef = useRef(createWheelState()); // Bloque L4: rueda R7 { r7, lastTurn }
+  // Bloque K2: espejo de `messages` para el autosave y guardas de retoma.
+  const messagesRef = useRef([]);
+  const skipAutosaveRef = useRef(true); // true en el montaje y al retomar una sesión
   const [tokens, setTokens] = useState(0);
   const [tokenWarningDismissed, setTokenWarningDismissed] = useState(false);
 
@@ -94,11 +98,29 @@ export default function TitoPanel({
     setR9Btn(null);
   }
 
+  // Bloque K2: archiva el estado actual como sesión y promueve la rueda a global.
+  function persistCurrentSession() {
+    const msgs = messagesRef.current
+    if (!msgs.some(m => m.rol === 'usuario' || m.role === 'user')) return
+    const session = makeSession('tito', {
+      sessionId: sessionIdRef.current,
+      wheel: wheelRef.current,
+      messages: msgs,
+    })
+    sessionIdRef.current = session.id
+    saveSession(session).catch(err => console.error('autosave tito:', err))
+  }
+  async function promoteWheelToGlobal() {
+    const sealed = flushWheel(wheelRef.current)
+    if (sealed.r7 && sealed.r7.trim()) await writeR9File('r7', sealed.r7)
+  }
+
   async function handleSaveR7() {
     try {
       // Bloque L4: archivo NUEVO acumulativo con TODO el R7, sin R3 (D1).
-      const sealed = flushWheel(wheelRef.current)
-      await writeR9File('r7', sealed.r7 || '')
+      // K2: igual que CLS, archiva la sesión y promueve la rueda (decisión 4).
+      persistCurrentSession()
+      await promoteWheelToGlobal()
       setMessages([])
       setTokens(0); setTokenWarningDismissed(false)
       sessionPairsRef.current = []
@@ -108,6 +130,18 @@ export default function TitoPanel({
     } catch (err) {
       setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: `⚠️ No se pudo guardar R7: ${err.message}` }])
     }
+  }
+
+  // K2: CLS archiva la sesión y arranca una conversación nueva con la rueda global.
+  async function handleClear() {
+    if (!window.confirm('¿Borrar toda la conversación?')) return
+    persistCurrentSession()
+    await promoteWheelToGlobal()
+    setMessages([]); setTokens(0); setTokenWarningDismissed(false)
+    sessionPairsRef.current = []
+    wheelRef.current = createWheelState(await readLatestR7())
+    sessionIdRef.current = null
+    onResetUsage?.('tito')
   }
 
   useEffect(() => {
@@ -132,6 +166,49 @@ export default function TitoPanel({
   useEffect(() => {
     readLatestR7().then(r7 => { wheelRef.current = createWheelState(r7) })
   }, [])
+
+  // ── Bloque K2: autosave + resume ──────────────────────────────────────────
+  useEffect(() => { messagesRef.current = messages }, [messages]);
+
+  const isUserMsg = (m) => m?.role === 'user' || m?.rol === 'usuario';
+
+  // Autosave tras cerrar cada turno (KD5). Salta montaje y retomas; no guarda
+  // mientras `streaming` está activo.
+  useEffect(() => {
+    if (skipAutosaveRef.current) { skipAutosaveRef.current = false; return }
+    if (streaming) return
+    if (!messages.some(isUserMsg)) return
+    const session = makeSession('tito', {
+      sessionId: sessionIdRef.current,
+      wheel: wheelRef.current,
+      messages,
+    })
+    sessionIdRef.current = session.id
+    saveSession(session).catch(err => console.error('autosave tito:', err))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, streaming]);
+
+  // Retomar una sesión guardada (KD7): mensajes + snapshot de rueda + sessionId
+  // propios. NO toca el R7 global.
+  useEffect(() => {
+    if (!pendingSession) return
+    onSessionConsumed?.()
+    const { id } = pendingSession
+    let alive = true
+    ;(async () => {
+      const s = await loadSession(id)
+      if (!alive || !s) return
+      skipAutosaveRef.current = true
+      setMessages((s.messages || []).map(m => fromCanonical('tito', m)))
+      wheelRef.current = { r7: s.wheel?.r7 || '', lastTurn: s.wheel?.lastTurn ?? null }
+      sessionIdRef.current = s.id
+      sessionPairsRef.current = []
+      setTokenWarningDismissed(false); setTokens(0)
+      onResetUsage?.('tito')
+    })()
+    return () => { alive = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSession?.nonce]);
 
   const sendMessage = async (text) => {
     if (streaming) return;
@@ -459,7 +536,7 @@ RGartner by R7Signal
         <span>⚡ {TITO_MODELS[searchLevel]}</span>
         <div style={{ flex: 1 }} />
         <button
-          onClick={async () => { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); setTokens(0); setTokenWarningDismissed(false); sessionPairsRef.current = []; wheelRef.current = createWheelState(await readLatestR7()); sessionIdRef.current = null; onResetUsage?.('tito') } }}
+          onClick={handleClear}
           style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}
