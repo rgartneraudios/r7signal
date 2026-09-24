@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "harness:permissions": "node harness/cochiPermissions.harness.mjs",
     "harness:r7wheel": "node harness/cochiR7Wheel.harness.mjs",
+    "harness:sessions": "node harness/cochiSessions.harness.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -14,6 +14,7 @@ import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFr
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
+import { newMessageId } from '../lib/sessionStore.js'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -324,6 +325,12 @@ export default function CochiDesktop({
     setActivity(prev => [...prev, { icon, label, detail, diff, ts: Date.now() }])
   }
 
+  // Bloque K: todo mensaje visible nace con id único (key de React y ancla del
+  // undo). pushMessage evita repetir el id en los ~18 puntos de append.
+  function pushMessage(msg) {
+    setMessages(prev => [...prev, { ...msg, id: msg.id ?? newMessageId('cochi') }])
+  }
+
   // ─── ask_user: pausa real del loop ────────────────────────────────────────
   // Devuelve una promesa que se resuelve cuando el usuario responde (o cancela
   // con el botón CANCELAR / Esc, que aborta el controller).
@@ -342,7 +349,7 @@ export default function CochiDesktop({
         setPendingQuestion(null)
         resolve(value)
       }
-      setMessages(prev => [...prev, { role: 'assistant', content: `❓ ${payload.question}` }])
+      pushMessage({ role: 'assistant', content: `❓ ${payload.question}` })
       setPendingQuestion({ ...payload })
     })
   }
@@ -350,7 +357,7 @@ export default function CochiDesktop({
   function submitAsk(answer) {
     const text = String(answer ?? '').trim()
     if (!text) return
-    setMessages(prev => [...prev, { role: 'user', content: text }])
+    pushMessage({ role: 'user', content: text })
     askResolverRef.current?.(`USER ANSWER: ${text}`)
   }
 
@@ -584,7 +591,7 @@ export default function CochiDesktop({
       const msg = promptsError
         ? '⛔ Sin conexión a R7Signal. Verifica tu red e intenta de nuevo.'
         : '⏳ Configuración aún cargando. Espera un momento.'
-      setMessages(prev => [...prev, { role: 'assistant', content: msg }])
+      pushMessage({ role: 'assistant', content: msg })
       return
     }
 
@@ -594,10 +601,10 @@ export default function CochiDesktop({
     if (usesOpenRouter && !getOpenRouterKey()) {
       setLoading(false)
       setPlanStatus('idle')
-      setMessages(prev => [...prev, {
+      pushMessage({
         role: 'assistant',
         content: '🔑 Todavía no cargaste tu API key de OpenRouter. Usá el botón de la llave en la barra superior y pegala para poder trabajar.'
-      }])
+      })
       return
     }
     let remainingIter = 25
@@ -746,10 +753,10 @@ export default function CochiDesktop({
             if (trackSteps) updateStepStatus(step.id, 'failed', 'Respuesta cortada por límite de tokens (finish_reason=length)')
             stepResultSummary = 'FAILED: respuesta cortada por límite de tokens'
             requestFinalText = '⚠️ La respuesta del modelo se cortó por el límite de tokens. Probá con una instrucción más acotada o un archivo más pequeño.'
-            setMessages(prev => [...prev, {
+            pushMessage({
               role: 'assistant',
               content: '⚠️ La respuesta del modelo se cortó por el límite de tokens. Probá con una instrucción más acotada o un archivo más pequeño.'
-            }])
+            })
             stepCompleted = true
             break
           }
@@ -782,7 +789,7 @@ export default function CochiDesktop({
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 requestFinalText = displayContent
-                setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+                pushMessage({ role: 'assistant', content: displayContent })
                 stepCompleted = true
                 break
               } else if (failedMatch) {
@@ -791,7 +798,7 @@ export default function CochiDesktop({
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 requestFinalText = displayContent
-                setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+                pushMessage({ role: 'assistant', content: displayContent })
                 stepCompleted = true
                 break
               } else if (replanMatch) {
@@ -806,7 +813,7 @@ export default function CochiDesktop({
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 requestFinalText = displayContent
-                setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+                pushMessage({ role: 'assistant', content: displayContent })
                 stepCompleted = true
                 break
               } else {
@@ -814,7 +821,7 @@ export default function CochiDesktop({
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 requestFinalText = displayContent
-                setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
+                pushMessage({ role: 'assistant', content: displayContent })
                 stepCompleted = true
                 break
               }
@@ -879,10 +886,10 @@ export default function CochiDesktop({
                     await appendToMemory(r1, r2)
                     sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                     requestFinalText = displayContent || extractedResult
-                    setMessages(prev => [...prev, { role: 'assistant', content: displayContent || extractedResult }])
+                    pushMessage({ role: 'assistant', content: displayContent || extractedResult })
                   } catch (wrapErr) {
                     requestFinalText = extractedResult
-                    setMessages(prev => [...prev, { role: 'assistant', content: extractedResult }])
+                    pushMessage({ role: 'assistant', content: extractedResult })
                   }
                 }
 
@@ -894,7 +901,7 @@ export default function CochiDesktop({
                 stepResultSummary = `FAILED: ${reason}`
                 if (shouldWrapperTranslate) {
                   requestFinalText = `⚠️ ${reason}`
-                  setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${reason}` }])
+                  pushMessage({ role: 'assistant', content: `⚠️ ${reason}` })
                 }
                 stepCompleted = true
                 break
@@ -903,7 +910,7 @@ export default function CochiDesktop({
                 if (!trackSteps) {
                   stepResultSummary = `FAILED: ${extractedReason}`
                   requestFinalText = `⚠️ Esta tarea necesita dividirse en pasos y hoy no hay planner activo. Motivo: ${extractedReason}. Probá pedírmelo de forma más específica o en partes.`
-                  setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Esta tarea necesita dividirse en pasos y hoy no hay planner activo. Motivo: ${extractedReason}. Probá pedírmelo de forma más específica o en partes.` }])
+                  pushMessage({ role: 'assistant', content: `⚠️ Esta tarea necesita dividirse en pasos y hoy no hay planner activo. Motivo: ${extractedReason}. Probá pedírmelo de forma más específica o en partes.` })
                 } else if (step.isReplanned) {
                   updateStepStatus(step.id, 'failed', extractedReason)
                   stepResultSummary = `REPLANNED: ${extractedReason}`
@@ -918,7 +925,7 @@ export default function CochiDesktop({
                 stepResultSummary = 'FAILED: No control signal emitted'
                 if (shouldWrapperTranslate) {
                   requestFinalText = '⚠️ El paso final no emitió una señal de control válida.'
-                  setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ El paso final no emitió una señal de control válida.' }])
+                  pushMessage({ role: 'assistant', content: '⚠️ El paso final no emitió una señal de control válida.' })
                 }
                 stepCompleted = true
                 break
@@ -994,7 +1001,7 @@ export default function CochiDesktop({
               }
             } catch (err) { modelResult = `ERROR: ${err.message}` }
             pushActivity(icon, name, shortLabel, diff)
-            if (diff) setMessages(prev => [...prev, { role: 'diff', diff }])
+            if (diff) pushMessage({ role: 'diff', diff })
             console.log(`DEBUG TOOL RESULT [step ${trackSteps ? stepIndex + 1 : '—'} / iter ${innerIter}]`, { name, modelResult })
             return { role: 'tool', tool_call_id: toolCall.id, content: String(modelResult) }
           }
@@ -1040,10 +1047,10 @@ export default function CochiDesktop({
             if (trackSteps) {
               updateStepStatus(step.id, 'failed', 'Bucle de repetición detectado — misma llamada repetida sin progreso')
             }
-            setMessages(prev => [...prev, {
+            pushMessage({
               role: 'assistant',
               content: '⚠️ Cochi entró en un bucle repitiendo la misma búsqueda y se detuvo automáticamente. Intenta con instrucciones más específicas (ej. indicar el archivo exacto).'
-            }])
+            })
             stepCompleted = false
             break
           } else if (maxRepeatCount >= REPEAT_WARN_THRESHOLD && !repeatWarned) {
@@ -1115,7 +1122,7 @@ export default function CochiDesktop({
         if (failedSteps.length > 0) {
           summary += ' Fallos: ' + failedSteps.map(s => `${s.description} (${s.result || 'sin motivo'})`).join('; ')
         }
-        setMessages(prev => [...prev, { role: 'assistant', content: summary }])
+        pushMessage({ role: 'assistant', content: summary })
       }
 
     } catch (err) {
@@ -1124,7 +1131,7 @@ export default function CochiDesktop({
       setLiveStream('')
       setPlanStatus('completed')
       if (err.name !== 'AbortError') {
-        setMessages(prev => [...prev, { role: 'assistant', content: `❌ Error en ejecución del plan: ${err.message}` }])
+        pushMessage({ role: 'assistant', content: `❌ Error en ejecución del plan: ${err.message}` })
       }
     }
   }
@@ -1134,7 +1141,7 @@ export default function CochiDesktop({
     if (!sent || loading || planStatus === 'executing') return
 
     originalMessageRef.current = sent
-    setMessages(prev => [...prev, { role: 'user', content: sent }])
+    pushMessage({ role: 'user', content: sent })
 
     // Planner revivido (Bloque J): si la intención amerita varios pasos, se
     // genera un plan y se espera confirmación en PlanViewer antes de ejecutar;
@@ -1157,7 +1164,7 @@ export default function CochiDesktop({
   function cancelPlan() {
     syncPlan(null)
     setPlanStatus('idle')
-    setMessages(prev => [...prev, { role: 'assistant', content: 'Plan cancelado.' }])
+    pushMessage({ role: 'assistant', content: 'Plan cancelado.' })
   }
 
   function handleEsc() {
@@ -1198,7 +1205,7 @@ export default function CochiDesktop({
       sessionAllowRef.current = new Set()
       onResetUsage?.('cochi')
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ No se pudo guardar R7: ${err.message}` }])
+      pushMessage({ role: 'assistant', content: `⚠️ No se pudo guardar R7: ${err.message}` })
     }
   }
 
@@ -1406,11 +1413,11 @@ RGartner by R7Signal
             </div>
           )}
 
-          {messages.map((msg, idx) => (
+          {messages.map((msg) => (
             msg.role === 'diff' ? (
-              <DiffViewer key={`diff-${idx}`} diff={msg.diff} />
+              <DiffViewer key={msg.id} diff={msg.diff} />
             ) : msg.role === 'user' ? (
-              <div key={idx} className="cd-message-enter" style={isTerminator ? {
+              <div key={msg.id} className="cd-message-enter" style={isTerminator ? {
                 background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
                 border: '1px solid rgba(200,162,216,0.2)',
                 borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
@@ -1435,7 +1442,7 @@ RGartner by R7Signal
                 </div>
               </div>
             ) : (
-              <div key={idx} className="cd-message-enter" style={isTerminator ? {
+              <div key={msg.id} className="cd-message-enter" style={isTerminator ? {
                 background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
                 border: '1px solid rgba(201,128,84,0.4)', borderLeft: '3px solid #C98054',
                 borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
