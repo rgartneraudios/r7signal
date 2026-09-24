@@ -14,7 +14,7 @@ import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFr
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
-import { newMessageId } from '../lib/sessionStore.js'
+import { newMessageId, makeSession, saveSession, loadSession, fromCanonical } from '../lib/sessionStore.js'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -177,6 +177,8 @@ const css = `
 export default function CochiDesktop({
   pendingMessage,
   onMessageConsumed,
+  pendingSession,
+  onSessionConsumed,
   handoff,
   onHandoffConsumed,
   workspace,
@@ -213,6 +215,9 @@ export default function CochiDesktop({
   const sessionPairsRef = useRef([]) // acumula {r1,r2,stepId} de cada turno — stepId = ordinal del step (stepIndex+1) o null sin plan; se resetea en CLS y Guardar R7
   const wheelRef = useRef(createWheelState()) // Bloque L4: rueda R7 { r7, lastTurn } — se resetea en CLS y Guardar R7
   const cochiSessionIdRef = useRef(null) // session_id estable por conversación; se resetea en CLS y Guardar R7
+  // Bloque K2: espejo de `messages` para el autosave y guardas de retoma.
+  const messagesRef = useRef([])
+  const skipAutosaveRef = useRef(true) // true en el montaje y al retomar una sesión
   const chatContainerRef = useRef(null)
   const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
   const [todos, setTodos] = useState([])   // lista de tareas del tool todowrite
@@ -244,6 +249,53 @@ export default function CochiDesktop({
   useEffect(() => {
     readLatestR7().then(r7 => { wheelRef.current = createWheelState(r7) })
   }, [])
+
+  // ── Bloque K2: autosave + resume ──────────────────────────────────────────
+  // Espejo de messages (setState es async; el autosave necesita el estado final).
+  useEffect(() => { messagesRef.current = messages }, [messages])
+
+  const isUserMsg = (m) => m?.role === 'user' || m?.rol === 'usuario'
+
+  // Autosave tras cerrar cada turno (KD5). Se salta el montaje y las retomas,
+  // y nunca guarda mientras hay ejecución en curso (streaming infinito).
+  useEffect(() => {
+    if (skipAutosaveRef.current) { skipAutosaveRef.current = false; return }
+    if (loading) return
+    if (!messages.some(isUserMsg)) return
+    const session = makeSession('cochi', {
+      sessionId: cochiSessionIdRef.current,
+      wheel: wheelRef.current,
+      messages,
+    })
+    cochiSessionIdRef.current = session.id
+    saveSession(session).catch(err => console.error('autosave cochi:', err))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, loading])
+
+  // Retomar una sesión guardada (KD7): carga mensajes + snapshot de rueda +
+  // sessionId propios de la sesión. NO toca el R7 global.
+  useEffect(() => {
+    if (!pendingSession) return
+    onSessionConsumed?.()
+    const { id, nonce } = pendingSession
+    let alive = true
+    ;(async () => {
+      const s = await loadSession(id)
+      if (!alive || !s) return
+      skipAutosaveRef.current = true
+      setMessages((s.messages || []).map(m => fromCanonical('cochi', m)))
+      wheelRef.current = { r7: s.wheel?.r7 || '', lastTurn: s.wheel?.lastTurn ?? null }
+      cochiSessionIdRef.current = s.id
+      sessionPairsRef.current = []
+      setActivity([]); setTodos([]); syncPlan(null)
+      setPlanStatus('idle'); setTokenWarningDismissed(false)
+      setTokens(0); setCost(0)
+      sessionAllowRef.current = new Set()
+      onResetUsage?.('cochi')
+    })()
+    return () => { alive = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSession?.nonce])
 
   // Cerrar gear al hacer click fuera
   useEffect(() => {
@@ -329,6 +381,27 @@ export default function CochiDesktop({
   // undo). pushMessage evita repetir el id en los ~18 puntos de append.
   function pushMessage(msg) {
     setMessages(prev => [...prev, { ...msg, id: msg.id ?? newMessageId('cochi') }])
+  }
+
+  // Bloque K2: sella el estado actual como sesión (overwrite Sessions/<id>.json).
+  // CLS la usa para archivar el estado final antes de resetear.
+  function persistCurrentSession() {
+    const msgs = messagesRef.current
+    if (!msgs.some(isUserMsg)) return
+    const session = makeSession('cochi', {
+      sessionId: cochiSessionIdRef.current,
+      wheel: wheelRef.current,
+      messages: msgs,
+    })
+    cochiSessionIdRef.current = session.id
+    saveSession(session).catch(err => console.error('autosave cochi:', err))
+  }
+
+  // Bloque K2 (decisión 3): CLS/Guardar R7 promueven la rueda actual a global
+  // como chat_N nuevo, para que la sesión siguiente herede la continuidad.
+  async function promoteWheelToGlobal() {
+    const sealed = flushWheel(wheelRef.current)
+    if (sealed.r7 && sealed.r7.trim()) await writeR9File('r7', sealed.r7)
   }
 
   // ─── ask_user: pausa real del loop ────────────────────────────────────────
@@ -1178,6 +1251,9 @@ export default function CochiDesktop({
   }
   async function handleClear() {
     if (window.confirm('¿Borrar toda la conversación?')) {
+      // K2: archiva la sesión (queda en la lista) y promueve su rueda a global.
+      persistCurrentSession()
+      await promoteWheelToGlobal()
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
       setTodos([])
@@ -1193,8 +1269,9 @@ export default function CochiDesktop({
     try {
       // Bloque L4: la rueda se guarda entera (TODO el R7 hasta este momento), sin
       // R3 (D1) y sin sección "── R3 final ──". flushWheel sella el turno pendiente.
-      const sealed = flushWheel(wheelRef.current)
-      await writeR9File('r7', sealed.r7 || '')
+      // K2: igual que CLS, archiva la sesión y promueve la rueda (decisión 4).
+      persistCurrentSession()
+      await promoteWheelToGlobal()
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
       setTodos([])

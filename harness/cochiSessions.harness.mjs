@@ -161,5 +161,38 @@ check('loadSession inexistente → null', await loadSession('nope', { fs: fake, 
 check('deleteSession borra', await deleteSession('s-old', { fs: fake, baseDir: ROOT }), true)
 check('tras delete no está', fake.files.has(`${SESSIONS_DIR}/s-old.json`), false)
 
+console.log('\n— K2: autosave/resume round-trip (wheel + lastTurn) —')
+const wheelSnap = {
+  r7: appendR7Pair('', 1, 'r1a', 'r2a'),
+  lastTurn: { user: 'u2', assistant: 'a2', pairs: [{ r1: 'r1b', r2: 'r2b' }] },
+}
+const k2Session = makeSession('cochi', {
+  sessionId: 'cochi-k2',
+  wheel: wheelSnap,
+  messages: [
+    { id: 'u1', role: 'user', content: 'q1' },
+    { id: 'a1', role: 'assistant', content: 'R3: r1' },
+    { id: 'd1', role: 'diff', diff: { before: 'x', after: 'y' } },
+  ],
+})
+const fake2 = makeFakeFs()
+await saveSession(k2Session, { fs: fake2, baseDir: ROOT })
+const loaded2 = await loadSession('cochi-k2', { fs: fake2, baseDir: ROOT })
+check('resume: wheel.r7 intacto', loaded2.wheel.r7, wheelSnap.r7)
+check('resume: wheel.lastTurn intacto', loaded2.wheel.lastTurn, wheelSnap.lastTurn)
+check('resume: roles canónicos', loaded2.messages.map(m => m.role), ['user', 'assistant', 'diff'])
+check('resume: diff reconstruido', fromCanonical('cochi', loaded2.messages[2]).diff, { before: 'x', after: 'y' })
+check('resume: id de sesión reusado', loaded2.id, 'cochi-k2')
+
+const asunSession = makeSession('asun', {
+  sessionId: 'asun-k2',
+  wheel: { r7: '── Turno 1 ──\nR1: a\nR2: b', lastTurn: null },
+  messages: [{ id: 'x', rol: 'usuario', contenido: 'hola' }],
+})
+await saveSession(asunSession, { fs: fake2, baseDir: ROOT })
+const loadedAsun = await loadSession('asun-k2', { fs: fake2, baseDir: ROOT })
+check('resume asun: rol usuario reconstruido', fromCanonical('asun', loadedAsun.messages[0]).rol, 'usuario')
+check('resume asun: listSessions lo encuentra', (await listSessions({ agent: 'asun', fs: fake2, baseDir: ROOT })).map(x => x.id), ['asun-k2'])
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
