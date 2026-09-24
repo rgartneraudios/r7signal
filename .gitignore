@@ -31,3 +31,6 @@ public/videos/
 .env.*.local
 node_modules/
 dist/
+
+# Output de agentes (archivos nuevos; los ya trackeados siguen versionados)
+output/

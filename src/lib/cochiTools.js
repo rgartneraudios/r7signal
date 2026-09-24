@@ -776,7 +776,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
     }
 
     case 'save_to_r9': {
-      const entry = await writeR9File(workspaceRoot, 'r9', args.content, { source: 'cochi', label: args.label })
+      const entry = await writeR9File('r9', args.content, { source: 'cochi', label: args.label })
       return { modelResult: `✅ Guardado en R9: ${entry.fileName}`, diff: null }
     }
 

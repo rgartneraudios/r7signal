@@ -356,7 +356,7 @@ export async function executeTool(toolName, toolArgs, workspace) {
     }
 
     case 'save_to_r9': {
-      const entry = await writeR9File(workspace?.path, 'r9', toolArgs.content, { source: 'asun', label: toolArgs.label })
+      const entry = await writeR9File('r9', toolArgs.content, { source: 'asun', label: toolArgs.label })
       return `Guardado en R9: ${entry.fileName}`
     }
 

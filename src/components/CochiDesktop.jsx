@@ -11,7 +11,9 @@ import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { TOOL_ICONS, executeTool, getToolsForPermission } from '../lib/cochiTools.js'
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
-import { writeR9File } from '../lib/r9Store.js'
+import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
+import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
+import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -55,24 +57,15 @@ const COCHI_TIER_LABEL = {
   'tencent/hy4-preview':  'Terminator',
 }
 
-// ─── Compactación de contexto token-aware (Bloque H) ──────────────────────────
+// ─── Compactación de contexto token-aware (Bloque H + L4) ─────────────────────
 // Distinto del pairing guard de pruneApiMessages (Bloque A), que se mantiene
-// intacto como red de seguridad estructural. Acá, cuando la conversación supera
-// el presupuesto de tokens, la porción vieja se reemplaza por un resumen REAL
-// generado por el modelo en vez de solo descartarse con un placeholder.
+// intacto como red de seguridad estructural. Cuando la conversación supera el
+// presupuesto de tokens, la porción vieja se colapsa usando los R1/R2 que el
+// modelo YA emitió (D9: se jubiló summarizeDropped → cero llamadas extra). El
+// camino L1.2 (markers de steps completos) se conserva tal cual.
 const CONTEXT_TOKEN_BUDGET   = 60000 // tokens estimados que disparan la compactación
 const CONTEXT_KEEP_RECENT_MSGS = 14  // tope de mensajes recientes conservados (red de seguridad)
 const CONTEXT_RECENT_TOKEN_CAP = CONTEXT_TOKEN_BUDGET / 2 // tramo reciente a preservar sin resumir
-const CONTEXT_SUMMARY_MAX_TOKENS = 900
-
-const CONTEXT_COMPACTION_PROMPT = `You compress an agentic conversation to save context. You receive a transcript of older messages (user requests, assistant reasoning, tool calls and their results). Produce a dense, factual summary that preserves everything needed to continue the task.
-
-RULES:
-- Preserve: the original task/goal, decisions made, files created/modified/deleted with their exact paths, command outputs that matter, errors encountered and how they were resolved, and any pending/next action.
-- Keep exact identifiers: file paths, function names, IDs, URLs, values.
-- Discard: conversational filler, repeated tool results, and anything already superseded.
-- Write in the same language as the transcript.
-- Be concise but complete. No preamble, no meta-commentary, no markdown headers. A few short paragraphs or a tight bullet list is fine.`
 
 // Estimación heurística de tokens (~4 chars/token) para decidir la compactación
 // antes de que el proveedor rechace por contexto excedido.
@@ -98,44 +91,10 @@ const READ_ONLY_TOOLS = new Set([
   'search_in_files', 'get_file_info', 'file_exists', 'web_fetch',
 ])
 
-// Genera un resumen real de los mensajes descartados por la compactación.
-// Se apoya en el proveedor activo y, si falla, devuelve null para caer al
-// placeholder estático sin romper el loop.
-async function summarizeDropped(dropped, { provider, sessionId, signal, onUsage }) {
-  if (!dropped.length) return null
-  const transcript = dropped.map(m => {
-    const label = m.role === 'tool' ? 'TOOL' : String(m.role).toUpperCase()
-    let text = typeof m.content === 'string'
-      ? m.content
-      : (m.content != null ? JSON.stringify(m.content) : '')
-    if (Array.isArray(m.tool_calls)) {
-      text += ' ' + m.tool_calls
-        .map(tc => `[llamada ${tc.function?.name}(${tc.function?.arguments})]`)
-        .join(' ')
-    }
-    return `${label}: ${text}`
-  }).join('\n')
-
-  try {
-    const res = await streamChat({
-      provider,
-      stream: false,
-      signal,
-      sessionId,
-      retries: 2,
-      maxTokens: CONTEXT_SUMMARY_MAX_TOKENS,
-      messages: [
-        { role: 'system', content: CONTEXT_COMPACTION_PROMPT },
-        { role: 'user', content: transcript },
-      ],
-      onUsage,
-    })
-    const summary = (res.content || '').trim()
-    return summary || null
-  } catch {
-    return null
-  }
-}
+// Genera un resumen de los mensajes descartados por la compactación a partir de
+// los R1/R2 YA emitidos (D9: cero llamadas extra al modelo). Si no hay pares
+// recuperables devuelve null y el llamador usa el placeholder estático.
+// (La heurística pura vive en r7Wheel.summarizeFromPairs, testeable headless.)
 
 // L1.2: en apiMessages, un step completado se colapsa a un único mensaje
 // "[STEP N RESULT: …]" (ver collapse en el loop). Una ventana descartada es "de
@@ -251,6 +210,7 @@ export default function CochiDesktop({
   const planRef = useRef(null)
   const originalMessageRef = useRef('')
   const sessionPairsRef = useRef([]) // acumula {r1,r2,stepId} de cada turno — stepId = ordinal del step (stepIndex+1) o null sin plan; se resetea en CLS y Guardar R7
+  const wheelRef = useRef(createWheelState()) // Bloque L4: rueda R7 { r7, lastTurn } — se resetea en CLS y Guardar R7
   const cochiSessionIdRef = useRef(null) // session_id estable por conversación; se resetea en CLS y Guardar R7
   const chatContainerRef = useRef(null)
   const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
@@ -277,6 +237,11 @@ export default function CochiDesktop({
       if (p) { setRemotePrompts(p); onPromptsReady?.('cochi') }
       else setPromptsError(true)
     })
+  }, [])
+
+  // Bloque L4: al abrir la sesión, cargar la rueda R7 global desde disco.
+  useEffect(() => {
+    readLatestR7().then(r7 => { wheelRef.current = createWheelState(r7) })
   }, [])
 
   // Cerrar gear al hacer click fuera
@@ -431,29 +396,10 @@ export default function CochiDesktop({
     })
   }
 
-  const stripLabelLines = (text) => text
-    .split('\n')
-    .filter(line => !/^\s*\*{0,2}R[123]:\*{0,2}/i.test(line))
-    .join('\n')
-    .trim()
-
-  const parseR1R2R3 = (content) => {
-    const r1Match    = content.match(/\*{0,2}R1:\*{0,2}\s*([^\n]*?)(?=\s*\*{0,2}R2:|$)/im)
-    const r2Match    = content.match(/\*{0,2}R2:\*{0,2}\s*([^\n]*)/im)
-    const r3Match    = content.match(/\*{0,2}R3:\*{0,2}\s*([\s\S]*?)$/im)
-    const r1 = r1Match ? r1Match[1].trim() : ''
-    const r2 = r2Match ? r2Match[1].trim() : ''
-    let r3   = ''
-    if (r3Match)      { r3 = r3Match[1].trim() }
-    else if (r2Match) { const r2End = content.indexOf(r2Match[0]) + r2Match[0].length; r3 = content.slice(r2End).trim() }
-    else              { r3 = stripLabelLines(content) || 'Respuesta sin formato reconocido.' }
-    return { r1, r2, r3 }
-  }
-
   // Compactación de contexto (Bloque H): el disparador es token-aware y la
   // porción descartada se resume de verdad. El pairing guard del Bloque A se
   // conserva textualmente intacto.
-  async function pruneApiMessages(messages, { provider, sessionId, signal, onUsage } = {}) {
+  async function pruneApiMessages(messages) {
     const systemMsgs = messages.filter(m => m.role === 'system')
     const nonSystem  = messages.filter(m => m.role !== 'system')
 
@@ -492,7 +438,7 @@ export default function CochiDesktop({
 
     // L1.2: si la ventana descartada son steps ya completos, se resume
     // concatenando el texto de sus markers "[STEP N RESULT: …]" (cero llamadas
-    // al modelo). Si algún step queda cortado a mitad, se cae al resumen real.
+    // al modelo). Si algún step queda cortado a mitad, se cae a la rueda.
     const complete = extractCompleteSteps(dropped)
     let summary = null
     let carried = null
@@ -509,15 +455,17 @@ export default function CochiDesktop({
         })
         .join('\n')
     }
+    // D9: jubilado summarizeDropped. Se usan los R1/R2 ya emitidos en los
+    // assistant descartados (cero llamadas al modelo). Último recurso: placeholder.
     if (summary === null) {
-      summary = await summarizeDropped(dropped, { provider, sessionId, signal, onUsage })
+      summary = summarizeFromPairs(dropped)
     }
     const compressed = {
       role: 'user',
       content: carried
-        ? `${carried}\n\n${summary}`
+        ? (summary ? `${carried}\n\n${summary}` : carried)
         : summary
-          ? `[CONTEXT SUMMARY] Earlier turns were compacted to save context. Real summary of what happened:\n${summary}`
+          ? `[R7 COMPACTED] Older turns collapsed to their R1/R2 summaries (no extra model call):\n${summary}`
           : '[MEMORY] Previous tool results compressed to save context. Continue task from current state.'
     }
     return [...systemMsgs, firstUser, compressed, ...recent]
@@ -676,6 +624,8 @@ export default function CochiDesktop({
       let apiMessages = null // conversación persistente para todo el plan — se arma UNA vez y se comprime al cerrar cada step, nunca se reconstruye desde cero.
       let technicalSwapped = false // true cuando un turno sin plan (!trackSteps) pasó de Prompt A (personalidad completa) a Prompt B (STEP_EXECUTION_PROMPT, sin personalidad) por necesitar ping-pong de tools.
       let personalitySystemMsgRef = null // referencia directa (no por contenido) al mensaje de Prompt A dentro de apiMessages, para poder swapearlo sin depender de que remoteSystem siga siendo el mismo string.
+      const pairsStartIdx = sessionPairsRef.current.length // Bloque L4: corte para saber qué parejas se emitieron en ESTE request
+      let requestFinalText = '' // Bloque L4: R3 visible final del request (para el turno crudo de la rueda)
       while (remainingIter > 0 && !controller.signal.aborted) {
         const currentPlan = planRef.current
         const trackSteps = currentPlan !== null
@@ -722,7 +672,17 @@ export default function CochiDesktop({
                 },
                 { role: 'system', content: remoteSystem },
               ]
-          apiMessages = [...baseSystemMessages, { role: 'user', content: originalMessageRef.current || '' }]
+          // Bloque L4 — prompt híbrido (D3/D8): system estable -> bloque R7 ->
+          // último turno crudo -> input actual. El bloque R7 va ANTES del input
+          // del usuario y crece sólo por append al final, así el prefijo
+          // [system + R7 v(n-1)] se mantiene cacheable por el proveedor.
+          const wheel = wheelRef.current
+          apiMessages = buildWheelMessages({
+            systemMessages: baseSystemMessages,
+            r7: wheel.r7,
+            rawTurns: wheel.lastTurn ? [wheel.lastTurn] : [],
+            userInput: originalMessageRef.current || '',
+          })
           // Referencia directa al mensaje de personalidad (Prompt A), no su contenido — así el swap
           // no depende de que remoteSystem siga interpolando igual entre vueltas del while.
           if (!usesTechnicalPrompt) personalitySystemMsgRef = baseSystemMessages[1]
@@ -785,6 +745,7 @@ export default function CochiDesktop({
           if (streamed.finishReason === 'length') {
             if (trackSteps) updateStepStatus(step.id, 'failed', 'Respuesta cortada por límite de tokens (finish_reason=length)')
             stepResultSummary = 'FAILED: respuesta cortada por límite de tokens'
+            requestFinalText = '⚠️ La respuesta del modelo se cortó por el límite de tokens. Probá con una instrucción más acotada o un archivo más pequeño.'
             setMessages(prev => [...prev, {
               role: 'assistant',
               content: '⚠️ La respuesta del modelo se cortó por el límite de tokens. Probá con una instrucción más acotada o un archivo más pequeño.'
@@ -820,6 +781,7 @@ export default function CochiDesktop({
                 if (trackSteps) updateStepStatus(step.id, 'completed', extractedResult)
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
+                requestFinalText = displayContent
                 setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
                 stepCompleted = true
                 break
@@ -828,6 +790,7 @@ export default function CochiDesktop({
                 if (trackSteps) updateStepStatus(step.id, 'failed', reason)
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
+                requestFinalText = displayContent
                 setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
                 stepCompleted = true
                 break
@@ -842,6 +805,7 @@ export default function CochiDesktop({
                 }
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
+                requestFinalText = displayContent
                 setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
                 stepCompleted = true
                 break
@@ -849,6 +813,7 @@ export default function CochiDesktop({
                 if (trackSteps) updateStepStatus(step.id, 'completed', 'Completado')
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
+                requestFinalText = displayContent
                 setMessages(prev => [...prev, { role: 'assistant', content: displayContent }])
                 stepCompleted = true
                 break
@@ -913,8 +878,10 @@ export default function CochiDesktop({
                       .trim()
                     await appendToMemory(r1, r2)
                     sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
+                    requestFinalText = displayContent || extractedResult
                     setMessages(prev => [...prev, { role: 'assistant', content: displayContent || extractedResult }])
                   } catch (wrapErr) {
+                    requestFinalText = extractedResult
                     setMessages(prev => [...prev, { role: 'assistant', content: extractedResult }])
                   }
                 }
@@ -926,6 +893,7 @@ export default function CochiDesktop({
                 if (trackSteps) updateStepStatus(step.id, 'failed', reason)
                 stepResultSummary = `FAILED: ${reason}`
                 if (shouldWrapperTranslate) {
+                  requestFinalText = `⚠️ ${reason}`
                   setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${reason}` }])
                 }
                 stepCompleted = true
@@ -934,6 +902,7 @@ export default function CochiDesktop({
                 const extractedReason = replanMatch[1].trim()
                 if (!trackSteps) {
                   stepResultSummary = `FAILED: ${extractedReason}`
+                  requestFinalText = `⚠️ Esta tarea necesita dividirse en pasos y hoy no hay planner activo. Motivo: ${extractedReason}. Probá pedírmelo de forma más específica o en partes.`
                   setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Esta tarea necesita dividirse en pasos y hoy no hay planner activo. Motivo: ${extractedReason}. Probá pedírmelo de forma más específica o en partes.` }])
                 } else if (step.isReplanned) {
                   updateStepStatus(step.id, 'failed', extractedReason)
@@ -948,6 +917,7 @@ export default function CochiDesktop({
                 if (trackSteps) updateStepStatus(step.id, 'failed', 'No control signal emitted')
                 stepResultSummary = 'FAILED: No control signal emitted'
                 if (shouldWrapperTranslate) {
+                  requestFinalText = '⚠️ El paso final no emitió una señal de control válida.'
                   setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ El paso final no emitió una señal de control válida.' }])
                 }
                 stepCompleted = true
@@ -1084,20 +1054,7 @@ export default function CochiDesktop({
             })
           }
 
-          apiMessages = await pruneApiMessages(apiMessages, {
-            provider,
-            sessionId: cochiSessionId,
-            signal: controller.signal,
-            onUsage: (usage) => {
-              const promptTokens = usage.prompt_tokens ?? 0
-              const completionTokens = usage.completion_tokens ?? 0
-              const total = usage.total_tokens ?? (promptTokens + completionTokens)
-              stepTokens += total
-              totalTokensAcc += total
-              stepInputTokens += promptTokens
-              stepOutputTokens += completionTokens
-            },
-          })
+          apiMessages = await pruneApiMessages(apiMessages)
         }
 
         if (trackSteps && stepCompleted) {
@@ -1129,6 +1086,19 @@ export default function CochiDesktop({
 
         // Single pass when no plan
         if (!trackSteps) break
+      }
+
+      // Bloque L4 — consolidar la rueda UNA vez por request (no por step): se
+      // sella el turno anterior en R7 y el actual queda como turno crudo (D3).
+      const requestPairs = sessionPairsRef.current
+        .slice(pairsStartIdx)
+        .map(p => ({ r1: p.r1, r2: p.r2 }))
+      if (requestFinalText || requestPairs.length) {
+        wheelRef.current = closeWheelTurn(wheelRef.current, {
+          user: originalMessageRef.current || '',
+          assistant: requestFinalText,
+          pairs: requestPairs,
+        })
       }
 
       setPlanStatus('completed')
@@ -1199,13 +1169,14 @@ export default function CochiDesktop({
       setPlanStatus('completed')
     }
   }
-  function handleClear() {
+  async function handleClear() {
     if (window.confirm('¿Borrar toda la conversación?')) {
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
       setTodos([])
       syncPlan(null); setPlanStatus('idle')
       sessionPairsRef.current = []
+      wheelRef.current = createWheelState(await readLatestR7())
       cochiSessionIdRef.current = null
       sessionAllowRef.current = new Set()
       onResetUsage?.('cochi')
@@ -1213,18 +1184,16 @@ export default function CochiDesktop({
   }
   async function handleSaveR7() {
     try {
-      const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')
-      const r3 = lastAssistant?.content || '(sin respuesta final en esta sesión)'
-      const pairsText = sessionPairsRef.current.length
-        ? sessionPairsRef.current.map((p, i) => `── Turno ${i + 1} ──\nR1: ${p.r1}\nR2: ${p.r2}`).join('\n\n') + '\n\n'
-        : ''
-      const content = pairsText + `── R3 final ──\n${r3}`
-      await writeR9File(workspace?.path, 'r7', content)
+      // Bloque L4: la rueda se guarda entera (TODO el R7 hasta este momento), sin
+      // R3 (D1) y sin sección "── R3 final ──". flushWheel sella el turno pendiente.
+      const sealed = flushWheel(wheelRef.current)
+      await writeR9File('r7', sealed.r7 || '')
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
       setLoading(false); setTokenWarningDismissed(false)
       setTodos([])
       syncPlan(null); setPlanStatus('idle')
       sessionPairsRef.current = []
+      wheelRef.current = createWheelState(await readLatestR7())
       cochiSessionIdRef.current = null
       sessionAllowRef.current = new Set()
       onResetUsage?.('cochi')
@@ -1245,7 +1214,7 @@ export default function CochiDesktop({
 
   async function handleConfirmR9() {
     if (!r9Btn) return
-    try { await writeR9File(workspace?.path, 'r9', r9Btn.text, { source: 'cochi' }) }
+    try { await writeR9File('r9', r9Btn.text, { source: 'cochi' }) }
     catch (err) { console.error('R9 write error:', err) }
     window.getSelection()?.removeAllRanges()
     setR9Btn(null)

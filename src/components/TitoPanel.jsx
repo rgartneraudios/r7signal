@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { calculateCost } from '../lib/modelPrices.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
-import { writeR9File } from '../lib/r9Store.js'
+import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
+import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
+import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 
 const TITO_MODELS = {
@@ -49,7 +51,6 @@ export default function TitoPanel({
   onUsage, onResetUsage, onHandoff, userName,
   preferences = {},
   onPromptsReady,
-  workspace,
 }) {
   const chatLanguage = preferences.chat_language ?? 'Spanish'
   const [messages, setMessages] = useState([]);
@@ -69,6 +70,10 @@ export default function TitoPanel({
     return sessionIdRef.current;
   }
   const [r9Btn, setR9Btn] = useState(null); // {x,y,text} — botón flotante "+R9"
+  const sessionPairsRef = useRef([]);
+  const wheelRef = useRef(createWheelState()); // Bloque L4: rueda R7 { r7, lastTurn }
+  const [tokens, setTokens] = useState(0);
+  const [tokenWarningDismissed, setTokenWarningDismissed] = useState(false);
 
   function handleSelectionMouseUp() {
     const sel = window.getSelection();
@@ -82,10 +87,26 @@ export default function TitoPanel({
 
   async function handleConfirmR9() {
     if (!r9Btn) return;
-    try { await writeR9File(workspace?.path, 'r9', r9Btn.text, { source: 'tito' }); }
+    try { await writeR9File('r9', r9Btn.text, { source: 'tito' }); }
     catch (err) { console.error('R9 write error:', err); }
     window.getSelection()?.removeAllRanges();
     setR9Btn(null);
+  }
+
+  async function handleSaveR7() {
+    try {
+      // Bloque L4: archivo NUEVO acumulativo con TODO el R7, sin R3 (D1).
+      const sealed = flushWheel(wheelRef.current)
+      await writeR9File('r7', sealed.r7 || '')
+      setMessages([])
+      setTokens(0); setTokenWarningDismissed(false)
+      sessionPairsRef.current = []
+      wheelRef.current = createWheelState(await readLatestR7())
+      sessionIdRef.current = null
+      onResetUsage?.('tito')
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ No se pudo guardar R7: ${err.message}` }])
+    }
   }
 
   useEffect(() => {
@@ -104,6 +125,11 @@ export default function TitoPanel({
       if (p) { setRemotePrompts(p); onPromptsReady?.('tito') }
       else setPromptsError(true)
     })
+  }, [])
+
+  // Bloque L4: al abrir la sesión, cargar la rueda R7 global desde disco.
+  useEffect(() => {
+    readLatestR7().then(r7 => { wheelRef.current = createWheelState(r7) })
   }, [])
 
   const sendMessage = async (text) => {
@@ -145,6 +171,16 @@ export default function TitoPanel({
     abortRef.current = controller;
     const titoSystem = interpolatePrompt(remotePrompts.system, { chatLanguage })
 
+    // Bloque L4 — prompt híbrido (D3/D8): system -> bloque R7 -> último turno
+    // crudo -> input actual. Sustituye el reenvío del historial R3 completo.
+    const wheel = wheelRef.current
+    const wheelMessages = buildWheelMessages({
+      systemMessages: [{ role: 'system', content: titoSystem }],
+      r7: wheel.r7,
+      rawTurns: wheel.lastTurn ? [wheel.lastTurn] : [],
+      userInput: text,
+    })
+
     try {
       // Conversational guard — skip web search for casual messages
       if (!needsWebSearch(text)) {
@@ -163,10 +199,7 @@ export default function TitoPanel({
             usage: { include: true },
             reasoning: { enabled: false },
             session_id: getTitoSessionId(),
-            messages: [
-{ role: 'system', content: titoSystem },
-               ...history,
-             ],
+            messages: wheelMessages,
            }),
          })
          const reader = res.body.getReader()
@@ -195,6 +228,7 @@ export default function TitoPanel({
                if (parsed.usage) {
                  const { prompt_tokens, completion_tokens } = parsed.usage
                  const cost = calculateCost(chatModel, prompt_tokens, completion_tokens, 'token')
+                 setTokens(prev => prev + prompt_tokens + completion_tokens)
                  if (typeof onUsage === 'function') {
                    onUsage({ source: 'tito', inputTokens: prompt_tokens, outputTokens: completion_tokens, cost })
                  }
@@ -202,8 +236,16 @@ export default function TitoPanel({
              } catch {}
            }
          }
+         const r7Pair = parseR1R2R3(fullText)
+         if (r7Pair.r1 || r7Pair.r2) sessionPairsRef.current.push({ r1: r7Pair.r1, r2: r7Pair.r2 })
          const finalDisplay = extractR3(fullText)
          const hasHandoff = fullText.includes('[→ COCHI:')
+         // Bloque L4 — cerrar el turno de la rueda.
+         wheelRef.current = closeWheelTurn(wheelRef.current, {
+           user: text,
+           assistant: finalDisplay,
+           pairs: (r7Pair.r1 || r7Pair.r2) ? [{ r1: r7Pair.r1, r2: r7Pair.r2 }] : [],
+         })
          setMessages(prev => {
           const updated = [...prev]
           updated[updated.length - 1] = {
@@ -234,10 +276,7 @@ export default function TitoPanel({
           usage: { include: true },
           reasoning: { enabled: false },
           session_id: getTitoSessionId(),
-          messages: [
-            { role: 'system', content: titoSystem },
-            ...history,
-          ],
+          messages: wheelMessages,
         }),
       });
 
@@ -268,6 +307,7 @@ export default function TitoPanel({
             if (parsed.usage) {
               const { prompt_tokens, completion_tokens } = parsed.usage
               const cost = calculateCost(TITO_MODELS[searchLevel], prompt_tokens, completion_tokens, 'token')
+              setTokens(prev => prev + prompt_tokens + completion_tokens)
               if (typeof onUsage === 'function') {
                 onUsage({ source: 'tito', inputTokens: prompt_tokens, outputTokens: completion_tokens, cost })
               }
@@ -276,8 +316,16 @@ export default function TitoPanel({
         }
       }
 
+      const r7Pair = parseR1R2R3(fullText);
+      if (r7Pair.r1 || r7Pair.r2) sessionPairsRef.current.push({ r1: r7Pair.r1, r2: r7Pair.r2 });
       const finalDisplay = extractR3(fullText);
       const hasHandoff = fullText.includes('[→ COCHI:');
+      // Bloque L4 — cerrar el turno de la rueda.
+      wheelRef.current = closeWheelTurn(wheelRef.current, {
+        user: text,
+        assistant: finalDisplay,
+        pairs: (r7Pair.r1 || r7Pair.r2) ? [{ r1: r7Pair.r1, r2: r7Pair.r2 }] : [],
+      });
       setMessages(prev => {
         const updated = [...prev];
         updated[updated.length - 1] = {
@@ -394,12 +442,35 @@ RGartner by R7Signal
         )}
       </div>
 
+      {/* ── Token warning banner ── */}
+      {tokens > 70000 && !tokenWarningDismissed && (
+        <div style={{
+          flexShrink: 0,
+          borderTop: '1px solid rgba(232,200,74,0.3)',
+          background: 'rgba(232,200,74,0.07)',
+          padding: '8px 14px',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: '0.7rem', color: '#E8C84A', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
+            ⚠ 70k tokens — Tu contexto está completo. Guárdalo en R7 antes de empezar un chat nuevo: no perderás nada.
+          </span>
+          <button
+            onClick={handleSaveR7}
+            style={{ background: 'rgba(232,200,74,0.15)', border: '1px solid rgba(232,200,74,0.5)', borderRadius: 4, padding: '3px 10px', color: '#E8C84A', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
+          >Guardar R7</button>
+          <button
+            onClick={() => setTokenWarningDismissed(true)}
+            style={{ background: 'transparent', border: 'none', color: '#6A7A8A', fontSize: '0.8rem', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
+          >×</button>
+        </div>
+      )}
+
       {/* Status bar */}
       <div className="tito-status">
         <span>⚡ {TITO_MODELS[searchLevel]}</span>
         <div style={{ flex: 1 }} />
         <button
-          onClick={() => { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); sessionIdRef.current = null; onResetUsage?.('tito') } }}
+          onClick={async () => { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); setTokens(0); setTokenWarningDismissed(false); sessionPairsRef.current = []; wheelRef.current = createWheelState(await readLatestR7()); sessionIdRef.current = null; onResetUsage?.('tito') } }}
           style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}

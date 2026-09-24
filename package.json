@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "harness:permissions": "node harness/cochiPermissions.harness.mjs",
+    "harness:r7wheel": "node harness/cochiR7Wheel.harness.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
