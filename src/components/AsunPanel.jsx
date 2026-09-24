@@ -7,7 +7,7 @@ import { getAsunTools, executeTool, pathExists } from '../lib/asunTools.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
-import { newMessageId, makeSession, saveSession, loadSession, fromCanonical } from '../lib/sessionStore.js'
+import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { open } from '@tauri-apps/plugin-dialog'
 
@@ -502,6 +502,8 @@ export default function AsunPanel({
   const skipAutosaveRef = useRef(true) // true en el montaje y al retomar una sesión
   const [tokens, setTokens] = useState(0)
   const [tokenWarningDismissed, setTokenWarningDismissed] = useState(false)
+  // Bloque K3: true si el último turno tocó archivos o generó música (regenerate avisa).
+  const lastTurnMutatedRef = useRef(false)
 
   function handleSelectionMouseUp() {
     const sel = window.getSelection()
@@ -566,6 +568,36 @@ export default function AsunPanel({
     wheelRef.current = createWheelState(await readLatestR7())
     sessionIdRef.current = null
     onResetUsage?.('asun')
+  }
+
+  // ── Bloque K3: undo / regenerate ──────────────────────────────────────────
+  // Undo: quita el último turno visible y retrocede la rueda (una anotación por
+  // turno). messagesRef se sincroniza para que regenerate reenvíe sin leer un
+  // estado viejo. Si era el único turno, se borra el JSON fantasma.
+  function applyUndo() {
+    const { messages: newMsgs, wheel: newWheel, undoneUser } = undoLastTurn(messagesRef.current, wheelRef.current)
+    messagesRef.current = newMsgs
+    wheelRef.current = newWheel
+    setMessages(newMsgs)
+    setPromptMusica(null); setAudioUrl(null)
+    if (!newMsgs.some(isUserMsg) && sessionIdRef.current) {
+      deleteSession(sessionIdRef.current).catch(() => {})
+    }
+    return undoneUser
+  }
+
+  function handleUndo() {
+    if (loading || generating) return
+    applyUndo()
+  }
+
+  async function handleRegenerate() {
+    if (loading || generating) return
+    const userText = lastUserText(messagesRef.current)
+    if (!userText) return
+    if (lastTurnMutatedRef.current && !window.confirm('Este turno tocó archivos o generó música. Regenerar puede repetir esa acción. ¿Continuar?')) return
+    applyUndo()
+    await sendMessage(userText)
   }
 
   // Notificar categoría activa al padre
@@ -679,6 +711,7 @@ export default function AsunPanel({
     }
 
     const isCochiCommand = text.startsWith('/COCHI')
+    lastTurnMutatedRef.current = false // Bloque K3: se evalúa por turno
     const userMsg = { rol: 'usuario', contenido: text, id: newMessageId('asun') }
     setMessages(prev => [...prev, userMsg])
     setLoading(true)
@@ -690,7 +723,7 @@ export default function AsunPanel({
       // ── MODO MÚSICA: sin herramientas, streaming directo ──────────────────
       if (category === 'musica') {
         const systemContent = interpolatePrompt(remotePrompts.music, { chatLanguage, nombreAlternativo })
-        const history = messages
+        const history = messagesRef.current
           .filter(m => !m.streaming)
           .map(m => ({ role: m.rol === 'usuario' ? 'user' : 'assistant', content: m.contenido }))
         const apiMessages = [
@@ -859,6 +892,9 @@ export default function AsunPanel({
 
           let toolResult = ''
           try {
+            if (['save_to_r9', 'write_text_file', 'create_dir', 'move_file', 'delete_file'].includes(toolName)) {
+              lastTurnMutatedRef.current = true // Bloque K3: regenerate avisa
+            }
             toolResult = await executeTool(toolName, toolArgs, workspace)
           } catch (err) {
             toolResult = `Error: ${err.message}`
@@ -975,6 +1011,7 @@ export default function AsunPanel({
   // ─── Generar música ────────────────────────────────────────────────────────
   async function generateMusic() {
     if (!promptMusica || generating) return
+    lastTurnMutatedRef.current = true // Bloque K3
     setGenerating(true)
     setMessages(prev => [...prev, { rol: 'usuario', contenido: '🎵 Generar canción', id: newMessageId('asun') }])
     try {
@@ -1029,6 +1066,11 @@ export default function AsunPanel({
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
+  // Bloque K3: los botones undo/regenerate cuelgan del último assistant. Si ese
+  // turno fue una generación de música no se ofrece regenerate (no se reproduce).
+  const lastAssistant = [...messages].reverse().find(m => m.rol === 'asistente')
+  const lastAssistantId = lastAssistant?.id
+  const canRegenerate = !lastAssistant?.audioUrl
   return (
     <div style={{
       display: 'flex', flexDirection: 'column',
@@ -1302,6 +1344,27 @@ RGartner by R7Signal</>
                     >
                       → Enviar a Cochi
                     </button>
+                  )}
+                  {/* Bloque K3: undo / regenerate */}
+                  {msg.rol === 'asistente' && msg.id === lastAssistantId && !loading && !generating && (
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button
+                        onClick={handleUndo}
+                        title="Deshacer el último turno"
+                        style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
+                      >↶ Undo</button>
+                      {canRegenerate && (
+                        <button
+                          onClick={handleRegenerate}
+                          title="Volver a generar la última respuesta"
+                          style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
+                        >↻ Regenerate</button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

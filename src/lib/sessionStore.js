@@ -30,7 +30,12 @@ function baseDirFrom(opts) {
   return opts?.baseDir ?? BaseDirectory.AppLocalData
 }
 function roleOf(msg) {
-  return msg?.role ?? msg?.rol
+  const r = msg?.role ?? msg?.rol
+  // Asun usa rol/contenido internamente; se normaliza aquí para que undo y
+  // lastUserText funcionen tanto con el shape interno como con el canónico.
+  if (r === 'usuario') return 'user'
+  if (r === 'asistente') return 'assistant'
+  return r
 }
 
 // ─── IDs ──────────────────────────────────────────────────────────────────────
@@ -123,9 +128,21 @@ export function touchSession(session) {
 }
 
 // ─── undo (K3): pura, no toca disco ──────────────────────────────────────────
+// Texto del último mensaje de usuario (sirve para REGENERATE: reenviarlo tal cual).
+export function lastUserText(messages) {
+  const msgs = Array.isArray(messages) ? messages : []
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (roleOf(msgs[i]) === 'user') {
+      return String(msgs[i].content ?? msgs[i].contenido ?? '')
+    }
+  }
+  return ''
+}
+
 // Reversión completa: quita el último turno visible (user + assistant + diffs
 // colgantes) y des-sella el último bloque de R7, devolviéndolo a `lastTurn`.
-// Acepta mensajes canónicos o internos (role o rol).
+// Acepta mensajes canónicos o internos (role o rol). Devuelve además `undoneUser`
+// con el texto del usuario eliminado (lo usa REGENERATE).
 export function undoLastTurn(messages, wheel) {
   const msgs = Array.isArray(messages) ? [...messages] : []
 
@@ -133,7 +150,11 @@ export function undoLastTurn(messages, wheel) {
   for (let i = msgs.length - 1; i >= 0; i--) {
     if (roleOf(msgs[i]) === 'user') { lastUserIdx = i; break }
   }
-  if (lastUserIdx !== -1) msgs.splice(lastUserIdx)
+  let undoneUser = ''
+  if (lastUserIdx !== -1) {
+    undoneUser = String(msgs[lastUserIdx].content ?? msgs[lastUserIdx].contenido ?? '')
+    msgs.splice(lastUserIdx)
+  }
 
   // Nuevo turno crudo = último par user/assistant que queda.
   let restored = null
@@ -156,7 +177,7 @@ export function undoLastTurn(messages, wheel) {
     ? { user: restored.user, assistant: restored.assistant, pairs: pair ? [pair] : [] }
     : null
 
-  return { messages: msgs, wheel: { ...w, r7, lastTurn } }
+  return { messages: msgs, wheel: { ...w, r7, lastTurn }, undoneUser }
 }
 
 // ─── Disco (inyectable) ──────────────────────────────────────────────────────

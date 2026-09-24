@@ -7,6 +7,8 @@ import {
   stripR7Header,
   countR7Turns,
   appendR7Pair,
+  mergeR7Pairs,
+  popR7Turn,
   createWheelState,
   closeWheelTurn,
   flushWheel,
@@ -44,6 +46,26 @@ r7 = appendR7Pair(r7, 2, 'c', 'd')
 check('tras 2 append → 2 turnos', countR7Turns(r7), 2)
 check('sin r1 ni r2 → no agrega', appendR7Pair(r7, 3, '', ''), r7)
 check('el append no reescribe el inicio', r7.startsWith('── Turno 1 ──'), true)
+
+console.log('\n— mergeR7Pairs / un turno = UNA anotación (plan multi-paso) —')
+check('una sola pareja → se conserva', mergeR7Pairs([{ r1: 'a', r2: 'b' }]), { r1: 'a', r2: 'b' })
+check('varias parejas → primer R1 + R2 encadenados sin repetir',
+  mergeR7Pairs([{ r1: 'p1', r2: 's1' }, { r1: '', r2: 's2' }, { r1: 'p1', r2: 's1' }]),
+  { r1: 'p1', r2: 's1\ns2' })
+check('lista vacía → null', mergeR7Pairs([]), null)
+check('sin r1 ni r2 → null', mergeR7Pairs([{ r1: '', r2: '' }]), null)
+
+let stMulti = createWheelState('')
+stMulti = closeWheelTurn(stMulti, {
+  user: 'u1', assistant: 'a1',
+  pairs: [{ r1: 'p1', r2: '1' }, { r1: '', r2: '2' }, { r1: '', r2: '3' }],
+})
+stMulti = closeWheelTurn(stMulti, { user: 'u2', assistant: 'a2', pairs: [{ r1: 'p2', r2: '4' }] })
+check('turno multi-paso sellado como UN bloque', countR7Turns(stMulti.r7), 1)
+check('el bloque conserva el primer R1', stMulti.r7.includes('R1: p1'), true)
+check('el bloque encadena los R2 de los pasos', stMulti.r7.includes('R2: 1\n2\n3'), true)
+const poppedMulti = popR7Turn(stMulti.r7)
+check('pop sobre bloque multi-paso devuelve el par unificado', poppedMulti.pair, { r1: 'p1', r2: '1\n2\n3' })
 
 console.log('\n— Rueda: R7 va un turno por detrás del crudo (sin duplicar) —')
 let st = createWheelState('')
