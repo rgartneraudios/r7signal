@@ -32,5 +32,5 @@ public/videos/
 node_modules/
 dist/
 
-# Output de agentes (archivos nuevos; los ya trackeados siguen versionados)
+# Output de agentes (no versionado; se conserva solo en el equipo local)
 output/
