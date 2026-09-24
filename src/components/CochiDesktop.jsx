@@ -14,7 +14,7 @@ import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFr
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
-import { newMessageId, makeSession, saveSession, loadSession, fromCanonical } from '../lib/sessionStore.js'
+import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -218,6 +218,8 @@ export default function CochiDesktop({
   // Bloque K2: espejo de `messages` para el autosave y guardas de retoma.
   const messagesRef = useRef([])
   const skipAutosaveRef = useRef(true) // true en el montaje y al retomar una sesión
+  // Bloque K3: true si el último turno ejecutó tools con efectos (regenerate avisa).
+  const lastTurnHadToolsRef = useRef(false)
   const chatContainerRef = useRef(null)
   const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
   const [todos, setTodos] = useState([])   // lista de tareas del tool todowrite
@@ -1059,6 +1061,9 @@ export default function CochiDesktop({
             }
 
             const icon = TOOL_ICONS[name] || '🔧'
+            if (!READ_ONLY_TOOLS.has(name) && name !== 'todowrite') {
+              lastTurnHadToolsRef.current = true // Bloque K3: regenerate avisa
+            }
             let shortLabel = name === 'run_command'
               ? (args.command?.slice(0, 60) + (args.command?.length > 60 ? '…' : ''))
               : ((args.path || args.fromPath)?.split('\\').pop() || args.path || args.fromPath || name)
@@ -1213,6 +1218,7 @@ export default function CochiDesktop({
   async function handleSendText(sent) {
     if (!sent || loading || planStatus === 'executing') return
 
+    lastTurnHadToolsRef.current = false // Bloque K3: se evalúa por turno
     originalMessageRef.current = sent
     pushMessage({ role: 'user', content: sent })
 
@@ -1286,6 +1292,40 @@ export default function CochiDesktop({
     }
   }
 
+  // ── Bloque K3: undo / regenerate ──────────────────────────────────────────
+  // Undo: quita el último turno visible y retrocede la rueda (una anotación por
+  // turno, ver mergeR7Pairs). Limpia el estado colateral (plan, tareas, feed y
+  // permisos/preguntas colgadas) y borra el JSON fantasma si no queda turno.
+  function applyUndo() {
+    const { messages: newMsgs, wheel: newWheel, undoneUser } = undoLastTurn(messagesRef.current, wheelRef.current)
+    messagesRef.current = newMsgs
+    wheelRef.current = newWheel
+    setMessages(newMsgs)
+    setActivity([]); setLiveStream(''); setTodos([])
+    setTokenWarningDismissed(false)
+    syncPlan(null); setPlanStatus('idle')
+    if (permissionResolverRef.current) permissionResolverRef.current('deny')
+    if (askResolverRef.current) askResolverRef.current(ASK_CANCELLED)
+    if (!newMsgs.some(isUserMsg) && cochiSessionIdRef.current) {
+      deleteSession(cochiSessionIdRef.current).catch(() => {})
+    }
+    return undoneUser
+  }
+
+  function handleUndo() {
+    if (loading || planStatus === 'executing') return
+    applyUndo()
+  }
+
+  async function handleRegenerate() {
+    if (loading || planStatus === 'executing') return
+    const userText = lastUserText(messagesRef.current)
+    if (!userText) return
+    if (lastTurnHadToolsRef.current && !window.confirm('Este turno ejecutó operaciones sobre archivos. Regenerar puede repetirlas. ¿Continuar?')) return
+    applyUndo()
+    await handleSendText(userText)
+  }
+
   function handleSelectionMouseUp() {
     const sel = window.getSelection()
     const text = sel?.toString().trim()
@@ -1310,6 +1350,9 @@ export default function CochiDesktop({
     ?? (selectedModel === 'ollama' ? 'Ollama' : 'LM Studio')
 
   const costStr = cost < 0.001 ? '~0,00€' : `~${cost.toFixed(3).replace('.', ',')}€`
+
+  // Bloque K3: los botones undo/regenerate cuelgan del último assistant.
+  const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -1561,6 +1604,24 @@ RGartner by R7Signal
                     {msg.content}
                   </ReactMarkdown>
                 </div>
+                {msg.id === lastAssistantId && !loading && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button
+                      onClick={handleUndo}
+                      title="Deshacer el último turno"
+                      style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
+                    >↶ Undo</button>
+                    <button
+                      onClick={handleRegenerate}
+                      title="Volver a ejecutar la última petición"
+                      style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
+                    >↻ Regenerate</button>
+                  </div>
+                )}
               </div>
             )
           ))}

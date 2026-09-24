@@ -10,6 +10,7 @@ import {
   makeSession,
   touchSession,
   undoLastTurn,
+  lastUserText,
   saveSession,
   listSessions,
   loadSession,
@@ -129,6 +130,12 @@ check('messages pierde el último turno', undone.messages.map(m => m.id), ['u1',
 check('R7 retrocede a 1 turno', countR7Turns(undone.wheel.r7), 1)
 check('lastTurn restaurado = turno 2', undone.wheel.lastTurn.user, 'u2')
 check('pares restaurados', undone.wheel.lastTurn.pairs, [{ r1: 'r1_2', r2: 'r2_2' }])
+check('devuelve undoneUser', undone.undoneUser, 'u3')
+
+console.log('\n— lastUserText (regenerate) —')
+check('último user canónico', lastUserText(msgs), 'u3')
+check('último user Asun (rol/contenido)', lastUserText([{ rol: 'usuario', contenido: 'hola' }, { rol: 'asistente', contenido: 'x' }]), 'hola')
+check('sin user → vacío', lastUserText([{ role: 'assistant', content: 'x' }]), '')
 
 const wheelFlushed = { r7: appendR7Pair('', 1, 'x', 'y'), lastTurn: null }
 const undone2 = undoLastTurn([{ role: 'user', content: 'u' }, { role: 'assistant', content: 'a' }], wheelFlushed)

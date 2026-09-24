@@ -49,6 +49,23 @@ export function appendR7Pair(r7, turnNumber, r1, r2) {
   return r7 ? `${r7}\n${block}` : block
 }
 
+// Un turno del USUARIO puede producir varias parejas R1/R2 (un plan de Cochi
+// emite una por paso), pero en la rueda un turno = UNA anotación (commit). Este
+// helper las colapsa: conserva el primer R1 no vacío (la intención original) y
+// encadena los R2 en orden (el relato de lo hecho), sin duplicar repetidos.
+export function mergeR7Pairs(pairs) {
+  const list = Array.isArray(pairs) ? pairs.filter(Boolean) : []
+  if (!list.length) return null
+  const r1 = list.map(p => (p.r1 || '').trim()).find(Boolean) || ''
+  const seen = new Set()
+  const r2 = list
+    .map(p => (p.r2 || '').trim())
+    .filter(x => x && !seen.has(x) && seen.add(x))
+    .join('\n')
+  if (!r1 && !r2) return null
+  return { r1, r2 }
+}
+
 // Des-sella el ÚLTIMO bloque "── Turno N ──" de R7 (undo/regenerate, K1/K3).
 // Devuelve { r7, pair } con el cuerpo restante y el par {r1,r2} quitado (o null
 // si la rueda no tenía turnos). NO toca el resto de la rueda.
@@ -74,15 +91,15 @@ export function createWheelState(r7 = '') {
 
 // Sella en R7 el turno que está a punto de dejar de ser "el último crudo".
 // Así R7 va SIEMPRE un turno por detrás del crudo, sin duplicar (nota §4).
+// Un turno = UNA anotación: si el turno emitió varias parejas (plan multi-paso),
+// se colapsan con mergeR7Pairs antes de escribir el bloque.
 export function sealLastTurn(state) {
   const last = state.lastTurn
   if (!last) return state
-  let r7 = state.r7
-  const pairs = Array.isArray(last.pairs) ? last.pairs : []
-  for (const p of pairs) {
-    const n = countR7Turns(r7) + 1
-    r7 = appendR7Pair(r7, n, p.r1, p.r2)
-  }
+  const merged = mergeR7Pairs(last.pairs)
+  if (!merged) return state
+  const n = countR7Turns(state.r7) + 1
+  const r7 = appendR7Pair(state.r7, n, merged.r1, merged.r2)
   return { ...state, r7 }
 }
 

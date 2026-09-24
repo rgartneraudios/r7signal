@@ -4,7 +4,7 @@ import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
-import { newMessageId, makeSession, saveSession, loadSession, fromCanonical } from '../lib/sessionStore.js'
+import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 
 const TITO_MODELS = {
@@ -144,6 +144,34 @@ export default function TitoPanel({
     onResetUsage?.('tito')
   }
 
+  // ── Bloque K3: undo / regenerate ──────────────────────────────────────────
+  // Undo: quita el último turno visible y retrocede la rueda (una anotación por
+  // turno). messagesRef se sincroniza para que regenerate pueda reenviar sin
+  // leer un estado viejo. Si era el único turno, se borra el JSON fantasma.
+  function applyUndo() {
+    const { messages: newMsgs, wheel: newWheel, undoneUser } = undoLastTurn(messagesRef.current, wheelRef.current)
+    messagesRef.current = newMsgs
+    wheelRef.current = newWheel
+    setMessages(newMsgs)
+    if (!newMsgs.some(isUserMsg) && sessionIdRef.current) {
+      deleteSession(sessionIdRef.current).catch(() => {})
+    }
+    return undoneUser
+  }
+
+  function handleUndo() {
+    if (streaming) return
+    applyUndo()
+  }
+
+  async function handleRegenerate() {
+    if (streaming) return
+    const userText = lastUserText(messagesRef.current)
+    if (!userText) return
+    applyUndo()
+    await sendMessage(userText)
+  }
+
   useEffect(() => {
     if (pendingMessage?.text) {
       sendMessage(pendingMessage.text);
@@ -242,7 +270,7 @@ export default function TitoPanel({
 
     const userMsg = { id: newMessageId('tito'), role: 'user', content: text };
     const placeholderId = newMessageId('tito');
-    const history = [...messages, userMsg];
+    const history = [...messagesRef.current, userMsg];
     setMessages([...history, { id: placeholderId, role: 'assistant', content: '', streaming: true }]);
     setStreaming(true);
     setCancelled(false);
@@ -430,6 +458,8 @@ export default function TitoPanel({
   };
 
   const isEmpty = messages.length === 0;
+  // Bloque K3: los botones undo/regenerate cuelgan del último assistant.
+  const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id;
 
   return (
     <div className="tito-panel">
@@ -489,6 +519,24 @@ RGartner by R7Signal
                     if (m) onHandoff?.(m[1].trim());
                   }}
                 >→ Enviar a Cochi</button>
+              )}
+              {msg.role === 'assistant' && msg.id === lastAssistantId && !streaming && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button
+                    onClick={handleUndo}
+                    title="Deshacer el último turno"
+                    style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}
+                  >↶ Undo</button>
+                  <button
+                    onClick={handleRegenerate}
+                    title="Volver a generar la última respuesta"
+                    style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}
+                  >↻ Regenerate</button>
+                </div>
               )}
             </div>
           ))
