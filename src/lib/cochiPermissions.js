@@ -10,6 +10,10 @@
 //   run_command:npm *        → permite cualquier comando npm
 //   delete_file:**/*.lock    → permite borrar archivos .lock
 //   *:**/secrets/*           → deniega (en deny) cualquier tool sobre secrets
+//
+// Además de las reglas del usuario hay una guarda baked-in e innegociable:
+// web_fetch a loopback/redes privadas/link-local se deniega SIEMPRE (SSRF),
+// incluso si una regla allow la cubre. Ver isBlockedUrl().
 
 // Herramientas que requieren aprobación explícita si no las cubre una regla
 // allow ni una autorización de sesión previa.
@@ -33,6 +37,62 @@ export const PERMISSION_RULE_HINT =
 
 function normSlash(value) {
   return String(value ?? '').replace(/\\/g, '/').trim()
+}
+
+// ─── SSRF: guarda baked-in (no configurable) ──────────────────────────────────
+// web_fetch NUNCA debe alcanzar loopback ni rangos privados/link-local, ni
+// siquiera si una regla allow del usuario lo pide. Esto se evalúa antes que
+// cualquier regla y no forma parte de {allow, deny} porque el formato glob no
+// expresa rangos de IP con precisión.
+function parseIPv4(host) {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
+  if (!m) return null
+  const parts = m.slice(1).map(Number)
+  if (parts.some(n => n > 255)) return null
+  return parts
+}
+
+function isPrivateOrLoopbackHost(hostname) {
+  const host = String(hostname ?? '').toLowerCase().replace(/^\[|\]$/g, '')
+  if (!host) return true
+  if (host === 'localhost' || host.endsWith('.localhost')) return true
+  if (host === '::1' || host === '0:0:0:0:0:0:0:1') return true
+  if (host === '::' || host === '0.0.0.0') return true
+  // IPv4-mapped IPv6 (::ffff:127.0.0.1). El parser WHATWG canonicaliza a
+  // hexadecimal (::ffff:7f00:1), así que aceptamos ambas formas.
+  const mapped = /^::ffff:(.+)$/.exec(host)
+  if (mapped) {
+    const tail = mapped[1]
+    const dotted = parseIPv4(tail)
+    if (dotted) return isPrivateOrLoopbackHost(tail)
+    const hex = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(tail)
+    if (hex) {
+      const hi = parseInt(hex[1], 16), lo = parseInt(hex[2], 16)
+      return isPrivateOrLoopbackHost(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`)
+    }
+    return false
+  }
+  const ip = parseIPv4(host)
+  if (ip) {
+    const [a, b] = ip
+    if (a === 0 || a === 10 || a === 127) return true
+    if (a === 169 && b === 254) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+    return false
+  }
+  // IPv6 link-local fe80::/10 y unique-local fc00::/7
+  if (/^fe[89ab][0-9a-f]:/.test(host)) return true
+  if (/^f[cd][0-9a-f]{2}:/.test(host)) return true
+  return false
+}
+
+// true = URL prohibida (protocolo no http(s) o destino interno).
+export function isBlockedUrl(rawUrl) {
+  let parsed
+  try { parsed = new URL(String(rawUrl)) } catch { return false }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return true
+  return isPrivateOrLoopbackHost(parsed.hostname)
 }
 
 // Traduce un glob a RegExp (mismo espíritu que el motor de cochiTools, acotado).
@@ -94,6 +154,7 @@ export function textToRules(text) {
 
 export function evaluatePermission(request, rules) {
   if (!request) return null
+  if (request.url && isBlockedUrl(request.url)) return 'deny'
   const { allow, deny } = normalizeRules(rules)
   if (deny.some(r => ruleMatches(r, request))) return 'deny'
   if (allow.some(r => ruleMatches(r, request))) return 'allow'
@@ -111,6 +172,7 @@ function commandProgram(command) {
 // Target usado para casar reglas: comando completo en run_command, ruta en el resto.
 function getTarget(name, args = {}) {
   if (name === 'run_command') return normSlash(args.command)
+  if (name === 'web_fetch') return String(args.url || '').trim()
   return args.path || args.fromPath || args.toPath || args.dirPath || ''
 }
 
@@ -160,6 +222,7 @@ export function buildPermissionRequest(name, args = {}) {
     detail,
     target,
     command: name === 'run_command' ? String(args.command || '') : '',
+    url: name === 'web_fetch' ? String(args.url || '') : '',
     diff: null,
     signature: '',
   }

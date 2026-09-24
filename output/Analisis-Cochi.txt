@@ -37,6 +37,24 @@ FASE 2 — ORDEN ACORDADO: E → F → G → H → I → J (K aparte, sin depend
       capability cochi-full-access.json) para evitar CORS; el paquete npm
       @tauri-apps/plugin-http quedó instalado. Requiere rebuild de Tauri.
       Verificación: npm run build  ✅ OK
+      MINI-FIX SSRF (post-review, dos capas):
+      · App: getTarget() ahora expone args.url y buildPermissionRequest setea
+        request.url; evaluatePermission aplica una guarda baked-in e
+        innegociable (isBlockedUrl) antes que {allow,deny} del usuario:
+        loopback, privados (10/8, 172.16-31/12, 192.168/16), link-local
+        (169.254/16), 0.0.0.0, ::1, fc00::/7, fe80::/10 e IPv4-mapped IPv6.
+        Una regla allow del usuario NO puede destrabarla.
+      · Capability: http:default ahora lleva un deny con los mismos rangos
+        (localhost, 127.*, 10.*, 169.254.*, 172.16-31.*, 192.168.*, *::1*)
+        a nivel nativo (tauri-plugin-http soporta deny por URL, confirmado).
+      · Verificación: npm run build ✅ OK. Harness Node 23/23
+        (npm run harness:permissions · harness/cochiPermissions.harness.mjs,
+        incluye web_fetch → http://localhost:11434 = deny pese a allow **).
+      · LIMITACIÓN CONOCIDA: ni el deny de capability ni el de app resuelven
+        DNS, así que un hostname público que resuelva a IP privada (DNS
+        rebinding) no se detecta por URL. El glob de capability tampoco cubre
+        variantes IPv6 más allá de ::1/::ffff. Corte fuerte pendiente:
+        validar la IP resuelta en Rust (sidecar/plugin propio).
 
 [x] BLOQUE H — Contexto y paralelismo  <-- COMPLETO
       · Compactación token-aware con resumen real: pruneApiMessages ahora

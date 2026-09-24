@@ -221,28 +221,32 @@ export default function PreferencesModal({ onClose, userId, supabase, preference
               style={{ ...inputStyle, marginBottom: 20 }}
             />
 
-            <div style={{ height: 1, background: '#201F23', margin: '4px 0 16px' }} />
+            {onSave && (
+              <>
+                <div style={{ height: 1, background: '#201F23', margin: '4px 0 16px' }} />
 
-            <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Permisos de Cochi</div>
-            <div style={{ fontSize: '0.62rem', color: '#6B9EC4', lineHeight: 1.4, marginBottom: 10 }}>{PERMISSION_RULE_HINT}</div>
+                <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Permisos de Cochi</div>
+                <div style={{ fontSize: '0.62rem', color: '#6B9EC4', lineHeight: 1.4, marginBottom: 10 }}>{PERMISSION_RULE_HINT}</div>
 
-            <div style={{ fontSize: '0.65rem', color: '#B0F527', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>Reglas ALLOW</div>
-            <textarea
-              value={allowRules}
-              onChange={e => setAllowRules(e.target.value)}
-              placeholder={'run_command:npm *\nreplace_in_file:**/*.md'}
-              spellCheck={false}
-              style={areaStyle}
-            />
+                <div style={{ fontSize: '0.65rem', color: '#B0F527', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>Reglas ALLOW</div>
+                <textarea
+                  value={allowRules}
+                  onChange={e => setAllowRules(e.target.value)}
+                  placeholder={'run_command:npm *\nreplace_in_file:**/*.md'}
+                  spellCheck={false}
+                  style={areaStyle}
+                />
 
-            <div style={{ fontSize: '0.65rem', color: '#FF4466', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>Reglas DENY</div>
-            <textarea
-              value={denyRules}
-              onChange={e => setDenyRules(e.target.value)}
-              placeholder={'run_command:rm *\ndelete_file:**/package.json'}
-              spellCheck={false}
-              style={{ ...areaStyle, marginBottom: 28 }}
-            />
+                <div style={{ fontSize: '0.65rem', color: '#FF4466', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>Reglas DENY</div>
+                <textarea
+                  value={denyRules}
+                  onChange={e => setDenyRules(e.target.value)}
+                  placeholder={'run_command:rm *\ndelete_file:**/package.json'}
+                  spellCheck={false}
+                  style={{ ...areaStyle, marginBottom: 28 }}
+                />
+              </>
+            )}
 
             {error && (
               <div style={{ color: THEME.pinkMarble, fontSize: '0.8rem', marginBottom: 16 }}>{error}</div>
