@@ -4,7 +4,9 @@ import { ASUN_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { readFile } from '@tauri-apps/plugin-fs'
 import { getAsunTools, executeTool, pathExists } from '../lib/asunTools.js'
-import { writeR9File } from '../lib/r9Store.js'
+import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
+import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
+import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { open } from '@tauri-apps/plugin-dialog'
 
@@ -490,6 +492,10 @@ export default function AsunPanel({
     return sessionIdRef.current
   }
   const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
+  const sessionPairsRef = useRef([])
+  const wheelRef = useRef(createWheelState()) // Bloque L4: rueda R7 { r7, lastTurn }
+  const [tokens, setTokens] = useState(0)
+  const [tokenWarningDismissed, setTokenWarningDismissed] = useState(false)
 
   function handleSelectionMouseUp() {
     const sel = window.getSelection()
@@ -503,10 +509,26 @@ export default function AsunPanel({
 
   async function handleConfirmR9() {
     if (!r9Btn) return
-    try { await writeR9File(workspace?.path, 'r9', r9Btn.text, { source: 'asun' }) }
+    try { await writeR9File('r9', r9Btn.text, { source: 'asun' }) }
     catch (err) { console.error('R9 write error:', err) }
     window.getSelection()?.removeAllRanges()
     setR9Btn(null)
+  }
+
+  async function handleSaveR7() {
+    try {
+      // Bloque L4: archivo NUEVO acumulativo con TODO el R7, sin R3 (D1).
+      const sealed = flushWheel(wheelRef.current)
+      await writeR9File('r7', sealed.r7 || '')
+      setMessages([])
+      setTokens(0); setTokenWarningDismissed(false)
+      sessionPairsRef.current = []
+      wheelRef.current = createWheelState(await readLatestR7())
+      sessionIdRef.current = null
+      onResetUsage?.('asun')
+    } catch (err) {
+      setMessages(prev => [...prev, { rol: 'asistente', contenido: `⚠️ No se pudo guardar R7: ${err.message}`, id: Date.now(), streaming: false }])
+    }
   }
 
   // Notificar categoría activa al padre
@@ -536,6 +558,11 @@ export default function AsunPanel({
     if (p) { setRemotePrompts(p); onPromptsReady?.('asun') }
     else setPromptsError(true)
   })
+  }, [])
+
+  // Bloque L4: al abrir la sesión, cargar la rueda R7 global desde disco.
+  useEffect(() => {
+    readLatestR7().then(r7 => { wheelRef.current = createWheelState(r7) })
   }, [])
 
   // ─── Send mensaje LLM / Música ─────────────────────────────────────────────
@@ -610,7 +637,7 @@ export default function AsunPanel({
           setMessages(prev => prev.map(m =>
             m.id === placeholderId ? { ...m, contenido: extractR3Streaming(partial) } : m
           ))
-        }, onUsage, getAsunSessionId())
+        }, (u) => { onUsage?.(u); setTokens(prev => prev + (u.inputTokens || 0) + (u.outputTokens || 0)) }, getAsunSessionId())
         const musicMatch = MUSIC_RE.exec(fullText)
         if (musicMatch) {
           setPromptMusica(musicMatch[1].trim())
@@ -656,16 +683,16 @@ export default function AsunPanel({
       const messageContent = userContent.length > 1 ? userContent : text
       setAttachedFile(null)
 
-      // Historial (sin placeholder)
-      const history = messages
-        .filter(m => !m.streaming)
-        .map(m => ({ role: m.rol === 'usuario' ? 'user' : 'assistant', content: m.contenido }))
-
-      const apiMessages = [
-        { role: 'system', content: systemContent },
-        ...history,
-        { role: 'user', content: messageContent },
-      ]
+      // Bloque L4 — prompt híbrido (D3/D8): system estable -> bloque R7 ->
+      // último turno crudo -> input actual. Ya no se reenvía el historial R3
+      // completo: la rueda lo sustituye.
+      const wheel = wheelRef.current
+      const apiMessages = buildWheelMessages({
+        systemMessages: [{ role: 'system', content: systemContent }],
+        r7: wheel.r7,
+        rawTurns: wheel.lastTurn ? [wheel.lastTurn] : [],
+        userInput: messageContent,
+      })
 
       const MAX_ITER = 10
       let iter = 0
@@ -701,6 +728,7 @@ export default function AsunPanel({
           const { prompt_tokens, completion_tokens } = data.usage
           const cost = calculateCost(model, prompt_tokens, completion_tokens, 'token')
           onUsage?.({ source: 'asun', inputTokens: prompt_tokens, outputTokens: completion_tokens, cost })
+          setTokens(prev => prev + prompt_tokens + completion_tokens)
         }
 
         const message = data.choices?.[0]?.message
@@ -780,6 +808,9 @@ export default function AsunPanel({
         }
       }
 
+      const r7Pair = parseR1R2R3(finalText)
+      if (r7Pair.r1 || r7Pair.r2) sessionPairsRef.current.push({ r1: r7Pair.r1, r2: r7Pair.r2 })
+
       // ── Procesar respuesta final ──────────────────────────────────────────
       const extractR3 = (t) => {
         const m = t.match(/R3:\s*([\s\S]*)$/)
@@ -808,6 +839,14 @@ export default function AsunPanel({
         setPromptMusica(musicMatch[1].trim())
         displayText = displayText.replace(MUSIC_RE, '').trim()
       }
+
+      // Bloque L4 — cerrar el turno de la rueda: sella el anterior en R7 y deja
+      // el actual como turno crudo (R7 va un turno por detrás, sin duplicar).
+      wheelRef.current = closeWheelTurn(wheelRef.current, {
+        user: text,
+        assistant: displayText,
+        pairs: (r7Pair.r1 || r7Pair.r2) ? [{ r1: r7Pair.r1, r2: r7Pair.r2 }] : [],
+      })
 
       setMessages(prev => prev.map(m =>
         m.id === placeholderId
@@ -1214,6 +1253,29 @@ RGartner by R7Signal</>
         )}
       </div>
 
+      {/* ── Token warning banner ── */}
+      {tokens > 70000 && !tokenWarningDismissed && (
+        <div style={{
+          flexShrink: 0,
+          borderTop: '1px solid rgba(200,162,216,0.3)',
+          background: 'rgba(200,162,216,0.07)',
+          padding: '8px 14px',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: '0.7rem', color: '#C8A2D8', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
+            ⚠ 70k tokens — Tu contexto está completo. Guárdalo en R7 antes de empezar un chat nuevo: no perderás nada.
+          </span>
+          <button
+            onClick={handleSaveR7}
+            style={{ background: 'rgba(200,162,216,0.15)', border: '1px solid rgba(200,162,216,0.5)', borderRadius: 4, padding: '3px 10px', color: '#C8A2D8', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
+          >Guardar R7</button>
+          <button
+            onClick={() => setTokenWarningDismissed(true)}
+            style={{ background: 'transparent', border: 'none', color: '#6A7A8A', fontSize: '0.8rem', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
+          >×</button>
+        </div>
+      )}
+
       {/* ── Status bar ── */}
       <div style={{
         flexShrink: 0,
@@ -1280,7 +1342,7 @@ RGartner by R7Signal</>
 
         {/* CLS */}
         <button
-          onClick={() => { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); sessionIdRef.current = null; onResetUsage?.('asun') } }}
+          onClick={async () => { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); setTokens(0); setTokenWarningDismissed(false); sessionPairsRef.current = []; wheelRef.current = createWheelState(await readLatestR7()); sessionIdRef.current = null; onResetUsage?.('asun') } }}
           style={{ background: 'transparent', border: '1px solid #1F1E22', borderRadius: 4, padding: '2px 8px', color: '#8A868B', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#D4D8DC'; e.currentTarget.style.color = '#D4D8DC' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#1F1E22'; e.currentTarget.style.color = '#8A868B' }}

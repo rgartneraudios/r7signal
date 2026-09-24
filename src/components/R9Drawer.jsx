@@ -6,20 +6,20 @@ const TABS = [
   { key: 'r9', label: 'R9 · Selecciones', accent: '#C8A2D8' },
 ]
 
-export default function R9Drawer({ workspace, onClose, onInsertAsun, onInsertCochi }) {
+export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi }) {
   const [tab, setTab] = useState('r7')
   const [files, setFiles] = useState({ r7: [], r9: [] })
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(null)
   const [contentCache, setContentCache] = useState({})
 
+  // Bloque L4: R7/R9 son GLOBALES (AppLocalData), no dependen del workspace.
   const refresh = useCallback(async () => {
-    if (!workspace?.path) { setFiles({ r7: [], r9: [] }); return }
     setLoading(true)
     try {
       const [r7, r9] = await Promise.all([
-        listR9Files(workspace.path, 'r7'),
-        listR9Files(workspace.path, 'r9'),
+        listR9Files('r7'),
+        listR9Files('r9'),
       ])
       setFiles({ r7, r9 })
     } catch (err) {
@@ -27,7 +27,7 @@ export default function R9Drawer({ workspace, onClose, onInsertAsun, onInsertCoc
     } finally {
       setLoading(false)
     }
-  }, [workspace?.path])
+  }, [])
 
   useEffect(() => { refresh() }, [refresh])
 
@@ -104,17 +104,12 @@ export default function R9Drawer({ workspace, onClose, onInsertAsun, onInsertCoc
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {!workspace?.path && (
-            <div style={{ color: '#6B7075', fontSize: '0.8rem', textAlign: 'center', marginTop: 30 }}>
-              No hay workspace activo.
-            </div>
-          )}
-          {workspace?.path && loading && (
+          {loading && (
             <div style={{ color: '#6B7075', fontSize: '0.8rem', textAlign: 'center', marginTop: 30 }}>
               Cargando…
             </div>
           )}
-          {workspace?.path && !loading && list.length === 0 && (
+          {!loading && list.length === 0 && (
             <div style={{ color: '#6B7075', fontSize: '0.8rem', textAlign: 'center', marginTop: 30 }}>
               {tab === 'r7' ? 'Sin chats guardados todavía.' : 'Sin selecciones guardadas todavía.'}
             </div>

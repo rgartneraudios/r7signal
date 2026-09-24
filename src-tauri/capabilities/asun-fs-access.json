@@ -5,6 +5,9 @@
   "windows": ["main"],
   "permissions": [
     "core:path:allow-resolve-directory",
+    "fs:allow-applocaldata-read-recursive",
+    "fs:allow-applocaldata-write-recursive",
+    "fs:scope-applocaldata-recursive",
     {
       "identifier": "fs:scope",
       "allow": [
