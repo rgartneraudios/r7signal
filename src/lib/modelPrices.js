@@ -16,8 +16,8 @@ export const MODEL_PRICES = {
   'perplexity/sonar-deep-research':        { inputPerM: 2, outputPerM: 8  },
   'perplexity/sonar-pro':                  { inputPerM: 3, outputPerM: 15 },
   // Cochi
-  '~deepseek/deepseek-v4-flash-latest':       { inputPerM: 0.05, outputPerM: 0.16 },
-  'tencent/hy4-preview':            { inputPerM: 0.834,  outputPerM: 2.501 },
+  '~deepseek/deepseek-v4-flash-latest':       { inputPerM: 0.05, outputPerM: 0.32 },
+  '~deepseek/deepseek-flash-latest':            { inputPerM: 0.4,  outputPerM: 1.00 },
   // Local (free)
   'ollama':    { inputPerM: 0, outputPerM: 0 },
   'lmstudio':  { inputPerM: 0, outputPerM: 0 },
