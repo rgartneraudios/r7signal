@@ -61,6 +61,13 @@ export default function TitoPanel({
   const abortRef = useRef(null);
   const bottomRef = useRef(null);
   const chatContainerRef = useRef(null);
+  const sessionIdRef = useRef(null);
+  function getTitoSessionId() {
+    if (!sessionIdRef.current) {
+      sessionIdRef.current = `tito-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+    return sessionIdRef.current;
+  }
   const [r9Btn, setR9Btn] = useState(null); // {x,y,text} — botón flotante "+R9"
 
   function handleSelectionMouseUp() {
@@ -153,6 +160,9 @@ export default function TitoPanel({
             model: chatModel,
             stream: true,
             stream_options: { include_usage: true },
+            usage: { include: true },
+            reasoning: { enabled: false },
+            session_id: getTitoSessionId(),
             messages: [
 { role: 'system', content: titoSystem },
                ...history,
@@ -221,6 +231,9 @@ export default function TitoPanel({
           model: TITO_MODELS[searchLevel],
           stream: true,
           stream_options: { include_usage: true },
+          usage: { include: true },
+          reasoning: { enabled: false },
+          session_id: getTitoSessionId(),
           messages: [
             { role: 'system', content: titoSystem },
             ...history,
@@ -386,7 +399,7 @@ RGartner by R7Signal
         <span>⚡ {TITO_MODELS[searchLevel]}</span>
         <div style={{ flex: 1 }} />
         <button
-          onClick={() => { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); onResetUsage?.('tito') } }}
+          onClick={() => { if (window.confirm('¿Borrar toda la conversación?')) { setMessages([]); sessionIdRef.current = null; onResetUsage?.('tito') } }}
           style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}
