@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useReducer } from 'react'
 import AsunPanel from './AsunPanel'
 import TitoPanel from './TitoPanel'
 import CochiDesktop from './CochiDesktop'
@@ -11,6 +11,27 @@ import { openUrl } from '@tauri-apps/plugin-opener'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 
 const DEFAULT_WORKSPACE = { path: '', permission: 'read' }
+
+// Bloque N: contadores de tokens en un reducer. `handleResetUsage` deja de
+// depender de los valores actuales (usa el propio estado) → callback estable, y
+// los paneles memoizados no se re-renderizan al cambiar un contador.
+const USAGE_INIT = { total: 0, asun: 0, tito: 0, cochi: 0 }
+function usageReducer(state, action) {
+  const source = action.source
+  const isAgent = source === 'asun' || source === 'tito' || source === 'cochi'
+  if (action.type === 'add') {
+    const total = (action.inputTokens || 0) + (action.outputTokens || 0)
+    if (!total) return state
+    return isAgent
+      ? { ...state, total: state.total + total, [source]: state[source] + total }
+      : { ...state, total: state.total + total }
+  }
+  if (action.type === 'reset') {
+    if (!isAgent) return state
+    return { ...state, total: state.total - state[source], [source]: 0 }
+  }
+  return state
+}
 
 export default function R7Desktop() {
   // Estado compartido
@@ -34,10 +55,7 @@ export default function R7Desktop() {
 
   // Acumulador de coste total de sesión
   const [activeLeftPanel, setActiveLeftPanel] = useState('asun')
-  const [totalTokens, setTotalTokens] = useState(0)
-  const [asunTokens,  setAsunTokens]  = useState(0)
-  const [titoTokens, setTitoTokens] = useState(0)
-  const [cochiTokens, setCochiTokens] = useState(0)
+  const [usage, dispatchUsage] = useReducer(usageReducer, USAGE_INIT)
   const [showPrefs, setShowPrefs] = useState(false)
   const [userName, setUserName] = useState('')
   const [preferences, setPreferences] = useState({ nombre_usuario: '', nombre_alternativo: '', chat_language: 'Español' })
@@ -105,6 +123,15 @@ export default function R7Desktop() {
   const handleInsertAsun  = useCallback((text) => { setActiveLeftPanel('asun'); setLeftInput(text) }, [])
   const handleInsertCochi = useCallback((text) => { setCochiInput(text) }, [])
 
+  // Bloque N: callbacks estables para no invalidar los paneles memoizados.
+  const handleConsumeAsun    = useCallback(() => setPendingAsun(null), [])
+  const handleConsumeCochi   = useCallback(() => setPendingCochi(null), [])
+  const handleConsumeSession = useCallback(() => setPendingSession(null), [])
+  const handleConsumeHandoff = useCallback(() => setHandoff(null), [])
+  const handleTitoHandoff    = useCallback((brief) => setHandoff({ type:'tito', brief, id: Date.now() }), [])
+  const handlePreferencesLoaded = useCallback((prefs) => setPreferences(prefs), [])
+  const handleRegisterSavePrefs = useCallback((fn) => { cochiSavePrefsRef.current = fn }, [])
+
   // Bloque K2: abrir una sesión guardada. Activa el panel izquierdo correcto
   // (Asun/Tito) y encola la sesión; Cochi vive en el panel derecho y no cambia
   // el selector.
@@ -112,22 +139,16 @@ export default function R7Desktop() {
     if (agent === 'asun' || agent === 'tito') setActiveLeftPanel(agent)
     setPendingSession({ agent, id, nonce: Date.now() })
   }, [])
-const handleUsage            = useCallback(({ source, inputTokens = 0, outputTokens = 0, cost }) => {
-      const total = (inputTokens || 0) + (outputTokens || 0)
-      if (source === 'asun')  setAsunTokens(prev  => prev + total)
-      if (source === 'tito')  setTitoTokens(prev => prev + total)
-      if (source === 'cochi') setCochiTokens(prev => prev + total)
-      setTotalTokens(prev => prev + total)
+const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, cost }) => {
+      dispatchUsage({ type: 'add', source, inputTokens, outputTokens })
     }, [])
 
   // Reset del contador por agente cuando ese panel hace CLS (o Guardar R7 en Cochi).
   // Resta del total lo que ese agente venía acumulando, en vez de tocar totalCost
   // (el coste total de sesión sí queremos que persista aunque se limpie un chat).
   const handleResetUsage = useCallback((source) => {
-    if (source === 'asun')  { setTotalTokens(prev => prev - asunTokens);  setAsunTokens(0) }
-    if (source === 'tito')  { setTotalTokens(prev => prev - titoTokens);  setTitoTokens(0) }
-    if (source === 'cochi') { setTotalTokens(prev => prev - cochiTokens); setCochiTokens(0) }
-  }, [asunTokens, titoTokens, cochiTokens])
+    dispatchUsage({ type: 'reset', source })
+  }, [])
 
   const showFooter = asunCategory !== 'imagen'
 
@@ -186,8 +207,6 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
       fontFamily: "'Space Grotesk', sans-serif",
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Boogaloo&display=swap');
-
         @keyframes subtleGridMove {
           0%   { background-position: 0 0; }
           100% { background-position: 40px 40px; }
@@ -559,7 +578,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
           <span style={{
             fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
             fontWeight:700, color:'#C8A2D8', letterSpacing:'0.04em', lineHeight:1,
-          }}>{asunTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+          }}>{usage.asun.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
         </div>
 
         <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', flexShrink:0 }} />
@@ -574,7 +593,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
           <span style={{
             fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
             fontWeight:700, color:'#A89EC4', letterSpacing:'0.04em', lineHeight:1,
-          }}>{titoTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+          }}>{usage.tito.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
         </div>
 
         <div style={{ flex:1 }} />
@@ -686,7 +705,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
           <span style={{
             fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
             fontWeight:700, color:'#C47460', letterSpacing:'0.04em', lineHeight:1,
-          }}>{cochiTokens.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+          }}>{usage.cochi.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
         </div>
 
         <button
@@ -796,9 +815,9 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
           ) : activeLeftPanel === 'asun'
             ? <AsunPanel
                 pendingMessage={pendingAsun}
-                onMessageConsumed={() => setPendingAsun(null)}
+                onMessageConsumed={handleConsumeAsun}
                 pendingSession={pendingSession?.agent === 'asun' ? pendingSession : null}
-                onSessionConsumed={() => setPendingSession(null)}
+                onSessionConsumed={handleConsumeSession}
                 onCategoryChange={setAsunCategory}
                 onHandoff={handleAsunHandoff}
                 onUsage={handleUsage}
@@ -809,12 +828,12 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
               />
             : <TitoPanel
                 pendingMessage={activeLeftPanel === 'tito' ? pendingAsun : null}
-                onMessageConsumed={() => setPendingAsun(null)}
+                onMessageConsumed={handleConsumeAsun}
                 pendingSession={pendingSession?.agent === 'tito' ? pendingSession : null}
-                onSessionConsumed={() => setPendingSession(null)}
+                onSessionConsumed={handleConsumeSession}
                 onUsage={handleUsage}
                 onResetUsage={handleResetUsage}
-                onHandoff={(brief) => setHandoff({ type:'tito', brief, id: Date.now() })}
+                onHandoff={handleTitoHandoff}
                 userName={userName}
                 preferences={preferences}
                 onPromptsReady={handlePromptsReady}
@@ -829,17 +848,17 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <CochiDesktop
             pendingMessage={pendingCochi}
-            onMessageConsumed={() => setPendingCochi(null)}
+            onMessageConsumed={handleConsumeCochi}
             pendingSession={pendingSession?.agent === 'cochi' ? pendingSession : null}
-            onSessionConsumed={() => setPendingSession(null)}
+            onSessionConsumed={handleConsumeSession}
             handoff={handoff}
-            onHandoffConsumed={() => setHandoff(null)}
+            onHandoffConsumed={handleConsumeHandoff}
             workspace={workspace}
             onWorkspaceChange={handleWorkspaceChange}
             onUsage={handleUsage}
             onResetUsage={handleResetUsage}
-            onPreferencesLoaded={(prefs) => setPreferences(prefs)}
-            onSavePreferences={(fn) => { cochiSavePrefsRef.current = fn }}
+            onPreferencesLoaded={handlePreferencesLoaded}
+            onSavePreferences={handleRegisterSavePrefs}
             onPromptsReady={handlePromptsReady}
           />
         </div>

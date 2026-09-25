@@ -72,8 +72,6 @@ export default function App() {
   return (
     <div style={{ position:'relative', width:'100%', minHeight:'100vh', overflow:'hidden', background:'#0F0E11', fontFamily:"'Space Grotesk', sans-serif" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
-
         @keyframes subtleGridMove {
           0% { background-position: 0 0; }
           100% { background-position: 40px 40px; }

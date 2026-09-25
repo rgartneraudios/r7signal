@@ -162,6 +162,90 @@ const CochiMarkdown = memo(function CochiMarkdown({ content }) {
   )
 })
 
+// ─── Historial memoizado (Bloque N) ──────────────────────────────────────────
+// Antes vivía inline: cada frame de `liveStream` (~30fps) re-renderizaba TODO el
+// historial. Al aislarlo, el stream sólo repinta la burbuja en vivo.
+const CochiMessageList = memo(function CochiMessageList({ messages, isTerminator, lastAssistantId, loading, onUndo, onRegenerate }) {
+  return messages.map((msg) => (
+    msg.role === 'diff' ? (
+      <DiffViewer key={msg.id} diff={msg.diff} />
+    ) : msg.role === 'user' ? (
+      <div key={msg.id} className="cd-message-enter" style={isTerminator ? {
+        background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
+        border: '1px solid rgba(200,162,216,0.2)',
+        borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+      } : {
+        background: '#13151A', border: '1px solid rgba(107,158,196,0.15)',
+        borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ fontSize: '0.92rem', lineHeight: 1.5, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+          ...(isTerminator ? {
+            backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          } : {
+            backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }),
+        }}>
+          {msg.content}
+        </div>
+      </div>
+    ) : (
+      <div key={msg.id} className="cd-message-enter" style={isTerminator ? {
+        background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
+        border: '1px solid rgba(201,128,84,0.4)', borderLeft: '3px solid #C98054',
+        borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+      } : {
+        background: '#13151A', border: '1px solid #232227', borderLeft: '3px solid #6A7A8A',
+        borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase',
+          color: isTerminator ? '#D4B8D8' : '#6A7A8A',
+        }}>
+          COCHI
+        </div>
+        <div style={{ fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
+          ...(isTerminator ? {
+            backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          } : {
+            backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }),
+        }}>
+          <CochiMarkdown content={msg.content} />
+        </div>
+        {msg.id === lastAssistantId && !loading && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button
+              onClick={onUndo}
+              title="Deshacer el último turno"
+              style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
+            >↶ Undo</button>
+            <button
+              onClick={onRegenerate}
+              title="Volver a ejecutar la última petición"
+              style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
+            >↻ Regenerate</button>
+          </div>
+        )}
+      </div>
+    )
+  ))
+})
+
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 const css = `
   @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
@@ -196,7 +280,7 @@ const css = `
 //   onWorkspaceChange (workspace)    — subir cambio de workspace
 //   onUsage           ({ source, inputTokens, outputTokens, cost }) — report cost
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function CochiDesktop({
+function CochiDesktop({
   pendingMessage,
   onMessageConsumed,
   pendingSession,
@@ -258,8 +342,14 @@ export default function CochiDesktop({
   const sessionAllowRef = useRef(new Set()) // firmas aprobadas "siempre en esta sesión"
   const permissionRules = normalizeRules(preferences?.permissions)
 
-  // Scroll al final (Bloque M: 'auto' durante el stream para no apilar animaciones)
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: loading ? 'auto' : 'smooth' }) }, [messages.length, loading, liveStream])
+  // Scroll al final (Bloque M/N: scrollTop directo en el contenedor en vez de
+  // scrollIntoView, que fuerza layout síncrono y puede escalar a ancestros).
+  useEffect(() => {
+    const el = chatContainerRef.current
+    if (!el) return
+    if (loading) el.scrollTop = el.scrollHeight
+    else el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+  }, [messages.length, loading, liveStream])
 
   // Reset del input de ask_user al abrir una nueva pregunta
   useEffect(() => { setAskInput(''); setAskChecks([]) }, [pendingQuestion])
@@ -1325,19 +1415,26 @@ export default function CochiDesktop({
     return undoneUser
   }
 
-  function handleUndo() {
-    if (loading || planStatus === 'executing') return
-    applyUndo()
-  }
-
-  async function handleRegenerate() {
-    if (loading || planStatus === 'executing') return
-    const userText = lastUserText(messagesRef.current)
-    if (!userText) return
-    if (lastTurnHadToolsRef.current && !window.confirm('Este turno ejecutó operaciones sobre archivos. Regenerar puede repetirlas. ¿Continuar?')) return
-    applyUndo()
-    await handleSendText(userText)
-  }
+  // Bloque N: wrappers estables para que CochiMessageList (memo) no se
+  // invalide en cada render. El cuerpo real se refresca por ref tras cada render.
+  const handleUndoRef = useRef(() => {})
+  const handleRegenerateRef = useRef(() => {})
+  useEffect(() => {
+    handleUndoRef.current = () => {
+      if (loading || planStatus === 'executing') return
+      applyUndo()
+    }
+    handleRegenerateRef.current = async () => {
+      if (loading || planStatus === 'executing') return
+      const userText = lastUserText(messagesRef.current)
+      if (!userText) return
+      if (lastTurnHadToolsRef.current && !window.confirm('Este turno ejecutó operaciones sobre archivos. Regenerar puede repetirlas. ¿Continuar?')) return
+      applyUndo()
+      await handleSendText(userText)
+    }
+  })
+  const handleUndo = useCallback(() => handleUndoRef.current(), [])
+  const handleRegenerate = useCallback(() => handleRegenerateRef.current(), [])
 
   function handleSelectionMouseUp() {
     const sel = window.getSelection()
@@ -1546,84 +1643,14 @@ RGartner by R7Signal
             </div>
           )}
 
-          {messages.map((msg) => (
-            msg.role === 'diff' ? (
-              <DiffViewer key={msg.id} diff={msg.diff} />
-            ) : msg.role === 'user' ? (
-              <div key={msg.id} className="cd-message-enter" style={isTerminator ? {
-                background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
-                border: '1px solid rgba(200,162,216,0.2)',
-                borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-              } : {
-                background: '#13151A', border: '1px solid rgba(107,158,196,0.15)',
-                borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-              }}>
-                <div style={{ fontSize: '0.92rem', lineHeight: 1.5, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                  ...(isTerminator ? {
-                    backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
-                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  } : {
-                    backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
-                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  }),
-                }}>
-                  {msg.content}
-                </div>
-              </div>
-            ) : (
-              <div key={msg.id} className="cd-message-enter" style={isTerminator ? {
-                background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
-                border: '1px solid rgba(201,128,84,0.4)', borderLeft: '3px solid #C98054',
-                borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-              } : {
-                background: '#13151A', border: '1px solid #232227', borderLeft: '3px solid #6A7A8A',
-                borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-              }}>
-                <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase',
-                  color: isTerminator ? '#D4B8D8' : '#6A7A8A',
-                }}>
-                  COCHI
-                </div>
-                <div style={{ fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
-                  ...(isTerminator ? {
-                    backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
-                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  } : {
-                    backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
-                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  }),
-                }}>
-                  <CochiMarkdown content={msg.content} />
-                </div>
-                {msg.id === lastAssistantId && !loading && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button
-                      onClick={handleUndo}
-                      title="Deshacer el último turno"
-                      style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
-                    >↶ Undo</button>
-                    <button
-                      onClick={handleRegenerate}
-                      title="Volver a ejecutar la última petición"
-                      style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
-                    >↻ Regenerate</button>
-                  </div>
-                )}
-              </div>
-            )
-          ))}
+          <CochiMessageList
+            messages={messages}
+            isTerminator={isTerminator}
+            lastAssistantId={lastAssistantId}
+            loading={loading}
+            onUndo={handleUndo}
+            onRegenerate={handleRegenerate}
+          />
 
           {/* Plan activo (Bloque J) — confirmar/cancelar y progreso en vivo */}
           {executionPlan && planStatus !== 'idle' && (
@@ -1922,3 +1949,5 @@ RGartner by R7Signal
     </div>
   )
 }
+
+export default memo(CochiDesktop)

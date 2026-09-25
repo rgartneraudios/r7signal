@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { calculateCost } from '../lib/modelPrices.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
@@ -48,7 +48,7 @@ const needsWebSearch = (message) => {
   return true
 }
 
-export default function TitoPanel({ 
+function TitoPanel({ 
   pendingMessage, onMessageConsumed, 
   pendingSession, onSessionConsumed,
   onUsage, onResetUsage, onHandoff, userName,
@@ -182,9 +182,13 @@ export default function TitoPanel({
     }
   }, [pendingMessage]);
 
-  // Scroll al final (Bloque M: 'auto' durante el stream para no apilar animaciones)
+  // Scroll al final (Bloque M/N: scrollTop directo en el contenedor en vez de
+  // scrollIntoView, que fuerza layout síncrono y puede escalar a ancestros).
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: streaming ? 'auto' : 'smooth' });
+    const el = chatContainerRef.current;
+    if (!el) return;
+    if (streaming) el.scrollTop = el.scrollHeight;
+    else el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages, streaming]);
 
   useEffect(() => {
@@ -604,3 +608,5 @@ RGartner by R7Signal
     </div>
   );
 }
+
+export default memo(TitoPanel)
