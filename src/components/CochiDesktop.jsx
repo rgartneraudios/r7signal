@@ -1392,7 +1392,7 @@ function CochiDesktop({
       sessionAllowRef.current = new Set()
       onResetUsage?.('cochi')
     } catch (err) {
-      pushMessage({ role: 'assistant', content: `⚠️ No se pudo guardar R7: ${err.message}` })
+      pushMessage({ role: 'assistant', content: `⚠️ No se pudo archivar la sesión R7: ${err.message}` })
     }
   }
 
@@ -1722,12 +1722,12 @@ RGartner by R7Signal
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <span style={{ fontSize: '0.7rem', color: '#E8762A', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
-            ⚠ 70k tokens — Tu contexto está completo. Guárdalo en R7 antes de empezar un chat nuevo: no perderás nada.
+            ⚠ 70k tokens — Tu contexto está completo. Archívala en R7 antes de empezar un chat nuevo: no perderás nada.
           </span>
           <button
             onClick={handleSaveR7}
             style={{ background: 'rgba(232,108,50,0.15)', border: '1px solid rgba(232,108,50,0.5)', borderRadius: 4, padding: '3px 10px', color: '#E8762A', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
-          >Guardar R7</button>
+          >Archivar sesión R7</button>
           <button
             onClick={() => setTokenWarningDismissed(true)}
             style={{ background: 'transparent', border: 'none', color: '#6A7A8A', fontSize: '0.8rem', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}

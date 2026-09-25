@@ -3,9 +3,8 @@ import { listR9Files, readR9File } from '../lib/r9Store.js'
 import { listSessions, deleteSession } from '../lib/sessionStore.js'
 
 const TABS = [
-  { key: 'r7', label: 'R7 · Chats', accent: '#E8762A' },
-  { key: 'r9', label: 'R9 · Selecciones', accent: '#C8A2D8' },
   { key: 'sessions', label: 'Sesiones', accent: '#6B9EC4' },
+  { key: 'r9', label: 'R9 · Selecciones', accent: '#C8A2D8' },
 ]
 
 const AGENT_ACCENT = { cochi: '#CF444D', asun: '#C8A2D8', tito: '#E8C84A' }
@@ -15,8 +14,8 @@ function formatWhen(iso) {
 }
 
 export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenSession }) {
-  const [tab, setTab] = useState('r7')
-  const [files, setFiles] = useState({ r7: [], r9: [] })
+  const [tab, setTab] = useState('sessions')
+  const [r9Files, setR9Files] = useState([])
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(null)
@@ -27,12 +26,11 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const [r7, r9, sess] = await Promise.all([
-        listR9Files('r7'),
+      const [r9, sess] = await Promise.all([
         listR9Files('r9'),
         listSessions({}),
       ])
-      setFiles({ r7, r9 })
+      setR9Files(r9)
       setSessions(sess)
     } catch (err) {
       console.error('R9Drawer refresh error:', err)
@@ -77,7 +75,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
     if (ok) setSessions(prev => prev.filter(s => s.id !== session.id))
   }
 
-  const list = files[tab]
+  const list = r9Files
   const activeAccent = TABS.find(t => t.key === tab)?.accent
 
   return (
@@ -122,7 +120,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
                 fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.75rem',
                 fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
               }}
-            >{t.label} ({t.key === 'sessions' ? sessions.length : files[t.key].length})</button>
+            >{t.label} ({t.key === 'sessions' ? sessions.length : r9Files.length})</button>
           ))}
         </div>
 
@@ -134,8 +132,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
           )}
           {!loading && (tab === 'sessions' ? sessions.length === 0 : list.length === 0) && (
             <div style={{ color: '#6B7075', fontSize: '0.8rem', textAlign: 'center', marginTop: 30 }}>
-              {tab === 'r7' ? 'Sin chats guardados todavía.'
-                : tab === 'r9' ? 'Sin selecciones guardadas todavía.'
+              {tab === 'r9' ? 'Sin selecciones guardadas todavía.'
                 : 'Sin sesiones guardadas todavía.'}
             </div>
           )}

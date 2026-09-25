@@ -640,7 +640,7 @@ function AsunPanel({
       sessionIdRef.current = null
       onResetUsage?.('asun')
     } catch (err) {
-      setMessages(prev => [...prev, { rol: 'asistente', contenido: `⚠️ No se pudo guardar R7: ${err.message}`, id: newMessageId('asun'), streaming: false }])
+      setMessages(prev => [...prev, { rol: 'asistente', contenido: `⚠️ No se pudo archivar la sesión R7: ${err.message}`, id: newMessageId('asun'), streaming: false }])
     }
   }
 
@@ -1424,12 +1424,12 @@ RGartner by R7Signal</>
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <span style={{ fontSize: '0.7rem', color: '#C8A2D8', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
-            ⚠ 70k tokens — Tu contexto está completo. Guárdalo en R7 antes de empezar un chat nuevo: no perderás nada.
+            ⚠ 70k tokens — Tu contexto está completo. Archívala en R7 antes de empezar un chat nuevo: no perderás nada.
           </span>
           <button
             onClick={handleSaveR7}
             style={{ background: 'rgba(200,162,216,0.15)', border: '1px solid rgba(200,162,216,0.5)', borderRadius: 4, padding: '3px 10px', color: '#C8A2D8', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
-          >Guardar R7</button>
+          >Archivar sesión R7</button>
           <button
             onClick={() => setTokenWarningDismissed(true)}
             style={{ background: 'transparent', border: 'none', color: '#6A7A8A', fontSize: '0.8rem', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
