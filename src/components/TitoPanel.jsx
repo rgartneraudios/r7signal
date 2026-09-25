@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo } from 'react';
+import { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { calculateCost } from '../lib/modelPrices.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
@@ -6,7 +6,68 @@ import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
 import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
-import { useFrameThrottle } from '../lib/streamThrottle.js'
+import { useFrameThrottle, isNearBottom } from '../lib/streamThrottle.js'
+
+// ─── Lista de mensajes memoizada (Bloque P) ──────────────────────────────────
+// Mientras llega el streaming, el placeholder cambia ~30 veces/seg. Sin esto,
+// React re-renderizaba TODA la conversación (y re-rasterizaba cada burbuja con
+// degradado) por frame. El comparador ignora los callbacks (se refrescan al
+// cerrar el turno) y sólo compara los mensajes cerrados por referencia.
+const TitoMessageList = memo(function TitoMessageList({ messages, lastAssistantId, streaming, onUndo, onRegenerate, onHandoff }) {
+  return messages.map((msg) => (
+    <div key={msg.id} className={`tito-msg tito-msg--${msg.role}`}>
+      <div className="tito-msg-content">{msg.content}</div>
+      {msg.hasHandoff && (
+        <button
+          className="tito-handoff-btn"
+          onClick={() => {
+            const m = msg.content.match(/\[→ COCHI:\s*(.+?)\]/s);
+            if (m) onHandoff?.(m[1].trim());
+          }}
+        >→ Enviar a Cochi</button>
+      )}
+      {msg.role === 'assistant' && msg.id === lastAssistantId && !streaming && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button
+            onClick={onUndo}
+            title="Deshacer el último turno"
+            style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}
+          >↶ Undo</button>
+          <button
+            onClick={onRegenerate}
+            title="Volver a generar la última respuesta"
+            style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}
+          >↻ Regenerate</button>
+        </div>
+      )}
+    </div>
+  ))
+}, (prev, next) => {
+  if (prev.lastAssistantId !== next.lastAssistantId) return false
+  if (prev.streaming !== next.streaming) return false
+  if (prev.messages.length !== next.messages.length) return false
+  for (let i = 0; i < prev.messages.length; i++) if (prev.messages[i] !== next.messages[i]) return false
+  return true
+})
+
+// ─── Burbuja en vivo (Bloque P) ──────────────────────────────────────────────
+// Recibe sólo el mensaje en streaming: su contenido cambia por frame, pero el
+// resto de la conversación (TitoMessageList) ya no se re-renderiza.
+function TitoStreamingBubble({ msg, containerRef }) {
+  useEffect(() => {
+    const el = containerRef?.current
+    if (isNearBottom(el)) el.scrollTop = el.scrollHeight
+  }, [msg.content, containerRef])
+  return (
+    <div className="tito-msg tito-msg--assistant">
+      <div className="tito-msg-content">{msg.content}</div>
+    </div>
+  )
+}
 
 const TITO_MODELS = {
   rapido: 'perplexity/sonar',
@@ -162,18 +223,24 @@ function TitoPanel({
     return undoneUser
   }
 
-  function handleUndo() {
+  // Bloque P: wrappers estables para la lista memoizada. El cuerpo se refresca
+  // por ref en cada render, así el historial no se invalida y nunca queda con
+  // closures viejos (p.ej. un searchLevel anterior).
+  const handleUndoRef = useRef(() => {})
+  const handleRegenerateRef = useRef(() => {})
+  handleUndoRef.current = () => {
     if (streaming) return
     applyUndo()
   }
-
-  async function handleRegenerate() {
+  handleRegenerateRef.current = async () => {
     if (streaming) return
     const userText = lastUserText(messagesRef.current)
     if (!userText) return
     applyUndo()
     await sendMessage(userText)
   }
+  const handleUndo = useCallback(() => handleUndoRef.current(), [])
+  const handleRegenerate = useCallback(() => handleRegenerateRef.current(), [])
 
   useEffect(() => {
     if (pendingMessage?.text) {
@@ -189,7 +256,7 @@ function TitoPanel({
     if (!el) return;
     if (streaming) el.scrollTop = el.scrollHeight;
     else el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-  }, [messages, streaming]);
+  }, [messages.length, streaming]);
 
   useEffect(() => {
     loadAgentPrompt('tito').then(p => {
@@ -470,6 +537,9 @@ const displayText = extractR3Streaming(fullText)
   const isEmpty = messages.length === 0;
   // Bloque K3: los botones undo/regenerate cuelgan del último assistant.
   const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id;
+  // Bloque P: la burbuja en vivo se pinta aparte de la lista memoizada.
+  const streamingMsg = messages.find(m => m.streaming)
+  const closedMessages = streamingMsg ? messages.filter(m => !m.streaming) : messages
 
   return (
     <div className="tito-panel">
@@ -518,38 +588,17 @@ RGartner by R7Signal
 	</div>
           </div>
         ) : (
-          messages.map((msg) => (
-            <div key={msg.id} className={`tito-msg tito-msg--${msg.role}`}>
-              <div className="tito-msg-content">{msg.content}</div>
-              {msg.hasHandoff && (
-                <button 
-                  className="tito-handoff-btn"
-                  onClick={() => {
-                    const m = msg.content.match(/\[→ COCHI:\s*(.+?)\]/s);
-                    if (m) onHandoff?.(m[1].trim());
-                  }}
-                >→ Enviar a Cochi</button>
-              )}
-              {msg.role === 'assistant' && msg.id === lastAssistantId && !streaming && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button
-                    onClick={handleUndo}
-                    title="Deshacer el último turno"
-                    style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}
-                  >↶ Undo</button>
-                  <button
-                    onClick={handleRegenerate}
-                    title="Volver a generar la última respuesta"
-                    style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}
-                  >↻ Regenerate</button>
-                </div>
-              )}
-            </div>
-          ))
+          <>
+            <TitoMessageList
+              messages={closedMessages}
+              lastAssistantId={lastAssistantId}
+              streaming={streaming}
+              onUndo={handleUndo}
+              onRegenerate={handleRegenerate}
+              onHandoff={onHandoff}
+            />
+            {streamingMsg && <TitoStreamingBubble msg={streamingMsg} containerRef={chatContainerRef} />}
+          </>
         )}
         <div ref={bottomRef} />
         {r9Btn && (
