@@ -48,3 +48,24 @@ export function isNearBottom(el, threshold = 120) {
   if (!el) return false
   return el.scrollHeight - el.scrollTop - el.clientHeight < threshold
 }
+
+// Bloque Q: auto-scroll sin reflow por frame. Antes cada burbuja en vivo hacía
+// isNearBottom(el) (lectura de layout) + scrollTop = scrollHeight (escritura)
+// ~30 veces/seg → dos layouts síncronos por frame. Ahora un listener de scroll
+// pasivo recuerda si el usuario sigue pegado al fondo (sólo lee en scroll real)
+// y el stream únicamente escribe. `scrollIfSticky()` se llama tras cada frame.
+export function useStickToBottom(elRef) {
+  const stick = useRef(true)
+  useEffect(() => {
+    const el = elRef.current
+    if (!el) return
+    const onScroll = () => { stick.current = isNearBottom(el) }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [elRef])
+  return useCallback(() => {
+    const el = elRef.current
+    if (el && stick.current) el.scrollTop = el.scrollHeight
+  }, [elRef])
+}

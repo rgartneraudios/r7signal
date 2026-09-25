@@ -437,8 +437,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
 
         .tito-msg {
           max-width: 85%;
-          padding: 12px 16px;
-          border-radius: 12px;
+          padding: 2px 0;
           font-family: 'Space Grotesk', sans-serif;
           font-size: 0.92rem;
           line-height: 1.65;
@@ -446,22 +445,13 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
           white-space: pre-wrap;
         }
         .tito-msg--user {
-          background: rgba(232,200,74,0.06);
-          border: 1px solid rgba(232,200,74,0.15);
           align-self: flex-end;
         }
+        .tito-msg--user .tito-msg-content { color: #5FD3E0; }
         .tito-msg--assistant {
-          background: #131215;
-          border: 1px solid #201F23;
-          border-left: 3px solid #E8C84A;
           align-self: flex-start;
         }
-        .tito-msg-content {
-          background: linear-gradient(135deg, #F5D27A, #CED2DB);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
+        .tito-msg--assistant .tito-msg-content { color: #E8C84A; }
 
         .tito-handoff-btn {
           background: linear-gradient(90deg, #F5D27A22, #CED2DB22);

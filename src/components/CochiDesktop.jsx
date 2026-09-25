@@ -14,7 +14,7 @@ import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFr
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
-import { useFrameThrottle, isNearBottom } from '../lib/streamThrottle.js'
+import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 
 
@@ -170,56 +170,24 @@ const CochiMessageList = memo(function CochiMessageList({ messages, isTerminator
     msg.role === 'diff' ? (
       <DiffViewer key={msg.id} diff={msg.diff} />
     ) : msg.role === 'user' ? (
-      <div key={msg.id} className="cd-message-enter" style={isTerminator ? {
-        background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
-        border: '1px solid rgba(200,162,216,0.2)',
-        borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-      } : {
-        background: '#13151A', border: '1px solid rgba(107,158,196,0.15)',
-        borderRadius: 8, padding: '10px 16px', alignSelf: 'flex-end', maxWidth: '85%',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-      }}>
-        <div style={{ fontSize: '0.92rem', lineHeight: 1.5, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-          ...(isTerminator ? {
-            backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          } : {
-            backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }),
+      <div key={msg.id} className="cd-message-enter" style={{ alignSelf: 'flex-end', maxWidth: '85%', padding: '2px 0' }}>
+        <div style={{
+          fontSize: '0.92rem', lineHeight: 1.5, fontFamily: "'Inter', sans-serif",
+          whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#5FD3E0',
         }}>
           {msg.content}
         </div>
       </div>
     ) : (
-      <div key={msg.id} className="cd-message-enter" style={isTerminator ? {
-        background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
-        border: '1px solid rgba(201,128,84,0.4)', borderLeft: '3px solid #C98054',
-        borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-      } : {
-        background: '#13151A', border: '1px solid #232227', borderLeft: '3px solid #6A7A8A',
-        borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-      }}>
+      <div key={msg.id} className="cd-message-enter" style={{ alignSelf: 'flex-start', maxWidth: '100%', padding: '2px 0' }}>
         <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase',
           color: isTerminator ? '#D4B8D8' : '#6A7A8A',
         }}>
           COCHI
         </div>
-        <div style={{ fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
-          ...(isTerminator ? {
-            backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          } : {
-            backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }),
+        <div style={{
+          fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
+          color: isTerminator ? '#B9C0CB' : '#C47460',
         }}>
           <CochiMarkdown content={msg.content} />
         </div>
@@ -253,37 +221,23 @@ const CochiMessageList = memo(function CochiMessageList({ messages, isTerminator
 const CochiStreamingBubble = memo(forwardRef(function CochiStreamingBubble({ isTerminator, containerRef }, ref) {
   const [text, setText] = useState('')
   const { schedule, flush } = useFrameThrottle(30)
+  const scrollIfSticky = useStickToBottom(containerRef)
   useImperativeHandle(ref, () => ({
     push: (partial) => schedule(() => setText(partial)),
     flush: () => flush(),
     clear: () => { flush(); setText('') },
   }), [schedule, flush])
   useEffect(() => {
-    if (!text) return
-    const el = containerRef?.current
-    if (isNearBottom(el)) el.scrollTop = el.scrollHeight
-  }, [text, containerRef])
+    if (text) scrollIfSticky()
+  }, [text, scrollIfSticky])
   if (!text) return null
   return (
-    <div className="cd-message-enter" style={isTerminator ? {
-      background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
-      border: '1px solid rgba(201,128,84,0.4)', borderLeft: '3px solid #C98054',
-      borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-    } : {
-      background: '#13151A', border: '1px solid #232227', borderLeft: '3px solid #6A7A8A',
-      borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-    }}>
+    <div className="cd-message-enter" style={{ alignSelf: 'flex-start', maxWidth: '100%', padding: '2px 0' }}>
       <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase', color: isTerminator ? '#D4B8D8' : '#6A7A8A' }}>COCHI</div>
-      <div style={{ fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-        ...(isTerminator ? {
-          backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
-          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        } : {
-          backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
-          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        }),
+      <div style={{
+        fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
+        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        color: isTerminator ? '#B9C0CB' : '#C47460',
       }}>{text}</div>
     </div>
   )

@@ -6,7 +6,7 @@ import { readFile } from '@tauri-apps/plugin-fs'
 import { getAsunTools, executeTool, pathExists } from '../lib/asunTools.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
-import { useFrameThrottle, isNearBottom } from '../lib/streamThrottle.js'
+import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
 import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
@@ -461,14 +461,10 @@ function AsunImagenFlow({ submenu, onHandoff }) {
 // el degradado de cada mensaje). El comparador ignora los callbacks, que se
 // refrescan al cerrar el turno.
 function AsunBubble({ msg, isReveladora, isLast, showActions, canRegenerate, onUndo, onRegenerate, onHandoff }) {
+  const isUser = msg.rol === 'usuario'
   return (
-    <div style={{ display: 'flex', justifyContent: msg.rol === 'usuario' ? 'flex-end' : 'flex-start' }}>
-      <div className={`asun-msg-bubble ${msg.rol}`}
-        style={isReveladora ? {
-          background: 'linear-gradient(135deg, #0C0B0D, #1B151F, #0C0B0D)',
-          border: '1px solid rgba(200,162,216,0.2)',
-        } : undefined}
-      >
+    <div style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
+      <div className="asun-msg-bubble">
         {msg.rol === 'asistente' && (
           <span style={{
             fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.15em',
@@ -477,13 +473,7 @@ function AsunBubble({ msg, isReveladora, isLast, showActions, canRegenerate, onU
             fontFamily: "'Space Grotesk', sans-serif",
           }}>Asun</span>
         )}
-        <div style={isReveladora ? {
-          color: '#E3D3E3',
-        } : {
-          backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
-          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-        }}>{msg.contenido}</div>
+        <div style={{ color: isUser ? '#5FD3E0' : (isReveladora ? '#D4B8D8' : '#C067E8') }}>{msg.contenido}</div>
         {msg.audioUrl && (
           <audio controls src={msg.audioUrl} style={{ marginTop: 10, width: '100%' }} />
         )}
@@ -545,10 +535,8 @@ const AsunMessageList = memo(function AsunMessageList({ messages, isReveladora, 
 })
 
 function AsunStreamingBubble({ msg, isReveladora, containerRef }) {
-  useEffect(() => {
-    const el = containerRef?.current
-    if (isNearBottom(el)) el.scrollTop = el.scrollHeight
-  }, [msg.contenido, containerRef])
+  const scrollIfSticky = useStickToBottom(containerRef)
+  useEffect(() => { scrollIfSticky() }, [msg.contenido, scrollIfSticky])
   return <AsunBubble msg={msg} isReveladora={isReveladora} isLast={false} showActions={false} canRegenerate={false} />
 }
 
@@ -1238,18 +1226,10 @@ function AsunPanel({
 
         .asun-msg-bubble {
           max-width: 85%;
-          padding: 12px 16px; border-radius: 12px;
+          padding: 2px 0;
           font-family: 'Space Grotesk', sans-serif;
           font-size: 0.92rem; line-height: 1.65;
           letter-spacing: 0.02em; white-space: pre-wrap;
-        }
-        .asun-msg-bubble.usuario {
-          background: #15151C; border: 1px solid #201F23;
-          align-self: flex-end;
-        }
-        .asun-msg-bubble.asistente {
-          background: #15151C; border: 1px solid #201F23;
-          border-left: 3px solid #C8A2D8;
         }
 
         .asun-handoff-btn {
