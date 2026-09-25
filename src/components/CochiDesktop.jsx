@@ -1597,42 +1597,17 @@ function CochiDesktop({
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               flex: 1, padding: '40px 20px', gap: 10, userSelect: 'none', pointerEvents: 'none',
             }}>
-              <div className="watermark-brand" style={isTerminator ? {
-                backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                fontSize: '1.5rem',
-              } : {
-                backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
+              <div className="watermark-brand" style={{
+                color: isTerminator ? '#B9C0CB' : '#C47460',
                 fontSize: '1.5rem',
               }}>R7SIGNAL</div>
               <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
-              <div className="watermark-name" style={isTerminator ? {
-                backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                textShadow: '0 0 60px rgba(127,141,163,0.4), 0 0 160px rgba(127,141,163,0.2)',
-                fontSize: '1.9rem',
-              } : {
-                backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                textShadow: '0 0 60px rgba(196,116,96,0.5), 0 0 160px rgba(196,116,96,0.2)',
+              <div className="watermark-name" style={{
+                color: isTerminator ? '#B9C0CB' : '#C47460',
                 fontSize: '1.9rem',
               }}>COCHI DESKTOP</div>
-              <div className="watermark-sub" style={isTerminator ? {
-                backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                textShadow: '0 0 40px rgba(127,141,163,0.24), 0 0 100px rgba(127,141,163,0.12)',
-                fontSize: '0.8rem',
-              } : {
-                backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                textShadow: '0 0 40px rgba(196,116,96,0.24), 0 0 100px rgba(196,116,96,0.12)',
+              <div className="watermark-sub" style={{
+                color: isTerminator ? '#B9C0CB' : '#C47460',
                 fontSize: '0.8rem',
               }}>
               Cochi es un agente diseñado para administrar tus archivos y tu código.<br />

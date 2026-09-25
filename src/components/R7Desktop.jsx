@@ -302,10 +302,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
         .tito-panel .watermark-brand,
         .tito-panel .watermark-name,
         .tito-panel .watermark-divider {
-          background: linear-gradient(135deg, #F5D27A, #CED2DB);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
+          color: #E8C84A;
         }
         .tito-watermark .watermark-hint {
           color: #EDD780;
@@ -356,9 +353,6 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
           gap: 10px;
           user-select: none;
           pointer-events: none;
-        }
-        .tito-watermark .watermark-name {
-          text-shadow: 0 0 60px rgba(232,200,74,0.4), 0 0 160px rgba(192,192,192,0.2);
         }
         .tito-watermark .watermark-sub {
           color: #EDD780;
