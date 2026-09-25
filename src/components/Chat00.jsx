@@ -43,11 +43,10 @@ export default function Chat00() {
                       radial-gradient(circle at 50% 120%, rgba(255,255,255,0.01) 0%, transparent 70%),
                       #0F0E11;
         }
-        .leather-grid {
+.leather-grid {
           background-image: linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
                             linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
-          background-size: 48px 48px;
-          animation: subtleGridMove 50s linear infinite;
+          background-size: 50px 50px;
         }
       `}</style>
 

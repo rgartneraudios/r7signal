@@ -6,6 +6,7 @@ import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
 import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
+import { useFrameThrottle } from '../lib/streamThrottle.js'
 
 const TITO_MODELS = {
   rapido: 'perplexity/sonar',
@@ -56,6 +57,8 @@ export default function TitoPanel({
 }) {
   const chatLanguage = preferences.chat_language ?? 'Spanish'
   const [messages, setMessages] = useState([]);
+  // Bloque M: coalescea el streaming a ~30fps (un re-render por frame, no por token).
+  const { schedule: scheduleStream, flush: flushStream } = useFrameThrottle(30)
   const [searchLevel, setSearchLevel] = useState('rapido');
   const [streaming, setStreaming] = useState(false);
   const [cancelled, setCancelled] = useState(false);
@@ -179,9 +182,10 @@ export default function TitoPanel({
     }
   }, [pendingMessage]);
 
+  // Scroll al final (Bloque M: 'auto' durante el stream para no apilar animaciones)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    bottomRef.current?.scrollIntoView({ behavior: streaming ? 'auto' : 'smooth' });
+  }, [messages, streaming]);
 
   useEffect(() => {
     loadAgentPrompt('tito').then(p => {
@@ -325,12 +329,12 @@ export default function TitoPanel({
                const parsed = JSON.parse(json)
                const delta = parsed.choices?.[0]?.delta?.content || ''
                fullText += delta
-               const displayText = extractR3Streaming(fullText)
-                setMessages(prev => prev.map(m =>
+const displayText = extractR3Streaming(fullText)
+                scheduleStream(() => setMessages(prev => prev.map(m =>
                   m.id === placeholderId
                     ? { ...m, content: displayText, streaming: true }
                     : m
-                ))
+                )))
                if (parsed.usage) {
                  const { prompt_tokens, completion_tokens } = parsed.usage
                  const cost = calculateCost(chatModel, prompt_tokens, completion_tokens, 'token')
@@ -351,13 +355,14 @@ export default function TitoPanel({
            user: text,
            assistant: finalDisplay,
            pairs: (r7Pair.r1 || r7Pair.r2) ? [{ r1: r7Pair.r1, r2: r7Pair.r2 }] : [],
-         })
+})
+         flushStream()
          setMessages(prev => prev.map(m =>
            m.id === placeholderId
              ? { ...m, content: finalDisplay, streaming: false, hasHandoff }
              : m
          ))
-        if (hasHandoff) {
+         if (hasHandoff) {
           const briefMatch = fullText.match(/\[→ COCHI:\s*(.+?)\]/s)
           if (briefMatch) onHandoff?.(briefMatch[1].trim())
         }
@@ -400,11 +405,11 @@ export default function TitoPanel({
             const delta = parsed.choices?.[0]?.delta?.content || '';
             fullText += delta;
             const displayText = extractR3Streaming(fullText);
-            setMessages(prev => prev.map(m =>
+            scheduleStream(() => setMessages(prev => prev.map(m =>
               m.id === placeholderId
                 ? { ...m, content: displayText, streaming: true }
                 : m
-            ));
+            )));
             if (parsed.usage) {
               const { prompt_tokens, completion_tokens } = parsed.usage
               const cost = calculateCost(TITO_MODELS[searchLevel], prompt_tokens, completion_tokens, 'token')
@@ -427,6 +432,7 @@ export default function TitoPanel({
         assistant: finalDisplay,
         pairs: (r7Pair.r1 || r7Pair.r2) ? [{ r1: r7Pair.r1, r2: r7Pair.r2 }] : [],
       });
+      flushStream()
       setMessages(prev => prev.map(m =>
         m.id === placeholderId
           ? { ...m, content: finalDisplay, streaming: false, hasHandoff }

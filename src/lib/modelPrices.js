@@ -17,7 +17,7 @@ export const MODEL_PRICES = {
   'perplexity/sonar-pro':                  { inputPerM: 3, outputPerM: 15 },
   // Cochi
   '~deepseek/deepseek-v4-flash-latest':       { inputPerM: 0.05, outputPerM: 0.32 },
-  '~deepseek/deepseek-flash-latest':            { inputPerM: 0.4,  outputPerM: 1.00 },
+  '~deepseek/deepseek-flash-latest':            { inputPerM: 0.04, outputPerM: 0.49 },
   // Local (free)
   'ollama':    { inputPerM: 0, outputPerM: 0 },
   'lmstudio':  { inputPerM: 0, outputPerM: 0 },
@@ -48,5 +48,5 @@ export const ASUN_MODELS = [
 // Cochi tier names
 export const COCHI_MODELS = [
   { id: '~deepseek/deepseek-v4-flash-latest', label: 'Centinela' },
-  { id: 'tencent/hy4-preview',  label: 'Terminator' },
+  { id: '~deepseek/deepseek-flash-latest', label: 'Terminator' },
 ]
