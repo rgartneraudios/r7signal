@@ -1332,42 +1332,17 @@ function AsunPanel({
                 flex: 1, padding: '40px 20px', gap: 10,
                 userSelect: 'none', pointerEvents: 'none',
               }}>
-                <div className="watermark-brand" style={isReveladora ? {
-                backgroundImage: 'linear-gradient(135deg, #E8DCE8, #866EE0)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                fontSize: '1.5rem',
-              } : {
-                backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
+                <div className="watermark-brand" style={{
+                color: isReveladora ? '#D4B8D8' : '#C067E8',
                 fontSize: '1.5rem',
               }}>R7SIGNAL</div>
                 <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
-                <div className="watermark-name" style={isReveladora ? {
-                  backgroundImage: 'linear-gradient(135deg, #E8DCE8, #866EE0)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  textShadow: '0 0 60px rgba(134,110,224,0.3), 0 0 160px rgba(134,110,224,0.15)',
-                  fontSize: '1.9rem',
-                } : {
-                  backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  textShadow: '0 0 60px rgba(250,97,219,0.4), 0 0 160px rgba(250,97,219,0.2)',
+                <div className="watermark-name" style={{
+                  color: isReveladora ? '#D4B8D8' : '#C067E8',
                   fontSize: '1.9rem',
                 }}>ASUN PANEL</div>
-                <div className="watermark-sub" style={isReveladora ? {
-                  backgroundImage: 'linear-gradient(135deg, #E8DCE8, #866EE0)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  textShadow: '0 0 40px rgba(134,110,224,0.12), 0 0 100px rgba(134,110,224,0.06)',
-                  fontSize: '0.8rem',
-                } : {
-                  backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  textShadow: '0 0 40px rgba(250,97,219,0.18), 0 0 100px rgba(250,97,219,0.1)',
+                <div className="watermark-sub" style={{
+                  color: isReveladora ? '#D4B8D8' : '#C067E8',
                   fontSize: '0.8rem',
                 }}>
 {category === 'llm'
