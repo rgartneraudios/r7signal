@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { supabase } from '../supabaseClient'
 import { ASUN_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
@@ -458,7 +458,7 @@ function AsunImagenFlow({ submenu, onHandoff }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ASUN PANEL PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function AsunPanel({
+function AsunPanel({
   pendingMessage,
   onMessageConsumed,
   pendingSession,
@@ -608,9 +608,13 @@ export default function AsunPanel({
     onCategoryChange?.(category)
   }, [category, onCategoryChange])
 
-  // Scroll al final (Bloque M: 'auto' durante el stream para no apilar animaciones)
+  // Scroll al final (Bloque M/N: scrollTop directo en el contenedor en vez de
+  // scrollIntoView, que fuerza layout síncrono y puede escalar a ancestros).
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: loading ? 'auto' : 'smooth' })
+    const el = chatContainerRef.current
+    if (!el) return
+    if (loading) el.scrollTop = el.scrollHeight
+    else el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [messages, loading])
 
   // Consumir mensaje del input central
@@ -1082,8 +1086,6 @@ export default function AsunPanel({
       position: 'relative',
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Boogaloo&family=Space+Grotesk:wght@400;500;600;700&family=Orbitron:wght@400;700;900&display=swap');
-
         @keyframes asun-spin { to { transform: rotate(360deg); } }
         @keyframes asun-pulse { 0%,100%{opacity:.4;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
 
@@ -1518,3 +1520,5 @@ RGartner by R7Signal</>
     </div>
   )
 }
+
+export default memo(AsunPanel)
