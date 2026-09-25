@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
@@ -14,6 +14,7 @@ import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFr
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
+import { useFrameThrottle } from '../lib/streamThrottle.js'
 import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 
 
@@ -55,7 +56,7 @@ const ASK_CANCELLED = 'Cancelado por el usuario.'
 // ─── Modelos ──────────────────────────────────────────────────────────────────
 const COCHI_TIER_LABEL = {
   '~deepseek/deepseek-v4-flash-latest': 'Centinela',
-  'tencent/hy4-preview':  'Terminator',
+  '~deepseek/deepseek-flash-latest':  'Terminator',
 }
 
 // ─── Compactación de contexto token-aware (Bloque H + L4) ─────────────────────
@@ -140,6 +141,27 @@ const r7SyntaxTheme = {
   'number':{ color:'#E8C84A' }, 'string':{ color:'#A08840' }, 'keyword':{ color:'#C4929A' }, 'function':{ color:'#6B9EC4' },
 }
 
+// ─── Markdown memoizado (Bloque M) ───────────────────────────────────────────
+// ReactMarkdown + SyntaxHighlighter son caros. Al memoizar por `content`, los
+// mensajes ya cerrados NO se re-parsean mientras llega el streaming del actual.
+const CochiMarkdown = memo(function CochiMarkdown({ content }) {
+  return (
+    <ReactMarkdown components={{
+      code({ node, inline, className, children, ...props }) {
+        const match = /language-(\w+)/.exec(className || '')
+        if (!inline && match) {
+          return (
+            <div style={{ WebkitTextFillColor: 'initial', WebkitBackgroundClip: 'initial', backgroundClip: 'initial' }}>
+              <SyntaxHighlighter style={r7SyntaxTheme} language={match[1]} PreTag="div" customStyle={{ borderRadius: 6, fontSize: '0.85rem', margin: '10px 0' }}>{String(children).replace(/\n$/, '')}</SyntaxHighlighter>
+            </div>
+          )
+        }
+        return <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 4, fontSize: '0.9em', color: '#E0E2E4', WebkitTextFillColor: 'initial', WebkitBackgroundClip: 'initial', backgroundClip: 'initial' }} {...props}>{children}</code>
+      }
+    }}>{content}</ReactMarkdown>
+  )
+})
+
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 const css = `
   @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
@@ -156,7 +178,7 @@ const css = `
   @keyframes activitySlide { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:translateX(0); } }
   @keyframes subtleGridMove { 0% { background-position:0 0; } 100% { background-position:50px 50px; } }
   .cd-activity-item { animation:activitySlide 0.2s ease-out; }
-  .leather-grid { background-image:linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px); background-size:50px 50px; animation:subtleGridMove 50s linear infinite; }
+  .leather-grid { background-image:linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px); background-size:50px 50px; }
   .cd-model-select { appearance:none; -webkit-appearance:none; background:#1A1920; border:1px solid #201F23; border-radius:6px; padding:7px 10px; font-size:0.82rem; font-weight:700; font-family:'Space Grotesk',sans-serif; letter-spacing:0.04em; cursor:pointer; outline:none; width:100%; color:#C0C0C0; }
   .cd-model-select option { background:#1A1920; color:#C0C0C0; }
   .cd-radio-label { display:flex; align-items:center; gap:5px; cursor:pointer; }
@@ -195,6 +217,8 @@ export default function CochiDesktop({
   const [cost,            setCost]            = useState(0)
   const [loading,         setLoading]         = useState(false)
   const [liveStream,      setLiveStream]      = useState('')
+  // Bloque M: coalescea el streaming a ~30fps (un re-render por frame, no por token).
+  const { schedule: scheduleLive, flush: flushLive } = useFrameThrottle(30)
   const abortRef                              = useRef(null)
   const [selectedModel,   setSelectedModel]   = useState(COCHI_MODELS[0].id)
   const [ollamaModel,     setOllamaModel]     = useState('llama3.2')
@@ -234,8 +258,8 @@ export default function CochiDesktop({
   const sessionAllowRef = useRef(new Set()) // firmas aprobadas "siempre en esta sesión"
   const permissionRules = normalizeRules(preferences?.permissions)
 
-  // Scroll al final
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading, liveStream])
+  // Scroll al final (Bloque M: 'auto' durante el stream para no apilar animaciones)
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: loading ? 'auto' : 'smooth' }) }, [messages.length, loading, liveStream])
 
   // Reset del input de ask_user al abrir una nueva pregunta
   useEffect(() => { setAskInput(''); setAskChecks([]) }, [pendingQuestion])
@@ -804,7 +828,7 @@ export default function CochiDesktop({
             signal: controller.signal,
             sessionId: cochiSessionId,
             retries: 3,
-            onDelta: (partial) => setLiveStream(extractStreamingDisplay(partial)),
+            onDelta: (partial) => scheduleLive(() => setLiveStream(extractStreamingDisplay(partial))),
             onUsage: (usage) => {
               const promptTokens = usage.prompt_tokens ?? 0
               const completionTokens = usage.completion_tokens ?? 0
@@ -813,15 +837,9 @@ export default function CochiDesktop({
               totalTokensAcc += total
               stepInputTokens += promptTokens
               stepOutputTokens += completionTokens
-              console.log(`TOKEN BREAKDOWN [step ${stepIndex + 1}]`, {
-                prompt: promptTokens,
-                completion: completionTokens,
-                reasoning: usage.completion_tokens_details?.reasoning_tokens ?? 0,
-                cached: usage.prompt_tokens_details?.cached_tokens ?? 0,
-                total,
-              })
             },
           })
+          flushLive()
           setLiveStream('')
 
           if (streamed.finishReason === 'length') {
@@ -933,7 +951,7 @@ export default function CochiDesktop({
                       signal: controller.signal,
                       sessionId: cochiSessionId,
                       retries: 3,
-                      onDelta: (partial) => setLiveStream(extractStreamingDisplay(partial)),
+                      onDelta: (partial) => scheduleLive(() => setLiveStream(extractStreamingDisplay(partial))),
                       onUsage: (usage) => {
                         const promptTokens = usage.prompt_tokens ?? 0
                         const completionTokens = usage.completion_tokens ?? 0
@@ -942,14 +960,9 @@ export default function CochiDesktop({
                         totalTokensAcc += total
                         stepInputTokens += promptTokens
                         stepOutputTokens += completionTokens
-                        console.log('TOKEN BREAKDOWN [wrapper]', {
-                          prompt: promptTokens,
-                          completion: completionTokens,
-                          reasoning: usage.completion_tokens_details?.reasoning_tokens ?? 0,
-                          total,
-                        })
                       },
                     })
+                    flushLive()
                     setLiveStream('')
                     const wrapperRaw = wrapperStreamed.content || ''
                     const { r1, r2, r3 } = parseR1R2R3(wrapperRaw)
@@ -1344,7 +1357,7 @@ export default function CochiDesktop({
     setR9Btn(null)
   }
 
-  const isTerminator = selectedModel === 'tencent/hy4-preview'
+  const isTerminator = selectedModel === '~deepseek/deepseek-flash-latest'
   const activeModelPrice = MODEL_PRICES[selectedModel]
   const activeModelLabel = COCHI_MODELS.find(m => m.id === selectedModel)?.label
     ?? (selectedModel === 'ollama' ? 'Ollama' : 'LM Studio')
@@ -1588,21 +1601,7 @@ RGartner by R7Signal
                     backgroundClip: 'text',
                   }),
                 }}>
-                  <ReactMarkdown components={{
-                    code({ node, inline, className, children, ...props }) {
-                      const match = /language-(\w+)/.exec(className || '')
-                      if (!inline && match) {
-                        return (
-                          <div style={{ WebkitTextFillColor: 'initial', WebkitBackgroundClip: 'initial', backgroundClip: 'initial' }}>
-                            <SyntaxHighlighter style={r7SyntaxTheme} language={match[1]} PreTag="div" customStyle={{ borderRadius: 6, fontSize: '0.85rem', margin: '10px 0' }}>{String(children).replace(/\n$/, '')}</SyntaxHighlighter>
-                          </div>
-                        )
-                      }
-                      return <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 4, fontSize: '0.9em', color: '#E0E2E4', WebkitTextFillColor: 'initial', WebkitBackgroundClip: 'initial', backgroundClip: 'initial' }} {...props}>{children}</code>
-                    }
-                  }}>
-                    {msg.content}
-                  </ReactMarkdown>
+                  <CochiMarkdown content={msg.content} />
                 </div>
                 {msg.id === lastAssistantId && !loading && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>

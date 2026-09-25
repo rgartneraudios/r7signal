@@ -92,7 +92,6 @@ export default function App() {
           background-image: linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
                             linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
           background-size: 50px 50px;
-          animation: subtleGridMove 50s linear infinite;
         }
         .landing-btn {
           position: relative;

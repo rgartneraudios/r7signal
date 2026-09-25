@@ -6,6 +6,7 @@ import { readFile } from '@tauri-apps/plugin-fs'
 import { getAsunTools, executeTool, pathExists } from '../lib/asunTools.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
+import { useFrameThrottle } from '../lib/streamThrottle.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
 import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
@@ -475,6 +476,8 @@ export default function AsunPanel({
   const [category, setCategory] = useState('llm')       // 'llm' | 'imagen' | 'musica'
   const [submenu,  setSubmenu]  = useState('occidente')  // 'occidente' | 'asia'
   const [messages, setMessages] = useState([])           // historial global LLM + Música
+  // Bloque M: coalescea el streaming a ~30fps (un re-render por frame, no por token).
+  const { schedule: scheduleStream, flush: flushStream } = useFrameThrottle(30)
   const [loading,  setLoading]  = useState(false)
   const [promptMusica, setPromptMusica] = useState(null) // prompt listo para Lyria
   const [generating,  setGenerating]   = useState(false)
@@ -605,9 +608,9 @@ export default function AsunPanel({
     onCategoryChange?.(category)
   }, [category, onCategoryChange])
 
-  // Scroll al final
+  // Scroll al final (Bloque M: 'auto' durante el stream para no apilar animaciones)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    messagesEndRef.current?.scrollIntoView({ behavior: loading ? 'auto' : 'smooth' })
   }, [messages, loading])
 
   // Consumir mensaje del input central
@@ -748,14 +751,15 @@ export default function AsunPanel({
           return 'Formato de respuesta inesperado — reintenta el mensaje.'
         }
         const fullText = await streamOR(MODELS.musica.chat, apiMessages, (partial) => {
-          setMessages(prev => prev.map(m =>
+          scheduleStream(() => setMessages(prev => prev.map(m =>
             m.id === placeholderId ? { ...m, contenido: extractR3Streaming(partial) } : m
-          ))
+          )))
         }, (u) => { onUsage?.(u); setTokens(prev => prev + (u.inputTokens || 0) + (u.outputTokens || 0)) }, getAsunSessionId())
         const musicMatch = MUSIC_RE.exec(fullText)
         if (musicMatch) {
           setPromptMusica(musicMatch[1].trim())
         }
+        flushStream()
         setMessages(prev => prev.map(m =>
           m.id === placeholderId
             ? { ...m, contenido: extractR3(fullText).replace(MUSIC_RE, '').trim(), streaming: false }

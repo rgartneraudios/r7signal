@@ -206,7 +206,6 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
             linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
             linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
           background-size: 50px 50px;
-          animation: subtleGridMove 50s linear infinite;
         }
 
         /* Botones de routing */
@@ -503,8 +502,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
         height: 60,
         display: 'flex', alignItems: 'center',
         borderBottom: '1px solid rgba(255,255,255,0.05)',
-        background: 'rgba(9,8,10,0.75)',
-        backdropFilter: 'blur(10px)',
+        background: 'rgba(9,8,10,0.9)',
         padding: '0 20px', gap: '20px',
       }}>
         {/* R7SIGNAL brand — leftmost */}
@@ -852,8 +850,7 @@ const handleUsage            = useCallback(({ source, inputTokens = 0, outputTok
         <div style={{
           flexShrink: 0,
           borderTop: '1px solid rgba(255,255,255,0.05)',
-          background: 'rgba(9,8,10,0.9)',
-          backdropFilter: 'blur(14px)',
+          background: 'rgba(9,8,10,0.97)',
           padding: '8px 14px',
           display: 'flex', alignItems: 'flex-end', gap: 9,
         }}>
