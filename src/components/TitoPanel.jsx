@@ -4,7 +4,7 @@ import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
-import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
+import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 
@@ -137,6 +137,9 @@ function TitoPanel({
   const bottomRef = useRef(null);
   const chatContainerRef = useRef(null);
   const sessionIdRef = useRef(null);
+  // Bloque X1: nombre del artefacto. Se hereda al "cargar como contexto" y, si no,
+  // se sugiere del primer mensaje del usuario en el primer autosave.
+  const sessionNameRef = useRef(null);
   function getTitoSessionId() {
     if (!sessionIdRef.current) {
       sessionIdRef.current = `tito-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -176,6 +179,7 @@ function TitoPanel({
     if (!msgs.some(m => m.rol === 'usuario' || m.role === 'user')) return
     const session = makeSession('tito', {
       sessionId: sessionIdRef.current,
+      name: sessionNameRef.current,
       wheel: wheelRef.current,
       messages: msgs,
     })
@@ -198,6 +202,7 @@ function TitoPanel({
       sessionPairsRef.current = []
       wheelRef.current = createWheelState(await readLatestR7())
       sessionIdRef.current = null
+      sessionNameRef.current = null
       onResetUsage?.('tito')
     } catch (err) {
       setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: `⚠️ No se pudo archivar la sesión R7: ${err.message}` }])
@@ -225,9 +230,6 @@ function TitoPanel({
     messagesRef.current = newMsgs
     wheelRef.current = newWheel
     setMessages(newMsgs)
-    if (!newMsgs.some(isUserMsg) && sessionIdRef.current) {
-      deleteSession(sessionIdRef.current).catch(() => {})
-    }
     return undoneUser
   }
 
@@ -291,6 +293,7 @@ function TitoPanel({
     if (!messages.some(isUserMsg)) return
     const session = makeSession('tito', {
       sessionId: sessionIdRef.current,
+      name: sessionNameRef.current,
       wheel: wheelRef.current,
       messages,
     })
@@ -299,23 +302,29 @@ function TitoPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, streaming]);
 
-  // Retomar una sesión guardada (KD7): mensajes + snapshot de rueda + sessionId
-  // propios. NO toca el R7 global.
+  // Bloque X1: "Cargar como contexto" una sesión guardada. La sesión NO restaura
+  // la conversación: arranca un chat en cero y adopta su rueda (snapshot) como
+  // contexto. Id NUEVO: el artefacto original queda intacto como semilla.
+  // Fix K2: `onSessionConsumed` se llama DESPUÉS del await (si se llamaba antes,
+  // el cleanup del efecto abortaba la carga).
   useEffect(() => {
     if (!pendingSession) return
-    onSessionConsumed?.()
     const { id } = pendingSession
     let alive = true
     ;(async () => {
       const s = await loadSession(id)
-      if (!alive || !s) return
-      skipAutosaveRef.current = true
-      setMessages((s.messages || []).map(m => fromCanonical('tito', m)))
-      wheelRef.current = { r7: s.wheel?.r7 || '', lastTurn: s.wheel?.lastTurn ?? null }
-      sessionIdRef.current = s.id
-      sessionPairsRef.current = []
-      setTokenWarningDismissed(false); setTokens(0)
-      onResetUsage?.('tito')
+      if (!alive) return
+      if (s) {
+        skipAutosaveRef.current = true
+        setMessages([])
+        wheelRef.current = { r7: s.wheel?.r7 || '', lastTurn: s.wheel?.lastTurn ?? null }
+        sessionIdRef.current = null
+        sessionNameRef.current = s.name || null
+        sessionPairsRef.current = []
+        setTokenWarningDismissed(false); setTokens(0)
+        onResetUsage?.('tito')
+      }
+      onSessionConsumed?.()
     })()
     return () => { alive = false }
   // eslint-disable-next-line react-hooks/exhaustive-deps

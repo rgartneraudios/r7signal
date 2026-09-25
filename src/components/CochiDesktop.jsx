@@ -13,7 +13,7 @@ import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
-import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
+import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -326,6 +326,9 @@ function CochiDesktop({
   const sessionPairsRef = useRef([]) // acumula {r1,r2,stepId} de cada turno — stepId = ordinal del step (stepIndex+1) o null sin plan; se resetea en CLS y Guardar R7
   const wheelRef = useRef(createWheelState()) // Bloque L4: rueda R7 { r7, lastTurn } — se resetea en CLS y Guardar R7
   const cochiSessionIdRef = useRef(null) // session_id estable por conversación; se resetea en CLS y Guardar R7
+  // Bloque X1: nombre del artefacto. Se hereda al "cargar como contexto" y, si no,
+  // se sugiere del primer mensaje del usuario en el primer autosave.
+  const cochiSessionNameRef = useRef(null)
   // Bloque K2: espejo de `messages` para el autosave y guardas de retoma.
   const messagesRef = useRef([])
   const skipAutosaveRef = useRef(true) // true en el montaje y al retomar una sesión
@@ -383,6 +386,7 @@ function CochiDesktop({
     if (!messages.some(isUserMsg)) return
     const session = makeSession('cochi', {
       sessionId: cochiSessionIdRef.current,
+      name: cochiSessionNameRef.current,
       wheel: wheelRef.current,
       messages,
     })
@@ -391,26 +395,33 @@ function CochiDesktop({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, loading])
 
-  // Retomar una sesión guardada (KD7): carga mensajes + snapshot de rueda +
-  // sessionId propios de la sesión. NO toca el R7 global.
+  // Bloque X1: "Cargar como contexto" una sesión guardada. La sesión NO restaura
+  // la conversación: arranca un chat en cero y adopta su rueda (snapshot) como
+  // contexto. Id NUEVO: el artefacto original queda intacto como semilla.
+  // Fix K2: `onSessionConsumed` se llama DESPUÉS del await; si se llamaba antes,
+  // el padre ponía pendingSession=null, React corría el cleanup (alive=false) y
+  // el resume abortaba siempre.
   useEffect(() => {
     if (!pendingSession) return
-    onSessionConsumed?.()
-    const { id, nonce } = pendingSession
+    const { id } = pendingSession
     let alive = true
     ;(async () => {
       const s = await loadSession(id)
-      if (!alive || !s) return
-      skipAutosaveRef.current = true
-      setMessages((s.messages || []).map(m => fromCanonical('cochi', m)))
-      wheelRef.current = { r7: s.wheel?.r7 || '', lastTurn: s.wheel?.lastTurn ?? null }
-      cochiSessionIdRef.current = s.id
-      sessionPairsRef.current = []
-      setActivity([]); setTodos([]); syncPlan(null)
-      setPlanStatus('idle'); setTokenWarningDismissed(false)
-      setTokens(0); setCost(0)
-      sessionAllowRef.current = new Set()
-      onResetUsage?.('cochi')
+      if (!alive) return
+      if (s) {
+        skipAutosaveRef.current = true
+        setMessages([])
+        wheelRef.current = { r7: s.wheel?.r7 || '', lastTurn: s.wheel?.lastTurn ?? null }
+        cochiSessionIdRef.current = null
+        cochiSessionNameRef.current = s.name || null
+        sessionPairsRef.current = []
+        setActivity([]); setTodos([]); syncPlan(null)
+        setPlanStatus('idle'); setTokenWarningDismissed(false)
+        setTokens(0); setCost(0)
+        sessionAllowRef.current = new Set()
+        onResetUsage?.('cochi')
+      }
+      onSessionConsumed?.()
     })()
     return () => { alive = false }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -513,6 +524,7 @@ function CochiDesktop({
     if (!msgs.some(isUserMsg)) return
     const session = makeSession('cochi', {
       sessionId: cochiSessionIdRef.current,
+      name: cochiSessionNameRef.current,
       wheel: wheelRef.current,
       messages: msgs,
     })
@@ -1371,6 +1383,7 @@ function CochiDesktop({
       sessionPairsRef.current = []
       wheelRef.current = createWheelState(await readLatestR7())
       cochiSessionIdRef.current = null
+      cochiSessionNameRef.current = null
       sessionAllowRef.current = new Set()
       onResetUsage?.('cochi')
     }
@@ -1389,6 +1402,7 @@ function CochiDesktop({
       sessionPairsRef.current = []
       wheelRef.current = createWheelState(await readLatestR7())
       cochiSessionIdRef.current = null
+      cochiSessionNameRef.current = null
       sessionAllowRef.current = new Set()
       onResetUsage?.('cochi')
     } catch (err) {
@@ -1410,9 +1424,6 @@ function CochiDesktop({
     syncPlan(null); setPlanStatus('idle')
     if (permissionResolverRef.current) permissionResolverRef.current('deny')
     if (askResolverRef.current) askResolverRef.current(ASK_CANCELLED)
-    if (!newMsgs.some(isUserMsg) && cochiSessionIdRef.current) {
-      deleteSession(cochiSessionIdRef.current).catch(() => {})
-    }
     return undoneUser
   }
 
