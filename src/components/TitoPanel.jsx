@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo, useCallback } from 'react';
+import { useState, useRef, useEffect, memo, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { calculateCost } from '../lib/modelPrices.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
@@ -6,7 +6,7 @@ import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
 import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
-import { useFrameThrottle, isNearBottom } from '../lib/streamThrottle.js'
+import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 
 // ─── Lista de mensajes memoizada (Bloque P) ──────────────────────────────────
 // Mientras llega el streaming, el placeholder cambia ~30 veces/seg. Sin esto,
@@ -54,20 +54,27 @@ const TitoMessageList = memo(function TitoMessageList({ messages, lastAssistantI
   return true
 })
 
-// ─── Burbuja en vivo (Bloque P) ──────────────────────────────────────────────
-// Recibe sólo el mensaje en streaming: su contenido cambia por frame, pero el
-// resto de la conversación (TitoMessageList) ya no se re-renderiza.
-function TitoStreamingBubble({ msg, containerRef }) {
-  useEffect(() => {
-    const el = containerRef?.current
-    if (isNearBottom(el)) el.scrollTop = el.scrollHeight
-  }, [msg.content, containerRef])
+// ─── Burbuja en vivo (Bloque Q) ──────────────────────────────────────────────
+// El texto en vivo vive DENTRO de este componente y su throttle; el loop de
+// streaming empuja por ref. Así el panel (y su lista memoizada) no se re-ejecuta
+// por frame: sólo se repinta esta burbuja.
+const TitoStreamingBubble = memo(forwardRef(function TitoStreamingBubble({ containerRef }, ref) {
+  const [text, setText] = useState('')
+  const { schedule, flush } = useFrameThrottle(30)
+  const scrollIfSticky = useStickToBottom(containerRef)
+  useImperativeHandle(ref, () => ({
+    push: (partial) => schedule(() => setText(partial)),
+    flush: () => flush(),
+    clear: () => { flush(); setText('') },
+  }), [schedule, flush])
+  useEffect(() => { if (text) scrollIfSticky() }, [text, scrollIfSticky])
+  if (!text) return null
   return (
     <div className="tito-msg tito-msg--assistant">
-      <div className="tito-msg-content">{msg.content}</div>
+      <div className="tito-msg-content">{text}</div>
     </div>
   )
-}
+}))
 
 const TITO_MODELS = {
   rapido: 'perplexity/sonar',
@@ -118,8 +125,9 @@ function TitoPanel({
 }) {
   const chatLanguage = preferences.chat_language ?? 'Spanish'
   const [messages, setMessages] = useState([]);
-  // Bloque M: coalescea el streaming a ~30fps (un re-render por frame, no por token).
-  const { schedule: scheduleStream, flush: flushStream } = useFrameThrottle(30)
+  // Bloque Q: el texto en vivo se empuja a TitoStreamingBubble por ref, así el
+  // panel no se re-renderiza en cada frame del throttle.
+  const liveRef = useRef(null)
   const [searchLevel, setSearchLevel] = useState('rapido');
   const [streaming, setStreaming] = useState(false);
   const [cancelled, setCancelled] = useState(false);
@@ -344,9 +352,7 @@ function TitoPanel({
 
 
     const userMsg = { id: newMessageId('tito'), role: 'user', content: text };
-    const placeholderId = newMessageId('tito');
-    const history = [...messagesRef.current, userMsg];
-    setMessages([...history, { id: placeholderId, role: 'assistant', content: '', streaming: true }]);
+    setMessages(prev => [...prev, userMsg]);
     setStreaming(true);
     setCancelled(false);
 
@@ -400,12 +406,8 @@ function TitoPanel({
                const parsed = JSON.parse(json)
                const delta = parsed.choices?.[0]?.delta?.content || ''
                fullText += delta
-const displayText = extractR3Streaming(fullText)
-                scheduleStream(() => setMessages(prev => prev.map(m =>
-                  m.id === placeholderId
-                    ? { ...m, content: displayText, streaming: true }
-                    : m
-                )))
+                const displayText = extractR3Streaming(fullText)
+                liveRef.current?.push(displayText)
                if (parsed.usage) {
                  const { prompt_tokens, completion_tokens } = parsed.usage
                  const cost = calculateCost(chatModel, prompt_tokens, completion_tokens, 'token')
@@ -427,12 +429,8 @@ const displayText = extractR3Streaming(fullText)
            assistant: finalDisplay,
            pairs: (r7Pair.r1 || r7Pair.r2) ? [{ r1: r7Pair.r1, r2: r7Pair.r2 }] : [],
 })
-         flushStream()
-         setMessages(prev => prev.map(m =>
-           m.id === placeholderId
-             ? { ...m, content: finalDisplay, streaming: false, hasHandoff }
-             : m
-         ))
+         liveRef.current?.clear()
+         setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: finalDisplay, hasHandoff }])
          if (hasHandoff) {
           const briefMatch = fullText.match(/\[→ COCHI:\s*(.+?)\]/s)
           if (briefMatch) onHandoff?.(briefMatch[1].trim())
@@ -476,11 +474,7 @@ const displayText = extractR3Streaming(fullText)
             const delta = parsed.choices?.[0]?.delta?.content || '';
             fullText += delta;
             const displayText = extractR3Streaming(fullText);
-            scheduleStream(() => setMessages(prev => prev.map(m =>
-              m.id === placeholderId
-                ? { ...m, content: displayText, streaming: true }
-                : m
-            )));
+            liveRef.current?.push(displayText);
             if (parsed.usage) {
               const { prompt_tokens, completion_tokens } = parsed.usage
               const cost = calculateCost(TITO_MODELS[searchLevel], prompt_tokens, completion_tokens, 'token')
@@ -503,12 +497,8 @@ const displayText = extractR3Streaming(fullText)
         assistant: finalDisplay,
         pairs: (r7Pair.r1 || r7Pair.r2) ? [{ r1: r7Pair.r1, r2: r7Pair.r2 }] : [],
       });
-      flushStream()
-      setMessages(prev => prev.map(m =>
-        m.id === placeholderId
-          ? { ...m, content: finalDisplay, streaming: false, hasHandoff }
-          : m
-      ));
+      liveRef.current?.clear()
+      setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: finalDisplay, hasHandoff }]);
 
     if (hasHandoff) {
       const briefMatch = fullText.match(/\[→ COCHI:\s*(.+?)\]/s);
@@ -517,11 +507,8 @@ const displayText = extractR3Streaming(fullText)
 
   } catch (err) {
       if (err.name !== 'AbortError') {
-        setMessages(prev => prev.map(m =>
-          m.id === placeholderId
-            ? { ...m, content: `Error: ${err.message}`, streaming: false }
-            : m
-        ));
+        liveRef.current?.clear()
+        setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: `Error: ${err.message}` }]);
       }
     } finally {
       setStreaming(false);
@@ -537,9 +524,6 @@ const displayText = extractR3Streaming(fullText)
   const isEmpty = messages.length === 0;
   // Bloque K3: los botones undo/regenerate cuelgan del último assistant.
   const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id;
-  // Bloque P: la burbuja en vivo se pinta aparte de la lista memoizada.
-  const streamingMsg = messages.find(m => m.streaming)
-  const closedMessages = streamingMsg ? messages.filter(m => !m.streaming) : messages
 
   return (
     <div className="tito-panel">
@@ -590,14 +574,14 @@ RGartner by R7Signal
         ) : (
           <>
             <TitoMessageList
-              messages={closedMessages}
+              messages={messages}
               lastAssistantId={lastAssistantId}
               streaming={streaming}
               onUndo={handleUndo}
               onRegenerate={handleRegenerate}
               onHandoff={onHandoff}
             />
-            {streamingMsg && <TitoStreamingBubble msg={streamingMsg} containerRef={chatContainerRef} />}
+            {streaming && <TitoStreamingBubble ref={liveRef} containerRef={chatContainerRef} />}
           </>
         )}
         <div ref={bottomRef} />
