@@ -1,6 +1,7 @@
 import { readTextFile, writeTextFile, readDir, exists, mkdir, remove, stat, rename, copyFile } from '@tauri-apps/plugin-fs'
 import { Command } from '@tauri-apps/plugin-shell'
 import { writeR9File } from './r9Store.js'
+import { capturePath } from './snapshotStore.js'
 
 // Tope de lectura de texto — evita meter megabytes al contexto del modelo.
 const MAX_READ_BYTES = 1 * 1024 * 1024 // 1MB
@@ -611,6 +612,11 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
   const canWrite = permission === 'write' || permission === 'readwrite' || permission === 'full'
   const canRun   = permission === 'full'
 
+  // Fase 3.1: snapshot del estado ANTERIOR de cada ruta antes de mutarla. El
+  // dryRun (previsualización) NO captura. `snap` es idempotente por ruta/turno.
+  const snapshot = options?.snapshot || null
+  const snap = async (p) => { if (snapshot && !dryRun && p) await capturePath(snapshot, p) }
+
   if (!canWrite && ['write_file', 'replace_in_file', 'append_to_file', 'create_dir', 'move_file', 'copy_file'].includes(name))
     return { modelResult: '⛔ Bloqueado: permiso Solo Lectura. Cambia el nivel en Workspace.', diff: null }
   if (!canRun && (name === 'run_command' || name === 'delete_file'))
@@ -666,6 +672,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       const before = fileExisted ? await readTextFile(args.path).catch(() => null) : null
       const diff = { path: args.path, before, after: args.content }
       if (dryRun) return { modelResult: `(preview) escribir ${args.path}`, diff }
+      await snap(args.path)
       if (dir && !(await exists(dir))) await mkdir(dir, { recursive: true })
       await writeTextFile(args.path, args.content)
       return {
@@ -691,6 +698,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       if (updated === original) return { modelResult: `⚠️ Texto no encontrado en ${args.path}`, diff: null }
       const diff = { path: args.path, before: original, after: updated }
       if (dryRun) return { modelResult: `(preview) editar ${args.path}`, diff }
+      await snap(args.path)
       await writeTextFile(args.path, updated)
       const count = doAll ? occurrences : 1
       return {
@@ -705,6 +713,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       const after = current + args.content
       const diff = { path: args.path, before: current, after }
       if (dryRun) return { modelResult: `(preview) añadir a ${args.path}`, diff }
+      await snap(args.path)
       await writeTextFile(args.path, after)
       return {
         modelResult: `✅ Contenido añadido a ${args.path}`,
@@ -884,6 +893,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
     case 'delete_file': {
       const existed = await pathExistsCochi(args.path)
       if (!existed) return { modelResult: `⚠️ No existe: ${args.path}`, diff: null }
+      await snap(args.path)
       await remove(args.path)
       return { modelResult: `🗑️ Eliminado: ${args.path}`, diff: null }
     }
@@ -894,6 +904,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         if (info?.isDirectory) return { modelResult: `ℹ️ Ya existe el directorio: ${args.path}`, diff: null }
         return { modelResult: `⛔ Ya existe un archivo en esa ruta: ${args.path}`, diff: null }
       }
+      await snap(args.path)
       await mkdir(args.path, { recursive: true })
       return { modelResult: `✅ Directorio creado: ${args.path}`, diff: null }
     }
@@ -904,6 +915,8 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       if (destExists && args.overwrite !== true) {
         return { modelResult: `⚠️ El destino ya existe: ${args.toPath}. Pasa overwrite: true para reemplazarlo.`, diff: null }
       }
+      await snap(args.fromPath)
+      await snap(args.toPath)
       await ensureParentDir(args.toPath)
       if (destExists) await remove(args.toPath, { recursive: true }).catch(() => {})
       await rename(args.fromPath, args.toPath)
@@ -917,6 +930,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       if (destExists && args.overwrite !== true) {
         return { modelResult: `⚠️ El destino ya existe: ${args.toPath}. Pasa overwrite: true para reemplazarlo.`, diff: null }
       }
+      await snap(args.toPath)
       await ensureParentDir(args.toPath)
       if (destExists) await remove(args.toPath, { recursive: true }).catch(() => {})
       if (info.isDirectory) await copyDirRecursive(args.fromPath, args.toPath)
