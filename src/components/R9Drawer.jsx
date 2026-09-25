@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { listR9Files, readR9File } from '../lib/r9Store.js'
-import { listSessions, deleteSession } from '../lib/sessionStore.js'
+import { listSessions, deleteSession, renameSession } from '../lib/sessionStore.js'
 
 const TABS = [
   { key: 'sessions', label: 'Sesiones', accent: '#6B9EC4' },
@@ -20,6 +20,8 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(null)
   const [contentCache, setContentCache] = useState({})
+  // Bloque X1: borradores de nombre por sesión (input editable en el drawer).
+  const [nameDrafts, setNameDrafts] = useState({})
 
   // Bloque L4: R7/R9 son GLOBALES (AppLocalData), no dependen del workspace.
   // Bloque K2: las sesiones también (Sessions/), mismas rutas relativas.
@@ -70,9 +72,32 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
   }
 
   async function handleDeleteSession(session) {
-    if (!window.confirm(`¿Borrar la sesión "${session.title}"?`)) return
+    if (!window.confirm(`¿Borrar la sesión "${session.name}"?`)) return
     const ok = await deleteSession(session.id)
     if (ok) setSessions(prev => prev.filter(s => s.id !== session.id))
+  }
+
+  // Bloque X1: el usuario nombra la sesión desde el drawer. Se guarda al salir
+  // del campo o con Enter; el autosave del panel preserva ese nombre.
+  function handleNameChange(session, value) {
+    setNameDrafts(prev => ({ ...prev, [session.id]: value }))
+  }
+
+  async function commitName(session) {
+    const raw = nameDrafts[session.id]
+    if (raw == null) return
+    const value = raw.trim()
+    if (!value || value === session.name) {
+      setNameDrafts(prev => { const c = { ...prev }; delete c[session.id]; return c })
+      return
+    }
+    const updated = await renameSession(session.id, value)
+    if (updated) {
+      setSessions(prev => prev.map(s => (
+        s.id === session.id ? { ...s, name: updated.name, updatedAt: updated.updatedAt } : s
+      )))
+    }
+    setNameDrafts(prev => { const c = { ...prev }; delete c[session.id]; return c })
   }
 
   const list = r9Files
@@ -148,16 +173,32 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
                   textTransform: 'uppercase', color: AGENT_ACCENT[session.agent] || '#9BA3A8',
                 }}>{session.agent}</span>
                 <span style={{ flex: 1 }} />
-                <button onClick={() => handleOpenSession(session)} style={miniBtnStyle(activeAccent)}>Abrir</button>
+                <button onClick={() => handleOpenSession(session)} style={miniBtnStyle(activeAccent)}>Cargar</button>
                 <button
                   onClick={() => handleDeleteSession(session)}
                   style={{ background: 'transparent', border: '1px solid #CF444D55', borderRadius: 5, padding: '3px 7px', color: '#CF444D', fontSize: '0.62rem', fontWeight: 700, cursor: 'pointer' }}
                 >🗑</button>
               </div>
-              <span style={{
-                fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.8rem',
-                color: '#D4D8DC', lineHeight: 1.35,
-              }}>{session.title}</span>
+              <input
+                value={nameDrafts[session.id] ?? session.name ?? ''}
+                onChange={e => handleNameChange(session, e.target.value)}
+                onBlur={e => {
+                  e.currentTarget.style.borderColor = 'transparent'
+                  e.currentTarget.style.background = 'transparent'
+                  commitName(session)
+                }}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                spellCheck={false}
+                title="Nombre de la sesión (artefacto de contexto)"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: 'transparent', border: '1px solid transparent',
+                  borderRadius: 5, padding: '3px 5px', outline: 'none',
+                  fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.8rem',
+                  color: '#D4D8DC', lineHeight: 1.35,
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; e.currentTarget.style.background = '#0F0E11' }}
+              />
               <span style={{
                 fontFamily: "'JetBrains Mono', monospace", fontSize: '0.62rem', color: '#6B7075',
               }}>{formatWhen(session.updatedAt)}</span>
