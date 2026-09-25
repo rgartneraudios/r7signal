@@ -6,6 +6,7 @@ import PlanViewer from './PlanViewer'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
+import { normalizeUsage } from '../lib/llmMetrics.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { TOOL_ICONS, executeTool, getToolsForPermission } from '../lib/cochiTools.js'
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
@@ -164,6 +165,38 @@ const CochiMarkdown = memo(function CochiMarkdown({ content }) {
   )
 })
 
+// ─── Bloque de razonamiento (Fase 3.2) ───────────────────────────────────────
+// Colapsable y cerrado por defecto: el reasoning es diagnóstico, no respuesta.
+// Sólo lo emiten los modelos de la whitelist (MODEL_CAPS), hoy los DeepSeek de Cochi.
+function ReasoningBlock({ text }) {
+  if (!text) return null
+  return (
+    <details style={{
+      marginBottom: 8,
+      border: '1px solid rgba(207,68,77,0.18)',
+      borderRadius: 6,
+      background: 'rgba(207,68,77,0.04)',
+    }}>
+      <summary style={{
+        cursor: 'pointer', padding: '6px 10px',
+        fontSize: '0.68rem', letterSpacing: '0.14em', fontWeight: 700,
+        textTransform: 'uppercase', color: 'var(--cochi-label)',
+        userSelect: 'none',
+      }}>
+        🧠 Razonamiento
+      </summary>
+      <div style={{
+        padding: '4px 12px 10px',
+        fontSize: '0.82rem', lineHeight: 1.55, fontStyle: 'italic',
+        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        color: 'rgba(255,255,255,0.55)',
+      }}>
+        {text}
+      </div>
+    </details>
+  )
+}
+
 // ─── Historial memoizado (Bloque N) ──────────────────────────────────────────
 // Antes vivía inline: cada frame de `liveStream` (~30fps) re-renderizaba TODO el
 // historial. Al aislarlo, el stream sólo repinta la burbuja en vivo.
@@ -187,6 +220,7 @@ const CochiMessageList = memo(function CochiMessageList({ messages, lastAssistan
         }}>
           COCHI
         </div>
+        <ReasoningBlock text={msg.reasoning} />
         <div style={{
           fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
           color: 'var(--cochi-body)',
@@ -303,6 +337,8 @@ function CochiDesktop({
   const [activity,        setActivity]        = useState([])
   const [tokens,          setTokens]          = useState(0)
   const [cost,            setCost]            = useState(0)
+  // Fase 3.2: input servido desde la caché de prefijo del proveedor (ahorro).
+  const [cachedTokens,    setCachedTokens]    = useState(0)
   const [loading,         setLoading]         = useState(false)
   // Bloque P: el texto en vivo vive en CochiStreamingBubble (vía ref), así el
   // panel no se re-renderiza en cada token. El throttle (~30fps) está dentro.
@@ -421,7 +457,7 @@ function CochiDesktop({
         sessionPairsRef.current = []
         setActivity([]); setTodos([]); syncPlan(null)
         setPlanStatus('idle'); setTokenWarningDismissed(false)
-        setTokens(0); setCost(0)
+        setTokens(0); setCost(0); setCachedTokens(0)
         sessionAllowRef.current = new Set()
         onResetUsage?.('cochi')
       }
@@ -912,6 +948,8 @@ function CochiDesktop({
         let stepTokens = 0
         let stepInputTokens = 0
         let stepOutputTokens = 0
+        let stepCachedTokens = 0
+        let stepReasoning = ''
         let innerIter = 0
         const MAX_INNER = 15
         let stepCompleted = false
@@ -938,17 +976,17 @@ function CochiDesktop({
             retries: 3,
             onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
             onUsage: (usage) => {
-              const promptTokens = usage.prompt_tokens ?? 0
-              const completionTokens = usage.completion_tokens ?? 0
-              const total = usage.total_tokens ?? (promptTokens + completionTokens)
-              stepTokens += total
-              totalTokensAcc += total
-              stepInputTokens += promptTokens
-              stepOutputTokens += completionTokens
+              const u = normalizeUsage(usage)
+              stepTokens += u.totalTokens
+              totalTokensAcc += u.totalTokens
+              stepInputTokens += u.promptTokens
+              stepOutputTokens += u.completionTokens
+              stepCachedTokens += u.cachedTokens
             },
           })
           liveRef.current?.flush()
           liveRef.current?.clear()
+          if (streamed.reasoning) stepReasoning = streamed.reasoning
 
           if (streamed.finishReason === 'length') {
             if (trackSteps) updateStepStatus(step.id, 'failed', 'Respuesta cortada por límite de tokens (finish_reason=length)')
@@ -990,7 +1028,7 @@ function CochiDesktop({
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 requestFinalText = displayContent
-                pushMessage({ role: 'assistant', content: displayContent })
+                pushMessage({ role: 'assistant', content: displayContent, reasoning: stepReasoning || undefined })
                 stepCompleted = true
                 break
               } else if (failedMatch) {
@@ -999,7 +1037,7 @@ function CochiDesktop({
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 requestFinalText = displayContent
-                pushMessage({ role: 'assistant', content: displayContent })
+                pushMessage({ role: 'assistant', content: displayContent, reasoning: stepReasoning || undefined })
                 stepCompleted = true
                 break
               } else if (replanMatch) {
@@ -1014,7 +1052,7 @@ function CochiDesktop({
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 requestFinalText = displayContent
-                pushMessage({ role: 'assistant', content: displayContent })
+                pushMessage({ role: 'assistant', content: displayContent, reasoning: stepReasoning || undefined })
                 stepCompleted = true
                 break
               } else {
@@ -1022,7 +1060,7 @@ function CochiDesktop({
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 requestFinalText = displayContent
-                pushMessage({ role: 'assistant', content: displayContent })
+                pushMessage({ role: 'assistant', content: displayContent, reasoning: stepReasoning || undefined })
                 stepCompleted = true
                 break
               }
@@ -1060,13 +1098,12 @@ function CochiDesktop({
                       retries: 3,
                       onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
                       onUsage: (usage) => {
-                        const promptTokens = usage.prompt_tokens ?? 0
-                        const completionTokens = usage.completion_tokens ?? 0
-                        const total = usage.total_tokens ?? (promptTokens + completionTokens)
-                        stepTokens += total
-                        totalTokensAcc += total
-                        stepInputTokens += promptTokens
-                        stepOutputTokens += completionTokens
+                        const u = normalizeUsage(usage)
+                        stepTokens += u.totalTokens
+                        totalTokensAcc += u.totalTokens
+                        stepInputTokens += u.promptTokens
+                        stepOutputTokens += u.completionTokens
+                        stepCachedTokens += u.cachedTokens
                       },
                     })
                     liveRef.current?.flush()
@@ -1081,10 +1118,10 @@ function CochiDesktop({
                     await appendToMemory(r1, r2)
                     sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                     requestFinalText = displayContent || extractedResult
-                    pushMessage({ role: 'assistant', content: displayContent || extractedResult })
+                    pushMessage({ role: 'assistant', content: displayContent || extractedResult, reasoning: (wrapperStreamed.reasoning || stepReasoning) || undefined })
                   } catch (wrapErr) {
                     requestFinalText = extractedResult
-                    pushMessage({ role: 'assistant', content: extractedResult })
+                    pushMessage({ role: 'assistant', content: extractedResult, reasoning: stepReasoning || undefined })
                   }
                 }
 
@@ -1278,10 +1315,11 @@ function CochiDesktop({
           break
         }
 
-        const stepCost = calculateCost(selectedModel, stepInputTokens, stepOutputTokens)
+        const stepCost = calculateCost(selectedModel, stepInputTokens, stepOutputTokens, 'token', stepCachedTokens)
         totalCostAcc += stepCost
         setTokens(prev => prev + stepTokens)
         setCost(prev => prev + stepCost)
+        setCachedTokens(prev => prev + stepCachedTokens)
         onUsage?.({ source: 'cochi', inputTokens: stepInputTokens, outputTokens: stepOutputTokens, cost: stepCost })
 
         // Single pass when no plan
@@ -1382,7 +1420,7 @@ function CochiDesktop({
       // K2: archiva la sesión (queda en la lista) y promueve su rueda a global.
       persistCurrentSession()
       await promoteWheelToGlobal()
-      setMessages([]); setActivity([]); setTokens(0); setCost(0)
+      setMessages([]); setActivity([]); setTokens(0); setCost(0); setCachedTokens(0)
       setLoading(false); setTokenWarningDismissed(false)
       setTodos([])
       syncPlan(null); setPlanStatus('idle')
@@ -1412,7 +1450,7 @@ function CochiDesktop({
       if (inheritedName) cochiSessionNameRef.current = inheritedName
       persistCurrentSession()
       await promoteWheelToGlobal()
-      setMessages([]); setActivity([]); setTokens(0); setCost(0)
+      setMessages([]); setActivity([]); setTokens(0); setCost(0); setCachedTokens(0)
       setLoading(false); setTokenWarningDismissed(false)
       setTodos([])
       syncPlan(null); setPlanStatus('idle')
@@ -1947,6 +1985,11 @@ RGartner by R7Signal
           {activeModelPrice && (
             <span style={{ color: isTerminator ? 'rgba(127,141,163,0.8)' : 'rgba(196,116,96,0.8)', fontSize: '0.55rem' }}>
               · {activeModelPrice.inputPerM}$/M in · {activeModelPrice.outputPerM}$/M out
+            </span>
+          )}
+          {(cost > 0 || cachedTokens > 0) && (
+            <span title="Coste estimado (input cacheado con descuento)" style={{ color: '#5FD3E0', fontSize: '0.55rem' }}>
+              · {costStr}{cachedTokens > 0 ? ` · ⚡ ${cachedTokens.toLocaleString('es')} cacheados` : ''}
             </span>
           )}
           {planStatus === 'planning' && <span style={{ color: '#8A868B', fontSize: '0.65rem', marginLeft: 4 }}>(planificando...)</span>}

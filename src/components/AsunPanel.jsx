@@ -6,6 +6,8 @@ import { readFile } from '@tauri-apps/plugin-fs'
 import { getAsunTools, executeTool, pathExists } from '../lib/asunTools.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
+import { resolveProvider, streamChat } from '../lib/llmClient.js'
+import { normalizeUsage } from '../lib/llmMetrics.js'
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
 import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
@@ -14,7 +16,6 @@ import { open } from '@tauri-apps/plugin-dialog'
 
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
-const OR_BASE       = 'https://openrouter.ai/api/v1'
 
 // ─── Modelos ──────────────────────────────────────────────────────────────────
 const MODELS = {
@@ -33,52 +34,29 @@ const COCHI_RE = /\[→ COCHI: ([^\]]+)\]/
 const MUSIC_RE  = /\[MUSIC_READY: ([\s\S]+?)\]/
 
 // ─── OpenRouter streaming ─────────────────────────────────────────────────────
-async function streamOR(model, messages, onChunk, onUsage, sessionId) {
-  const res = await fetch(`${OR_BASE}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-            'Authorization': `Bearer ${getOpenRouterKey()}`,
-      'HTTP-Referer': 'https://r7signal.com',
-      'X-Title': 'R7Desktop · Asun',
+// Fase 3.2: ya no duplica fetch/SSE — delega en llmClient (retry + usage
+// normalizado con tokens cacheados). `reasoning: false` explícito: D1 lo reserva
+// a Cochi aunque el modelo de música comparta id con Centinela.
+async function streamOR(model, messages, onChunk, onUsage, sessionId, signal) {
+  const provider = resolveProvider(model)
+  const result = await streamChat({
+    provider,
+    messages,
+    stream: true,
+    maxTokens: 4096,
+    sessionId,
+    signal,
+    reasoning: false,
+    onDelta: (partial) => onChunk?.(partial),
+    onUsage: (usage) => {
+      const u = normalizeUsage(usage)
+      const cost = calculateCost(model, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
+      if (typeof onUsage === 'function') {
+        onUsage({ source: 'asun', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost })
+      }
     },
-    body: JSON.stringify({
-      model, messages, stream: true, max_tokens: 4096,
-      stream_options: { include_usage: true },
-      usage: { include: true },
-      reasoning: { enabled: false },
-      ...(sessionId ? { session_id: sessionId } : {}),
-    }),
   })
-  if (!res.ok) throw new Error(`OpenRouter ${res.status}`)
-  const reader  = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = '', full = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      const raw = line.slice(6).trim()
-      if (raw === '[DONE]') continue
-      try {
-        const parsed = JSON.parse(raw)
-        const delta = parsed.choices?.[0]?.delta?.content || ''
-        if (delta) { full += delta; onChunk(full) }
-        if (parsed.usage) {
-          const { prompt_tokens, completion_tokens } = parsed.usage
-          const cost = calculateCost(model, prompt_tokens, completion_tokens, 'token')
-          if (typeof onUsage === 'function') {
-            onUsage({ source: 'asun', inputTokens: prompt_tokens, outputTokens: completion_tokens, cost })
-          }
-        }
-      } catch {}
-    }
-  }
-  return full
+  return result.content
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -943,37 +921,31 @@ function AsunPanel({
       while (iter < MAX_ITER) {
         iter++
 
-        const res = await fetch(`${OR_BASE}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-      'Authorization': `Bearer ${getOpenRouterKey()}`,
-            'HTTP-Referer': 'https://r7signal.com',
-            'X-Title': 'R7Desktop · Asun',
-          },
-          body: JSON.stringify({
-            model,
-            messages: apiMessages,
-            ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
-            max_tokens: 4096,
-            usage: { include: true },
-            reasoning: { enabled: false },
-            session_id: getAsunSessionId(),
-          }),
+        // Fase 3.2: el loop de tools deja de duplicar fetch/SSE. stream:false
+        // porque Asun resuelve el turno completo (sin streaming visible) aquí.
+        const provider = resolveProvider(model)
+        const result = await streamChat({
+          provider,
+          stream: false,
+          messages: apiMessages,
+          ...(tools.length > 0 ? { tools, toolChoice: 'auto' } : {}),
+          maxTokens: 4096,
+          sessionId: getAsunSessionId(),
+          reasoning: false,
         })
 
-        if (!res.ok) throw new Error(`OpenRouter ${res.status}`)
-        const data = await res.json()
-
-        // Acumular coste
-        if (data.usage) {
-          const { prompt_tokens, completion_tokens } = data.usage
-          const cost = calculateCost(model, prompt_tokens, completion_tokens, 'token')
-          onUsage?.({ source: 'asun', inputTokens: prompt_tokens, outputTokens: completion_tokens, cost })
-          setTokens(prev => prev + prompt_tokens + completion_tokens)
+        // Acumular coste (input cacheado con descuento, Fase 3.2)
+        if (result.usage) {
+          const u = normalizeUsage(result.usage)
+          const cost = calculateCost(model, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
+          onUsage?.({ source: 'asun', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost })
+          setTokens(prev => prev + u.totalTokens)
         }
 
-        const message = data.choices?.[0]?.message
+        const message = {
+          content: result.content,
+          tool_calls: result.toolCalls?.length ? result.toolCalls : undefined,
+        }
 
         // ── Sin tool calls → respuesta final ─────────────────────────────
         if (!message?.tool_calls?.length) {

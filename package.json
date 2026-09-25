@@ -11,6 +11,7 @@
     "harness:r7wheel": "node harness/cochiR7Wheel.harness.mjs",
     "harness:sessions": "node harness/cochiSessions.harness.mjs",
     "harness:snapshots": "node harness/cochiSnapshots.harness.mjs",
+    "harness:llm": "node harness/cochiLlmMetrics.harness.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

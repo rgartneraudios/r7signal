@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, memo, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { calculateCost } from '../lib/modelPrices.js'
+import { resolveProvider, streamChat } from '../lib/llmClient.js'
+import { normalizeUsage } from '../lib/llmMetrics.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
@@ -404,51 +406,24 @@ function TitoPanel({
       // Conversational guard — skip web search for casual messages
       if (!needsWebSearch(text)) {
         const chatModel = 'z-ai/glm-5.3-flash'
-        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${getOpenRouterKey()}`,
-            'Content-Type': 'application/json',
-          },
+        // Fase 3.2: streaming vía llmClient (retry + usage normalizado).
+        const result = await streamChat({
+          provider: resolveProvider(chatModel),
+          stream: true,
+          messages: wheelMessages,
+          sessionId: getTitoSessionId(),
           signal: controller.signal,
-          body: JSON.stringify({
-            model: chatModel,
-            stream: true,
-            stream_options: { include_usage: true },
-            usage: { include: true },
-            reasoning: { enabled: false },
-            session_id: getTitoSessionId(),
-            messages: wheelMessages,
-           }),
-         })
-         const reader = res.body.getReader()
-         const decoder = new TextDecoder()
-         let fullText = ''
-         while (true) {
-           const { done, value } = await reader.read()
-           if (done) break
-            const chunk = decoder.decode(value, { stream: true })
-           const lines = chunk.split('\n').filter(l => l.startsWith('data: '))
-           for (const line of lines) {
-             const json = line.replace('data: ', '')
-             if (json === '[DONE]') continue
-             try {
-               const parsed = JSON.parse(json)
-               const delta = parsed.choices?.[0]?.delta?.content || ''
-               fullText += delta
-                const displayText = extractR3Streaming(fullText)
-                liveRef.current?.push(displayText)
-               if (parsed.usage) {
-                 const { prompt_tokens, completion_tokens } = parsed.usage
-                 const cost = calculateCost(chatModel, prompt_tokens, completion_tokens, 'token')
-                 setTokens(prev => prev + prompt_tokens + completion_tokens)
-                 if (typeof onUsage === 'function') {
-                   onUsage({ source: 'tito', inputTokens: prompt_tokens, outputTokens: completion_tokens, cost })
-                 }
-               }
-             } catch {}
-           }
-         }
+          onDelta: (partial) => liveRef.current?.push(extractR3Streaming(partial)),
+          onUsage: (usage) => {
+            const u = normalizeUsage(usage)
+            const cost = calculateCost(chatModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
+            setTokens(prev => prev + u.totalTokens)
+            if (typeof onUsage === 'function') {
+              onUsage({ source: 'tito', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost })
+            }
+          },
+        })
+        const fullText = result.content
          const r7Pair = parseR1R2R3(fullText)
          if (r7Pair.r1 || r7Pair.r2) sessionPairsRef.current.push({ r1: r7Pair.r1, r2: r7Pair.r2 })
          const finalDisplay = extractR3(fullText)
@@ -469,54 +444,26 @@ function TitoPanel({
         return
       }
 
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getOpenRouterKey()}`,
-          'Content-Type': 'application/json',
-        },
+      const searchModel = TITO_MODELS[searchLevel]
+      // Fase 3.2: streaming vía llmClient (retry + usage normalizado).
+      const result = await streamChat({
+        provider: resolveProvider(searchModel),
+        stream: true,
+        messages: wheelMessages,
+        sessionId: getTitoSessionId(),
         signal: controller.signal,
-        body: JSON.stringify({
-          model: TITO_MODELS[searchLevel],
-          stream: true,
-          stream_options: { include_usage: true },
-          usage: { include: true },
-          reasoning: { enabled: false },
-          session_id: getTitoSessionId(),
-          messages: wheelMessages,
-        }),
-      });
+        onDelta: (partial) => liveRef.current?.push(extractR3Streaming(partial)),
+        onUsage: (usage) => {
+          const u = normalizeUsage(usage)
+          const cost = calculateCost(searchModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
+          setTokens(prev => prev + u.totalTokens)
+          if (typeof onUsage === 'function') {
+            onUsage({ source: 'tito', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost })
+          }
+        },
+      })
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
-        for (const line of lines) {
-          const json = line.replace('data: ', '');
-          if (json === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(json);
-            const delta = parsed.choices?.[0]?.delta?.content || '';
-            fullText += delta;
-            const displayText = extractR3Streaming(fullText);
-            liveRef.current?.push(displayText);
-            if (parsed.usage) {
-              const { prompt_tokens, completion_tokens } = parsed.usage
-              const cost = calculateCost(TITO_MODELS[searchLevel], prompt_tokens, completion_tokens, 'token')
-              setTokens(prev => prev + prompt_tokens + completion_tokens)
-              if (typeof onUsage === 'function') {
-                onUsage({ source: 'tito', inputTokens: prompt_tokens, outputTokens: completion_tokens, cost })
-              }
-            }
-          } catch {}
-        }
-      }
-
+      const fullText = result.content;
       const r7Pair = parseR1R2R3(fullText);
       if (r7Pair.r1 || r7Pair.r2) sessionPairsRef.current.push({ r1: r7Pair.r1, r2: r7Pair.r2 });
       const finalDisplay = extractR3(fullText);
