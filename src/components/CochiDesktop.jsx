@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, memo } from 'react'
+import { useState, useRef, useCallback, useEffect, memo, forwardRef, useImperativeHandle } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
@@ -14,7 +14,7 @@ import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFr
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
-import { useFrameThrottle } from '../lib/streamThrottle.js'
+import { useFrameThrottle, isNearBottom } from '../lib/streamThrottle.js'
 import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 
 
@@ -246,6 +246,49 @@ const CochiMessageList = memo(function CochiMessageList({ messages, isTerminator
   ))
 })
 
+// ─── Burbuja de streaming aislada (Bloque P) ─────────────────────────────────
+// El texto en vivo vive DENTRO de este componente. Cada frame del throttle
+// repinta SÓLO esta burbuja; el panel (1900+ líneas) deja de re-renderizarse por
+// token. `push/flush/clear` se invocan por ref desde el loop de streaming.
+const CochiStreamingBubble = memo(forwardRef(function CochiStreamingBubble({ isTerminator, containerRef }, ref) {
+  const [text, setText] = useState('')
+  const { schedule, flush } = useFrameThrottle(30)
+  useImperativeHandle(ref, () => ({
+    push: (partial) => schedule(() => setText(partial)),
+    flush: () => flush(),
+    clear: () => { flush(); setText('') },
+  }), [schedule, flush])
+  useEffect(() => {
+    if (!text) return
+    const el = containerRef?.current
+    if (isNearBottom(el)) el.scrollTop = el.scrollHeight
+  }, [text, containerRef])
+  if (!text) return null
+  return (
+    <div className="cd-message-enter" style={isTerminator ? {
+      background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
+      border: '1px solid rgba(201,128,84,0.4)', borderLeft: '3px solid #C98054',
+      borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+    } : {
+      background: '#13151A', border: '1px solid #232227', borderLeft: '3px solid #6A7A8A',
+      borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+    }}>
+      <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase', color: isTerminator ? '#D4B8D8' : '#6A7A8A' }}>COCHI</div>
+      <div style={{ fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        ...(isTerminator ? {
+          backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        } : {
+          backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        }),
+      }}>{text}</div>
+    </div>
+  )
+}))
+
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 const css = `
   @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
@@ -300,9 +343,9 @@ function CochiDesktop({
   const [tokens,          setTokens]          = useState(0)
   const [cost,            setCost]            = useState(0)
   const [loading,         setLoading]         = useState(false)
-  const [liveStream,      setLiveStream]      = useState('')
-  // Bloque M: coalescea el streaming a ~30fps (un re-render por frame, no por token).
-  const { schedule: scheduleLive, flush: flushLive } = useFrameThrottle(30)
+  // Bloque P: el texto en vivo vive en CochiStreamingBubble (vía ref), así el
+  // panel no se re-renderiza en cada token. El throttle (~30fps) está dentro.
+  const liveRef                               = useRef(null)
   const abortRef                              = useRef(null)
   const [selectedModel,   setSelectedModel]   = useState(COCHI_MODELS[0].id)
   const [ollamaModel,     setOllamaModel]     = useState('llama3.2')
@@ -349,7 +392,7 @@ function CochiDesktop({
     if (!el) return
     if (loading) el.scrollTop = el.scrollHeight
     else el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-  }, [messages.length, loading, liveStream])
+  }, [messages.length, loading])
 
   // Reset del input de ask_user al abrir una nueva pregunta
   useEffect(() => { setAskInput(''); setAskChecks([]) }, [pendingQuestion])
@@ -452,9 +495,13 @@ function CochiDesktop({
     } catch (err) { console.error('Error saving preferences:', err) }
   }
 
+  // Registro estable: el padre guarda la función en un ref; le pasamos un
+  // wrapper que siempre invoca la última versión (sin correr en cada render).
+  const savePreferencesRef = useRef(null)
+  savePreferencesRef.current = savePreferences
   useEffect(() => {
-    if (onSavePreferences) onSavePreferences(savePreferences)
-  })
+    if (onSavePreferences) onSavePreferences((prefs) => savePreferencesRef.current?.(prefs))
+  }, [onSavePreferences])
 
   // ─── Consumir mensaje del input central ───────────────────────────────────
   useEffect(() => {
@@ -701,7 +748,6 @@ function CochiDesktop({
       })
 
       const plan = parsePlanResponse(result.content)
-      console.log('DEBUG GENERATED PLAN:', plan.steps.map(s => s.description))
       syncPlan({ ...plan, currentStepIndex: 0, totalIterationsUsed: 0 })
       setPlanStatus('awaiting_confirmation')
     } catch (err) {
@@ -718,7 +764,6 @@ function CochiDesktop({
         currentStepIndex: 0,
         totalIterationsUsed: 0,
       }
-      console.log('DEBUG GENERATED PLAN:', fallback.steps.map(s => s.description))
       syncPlan(fallback)
       setPlanStatus('awaiting_confirmation')
     }
@@ -814,7 +859,7 @@ function CochiDesktop({
 
     setLoading(true)
     setActivity([])
-    setLiveStream('')
+    liveRef.current?.clear()
 
     try {
       let apiMessages = null // conversación persistente para todo el plan — se arma UNA vez y se comprime al cerrar cada step, nunca se reconstruye desde cero.
@@ -849,7 +894,6 @@ function CochiDesktop({
 
         const usesTwoPhaseFinal = trackSteps && isLastStep
         const usesTechnicalPrompt = !isLastStep || usesTwoPhaseFinal
-        console.log('DEBUG STEP:', { trackSteps, isLastStep, usesTwoPhaseFinal, stepIndex, totalSteps: currentPlan?.steps?.length })
 
         if (apiMessages === null) {
           // Arranca la conversación (del plan, o del turno único si no hay plan) — UNA sola vez.
@@ -918,7 +962,7 @@ function CochiDesktop({
             signal: controller.signal,
             sessionId: cochiSessionId,
             retries: 3,
-            onDelta: (partial) => scheduleLive(() => setLiveStream(extractStreamingDisplay(partial))),
+            onDelta: (partial) => liveRef.current?.push(extractStreamingDisplay(partial)),
             onUsage: (usage) => {
               const promptTokens = usage.prompt_tokens ?? 0
               const completionTokens = usage.completion_tokens ?? 0
@@ -929,8 +973,8 @@ function CochiDesktop({
               stepOutputTokens += completionTokens
             },
           })
-          flushLive()
-          setLiveStream('')
+          liveRef.current?.flush()
+          liveRef.current?.clear()
 
           if (streamed.finishReason === 'length') {
             if (trackSteps) updateStepStatus(step.id, 'failed', 'Respuesta cortada por límite de tokens (finish_reason=length)')
@@ -1016,12 +1060,10 @@ function CochiDesktop({
 
               if (completeMatch) {
                 const extractedResult = completeMatch[1].trim()
-                console.log('DEBUG COMPLETE MATCH:', { extractedResult, usesTwoPhaseFinal, shouldWrapperTranslate, technicalSwapped })
                 if (trackSteps) updateStepStatus(step.id, 'completed', extractedResult)
                 stepResultSummary = extractedResult
 
                 if (shouldWrapperTranslate) {
-                  console.log('DEBUG ENTERING WRAPPER CALL')
                   try {
                     const wrapperMessages = [
                       {
@@ -1041,7 +1083,7 @@ function CochiDesktop({
                       signal: controller.signal,
                       sessionId: cochiSessionId,
                       retries: 3,
-                      onDelta: (partial) => scheduleLive(() => setLiveStream(extractStreamingDisplay(partial))),
+                      onDelta: (partial) => liveRef.current?.push(extractStreamingDisplay(partial)),
                       onUsage: (usage) => {
                         const promptTokens = usage.prompt_tokens ?? 0
                         const completionTokens = usage.completion_tokens ?? 0
@@ -1052,8 +1094,8 @@ function CochiDesktop({
                         stepOutputTokens += completionTokens
                       },
                     })
-                    flushLive()
-                    setLiveStream('')
+                    liveRef.current?.flush()
+                    liveRef.current?.clear()
                     const wrapperRaw = wrapperStreamed.content || ''
                     const { r1, r2, r3 } = parseR1R2R3(wrapperRaw)
                     const displayContent = (r3 || wrapperRaw)
@@ -1122,8 +1164,6 @@ function CochiDesktop({
             let args = {}
             try { args = JSON.parse(toolCall.function.arguments) } catch {}
 
-            console.log(`DEBUG TOOL CALL [step ${trackSteps ? stepIndex + 1 : '—'} / iter ${innerIter}]`, { name, args })
-
             // ── ask_user: pausa el loop y espera la respuesta del usuario ────
             if (name === 'ask_user') {
               pushActivity(TOOL_ICONS.ask_user || '❓', 'ask_user', String(args.question || '').slice(0, 60))
@@ -1183,7 +1223,6 @@ function CochiDesktop({
             } catch (err) { modelResult = `ERROR: ${err.message}` }
             pushActivity(icon, name, shortLabel, diff)
             if (diff) pushMessage({ role: 'diff', diff })
-            console.log(`DEBUG TOOL RESULT [step ${trackSteps ? stepIndex + 1 : '—'} / iter ${innerIter}]`, { name, modelResult })
             return { role: 'tool', tool_call_id: toolCall.id, content: String(modelResult) }
           }
 
@@ -1292,7 +1331,7 @@ function CochiDesktop({
       setPlanStatus('completed')
       setLoading(false)
       setActivity([])
-      setLiveStream('')
+      liveRef.current?.clear()
 
       const finalPlan = planRef.current
       if (finalPlan) {
@@ -1309,7 +1348,7 @@ function CochiDesktop({
     } catch (err) {
       setLoading(false)
       setActivity([])
-      setLiveStream('')
+      liveRef.current?.clear()
       setPlanStatus('completed')
       if (err.name !== 'AbortError') {
         pushMessage({ role: 'assistant', content: `❌ Error en ejecución del plan: ${err.message}` })
@@ -1404,7 +1443,7 @@ function CochiDesktop({
     messagesRef.current = newMsgs
     wheelRef.current = newWheel
     setMessages(newMsgs)
-    setActivity([]); setLiveStream(''); setTodos([])
+    setActivity([]); liveRef.current?.clear(); setTodos([])
     setTokenWarningDismissed(false)
     syncPlan(null); setPlanStatus('idle')
     if (permissionResolverRef.current) permissionResolverRef.current('deny')
@@ -1686,30 +1725,8 @@ RGartner by R7Signal
               <div className="cd-pulse" style={{ display: 'inline-block', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Procesando turno…</div>
             </div>
           )}
-          {loading && liveStream && (
-            <div className="cd-message-enter" style={isTerminator ? {
-              background: 'linear-gradient(135deg, #1D1D1F, #292020, #0D0E0F)',
-              border: '1px solid rgba(201,128,84,0.4)', borderLeft: '3px solid #C98054',
-              borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-            } : {
-              background: '#13151A', border: '1px solid #232227', borderLeft: '3px solid #6A7A8A',
-              borderRadius: 8, padding: '12px 18px', alignSelf: 'flex-start', maxWidth: '100%',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-            }}>
-              <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase', color: isTerminator ? '#D4B8D8' : '#6A7A8A' }}>COCHI</div>
-              <div style={{ fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                ...(isTerminator ? {
-                  backgroundImage: 'linear-gradient(135deg, #D5DBDB, #7F8DA3)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-                } : {
-                  backgroundImage: 'linear-gradient(135deg, #C47460, #C2C3C4)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-                }),
-              }}>
-                {liveStream}
-              </div>
-            </div>
+          {loading && (
+            <CochiStreamingBubble ref={liveRef} isTerminator={isTerminator} containerRef={chatContainerRef} />
           )}
           <div ref={messagesEndRef} />
           {r9Btn && (

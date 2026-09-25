@@ -40,3 +40,11 @@ export function useFrameThrottle(fps = 30) {
 
   return { schedule, flush }
 }
+
+// Auto-scroll "pegado al fondo": evita forzar layout y saltos mientras el
+// usuario está leyendo hacia arriba. Lo usan las burbujas de streaming para
+// desplazar el contenedor sólo cuando corresponde.
+export function isNearBottom(el, threshold = 120) {
+  if (!el) return false
+  return el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+}

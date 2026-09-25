@@ -6,7 +6,7 @@ import { readFile } from '@tauri-apps/plugin-fs'
 import { getAsunTools, executeTool, pathExists } from '../lib/asunTools.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
-import { useFrameThrottle } from '../lib/streamThrottle.js'
+import { useFrameThrottle, isNearBottom } from '../lib/streamThrottle.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
 import { newMessageId, makeSession, saveSession, loadSession, fromCanonical, deleteSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
@@ -455,6 +455,103 @@ function AsunImagenFlow({ submenu, onHandoff }) {
   )
 }
 
+// ─── Burbuja + lista memoizada (Bloque P) ─────────────────────────────────────
+// La lista cerrada se memoiza: mientras llega el streaming (~30fps) sólo se
+// repinta la burbuja en vivo, no todo el historial (que además re-rasterizaba
+// el degradado de cada mensaje). El comparador ignora los callbacks, que se
+// refrescan al cerrar el turno.
+function AsunBubble({ msg, isReveladora, isLast, showActions, canRegenerate, onUndo, onRegenerate, onHandoff }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: msg.rol === 'usuario' ? 'flex-end' : 'flex-start' }}>
+      <div className={`asun-msg-bubble ${msg.rol}`}
+        style={isReveladora ? {
+          background: 'linear-gradient(135deg, #0C0B0D, #1B151F, #0C0B0D)',
+          border: '1px solid rgba(200,162,216,0.2)',
+        } : undefined}
+      >
+        {msg.rol === 'asistente' && (
+          <span style={{
+            fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.15em',
+            textTransform: 'uppercase', display: 'block', marginBottom: 4,
+            color: isReveladora ? '#D4B8D8' : '#C8A2D8',
+            fontFamily: "'Space Grotesk', sans-serif",
+          }}>Asun</span>
+        )}
+        <div style={isReveladora ? {
+          color: '#E3D3E3',
+        } : {
+          backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+        }}>{msg.contenido}</div>
+        {msg.audioUrl && (
+          <audio controls src={msg.audioUrl} style={{ marginTop: 10, width: '100%' }} />
+        )}
+        {msg.handoffBrief && (
+          <button
+            className="asun-handoff-btn"
+            onClick={() => onHandoff?.({ type: 'text', content: msg.contenido, brief: msg.handoffBrief })}
+          >
+            → Enviar a Cochi
+          </button>
+        )}
+        {msg.rol === 'asistente' && isLast && showActions && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button
+              onClick={onUndo}
+              title="Deshacer el último turno"
+              style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
+            >↶ Undo</button>
+            {canRegenerate && (
+              <button
+                onClick={onRegenerate}
+                title="Volver a generar la última respuesta"
+                style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
+              >↻ Regenerate</button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const AsunMessageList = memo(function AsunMessageList({ messages, isReveladora, lastAssistantId, showActions, canRegenerate, onUndo, onRegenerate, onHandoff }) {
+  return messages.map(msg => (
+    <AsunBubble
+      key={msg.id}
+      msg={msg}
+      isReveladora={isReveladora}
+      isLast={msg.id === lastAssistantId}
+      showActions={showActions}
+      canRegenerate={canRegenerate}
+      onUndo={onUndo}
+      onRegenerate={onRegenerate}
+      onHandoff={onHandoff}
+    />
+  ))
+}, (prev, next) => {
+  if (prev.isReveladora !== next.isReveladora) return false
+  if (prev.lastAssistantId !== next.lastAssistantId) return false
+  if (prev.showActions !== next.showActions) return false
+  if (prev.canRegenerate !== next.canRegenerate) return false
+  if (prev.messages.length !== next.messages.length) return false
+  for (let i = 0; i < prev.messages.length; i++) if (prev.messages[i] !== next.messages[i]) return false
+  return true
+})
+
+function AsunStreamingBubble({ msg, isReveladora, containerRef }) {
+  useEffect(() => {
+    const el = containerRef?.current
+    if (isNearBottom(el)) el.scrollTop = el.scrollHeight
+  }, [msg.contenido, containerRef])
+  return <AsunBubble msg={msg} isReveladora={isReveladora} isLast={false} showActions={false} canRegenerate={false} />
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ASUN PANEL PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -490,6 +587,7 @@ function AsunPanel({
   const [projectMode, setProjectMode] = useState(false) // Modo Proyecto — Arquitecto Senior, toggle ortogonal
   const messagesEndRef = useRef(null)
   const chatContainerRef = useRef(null)
+  const chatScrollRef = useRef(null) // Bloque P: contenedor real con overflowY (el de chatContainerRef es el contenido)
   const sessionIdRef = useRef(null)
   function getAsunSessionId() {
     if (!sessionIdRef.current) {
@@ -589,12 +687,16 @@ function AsunPanel({
     return undoneUser
   }
 
-  function handleUndo() {
+  // Bloque P: wrappers estables para la lista memoizada. El cuerpo se refresca
+  // por ref en cada render, así el historial no se invalida y nunca queda con
+  // closures viejos.
+  const handleUndoRef = useRef(() => {})
+  const handleRegenerateRef = useRef(() => {})
+  handleUndoRef.current = () => {
     if (loading || generating) return
     applyUndo()
   }
-
-  async function handleRegenerate() {
+  handleRegenerateRef.current = async () => {
     if (loading || generating) return
     const userText = lastUserText(messagesRef.current)
     if (!userText) return
@@ -602,6 +704,8 @@ function AsunPanel({
     applyUndo()
     await sendMessage(userText)
   }
+  const handleUndo = useCallback(() => handleUndoRef.current(), [])
+  const handleRegenerate = useCallback(() => handleRegenerateRef.current(), [])
 
   // Notificar categoría activa al padre
   useEffect(() => {
@@ -611,11 +715,11 @@ function AsunPanel({
   // Scroll al final (Bloque M/N: scrollTop directo en el contenedor en vez de
   // scrollIntoView, que fuerza layout síncrono y puede escalar a ancestros).
   useEffect(() => {
-    const el = chatContainerRef.current
+    const el = chatScrollRef.current
     if (!el) return
     if (loading) el.scrollTop = el.scrollHeight
     else el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-  }, [messages, loading])
+  }, [messages.length, loading])
 
   // Consumir mensaje del input central
   useEffect(() => {
@@ -1079,6 +1183,10 @@ function AsunPanel({
   const lastAssistant = [...messages].reverse().find(m => m.rol === 'asistente')
   const lastAssistantId = lastAssistant?.id
   const canRegenerate = !lastAssistant?.audioUrl
+  // Bloque P: la burbuja en vivo se pinta aparte de la lista memoizada.
+  const streamingMsg = messages.find(m => m.streaming)
+  const closedMessages = streamingMsg ? messages.filter(m => !m.streaming) : messages
+  const showActions = !loading && !generating
   return (
     <div style={{
       display: 'flex', flexDirection: 'column',
@@ -1223,7 +1331,7 @@ function AsunPanel({
       </div>
 
       {/* ── Contenido ── */}
-      <div style={{ flex: 1, overflowY: 'auto', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+      <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', position: 'relative', display: 'flex', flexDirection: 'column' }}>
 
         {/* ── IMAGEN: wizard ── */}
         {category === 'imagen' && (
@@ -1313,68 +1421,17 @@ RGartner by R7Signal</>
               </div>
             )}
 
-            {messages.map(msg => (
-              <div key={msg.id} style={{
-                display: 'flex',
-                justifyContent: msg.rol === 'usuario' ? 'flex-end' : 'flex-start',
-              }}>
-                <div className={`asun-msg-bubble ${msg.rol}`}
-                  style={isReveladora ? {
-                    background: 'linear-gradient(135deg, #0C0B0D, #1B151F, #0C0B0D)',
-                    border: '1px solid rgba(200,162,216,0.2)',
-                  } : undefined}
-                >
-                  {msg.rol === 'asistente' && (
-                    <span style={{
-                      fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.15em',
-                      textTransform: 'uppercase', display: 'block', marginBottom: 4,
-                      color: isReveladora ? '#D4B8D8' : '#C8A2D8',
-                      fontFamily: "'Space Grotesk', sans-serif",
-                    }}>Asun</span>
-                  )}
-                  <div style={isReveladora ? {
-                    color: '#E3D3E3',
-                  } : {
-                    backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
-                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  }}>{msg.contenido}</div>
-                  {msg.audioUrl && (
-                    <audio controls src={msg.audioUrl} style={{ marginTop: 10, width: '100%' }} />
-                  )}
-                  {/* Botón handoff */}
-                  {msg.handoffBrief && (
-                    <button
-                      className="asun-handoff-btn"
-                      onClick={() => onHandoff?.({ type: 'text', content: msg.contenido, brief: msg.handoffBrief })}
-                    >
-                      → Enviar a Cochi
-                    </button>
-                  )}
-                  {/* Bloque K3: undo / regenerate */}
-                  {msg.rol === 'asistente' && msg.id === lastAssistantId && !loading && !generating && (
-                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                      <button
-                        onClick={handleUndo}
-                        title="Deshacer el último turno"
-                        style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
-                      >↶ Undo</button>
-                      {canRegenerate && (
-                        <button
-                          onClick={handleRegenerate}
-                          title="Volver a generar la última respuesta"
-                          style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
-                        >↻ Regenerate</button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
+            <AsunMessageList
+              messages={closedMessages}
+              isReveladora={isReveladora}
+              lastAssistantId={lastAssistantId}
+              showActions={showActions}
+              canRegenerate={canRegenerate}
+              onUndo={handleUndo}
+              onRegenerate={handleRegenerate}
+              onHandoff={onHandoff}
+            />
+            {streamingMsg && <AsunStreamingBubble msg={streamingMsg} isReveladora={isReveladora} containerRef={chatScrollRef} />}
 
             {(loading || generating) && (
               <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
