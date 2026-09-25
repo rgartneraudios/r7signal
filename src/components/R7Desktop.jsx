@@ -122,7 +122,10 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
     dispatchUsage({ type: 'reset', source })
   }, [])
 
-  const showFooter = asunCategory !== 'imagen'
+  // Bloque S: Asun/Tito quedan montados permanentemente (ver paneles abajo), así
+  // que la categoría de Asun persiste aunque el panel activo sea Tito. El footer
+  // sólo se oculta cuando ASUN está activo y en modo Imagen.
+  const showFooter = activeLeftPanel !== 'asun' || asunCategory !== 'imagen'
 
   return (
     <div style={{
@@ -480,55 +483,69 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
       }}>
         {/* Panel izquierdo — R7Signal / Asun / Tito */}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {activeLeftPanel === 'r7signal' ? (
-            <div style={{
-              flex: 1, display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center',
-              padding: 40, gap: 10, userSelect: 'none', pointerEvents: 'none',
+          {/* Bloque S (performance): Asun y Tito se mantienen MONTADOS y se
+              alternan con `display`. Antes se montaba/desmontaba el panel entero
+              (1448/645 líneas) en cada clic del selector ASUN/TITO: ese mount era
+              la latencia percibida. Además conserva el estado interno del panel. */}
+          <div style={{
+            display: activeLeftPanel === 'r7signal' ? 'flex' : 'none',
+            flex: 1, minHeight: 0, flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            padding: 40, gap: 10, userSelect: 'none', pointerEvents: 'none',
+          }}>
+            <div className="watermark-brand" style={{
+              backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>R7SIGNAL</div>
+            <div className="watermark-divider">────────────────</div>
+            <div className="watermark-sub" style={{
+              backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
             }}>
-              <div className="watermark-brand" style={{
-                backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}>R7SIGNAL</div>
-              <div className="watermark-divider">────────────────</div>
-              <div className="watermark-sub" style={{
-                backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}>
-                Panel central — selecciona Asun o Tito.<br />
-                Usa ⌥↵ para enviar directo.
-              </div>
+              Panel central — selecciona Asun o Tito.<br />
+              Usa ⌥↵ para enviar directo.
             </div>
-          ) : activeLeftPanel === 'asun'
-            ? <AsunPanel
-                pendingMessage={pendingAsun}
-                onMessageConsumed={handleConsumeAsun}
-                pendingSession={pendingSession?.agent === 'asun' ? pendingSession : null}
-                onSessionConsumed={handleConsumeSession}
-                onCategoryChange={setAsunCategory}
-                onHandoff={handleAsunHandoff}
-                onUsage={handleUsage}
-                onResetUsage={handleResetUsage}
-                workspace={workspace}
-                preferences={preferences}
-                onPromptsReady={handlePromptsReady}
-              />
-            : <TitoPanel
-                pendingMessage={activeLeftPanel === 'tito' ? pendingAsun : null}
-                onMessageConsumed={handleConsumeAsun}
-                pendingSession={pendingSession?.agent === 'tito' ? pendingSession : null}
-                onSessionConsumed={handleConsumeSession}
-                onUsage={handleUsage}
-                onResetUsage={handleResetUsage}
-                onHandoff={handleTitoHandoff}
-                userName={userName}
-                preferences={preferences}
-                onPromptsReady={handlePromptsReady}
-                workspace={workspace}
-              />
-          }
+          </div>
+
+          <div style={{
+            display: activeLeftPanel === 'asun' ? 'flex' : 'none',
+            flex: 1, minHeight: 0, flexDirection: 'column',
+          }}>
+            <AsunPanel
+              pendingMessage={activeLeftPanel === 'asun' ? pendingAsun : null}
+              onMessageConsumed={handleConsumeAsun}
+              pendingSession={pendingSession?.agent === 'asun' ? pendingSession : null}
+              onSessionConsumed={handleConsumeSession}
+              onCategoryChange={setAsunCategory}
+              onHandoff={handleAsunHandoff}
+              onUsage={handleUsage}
+              onResetUsage={handleResetUsage}
+              workspace={workspace}
+              preferences={preferences}
+              onPromptsReady={handlePromptsReady}
+            />
+          </div>
+
+          <div style={{
+            display: activeLeftPanel === 'tito' ? 'flex' : 'none',
+            flex: 1, minHeight: 0, flexDirection: 'column',
+          }}>
+            <TitoPanel
+              pendingMessage={activeLeftPanel === 'tito' ? pendingAsun : null}
+              onMessageConsumed={handleConsumeAsun}
+              pendingSession={pendingSession?.agent === 'tito' ? pendingSession : null}
+              onSessionConsumed={handleConsumeSession}
+              onUsage={handleUsage}
+              onResetUsage={handleResetUsage}
+              onHandoff={handleTitoHandoff}
+              userName={userName}
+              preferences={preferences}
+              onPromptsReady={handlePromptsReady}
+              workspace={workspace}
+            />
+          </div>
         </div>
 
         <div className="r7d-divider" />

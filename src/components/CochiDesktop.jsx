@@ -43,11 +43,30 @@ const appendToMemory = async (r1, r2) => {
 // ─── Extracción de texto mostrable durante el streaming ───────────────────────
 // Solo pinta R3 (respuesta al usuario) o respuestas directas. Oculta R1/R2,
 // señales de control técnico y el contrato a medio emitir.
-const extractStreamingDisplay = (text) => {
-  const i = text.indexOf('R3:')
-  if (i !== -1) return text.slice(i + 3).trim()
-  if (!/R1:|R2:|STEP_COMPLETE|STEP_FAILED|NEED_REPLAN/.test(text)) return text.trim()
-  return ''
+// Bloque S (performance): `onDelta` entrega el texto COMPLETO acumulado en cada
+// token, así que re-escanear todo el texto (indexOf + regex + slice) por delta
+// era O(n²) y competía con el pintado en el hilo principal. Este extractor
+// incremental sólo mira el tramo nuevo y recuerda si ya apareció "R3:" o algún
+// marcador del contrato. Se crea uno por llamada a streamChat.
+function makeStreamingDisplayExtractor() {
+  let r3At = -1
+  let hasMarkers = false
+  let seen = 0
+  return (text) => {
+    if (r3At === -1) {
+      const from = Math.max(0, seen - 3) // "R3:" puede quedar partido entre deltas
+      const idx = text.indexOf('R3:', from)
+      if (idx !== -1) {
+        r3At = idx
+      } else if (!hasMarkers) {
+        if (/R1:|R2:|STEP_COMPLETE|STEP_FAILED|NEED_REPLAN/.test(text.slice(seen))) hasMarkers = true
+      }
+    }
+    seen = text.length
+    if (r3At !== -1) return text.slice(r3At + 3).trim()
+    if (!hasMarkers) return text.trim()
+    return ''
+  }
 }
 
 // Respuesta que recibe el modelo cuando el usuario cancela una pregunta de ask_user.
@@ -248,7 +267,12 @@ const css = `
   @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
   .cd-pulse { animation: pulse-dot 2s ease-in-out infinite; }
   @keyframes messageSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-  .cd-message-enter { animation: messageSlide 0.3s cubic-bezier(0.16,1,0.3,1) both; }
+  /* Bloque S (performance): con fill-mode both cada mensaje RETENIA
+     transform:translateY(0) para siempre → cada burbuja quedaba promovida a su
+     propia capa/stacking context y el scroll compositaba cientos de capas (scroll
+     a tropiezos). backwards evita el flash inicial y libera el transform al
+     terminar la animacion. */
+  .cd-message-enter { animation: messageSlide 0.3s cubic-bezier(0.16,1,0.3,1) backwards; }
   ::-webkit-scrollbar { width:4px; }
   ::-webkit-scrollbar-track { background:transparent; }
   ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:3px; }
@@ -909,6 +933,7 @@ function CochiDesktop({
 
           const isWrapperCall = false
 
+          const extractDisplay = makeStreamingDisplayExtractor()
           const streamed = await streamChat({
             provider,
             messages: apiMessages,
@@ -916,7 +941,7 @@ function CochiDesktop({
             signal: controller.signal,
             sessionId: cochiSessionId,
             retries: 3,
-            onDelta: (partial) => liveRef.current?.push(extractStreamingDisplay(partial)),
+            onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
             onUsage: (usage) => {
               const promptTokens = usage.prompt_tokens ?? 0
               const completionTokens = usage.completion_tokens ?? 0
@@ -1031,13 +1056,14 @@ function CochiDesktop({
                       }
                     ]
 
+                    const extractDisplay = makeStreamingDisplayExtractor()
                     const wrapperStreamed = await streamChat({
                       provider,
                       messages: wrapperMessages,
                       signal: controller.signal,
                       sessionId: cochiSessionId,
                       retries: 3,
-                      onDelta: (partial) => liveRef.current?.push(extractStreamingDisplay(partial)),
+                      onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
                       onUsage: (usage) => {
                         const promptTokens = usage.prompt_tokens ?? 0
                         const completionTokens = usage.completion_tokens ?? 0
