@@ -5,10 +5,10 @@ import CochiDesktop from './CochiDesktop'
 import PreferencesModal from './PreferencesModal'
 import ApiKeyModal from './ApiKeyModal'
 import R9Drawer from './R9Drawer'
+import R7TopBar from './R7TopBar'
+import R7FooterInputs from './R7FooterInputs'
 import { supabase } from '../supabaseClient'
 import { loadLocalConfig, hasOpenRouterKey } from '../lib/localConfig.js'
-import { openUrl } from '@tauri-apps/plugin-opener'
-import { open as openDialog } from '@tauri-apps/plugin-dialog'
 
 const DEFAULT_WORKSPACE = { path: '', permission: 'read' }
 
@@ -37,18 +37,14 @@ export default function R7Desktop() {
   // Estado compartido
   const [workspace,   setWorkspace]   = useState(DEFAULT_WORKSPACE)
   const [handoff,     setHandoff]     = useState(null)
-  const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false)
   const [showR9Drawer, setShowR9Drawer] = useState(false)
-  const workspaceRef = useRef(null)
 
-  // Inputs separados por panel
-  const [leftInput, setLeftInput] = useState('')
-  const [cochiInput, setCochiInput] = useState('')
-  const [asunCategory, setAsunCategory] = useState('llm')
-
-  // Mensajes pendientes por panel
+  // Inputs: viven en R7FooterInputs (Bloque R) para no re-renderizar el shell al
+  // tipear. Aquí sólo quedan los mensajes pendientes de cada panel.
   const [pendingAsun,  setPendingAsun]  = useState(null)
   const [pendingCochi, setPendingCochi] = useState(null)
+  const [asunCategory, setAsunCategory] = useState('llm')
+  const footerRef = useRef(null)
 
   // Bloque K2: sesión a retomar desde el drawer (mismo patrón que pendingMessage).
   const [pendingSession, setPendingSession] = useState(null) // { agent, id, nonce }
@@ -82,46 +78,13 @@ export default function R7Desktop() {
 
   const handleApiKeySaved = useCallback(() => setApiKeyConfigured(true), [])
 
-  const leftInputRef = useRef(null)
-  const cochiInputRef = useRef(null)
   const cochiSavePrefsRef = useRef(null)
-
-  // ─── Routing ──────────────────────────────────────────────────────────────
-  function sendToLeft() {
-    const text = leftInput.trim()
-    if (!text) return
-    setPendingAsun({ text, id: Date.now() })
-    setLeftInput('')
-    leftInputRef.current?.focus()
-  }
-
-  function sendToCochi() {
-    const text = cochiInput.trim()
-    if (!text) return
-    setPendingCochi({ text, id: Date.now() })
-    setCochiInput('')
-    cochiInputRef.current?.focus()
-  }
-
-  function leftKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendToLeft()
-    }
-  }
-
-  function cochiKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendToCochi()
-    }
-  }
 
   // ─── Callbacks de paneles ─────────────────────────────────────────────────
   const handleAsunHandoff      = useCallback((brief)    => setHandoff({ ...brief, id: Date.now() }), [])
   const handleWorkspaceChange  = useCallback((newWs)    => setWorkspace(newWs), [])
-  const handleInsertAsun  = useCallback((text) => { setActiveLeftPanel('asun'); setLeftInput(text) }, [])
-  const handleInsertCochi = useCallback((text) => { setCochiInput(text) }, [])
+  const handleInsertAsun  = useCallback((text) => { setActiveLeftPanel('asun'); footerRef.current?.setLeftText(text) }, [])
+  const handleInsertCochi = useCallback((text) => { footerRef.current?.setCochiText(text) }, [])
 
   // Bloque N: callbacks estables para no invalidar los paneles memoizados.
   const handleConsumeAsun    = useCallback(() => setPendingAsun(null), [])
@@ -131,6 +94,15 @@ export default function R7Desktop() {
   const handleTitoHandoff    = useCallback((brief) => setHandoff({ type:'tito', brief, id: Date.now() }), [])
   const handlePreferencesLoaded = useCallback((prefs) => setPreferences(prefs), [])
   const handleRegisterSavePrefs = useCallback((fn) => { cochiSavePrefsRef.current = fn }, [])
+
+  // Bloque R: envíos desde el footer aislado (callbacks estables).
+  const handleSubmitLeft  = useCallback((msg) => setPendingAsun(msg), [])
+  const handleSubmitCochi = useCallback((msg) => setPendingCochi(msg), [])
+
+  // Bloque R: abridores de modales del TopBar (estables para no invalidar el memo).
+  const openApiKey = useCallback(() => setShowApiKey(true), [])
+  const openR9     = useCallback(() => setShowR9Drawer(true), [])
+  const openPrefs  = useCallback(() => setShowPrefs(true), [])
 
   // Bloque K2: abrir una sesión guardada. Activa el panel izquierdo correcto
   // (Asun/Tito) y encola la sesión; Cochi vive en el panel derecho y no cambia
@@ -151,52 +123,6 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
   }, [])
 
   const showFooter = asunCategory !== 'imagen'
-
-  const openExternal = (url) => {
-    openUrl(url).catch(() => window.open(url, '_blank'))
-  }
-
-  // ─── Workspace pick ─────────────────────────────────────────────────────────
-  async function handleWorkspacePick() {
-    try {
-      const selected = await openDialog({ directory: true, multiple: false, title: 'Seleccionar carpeta de trabajo' })
-      if (selected) {
-        setWorkspace(prev => ({ ...prev, path: selected }))
-      }
-    } catch (err) { console.error('Error al seleccionar carpeta:', err) }
-    setShowWorkspaceMenu(false)
-  }
-
-  function handleSetPermission(permission) {
-    setWorkspace(prev => ({ ...prev, permission }))
-  }
-
-  // Cerrar popup al hacer click fuera
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (workspaceRef.current && !workspaceRef.current.contains(e.target)) {
-        setShowWorkspaceMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  // Resolver permisos para la pill
-  const perm = workspace?.permission || null
-  const permissionColor = perm === 'read' ? '#E8C84A'
-    : perm === 'readwrite' || perm === 'write' ? '#6B9EC4'
-    : perm === 'full' ? '#B0F527'
-    : '#555'
-  const permissionIcon = perm === 'read' ? '🔒'
-    : perm === 'readwrite' || perm === 'write' ? '✏️'
-    : perm === 'full' ? '⚡'
-    : '○'
-  const permissionLabel = perm === 'read' ? 'Lectura'
-    : perm === 'readwrite' ? 'L + Escritura'
-    : perm === 'write' ? 'Escritura'
-    : perm === 'full' ? 'Full Access'
-    : 'Sin permisos'
 
   return (
     <div style={{
@@ -505,245 +431,18 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
       <div className="r7d-grid" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0 }} />
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, background: 'radial-gradient(circle at 50% -20%, rgba(255,255,255,0.018) 0%, transparent 60%)' }} />
 
-      {/* ── Top bar ── */}
-      <div style={{
-        position: 'relative', zIndex: 10, flexShrink: 0,
-        height: 60,
-        display: 'flex', alignItems: 'center',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
-        background: 'rgba(9,8,10,0.9)',
-        padding: '0 20px', gap: '20px',
-      }}>
-        {/* R7SIGNAL brand — leftmost */}
-<span style={{
-            fontFamily: "'Orbitron', sans-serif",
-            fontWeight: 900,
-            fontSize: '1rem',
-            letterSpacing: '0.15em',
-            backgroundImage: 'linear-gradient(135deg, #876EF5, #FA61DB)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            flexShrink: 0,
-            userSelect: 'none',
-          }}>R7SIGNAL</span>
-
-        <div style={{ width:1, height:24, background:'rgba(255,255,255,0.07)', flexShrink:0 }} />
-
-        {/* Left panel selector — ASUN · TITO */}
-        <div className="left-panel-selector" style={{ display:'flex', gap:2, flexShrink:0 }}>
-          {['asun', 'tito'].map(id => (
-            <button
-              key={id}
-              className={`selector-btn ${id}-btn${activeLeftPanel === id ? ' active' : ''}`}
-              onClick={() => setActiveLeftPanel(id)}
-              style={{
-                background: 'transparent', border: 'none',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: '13px', padding: '6px 14px',
-                borderRadius: '6px', cursor: 'pointer',
-                transition: 'all 0.2s', fontWeight: 600,
-                color: activeLeftPanel === id
-                  ? (id === 'asun' ? '#C8A2D8' : '#E8C84A')
-                  : (id === 'asun' ? 'rgba(200,162,216,0.33)' : 'rgba(232,200,74,0.33)'),
-                boxShadow: activeLeftPanel === id
-                  ? (id === 'asun' ? '0 0 10px rgba(200,162,216,0.33)' : '0 0 10px rgba(232,200,74,0.33)')
-                  : 'none',
-              }}
-            >
-              {id.toUpperCase()}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', flexShrink:0 }} />
-
-        {/* ASUN tok */}
-        <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0 }}>
-          <span style={{
-            fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
-            letterSpacing:'0.25em', fontWeight:700,
-            color:'#C8A2D8', opacity:0.8,
-          }}>ASUN</span>
-          <span style={{
-            fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
-            fontWeight:700, color:'#C8A2D8', letterSpacing:'0.04em', lineHeight:1,
-          }}>{usage.asun.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
-        </div>
-
-        <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', flexShrink:0 }} />
-
-        {/* TITO tok */}
-        <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0 }}>
-          <span style={{
-            fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
-            letterSpacing:'0.25em', fontWeight:700,
-            color:'#A89EC4', opacity:0.8,
-          }}>TITO</span>
-          <span style={{
-            fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
-            fontWeight:700, color:'#A89EC4', letterSpacing:'0.04em', lineHeight:1,
-          }}>{usage.tito.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
-        </div>
-
-        <div style={{ flex:1 }} />
-
-        {/* Workspace + permisos pill — center */}
-        <div ref={workspaceRef} style={{ position: 'relative', flexShrink:0 }}>
-          <div
-            onClick={() => setShowWorkspaceMenu(prev => !prev)}
-            style={{
-              display:'flex', alignItems:'center', gap:'8px',
-              background:'#1E1D23', border:'1px solid #333',
-              borderRadius:'6px', padding:'2px 10px',
-              cursor:'pointer', fontFamily:'JetBrains Mono, monospace',
-              fontSize:'11px', color:'#ccc',
-            }}
-          >
-            <span>📁</span>
-            <span style={{ maxWidth:'180px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-              {workspace?.path ? workspace.path.split(/[\\/]/).pop() : 'Sin workspace'}
-            </span>
-            <span style={{ marginLeft:'6px', color: permissionColor }}>
-              {permissionIcon} {permissionLabel}
-            </span>
-          </div>
-
-          {showWorkspaceMenu && (
-            <div style={{
-              position:'absolute', top:'100%', left:'50%', transform:'translateX(-50%)', marginTop:6,
-              minWidth:240, background:'#131215', border:'1px solid #201F23', borderRadius:10,
-              padding:'14px 16px', boxShadow:'0 12px 40px rgba(0,0,0,0.9)',
-              zIndex:200, display:'flex', flexDirection:'column', gap:10,
-            }}>
-              <div style={{ fontSize:'0.6rem', color:'#8A868B', letterSpacing:'0.2em', fontWeight:700, textTransform:'uppercase' }}>CARPETA</div>
-              <button onClick={handleWorkspacePick} style={{
-                background:'transparent', border:'1px solid #2F2D35', borderRadius:6,
-                padding:'6px 10px', color:'#ccc', cursor:'pointer',
-                fontFamily:'JetBrains Mono, monospace', fontSize:'11px', textAlign:'left',
-              }}>
-                📁 {workspace?.path ? workspace.path.split(/[\\/]/).pop() : 'Seleccionar carpeta'}
-              </button>
-              <div style={{ height:1, background:'#201F23' }} />
-              <div style={{ fontSize:'0.6rem', color:'#8A868B', letterSpacing:'0.2em', fontWeight:700, textTransform:'uppercase' }}>PERMISOS</div>
-              <div style={{ display:'flex', gap:12 }}>
-                {[
-                  { value:'read', label:'Lectura' },
-                  { value:'write', label:'Escritura' },
-                  { value:'full', label:'Full Access' },
-                ].map(p => (
-                  <label key={p.value} style={{ display:'flex', alignItems:'center', gap:5, cursor:'pointer', fontSize:'0.65rem', color: workspace.permission === p.value ? '#D4D8DC' : '#5A585C', fontWeight:600 }}>
-                    <input
-                      type="radio" name="ws-permission" value={p.value}
-                      checked={workspace.permission === p.value}
-                      onChange={() => handleSetPermission(p.value)}
-                      style={{ accentColor:'#6B9EC4', cursor:'pointer' }}
-                    />
-                    {p.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div style={{ flex:1 }} />
-
-        {/* OR Credits */}
-        <button
-          onClick={() => openExternal('https://openrouter.ai/settings/credits')}
-          style={{
-            background:'none',
-            border:'1px solid #B2FF61',
-            color:'#B2FF61',
-            fontFamily:"'JetBrains Mono', monospace",
-            fontSize:'11px',
-            padding:'2px 8px',
-            borderRadius:'4px',
-            cursor:'pointer',
-          }}
-        >
-          OR Credits
-        </button>
-
-        {/* OR Activity */}
-        <button
-          onClick={() => openExternal('https://openrouter.ai/activity')}
-          style={{
-            background:'none',
-            border:'1px solid #B2FF61',
-            color:'#B2FF61',
-            fontFamily:"'JetBrains Mono', monospace",
-            fontSize:'11px',
-            padding:'2px 8px',
-            borderRadius:'4px',
-            cursor:'pointer',
-          }}
-        >
-          OR Activity
-        </button>
-
-        <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', flexShrink:0 }} />
-
-        {/* COCHI tok — rightmost */}
-        <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0, alignItems:'flex-end' }}>
-          <span style={{
-            fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
-            letterSpacing:'0.25em', fontWeight:700,
-            color:'#C47460', opacity:0.8,
-          }}>COCHI</span>
-          <span style={{
-            fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
-            fontWeight:700, color:'#C47460', letterSpacing:'0.04em', lineHeight:1,
-          }}>{usage.cochi.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
-        </div>
-
-        <button
-          onClick={() => setShowApiKey(true)}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: apiKeyConfigured ? '#B0F527' : '#E8C84A',
-            fontSize: '1.05rem',
-            padding: '0 8px',
-            transition: 'color 0.2s',
-          }}
-          title={apiKeyConfigured ? 'API key configurada — click para cambiarla' : 'Falta tu API key de OpenRouter — click para cargarla'}
-        >🔑</button>
-
-        <button
-          onClick={() => setShowR9Drawer(true)}
-          style={{
-            background:'none',
-            border:'none',
-            cursor:'pointer',
-            color:'#9BA3A8',
-            fontSize:'1.1rem',
-            padding:'0 8px',
-            transition:'color 0.2s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = '#D4D8DC'}
-          onMouseLeave={e => e.currentTarget.style.color = '#9BA3A8'}
-          title="R9 — Memoria compartida"
-        >🗂️</button>
-
-        <button
-          onClick={() => setShowPrefs(true)}
-          style={{
-            background:'none',
-            border:'none',
-            cursor:'pointer',
-            color:'#9BA3A8',
-            fontSize:'1.1rem',
-            padding:'0 8px',
-            transition:'color 0.2s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = '#D4D8DC'}
-          onMouseLeave={e => e.currentTarget.style.color = '#9BA3A8'}
-          title="Preferencias"
-        >⚙️</button>
-      </div>
+      {/* ── Top bar (Bloque R) — memo: no se re-renderiza al tipear ── */}
+      <R7TopBar
+        usage={usage}
+        activeLeftPanel={activeLeftPanel}
+        onSelectLeft={setActiveLeftPanel}
+        apiKeyConfigured={apiKeyConfigured}
+        onOpenApiKey={openApiKey}
+        onOpenR9={openR9}
+        onOpenPrefs={openPrefs}
+        workspace={workspace}
+        onWorkspaceChange={handleWorkspaceChange}
+      />
 
       {showPrefs && (
         <PreferencesModal
@@ -854,75 +553,16 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
         </div>
       </div>
 
-      {/* ── Footer / Inputs ── */}
-      {showFooter && (
-        <div style={{
-          flexShrink: 0,
-          borderTop: '1px solid rgba(255,255,255,0.05)',
-          background: 'rgba(9,8,10,0.97)',
-          padding: '8px 14px',
-          display: 'flex', alignItems: 'flex-end', gap: 9,
-        }}>
-          {/* Left section: cost + Asun/Tito input */}
-          <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: 9 }}>
-            <div style={{
-              flex: 1,
-              background: '#0C0B0F',
-              border: '1px solid rgba(255,255,255,0.07)',
-              borderRadius: 10,
-              padding: '9px 14px',
-              display: 'flex', alignItems: 'flex-end',
-            }}>
-              <textarea
-                ref={leftInputRef}
-                className="r7d-input"
-                rows={1}
-                value={leftInput}
-                onChange={e => setLeftInput(e.target.value)}
-                onKeyDown={leftKeyDown}
-                placeholder={
-                  activeLeftPanel === 'asun' && !promptsReady.asun ? 'Conectando…' :
-                  activeLeftPanel === 'tito' && !promptsReady.tito ? 'Conectando…' :
-                  'Asun / Tito'
-                }
-                disabled={
-                  (activeLeftPanel === 'asun' && !promptsReady.asun) ||
-                  (activeLeftPanel === 'tito' && !promptsReady.tito)
-                }
-                onInput={e => {
-                  e.target.style.height = 'auto'
-                  e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Right section: Cochi input */}
-          <div style={{
-            flex: 1,
-            background: '#0C0B0F',
-            border: '1px solid rgba(255,255,255,0.07)',
-            borderRadius: 10,
-            padding: '9px 14px',
-            display: 'flex', alignItems: 'flex-end',
-          }}>
-            <textarea
-              ref={cochiInputRef}
-              className="r7d-input"
-              rows={1}
-              value={cochiInput}
-              onChange={e => setCochiInput(e.target.value)}
-              onKeyDown={cochiKeyDown}
-              placeholder={!promptsReady.cochi ? 'Conectando…' : 'Cochi'}
-              disabled={!promptsReady.cochi}
-              onInput={e => {
-                e.target.style.height = 'auto'
-                e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px'
-              }}
-            />
-          </div>
-        </div>
-      )}
+      {/* ── Footer / Inputs (Bloque R) — aislado para no re-renderizar el shell al tipear ── */}
+      <div style={{ display: showFooter ? 'block' : 'none' }}>
+        <R7FooterInputs
+          ref={footerRef}
+          activeLeftPanel={activeLeftPanel}
+          promptsReady={promptsReady}
+          onSubmitLeft={handleSubmitLeft}
+          onSubmitCochi={handleSubmitCochi}
+        />
+      </div>
     </div>
   )
 }

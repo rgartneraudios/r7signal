@@ -460,7 +460,7 @@ function AsunImagenFlow({ submenu, onHandoff }) {
 // repinta la burbuja en vivo, no todo el historial (que además re-rasterizaba
 // el degradado de cada mensaje). El comparador ignora los callbacks, que se
 // refrescan al cerrar el turno.
-function AsunBubble({ msg, isReveladora, isLast, showActions, canRegenerate, onUndo, onRegenerate, onHandoff }) {
+function AsunBubble({ msg, isLast, showActions, canRegenerate, onUndo, onRegenerate, onHandoff }) {
   const isUser = msg.rol === 'usuario'
   return (
     <div style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
@@ -469,11 +469,11 @@ function AsunBubble({ msg, isReveladora, isLast, showActions, canRegenerate, onU
           <span style={{
             fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.15em',
             textTransform: 'uppercase', display: 'block', marginBottom: 4,
-            color: isReveladora ? '#D4B8D8' : '#C8A2D8',
+            color: 'var(--asun-label)',
             fontFamily: "'Space Grotesk', sans-serif",
           }}>Asun</span>
         )}
-        <div style={{ color: isUser ? '#5FD3E0' : (isReveladora ? '#D4B8D8' : '#C067E8') }}>{msg.contenido}</div>
+        <div style={{ color: isUser ? '#5FD3E0' : 'var(--asun-body)' }}>{msg.contenido}</div>
         {msg.audioUrl && (
           <audio controls src={msg.audioUrl} style={{ marginTop: 10, width: '100%' }} />
         )}
@@ -510,12 +510,11 @@ function AsunBubble({ msg, isReveladora, isLast, showActions, canRegenerate, onU
   )
 }
 
-const AsunMessageList = memo(function AsunMessageList({ messages, isReveladora, lastAssistantId, showActions, canRegenerate, onUndo, onRegenerate, onHandoff }) {
+const AsunMessageList = memo(function AsunMessageList({ messages, lastAssistantId, showActions, canRegenerate, onUndo, onRegenerate, onHandoff }) {
   return messages.map(msg => (
     <AsunBubble
       key={msg.id}
       msg={msg}
-      isReveladora={isReveladora}
       isLast={msg.id === lastAssistantId}
       showActions={showActions}
       canRegenerate={canRegenerate}
@@ -525,7 +524,6 @@ const AsunMessageList = memo(function AsunMessageList({ messages, isReveladora, 
     />
   ))
 }, (prev, next) => {
-  if (prev.isReveladora !== next.isReveladora) return false
   if (prev.lastAssistantId !== next.lastAssistantId) return false
   if (prev.showActions !== next.showActions) return false
   if (prev.canRegenerate !== next.canRegenerate) return false
@@ -534,10 +532,10 @@ const AsunMessageList = memo(function AsunMessageList({ messages, isReveladora, 
   return true
 })
 
-function AsunStreamingBubble({ msg, isReveladora, containerRef }) {
+function AsunStreamingBubble({ msg, containerRef }) {
   const scrollIfSticky = useStickToBottom(containerRef)
   useEffect(() => { scrollIfSticky() }, [msg.contenido, scrollIfSticky])
-  return <AsunBubble msg={msg} isReveladora={isReveladora} isLast={false} showActions={false} canRegenerate={false} />
+  return <AsunBubble msg={msg} isLast={false} showActions={false} canRegenerate={false} />
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1321,6 +1319,8 @@ function AsunPanel({
         {/* ── LLM / MÚSICA: chat ── */}
         {category !== 'imagen' && (
           <div ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{
+            '--asun-label': isReveladora ? '#D4B8D8' : '#C8A2D8',
+            '--asun-body': isReveladora ? '#D4B8D8' : '#C067E8',
             display: 'flex', flexDirection: 'column',
             gap: 14, padding: '16px 16px 24px',
             flex: 1, position: 'relative',
@@ -1403,7 +1403,6 @@ RGartner by R7Signal</>
 
             <AsunMessageList
               messages={closedMessages}
-              isReveladora={isReveladora}
               lastAssistantId={lastAssistantId}
               showActions={showActions}
               canRegenerate={canRegenerate}
@@ -1411,7 +1410,7 @@ RGartner by R7Signal</>
               onRegenerate={handleRegenerate}
               onHandoff={onHandoff}
             />
-            {streamingMsg && <AsunStreamingBubble msg={streamingMsg} isReveladora={isReveladora} containerRef={chatScrollRef} />}
+            {streamingMsg && <AsunStreamingBubble msg={streamingMsg} containerRef={chatScrollRef} />}
 
             {(loading || generating) && (
               <div style={{ display: 'flex', justifyContent: 'flex-start' }}>

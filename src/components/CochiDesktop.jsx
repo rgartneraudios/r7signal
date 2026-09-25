@@ -165,7 +165,7 @@ const CochiMarkdown = memo(function CochiMarkdown({ content }) {
 // ─── Historial memoizado (Bloque N) ──────────────────────────────────────────
 // Antes vivía inline: cada frame de `liveStream` (~30fps) re-renderizaba TODO el
 // historial. Al aislarlo, el stream sólo repinta la burbuja en vivo.
-const CochiMessageList = memo(function CochiMessageList({ messages, isTerminator, lastAssistantId, loading, onUndo, onRegenerate }) {
+const CochiMessageList = memo(function CochiMessageList({ messages, lastAssistantId, loading, onUndo, onRegenerate }) {
   return messages.map((msg) => (
     msg.role === 'diff' ? (
       <DiffViewer key={msg.id} diff={msg.diff} />
@@ -181,13 +181,13 @@ const CochiMessageList = memo(function CochiMessageList({ messages, isTerminator
     ) : (
       <div key={msg.id} className="cd-message-enter" style={{ alignSelf: 'flex-start', maxWidth: '100%', padding: '2px 0' }}>
         <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase',
-          color: isTerminator ? '#D4B8D8' : '#6A7A8A',
+          color: 'var(--cochi-label)',
         }}>
           COCHI
         </div>
         <div style={{
           fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
-          color: isTerminator ? '#B9C0CB' : '#C47460',
+          color: 'var(--cochi-body)',
         }}>
           <CochiMarkdown content={msg.content} />
         </div>
@@ -218,7 +218,7 @@ const CochiMessageList = memo(function CochiMessageList({ messages, isTerminator
 // El texto en vivo vive DENTRO de este componente. Cada frame del throttle
 // repinta SÓLO esta burbuja; el panel (1900+ líneas) deja de re-renderizarse por
 // token. `push/flush/clear` se invocan por ref desde el loop de streaming.
-const CochiStreamingBubble = memo(forwardRef(function CochiStreamingBubble({ isTerminator, containerRef }, ref) {
+const CochiStreamingBubble = memo(forwardRef(function CochiStreamingBubble({ containerRef }, ref) {
   const [text, setText] = useState('')
   const { schedule, flush } = useFrameThrottle(30)
   const scrollIfSticky = useStickToBottom(containerRef)
@@ -233,11 +233,11 @@ const CochiStreamingBubble = memo(forwardRef(function CochiStreamingBubble({ isT
   if (!text) return null
   return (
     <div className="cd-message-enter" style={{ alignSelf: 'flex-start', maxWidth: '100%', padding: '2px 0' }}>
-      <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase', color: isTerminator ? '#D4B8D8' : '#6A7A8A' }}>COCHI</div>
+      <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase', color: 'var(--cochi-label)' }}>COCHI</div>
       <div style={{
         fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
         whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-        color: isTerminator ? '#B9C0CB' : '#C47460',
+        color: 'var(--cochi-body)',
       }}>{text}</div>
     </div>
   )
@@ -1563,7 +1563,7 @@ function CochiDesktop({
         <div className="leather-grid" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.7 }} />
 
         {/* Historial */}
-        <div ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 4, position: 'relative', zIndex: 1 }}>
+        <div ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{ '--cochi-label': isTerminator ? '#D4B8D8' : '#6A7A8A', '--cochi-body': isTerminator ? '#B9C0CB' : '#C47460', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 4, position: 'relative', zIndex: 1 }}>
 
           {/* Watermark estado vacío */}
           {messages.length === 0 && !loading && (
@@ -1638,7 +1638,6 @@ RGartner by R7Signal
 
           <CochiMessageList
             messages={messages}
-            isTerminator={isTerminator}
             lastAssistantId={lastAssistantId}
             loading={loading}
             onUndo={handleUndo}
@@ -1680,7 +1679,7 @@ RGartner by R7Signal
             </div>
           )}
           {loading && (
-            <CochiStreamingBubble ref={liveRef} isTerminator={isTerminator} containerRef={chatContainerRef} />
+            <CochiStreamingBubble ref={liveRef} containerRef={chatContainerRef} />
           )}
           <div ref={messagesEndRef} />
           {r9Btn && (
