@@ -14,6 +14,7 @@ import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
+import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots } from '../lib/snapshotStore.js'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -332,8 +333,10 @@ function CochiDesktop({
   // Bloque K2: espejo de `messages` para el autosave y guardas de retoma.
   const messagesRef = useRef([])
   const skipAutosaveRef = useRef(true) // true en el montaje y al retomar una sesión
-  // Bloque K3: true si el último turno ejecutó tools con efectos (regenerate avisa).
-  const lastTurnHadToolsRef = useRef(false)
+  // Fase 3.1: true si el último turno corrió run_command (efectos no revertibles).
+  const lastTurnHadCommandRef = useRef(false)
+  // Fase 3.1: snapshot del estado previo de los archivos tocados en el turno.
+  const snapshotRef = useRef(null)
   const chatContainerRef = useRef(null)
   const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
   const [todos, setTodos] = useState([])   // lista de tareas del tool todowrite
@@ -414,6 +417,7 @@ function CochiDesktop({
         wheelRef.current = { r7: s.wheel?.r7 || '', lastTurn: s.wheel?.lastTurn ?? null }
         cochiSessionIdRef.current = null
         cochiSessionNameRef.current = s.name || null
+        snapshotRef.current = null
         sessionPairsRef.current = []
         setActivity([]); setTodos([]); syncPlan(null)
         setPlanStatus('idle'); setTokenWarningDismissed(false)
@@ -1175,16 +1179,14 @@ function CochiDesktop({
             }
 
             const icon = TOOL_ICONS[name] || '🔧'
-            if (!READ_ONLY_TOOLS.has(name) && name !== 'todowrite') {
-              lastTurnHadToolsRef.current = true // Bloque K3: regenerate avisa
-            }
+            if (name === 'run_command') lastTurnHadCommandRef.current = true // Fase 3.1: no revertible
             let shortLabel = name === 'run_command'
               ? (args.command?.slice(0, 60) + (args.command?.length > 60 ? '…' : ''))
               : ((args.path || args.fromPath)?.split('\\').pop() || args.path || args.fromPath || name)
             let modelResult = ''
             let diff = null
             try {
-              const execResult = await executeTool(name, args, workspace.permission, workspace.path)
+              const execResult = await executeTool(name, args, workspace.permission, workspace.path, { snapshot: snapshotRef.current })
               modelResult = execResult.modelResult
               diff = execResult.diff
               if (name === 'todowrite' && execResult.todos) {
@@ -1332,6 +1334,13 @@ function CochiDesktop({
     if (!sent || loading || planStatus === 'executing') return
 
     lastTurnHadToolsRef.current = false // Bloque K3: se evalúa por turno
+    lastTurnHadCommandRef.current = false // Fase 3.1
+    // Fase 3.1: abre el snapshot del turno. Si no hay mutaciones, no se escribe
+    // nada en disco y el snapshot queda vacío (se descarta al resetear).
+    if (!cochiSessionIdRef.current) {
+      cochiSessionIdRef.current = `cochi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    }
+    snapshotRef.current = await beginTurn(cochiSessionIdRef.current)
     originalMessageRef.current = sent
     pushMessage({ role: 'user', content: sent })
 
@@ -1379,9 +1388,13 @@ function CochiDesktop({
       syncPlan(null); setPlanStatus('idle')
       sessionPairsRef.current = []
       wheelRef.current = createWheelState(await readLatestR7())
+      const closingSessionId = cochiSessionIdRef.current
       cochiSessionIdRef.current = null
       cochiSessionNameRef.current = null
       sessionAllowRef.current = new Set()
+      await discardTurn(snapshotRef.current)
+      snapshotRef.current = null
+      await clearSessionSnapshots(closingSessionId)
       onResetUsage?.('cochi')
     }
   }
@@ -1405,10 +1418,14 @@ function CochiDesktop({
       syncPlan(null); setPlanStatus('idle')
       sessionPairsRef.current = []
       wheelRef.current = createWheelState(await readLatestR7())
+      const closingSessionId = cochiSessionIdRef.current
       cochiSessionIdRef.current = null
       // X2: la sesión nueva hereda el nombre definido al archivar.
       cochiSessionNameRef.current = inheritedName || null
       sessionAllowRef.current = new Set()
+      await discardTurn(snapshotRef.current)
+      snapshotRef.current = null
+      await clearSessionSnapshots(closingSessionId)
       onResetUsage?.('cochi')
     } catch (err) {
       pushMessage({ role: 'assistant', content: `⚠️ No se pudo archivar la sesión R7: ${err.message}` })
@@ -1447,18 +1464,44 @@ function CochiDesktop({
 
   // Bloque N: wrappers estables para que CochiMessageList (memo) no se
   // invalide en cada render. El cuerpo real se refresca por ref tras cada render.
+  // Fase 3.1: revierte en disco los archivos que tocó el último turno. Pide
+  // confirmación mostrando las rutas; si el usuario rechaza, no toca el disco.
+  async function maybeRevertFiles() {
+    const snap = snapshotRef.current
+    snapshotRef.current = null
+    if (!snap) return
+    const info = summarizeSnapshot(snap)
+    if (info.count === 0) { await discardTurn(snap); return }
+    const list = info.paths.slice(0, 12).map(p => `• ${p}`).join('\n')
+    const more = info.paths.length > 12 ? `\n… y ${info.paths.length - 12} más` : ''
+    const warn = info.unrevertible.length ? `\n\n⚠️ ${info.unrevertible.length} archivo(s) eran demasiado grandes y NO se podrán restaurar.` : ''
+    const cmdWarn = lastTurnHadCommandRef.current ? '\n\n⚠️ Este turno ejecutó run_command: sus efectos NO se pueden revertir.' : ''
+    const ok = window.confirm(`Este turno modificó ${info.count} archivo(s):\n${list}${more}${warn}${cmdWarn}\n\n¿Revertir los archivos a su estado anterior?`)
+    if (!ok) { await discardTurn(snap); return }
+    try {
+      const res = await revertSnapshot(snap.id)
+      const failed = (res.results || []).filter(r => r.action === 'error' || r.action === 'skip')
+      if (failed.length) {
+        pushMessage({ role: 'assistant', content: `⚠️ No se pudieron restaurar ${failed.length} archivo(s): ${failed.map(f => f.path).join(', ')}` })
+      }
+    } catch (err) {
+      pushMessage({ role: 'assistant', content: `⚠️ Error al revertir archivos: ${err.message}` })
+    }
+  }
+
   const handleUndoRef = useRef(() => {})
   const handleRegenerateRef = useRef(() => {})
   useEffect(() => {
-    handleUndoRef.current = () => {
+    handleUndoRef.current = async () => {
       if (loading || planStatus === 'executing') return
+      await maybeRevertFiles()
       applyUndo()
     }
     handleRegenerateRef.current = async () => {
       if (loading || planStatus === 'executing') return
       const userText = lastUserText(messagesRef.current)
       if (!userText) return
-      if (lastTurnHadToolsRef.current && !window.confirm('Este turno ejecutó operaciones sobre archivos. Regenerar puede repetirlas. ¿Continuar?')) return
+      await maybeRevertFiles()
       applyUndo()
       await handleSendText(userText)
     }
