@@ -4,6 +4,7 @@
 // por Asun/Tito para matar la duplicación de apiUrl/modelSlug/authHeader).
 
 import { getOpenRouterKey } from './localConfig.js'
+import { buildReasoningConfig, extractReasoningDelta } from './llmMetrics.js'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const OPENROUTER_HEADERS = {
@@ -68,10 +69,11 @@ export function resolveProvider(selectedModel, ctx = {}) {
   }
 }
 
-function buildBody({ provider, messages, tools, toolChoice = 'auto', stream, sessionId, maxTokens, temperature }) {
+function buildBody({ provider, messages, tools, toolChoice = 'auto', stream, sessionId, maxTokens, temperature, reasoning }) {
   const body = { model: provider.model, messages, stream }
   if (provider.supportsUsage) {
-    body.reasoning = { enabled: false }
+    // Fase 3.2: reasoning por modelo (whitelist en llmMetrics.MODEL_CAPS).
+    body.reasoning = buildReasoningConfig(provider.model, reasoning)
     body.usage = { include: true }
     if (stream) body.stream_options = { include_usage: true }
   }
@@ -126,8 +128,8 @@ function normalizeToolCalls(toolAcc) {
 }
 
 // ─── Streaming SSE ────────────────────────────────────────────────────────────
-async function streamOnce({ provider, messages, tools, toolChoice, signal, sessionId, maxTokens, temperature, onDelta, onUsage }) {
-  const res = await doFetch(provider, buildBody({ provider, messages, tools, toolChoice, stream: true, sessionId, maxTokens, temperature }), signal)
+async function streamOnce({ provider, messages, tools, toolChoice, signal, sessionId, maxTokens, temperature, reasoning, onDelta, onUsage, onReasoning }) {
+  const res = await doFetch(provider, buildBody({ provider, messages, tools, toolChoice, stream: true, sessionId, maxTokens, temperature, reasoning }), signal)
 
   const contentType = res.headers?.get?.('content-type') || ''
   if (!contentType.includes('text/event-stream')) {
@@ -140,10 +142,13 @@ async function streamOnce({ provider, messages, tools, toolChoice, signal, sessi
     }
     const message = data.choices?.[0]?.message || {}
     const content = message.content || ''
+    const reasoningText = message.reasoning || ''
     if (content && onDelta) onDelta(content)
+    if (reasoningText && onReasoning) onReasoning(reasoningText)
     if (data.usage && onUsage) onUsage(data.usage)
     return {
       content,
+      reasoning: reasoningText,
       toolCalls: message.tool_calls || [],
       usage: data.usage || null,
       finishReason: data.choices?.[0]?.finish_reason || null,
@@ -155,6 +160,7 @@ async function streamOnce({ provider, messages, tools, toolChoice, signal, sessi
   const decoder = new TextDecoder()
   let buffer = ''
   let content = ''
+  let reasoningText = ''
   let finishReason = null
   let usage = null
   let receivedAny = false
@@ -192,6 +198,13 @@ async function streamOnce({ provider, messages, tools, toolChoice, signal, sessi
           if (onDelta) onDelta(content)
         }
 
+        const rDelta = extractReasoningDelta(delta)
+        if (rDelta) {
+          reasoningText += rDelta
+          receivedAny = true
+          if (onReasoning) onReasoning(reasoningText)
+        }
+
         if (Array.isArray(delta.tool_calls)) {
           receivedAny = true
           for (const tc of delta.tool_calls) {
@@ -218,12 +231,12 @@ async function streamOnce({ provider, messages, tools, toolChoice, signal, sessi
     try { reader.releaseLock?.() } catch {}
   }
 
-  return { content, toolCalls: normalizeToolCalls(toolAcc), usage, finishReason, model: provider.model }
+  return { content, reasoning: reasoningText, toolCalls: normalizeToolCalls(toolAcc), usage, finishReason, model: provider.model }
 }
 
 // ─── Respuesta completa (sin streaming) ───────────────────────────────────────
-async function completeOnce({ provider, messages, tools, toolChoice, signal, sessionId, maxTokens, temperature, onUsage }) {
-  const res = await doFetch(provider, buildBody({ provider, messages, tools, toolChoice, stream: false, sessionId, maxTokens, temperature }), signal)
+async function completeOnce({ provider, messages, tools, toolChoice, signal, sessionId, maxTokens, temperature, reasoning, onUsage }) {
+  const res = await doFetch(provider, buildBody({ provider, messages, tools, toolChoice, stream: false, sessionId, maxTokens, temperature, reasoning }), signal)
 
   let data
   try { data = await res.json() } catch (err) {
@@ -243,6 +256,7 @@ async function completeOnce({ provider, messages, tools, toolChoice, signal, ses
   const message = choice.message || {}
   return {
     content: message.content || '',
+    reasoning: message.reasoning || '',
     toolCalls: message.tool_calls || [],
     usage: data.usage || null,
     finishReason: choice.finish_reason || null,
