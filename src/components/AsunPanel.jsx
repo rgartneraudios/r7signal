@@ -8,7 +8,7 @@ import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
-import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
+import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { open } from '@tauri-apps/plugin-dialog'
 
@@ -631,10 +631,17 @@ function AsunPanel({
     if (sealed.r7 && sealed.r7.trim()) await writeR9File('r7', sealed.r7)
   }
 
-  async function handleSaveR7() {
+  async function handleSaveR7(nameOverride) {
+    // Bloque X2: el archivado nunca bloquea: si hay una tarea en curso, no hace nada.
+    if (loading || generating) return
+    if (!messagesRef.current.some(m => m.rol === 'usuario' || m.role === 'user')) return
+    const inheritedName = typeof nameOverride === 'string' && nameOverride
+      ? nameOverride
+      : sessionNameRef.current
     try {
       // Bloque L4: archivo NUEVO acumulativo con TODO el R7, sin R3 (D1).
       // K2: igual que CLS, archiva la sesión y promueve la rueda (decisión 4).
+      if (inheritedName) sessionNameRef.current = inheritedName
       persistCurrentSession()
       await promoteWheelToGlobal()
       setMessages([])
@@ -642,11 +649,25 @@ function AsunPanel({
       sessionPairsRef.current = []
       wheelRef.current = createWheelState(await readLatestR7())
       sessionIdRef.current = null
-      sessionNameRef.current = null
+      // X2: la sesión nueva hereda el nombre definido al archivar.
+      sessionNameRef.current = inheritedName || null
       onResetUsage?.('asun')
     } catch (err) {
       setMessages(prev => [...prev, { rol: 'asistente', contenido: `⚠️ No se pudo archivar la sesión R7: ${err.message}`, id: newMessageId('asun'), streaming: false }])
     }
+  }
+
+  // Bloque X2: acción manual siempre disponible — archiva la sesión actual con un
+  // nombre y define la próxima (que lo hereda). No bloquea tareas en curso.
+  async function handleArchiveWithName() {
+    if (loading || generating) return
+    if (!messagesRef.current.some(m => m.rol === 'usuario' || m.role === 'user')) return
+    const suggested = sessionNameRef.current || suggestSessionName(messagesRef.current)
+    const input = window.prompt('Nombre de la sesión (artefacto R7). La próxima sesión heredará el nombre:', suggested)
+    if (input === null) return
+    const name = input.trim() || suggested
+    sessionNameRef.current = name
+    await handleSaveR7(name)
   }
 
   // K2: CLS archiva la sesión (queda en la lista), promueve la rueda a global y
@@ -1433,11 +1454,12 @@ RGartner by R7Signal</>
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <span style={{ fontSize: '0.7rem', color: '#C8A2D8', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
-            ⚠ 70k tokens — Tu contexto está completo. Archívala en R7 antes de empezar un chat nuevo: no perderás nada.
+            ⚠ 70k tokens — El contexto es largo. Podés seguir extendiendo la sesión o archivarla en R7 para empezar un chat nuevo: no perderás nada.
           </span>
           <button
-            onClick={handleSaveR7}
-            style={{ background: 'rgba(200,162,216,0.15)', border: '1px solid rgba(200,162,216,0.5)', borderRadius: 4, padding: '3px 10px', color: '#C8A2D8', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
+            onClick={() => handleSaveR7()}
+            disabled={loading || generating}
+            style={{ background: 'rgba(200,162,216,0.15)', border: '1px solid rgba(200,162,216,0.5)', borderRadius: 4, padding: '3px 10px', color: '#C8A2D8', fontSize: '0.65rem', fontWeight: 700, cursor: (loading || generating) ? 'not-allowed' : 'pointer', opacity: (loading || generating) ? 0.45 : 1, fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
           >Archivar sesión R7</button>
           <button
             onClick={() => setTokenWarningDismissed(true)}
@@ -1517,6 +1539,16 @@ RGartner by R7Signal</>
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#D4D8DC'; e.currentTarget.style.color = '#D4D8DC' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#1F1E22'; e.currentTarget.style.color = '#8A868B' }}
         >🗑 CLS</button>
+
+        {/* X2: archivado manual siempre disponible (con nombre) */}
+        <button
+          onClick={handleArchiveWithName}
+          disabled={loading || generating}
+          title="Archivar y definir próxima sesión"
+          style={{ background: 'transparent', border: '1px solid #2E2440', borderRadius: 4, padding: '2px 8px', color: '#8A6AA0', fontSize: '0.65rem', fontWeight: 700, cursor: (loading || generating) ? 'not-allowed' : 'pointer', opacity: (loading || generating) ? 0.4 : 1, fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
+          onMouseEnter={e => { if (!(loading || generating)) { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' } }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#2E2440'; e.currentTarget.style.color = '#8A6AA0' }}
+        >📥 Archivar R7</button>
       </div>
 
       {/* ── Footer música: botón generar ── */}

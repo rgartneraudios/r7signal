@@ -4,7 +4,7 @@ import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
-import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
+import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 
@@ -191,10 +191,17 @@ function TitoPanel({
     if (sealed.r7 && sealed.r7.trim()) await writeR9File('r7', sealed.r7)
   }
 
-  async function handleSaveR7() {
+  async function handleSaveR7(nameOverride) {
+    // Bloque X2: el archivado nunca bloquea: si hay un stream en curso, no hace nada.
+    if (streaming) return
+    if (!messagesRef.current.some(m => m.rol === 'usuario' || m.role === 'user')) return
+    const inheritedName = typeof nameOverride === 'string' && nameOverride
+      ? nameOverride
+      : sessionNameRef.current
     try {
       // Bloque L4: archivo NUEVO acumulativo con TODO el R7, sin R3 (D1).
       // K2: igual que CLS, archiva la sesión y promueve la rueda (decisión 4).
+      if (inheritedName) sessionNameRef.current = inheritedName
       persistCurrentSession()
       await promoteWheelToGlobal()
       setMessages([])
@@ -202,11 +209,25 @@ function TitoPanel({
       sessionPairsRef.current = []
       wheelRef.current = createWheelState(await readLatestR7())
       sessionIdRef.current = null
-      sessionNameRef.current = null
+      // X2: la sesión nueva hereda el nombre definido al archivar.
+      sessionNameRef.current = inheritedName || null
       onResetUsage?.('tito')
     } catch (err) {
       setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: `⚠️ No se pudo archivar la sesión R7: ${err.message}` }])
     }
+  }
+
+  // Bloque X2: acción manual siempre disponible — archiva la sesión actual con un
+  // nombre y define la próxima (que lo hereda). No bloquea tareas en curso.
+  async function handleArchiveWithName() {
+    if (streaming) return
+    if (!messagesRef.current.some(m => m.rol === 'usuario' || m.role === 'user')) return
+    const suggested = sessionNameRef.current || suggestSessionName(messagesRef.current)
+    const input = window.prompt('Nombre de la sesión (artefacto R7). La próxima sesión heredará el nombre:', suggested)
+    if (input === null) return
+    const name = input.trim() || suggested
+    sessionNameRef.current = name
+    await handleSaveR7(name)
   }
 
   // K2: CLS archiva la sesión y arranca una conversación nueva con la rueda global.
@@ -618,11 +639,12 @@ RGartner by R7Signal
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <span style={{ fontSize: '0.7rem', color: '#E8C84A', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
-            ⚠ 70k tokens — Tu contexto está completo. Archívala en R7 antes de empezar un chat nuevo: no perderás nada.
+            ⚠ 70k tokens — El contexto es largo. Podés seguir extendiendo la sesión o archivarla en R7 para empezar un chat nuevo: no perderás nada.
           </span>
           <button
-            onClick={handleSaveR7}
-            style={{ background: 'rgba(232,200,74,0.15)', border: '1px solid rgba(232,200,74,0.5)', borderRadius: 4, padding: '3px 10px', color: '#E8C84A', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
+            onClick={() => handleSaveR7()}
+            disabled={streaming}
+            style={{ background: 'rgba(232,200,74,0.15)', border: '1px solid rgba(232,200,74,0.5)', borderRadius: 4, padding: '3px 10px', color: '#E8C84A', fontSize: '0.65rem', fontWeight: 700, cursor: streaming ? 'not-allowed' : 'pointer', opacity: streaming ? 0.45 : 1, fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
           >Archivar sesión R7</button>
           <button
             onClick={() => setTokenWarningDismissed(true)}
@@ -641,6 +663,15 @@ RGartner by R7Signal
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}
         >🗑 CLS</button>
+        {/* X2: archivado manual siempre disponible (con nombre) */}
+        <button
+          onClick={handleArchiveWithName}
+          disabled={streaming}
+          title="Archivar y definir próxima sesión"
+          style={{ background: 'transparent', border: '1px solid #E8C84A22', borderRadius: 4, padding: '2px 8px', color: '#8A7A3A', fontSize: '0.65rem', fontWeight: 700, cursor: streaming ? 'not-allowed' : 'pointer', opacity: streaming ? 0.4 : 1, fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
+          onMouseEnter={e => { if (!streaming) { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' } }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A22'; e.currentTarget.style.color = '#8A7A3A' }}
+        >📥 Archivar R7</button>
         {streaming && (
           <button className="tito-cancel-btn" onClick={handleCancel}>
             CANCELAR

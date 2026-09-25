@@ -13,7 +13,7 @@ import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
-import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText } from '../lib/sessionStore.js'
+import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -860,9 +860,6 @@ function CochiDesktop({
 
         const remoteSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
         const sessionTotal = tokens + totalTokensAcc
-        const tokenAlert   = sessionTotal > 70000
-          ? '\nTOKEN_ALERT: Session context is large. If the user has not yet been informed, mention that saving R7 (session summary) is recommended before starting a new chat.'
-          : ''
 
         const usesTwoPhaseFinal = trackSteps && isLastStep
         const usesTechnicalPrompt = !isLastStep || usesTwoPhaseFinal
@@ -880,7 +877,7 @@ function CochiDesktop({
             : [
                 {
                   role: 'system',
-                  content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.\nSESSION_TOKENS: ${sessionTotal}${tokenAlert}`
+                  content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.\nSESSION_TOKENS: ${sessionTotal}`
                 },
                 { role: 'system', content: remoteSystem },
               ]
@@ -1041,7 +1038,7 @@ function CochiDesktop({
                     const wrapperMessages = [
                       {
                         role: 'system',
-                        content: `SYSTEM CONTEXT\nYou are operating on a Windows system.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.\nSESSION_TOKENS: ${sessionTotal}${tokenAlert}`
+                        content: `SYSTEM CONTEXT\nYou are operating on a Windows system.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.\nSESSION_TOKENS: ${sessionTotal}`
                       },
                       { role: 'system', content: remoteSystem },
                       {
@@ -1388,11 +1385,18 @@ function CochiDesktop({
       onResetUsage?.('cochi')
     }
   }
-  async function handleSaveR7() {
+  async function handleSaveR7(nameOverride) {
+    // Bloque X2: el archivado nunca bloquea: si hay una tarea en curso, no hace nada.
+    if (loading || planStatus === 'executing') return
+    if (!messagesRef.current.some(isUserMsg)) return
+    const inheritedName = typeof nameOverride === 'string' && nameOverride
+      ? nameOverride
+      : cochiSessionNameRef.current
     try {
       // Bloque L4: la rueda se guarda entera (TODO el R7 hasta este momento), sin
       // R3 (D1) y sin sección "── R3 final ──". flushWheel sella el turno pendiente.
       // K2: igual que CLS, archiva la sesión y promueve la rueda (decisión 4).
+      if (inheritedName) cochiSessionNameRef.current = inheritedName
       persistCurrentSession()
       await promoteWheelToGlobal()
       setMessages([]); setActivity([]); setTokens(0); setCost(0)
@@ -1402,12 +1406,26 @@ function CochiDesktop({
       sessionPairsRef.current = []
       wheelRef.current = createWheelState(await readLatestR7())
       cochiSessionIdRef.current = null
-      cochiSessionNameRef.current = null
+      // X2: la sesión nueva hereda el nombre definido al archivar.
+      cochiSessionNameRef.current = inheritedName || null
       sessionAllowRef.current = new Set()
       onResetUsage?.('cochi')
     } catch (err) {
       pushMessage({ role: 'assistant', content: `⚠️ No se pudo archivar la sesión R7: ${err.message}` })
     }
+  }
+
+  // Bloque X2: acción manual siempre disponible — archiva la sesión actual con un
+  // nombre y define la próxima (que lo hereda). No bloquea tareas en curso.
+  async function handleArchiveWithName() {
+    if (loading || planStatus === 'executing') return
+    if (!messagesRef.current.some(isUserMsg)) return
+    const suggested = cochiSessionNameRef.current || suggestSessionName(messagesRef.current)
+    const input = window.prompt('Nombre de la sesión (artefacto R7). La próxima sesión heredará el nombre:', suggested)
+    if (input === null) return
+    const name = input.trim() || suggested
+    cochiSessionNameRef.current = name
+    await handleSaveR7(name)
   }
 
   // ── Bloque K3: undo / regenerate ──────────────────────────────────────────
@@ -1733,11 +1751,12 @@ RGartner by R7Signal
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <span style={{ fontSize: '0.7rem', color: '#E8762A', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
-            ⚠ 70k tokens — Tu contexto está completo. Archívala en R7 antes de empezar un chat nuevo: no perderás nada.
+            ⚠ 70k tokens — El contexto es largo. Podés seguir extendiendo la sesión o archivarla en R7 para empezar un chat nuevo: no perderás nada.
           </span>
           <button
-            onClick={handleSaveR7}
-            style={{ background: 'rgba(232,108,50,0.15)', border: '1px solid rgba(232,108,50,0.5)', borderRadius: 4, padding: '3px 10px', color: '#E8762A', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
+            onClick={() => handleSaveR7()}
+            disabled={loading || planStatus === 'executing'}
+            style={{ background: 'rgba(232,108,50,0.15)', border: '1px solid rgba(232,108,50,0.5)', borderRadius: 4, padding: '3px 10px', color: '#E8762A', fontSize: '0.65rem', fontWeight: 700, cursor: (loading || planStatus === 'executing') ? 'not-allowed' : 'pointer', opacity: (loading || planStatus === 'executing') ? 0.45 : 1, fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
           >Archivar sesión R7</button>
           <button
             onClick={() => setTokenWarningDismissed(true)}
@@ -1899,6 +1918,16 @@ RGartner by R7Signal
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#D4D8DC'; e.currentTarget.style.color = '#D4D8DC' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#1F1E22'; e.currentTarget.style.color = '#8A868B' }}
         >🗑 CLS</button>
+
+        {/* X2: archivado manual siempre disponible (con nombre) */}
+        <button
+          onClick={handleArchiveWithName}
+          disabled={loading || planStatus === 'executing'}
+          title="Archivar y definir próxima sesión"
+          style={{ background: 'transparent', border: '1px solid #3A2A20', borderRadius: 4, padding: '2px 8px', color: '#B07A4A', fontSize: '0.65rem', fontWeight: 700, cursor: (loading || planStatus === 'executing') ? 'not-allowed' : 'pointer', opacity: (loading || planStatus === 'executing') ? 0.4 : 1, fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
+          onMouseEnter={e => { if (!(loading || planStatus === 'executing')) { e.currentTarget.style.borderColor = '#E8762A'; e.currentTarget.style.color = '#E8762A' } }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#3A2A20'; e.currentTarget.style.color = '#B07A4A' }}
+        >📥 Archivar R7</button>
 
         {/* Cancelar (solo cuando loading) */}
         {loading && (
