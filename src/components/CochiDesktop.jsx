@@ -1803,23 +1803,35 @@ function CochiDesktop({
         display: 'flex', alignItems: 'center',
       }}>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
-          {COCHI_MODELS.map(m => (
-            <button
-              key={m.id}
-              onClick={() => selectModel(m.id)}
-              style={{
-                padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
-                fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
-                background: selectedModel === m.id ? '#2a2a35' : 'transparent',
-                border: '1px solid',
-                borderColor: selectedModel === m.id ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
-                color: selectedModel === m.id ? '#C0C0C0' : 'rgba(207,68,77,0.5)',
-                transition: 'all 0.2s',
-              }}
-            >
-              {m.label}
-            </button>
-          ))}
+          {COCHI_MODELS.map(m => {
+            const isSelected = selectedModel === m.id
+            const isCentinela = m.label === 'Centinela'
+            return (
+              <button
+                key={m.id}
+                onClick={() => selectModel(m.id)}
+                style={{
+                  padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
+                  background: isSelected ? '#2a2a35' : 'transparent',
+                  border: '1px solid',
+                  borderColor: isSelected ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
+                  color: isCentinela ? 'transparent' : (isSelected ? '#C0C0C0' : 'rgba(207,68,77,0.5)'),
+                  transition: 'all 0.2s',
+                }}
+              >
+                {isCentinela
+                  ? <span style={{
+                      backgroundImage: 'linear-gradient(to right, #C47460, #C2C3C4)',
+                      WebkitBackgroundClip: 'text',
+                      backgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      color: 'transparent',
+                    }}>{m.label}</span>
+                  : m.label}
+              </button>
+            )
+          })}
 
           <div style={{ width:1, height:20, background:'rgba(255,255,255,0.05)', flexShrink:0, margin: '0 6px' }} />
 
