@@ -16,7 +16,7 @@ import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summa
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots } from '../lib/snapshotStore.js'
-import { runSubagent, formatBriefResult, subagentActivityDetail } from '../lib/subagent.js'
+import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider, DEFAULT_SUBAGENT_MODEL } from '../lib/subagent.js'
 import { SubagentBubble, SubagentBrief } from './SubagentView.jsx'
 
 
@@ -394,6 +394,9 @@ function CochiDesktop({
   const liveRef                               = useRef(null)
   const abortRef                              = useRef(null)
   const [selectedModel,   setSelectedModel]   = useState(COCHI_MODELS[0].id)
+  // Fase 3.4d: modelo propio del subagente (más barato por defecto). No aplica a
+  // proveedores locales, que heredan el modelo del padre.
+  const [subagentModel,   setSubagentModel]   = useState(DEFAULT_SUBAGENT_MODEL)
   const [ollamaModel,     setOllamaModel]     = useState('llama3.2')
   const [lmStudioModel,   setLmStudioModel]   = useState('local-model')
   const [userName,        setUserName]        = useState('')
@@ -959,6 +962,9 @@ function CochiDesktop({
     let requestCount = 0
 
     const provider = resolveProvider(selectedModel, { preferences, ollamaModel, lmStudioModel })
+    // Fase 3.4d: el subagente corre con su PROPIO modelo (más barato). Los
+    // proveedores locales heredan el del padre (resolveSubagentProvider).
+    const subagentProvider = resolveSubagentProvider(provider, { model: subagentModel })
     const permissionLabel = workspace.permission === 'read' ? 'read-only' : workspace.permission === 'write' ? 'write' : 'full access'
     const nombreAlternativo = preferences?.nombre_alternativo || 'Signor Roberto'
     const chatLanguage = preferences?.chat_language || 'Spanish'
@@ -1046,6 +1052,11 @@ function CochiDesktop({
         let stepInputTokens = 0
         let stepOutputTokens = 0
         let stepCachedTokens = 0
+        // Fase 3.4d: porción del gasto del step que hizo el subagente (se cobra
+        // a su propio modelo, no al del padre).
+        let stepSubInputTokens = 0
+        let stepSubOutputTokens = 0
+        let stepSubCachedTokens = 0
         let stepReasoning = ''
         let innerIter = 0
         const MAX_INNER = 15
@@ -1319,11 +1330,11 @@ function CochiDesktop({
               // Fase 3.3c: se registra el subagente para pintar su estado en vivo
               // (SubagentBubble). Al cerrar, el brief queda como mensaje destacado.
               const subId = newMessageId('sub')
-              addSubagent({ id: subId, label: subLabel, task, status: 'running', tools: [] })
+              addSubagent({ id: subId, label: subLabel, task, status: 'running', tools: [], model: subagentProvider.model })
               // Fase 3.3d: contador EN VIVO del subagente (se pinta en la burbuja).
               const subUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cached_tokens: 0, calls: 0 }
               const sub = await runSubagent({
-                provider,
+                provider: subagentProvider,
                 task,
                 context: args.context ? String(args.context) : '',
                 label: subLabel,
@@ -1347,6 +1358,9 @@ function CochiDesktop({
                   stepInputTokens += u.promptTokens
                   stepOutputTokens += u.completionTokens
                   stepCachedTokens += u.cachedTokens
+                  stepSubInputTokens += u.promptTokens
+                  stepSubOutputTokens += u.completionTokens
+                  stepSubCachedTokens += u.cachedTokens
                   subUsage.prompt_tokens += u.promptTokens
                   subUsage.completion_tokens += u.completionTokens
                   subUsage.total_tokens += u.totalTokens
@@ -1363,6 +1377,7 @@ function CochiDesktop({
                 iterations: sub.iterations || 0,
                 usageTotal: sub.usageTotal || subUsage,
                 label: sub.label || subLabel,
+                model: sub.model || subagentProvider.model,
               }
               patchSubagent(subId, done)
               pushMessage({ role: 'subagent', sub: { id: subId, task, ...done } })
@@ -1501,7 +1516,18 @@ function CochiDesktop({
           break
         }
 
-        const stepCost = calculateCost(selectedModel, stepInputTokens, stepOutputTokens, 'token', stepCachedTokens)
+        // Fase 3.4d: el gasto del subagente se cobra a su propio modelo; el resto
+        // al del padre. Los tokens del subagente ya están incluidos en los
+        // acumuladores del step, así que se descuentan para no cobrarlos doble.
+        const subCost = calculateCost(subagentProvider.model, stepSubInputTokens, stepSubOutputTokens, 'token', stepSubCachedTokens)
+        const ownStepCost = calculateCost(
+          selectedModel,
+          Math.max(0, stepInputTokens - stepSubInputTokens),
+          Math.max(0, stepOutputTokens - stepSubOutputTokens),
+          'token',
+          Math.max(0, stepCachedTokens - stepSubCachedTokens),
+        )
+        const stepCost = ownStepCost + subCost
         totalCostAcc += stepCost
         setTokens(prev => prev + stepTokens)
         setCost(prev => prev + stepCost)
@@ -1858,6 +1884,32 @@ function CochiDesktop({
               }}
             />
           )}
+
+          {/* Fase 3.4d — modelo propio del subagente (spawn_agent). Sólo aplica
+              a OpenRouter; con proveedor local se hereda el modelo del padre. */}
+          <div style={{ width:1, height:20, background:'rgba(255,255,255,0.05)', flexShrink:0, margin: '0 6px' }} />
+          <span style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: '10px',
+            letterSpacing: '0.12em', textTransform: 'uppercase',
+            color: (selectedModel === 'ollama' || selectedModel === 'lmstudio') ? '#3a3a42' : 'rgba(224,168,95,0.7)',
+          }}>
+            sub
+          </span>
+          <select
+            value={subagentModel}
+            onChange={e => setSubagentModel(e.target.value)}
+            disabled={selectedModel === 'ollama' || selectedModel === 'lmstudio'}
+            title="Modelo del subagente (spawn_agent)"
+            style={{
+              background: '#1a1a20', borderRadius: 4, cursor: 'pointer',
+              fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
+              border: '1px solid rgba(224,168,95,0.35)',
+              color: (selectedModel === 'ollama' || selectedModel === 'lmstudio') ? '#5a5a62' : '#E0A85F',
+              padding: '3px 6px', outline: 'none',
+            }}
+          >
+            {COCHI_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </select>
         </div>
       </div>
 
