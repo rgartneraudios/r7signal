@@ -16,7 +16,7 @@ import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summa
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots } from '../lib/snapshotStore.js'
-import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider, DEFAULT_SUBAGENT_MODEL } from '../lib/subagent.js'
+import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider, resolveStoredSubagentModel, DEFAULT_SUBAGENT_MODEL } from '../lib/subagent.js'
 import { SubagentBubble, SubagentBrief } from './SubagentView.jsx'
 
 
@@ -546,6 +546,8 @@ function CochiDesktop({
           setPreferences(data)
           if (data.ollamaModel) setOllamaModel(data.ollamaModel)
           if (data.lmStudioModel) setLmStudioModel(data.lmStudioModel)
+          // Fase 3.4e: restaurar el modelo del subagente si sigue siendo válido.
+          setSubagentModel(resolveStoredSubagentModel(data.subagentModel, COCHI_MODELS.map(m => m.id)))
         }
         onPreferencesLoaded?.(data)
       } catch {
@@ -1875,7 +1877,7 @@ function CochiDesktop({
           </span>
           <select
             value={subagentModel}
-            onChange={e => setSubagentModel(e.target.value)}
+            onChange={e => { setSubagentModel(e.target.value); savePreferences({ subagentModel: e.target.value }) }}
             disabled={selectedModel === 'ollama' || selectedModel === 'lmstudio'}
             title="Modelo del subagente (spawn_agent)"
             style={{

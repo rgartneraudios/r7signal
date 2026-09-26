@@ -62,6 +62,18 @@ export function resolveSubagentProvider(parentProvider, options = {}) {
   return { ...parentProvider, model }
 }
 
+// 3.4e — Persistencia del modelo del subagente. El selector "sub" vivía en estado
+// del panel y se reseteaba al recargar. PURO: acepta el valor guardado SÓLO si
+// está entre los ids válidos (catálogo del padre); si viene vacío/desconocido cae
+// al default. `validIds` inyectable para el harness.
+export function resolveStoredSubagentModel(stored, validIds) {
+  const value = String(stored || '').trim()
+  if (!value) return DEFAULT_SUBAGENT_MODEL
+  const ids = Array.isArray(validIds) ? validIds : []
+  if (ids.length && !ids.includes(value)) return DEFAULT_SUBAGENT_MODEL
+  return value
+}
+
 // 3.4c: el brief salía verboso (narraba el proceso: "The file exists. Let me
 // compute…" + secciones "Notas" sobre el truncado) pese a pedir concisión. Se
 // refuerza con una sección BRIEF STYLE explícita que prohíbe narrar el proceso y
