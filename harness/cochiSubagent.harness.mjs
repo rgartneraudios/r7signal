@@ -318,13 +318,13 @@ check('presupuesto con texto → ok true (parcial)', partial.ok, true)
 check('brief parcial devuelto', partial.brief, 'brief parcial')
 
 console.log('— Fase 3.4d · modelo propio del subagente —')
-check('DEFAULT_SUBAGENT_MODEL exportado', DEFAULT_SUBAGENT_MODEL, '~deepseek/deepseek-flash-latest')
-const parentProv = { model: '~deepseek/deepseek-v4-flash-latest', url: 'http://or', headers: { Authorization: 'k' }, supportsUsage: true, isLocal: false }
+check('DEFAULT_SUBAGENT_MODEL exportado', DEFAULT_SUBAGENT_MODEL, '~deepseek/deepseek-v4-flash-latest')
+const parentProv = { model: '~deepseek/deepseek-flash-latest', url: 'http://or', headers: { Authorization: 'k' }, supportsUsage: true, isLocal: false }
 const subProv = resolveSubagentProvider(parentProv)
-check('openrouter: cambia al modelo barato', subProv.model, DEFAULT_SUBAGENT_MODEL)
+check('openrouter: cambia al modelo propio del subagente', subProv.model, DEFAULT_SUBAGENT_MODEL)
 checkTrue('openrouter: conserva url/headers', subProv.url === 'http://or' && subProv.headers.Authorization === 'k')
 checkTrue('openrouter: conserva supportsUsage', subProv.supportsUsage === true)
-check('openrouter: no muta el provider del padre', parentProv.model, '~deepseek/deepseek-v4-flash-latest')
+check('openrouter: no muta el provider del padre', parentProv.model, '~deepseek/deepseek-flash-latest')
 check('modelo inyectable', resolveSubagentProvider(parentProv, { model: 'custom/model' }).model, 'custom/model')
 check('modelo vacío → default', resolveSubagentProvider(parentProv, { model: '' }).model, DEFAULT_SUBAGENT_MODEL)
 const localSub = { model: 'llama3.2', url: 'http://localhost', headers: {}, isLocal: true }
