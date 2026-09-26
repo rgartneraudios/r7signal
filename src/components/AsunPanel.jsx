@@ -1200,26 +1200,18 @@ function AsunPanel({
           color: #3A3840;
         }
         .asun-header-btn.active {
-          background-image: linear-gradient(135deg, #876EF5, #FA61DB);
-          background-clip: text;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          color: transparent;
+          color: #C8A2D8;
           border-color: rgba(200,162,216,0.3);
           background-color: rgba(200,162,216,0.06);
-          text-shadow: 0 0 12px rgba(200,162,216,0.3), 0 0 30px rgba(200,162,216,0.15);
         }
         .asun-header-btn:not(.active):hover { color: #8A868B; }
 
         .asun-wbtn {
           padding: 11px 18px;
           background: #131215; border: 1px solid #201F23; border-radius: 10px;
-          color: #8A868B; cursor: pointer;
+          color: #C8A2D8; cursor: pointer;
           font-family: 'Boogaloo', cursive; font-size: 1.1rem;
           letter-spacing: 0.04em; transition: all 0.18s;
-          background: linear-gradient(135deg, #876EF5, #FA61DB);
-          -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-          background-clip: text;
         }
         .asun-wbtn:hover { border-color: #424045; }
         .asun-wbtn.active { border-color: #C8A2D8; }
@@ -1227,8 +1219,9 @@ function AsunPanel({
         .asun-msg-bubble {
           max-width: 85%;
           padding: 2px 0;
-          font-family: 'Space Grotesk', sans-serif;
+          font-family: 'Sora', sans-serif;
           font-size: 0.92rem; line-height: 1.65;
+          font-weight: 300;
           letter-spacing: 0.02em; white-space: pre-wrap;
         }
 
@@ -1292,6 +1285,7 @@ function AsunPanel({
                     <button key={m.id}
                       className={`asun-header-btn${selectedLLMModel === m.id ? ' active' : ''}`}
                       onClick={() => setSelectedLLMModel(m.id)}
+                      style={selectedLLMModel === m.id ? { color: m.id === 'google/gemini-3.8-flash' ? '#B3B7FF' : '#DF9CFF' } : undefined}
                     >
                       {m.label}
                     </button>
@@ -1321,8 +1315,8 @@ function AsunPanel({
         {/* ── LLM / MÚSICA: chat ── */}
         {category !== 'imagen' && (
           <div ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{
-            '--asun-label': isReveladora ? '#D4B8D8' : '#C8A2D8',
-            '--asun-body': isReveladora ? '#D4B8D8' : '#C067E8',
+            '--asun-label': isReveladora ? '#B3B7FF' : '#DF9CFF',
+            '--asun-body': isReveladora ? '#B3B7FF' : '#DF9CFF',
             display: 'flex', flexDirection: 'column',
             gap: 14, padding: '16px 16px 24px',
             flex: 1, position: 'relative',
@@ -1335,16 +1329,16 @@ function AsunPanel({
                 userSelect: 'none', pointerEvents: 'none',
               }}>
                 <div className="watermark-brand" style={{
-                color: isReveladora ? '#D4B8D8' : '#C067E8',
+                color: isReveladora ? '#B3B7FF' : '#DF9CFF',
                 fontSize: '1.5rem',
               }}>R7SIGNAL</div>
                 <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
                 <div className="watermark-name" style={{
-                  color: isReveladora ? '#D4B8D8' : '#C067E8',
+                  color: isReveladora ? '#B3B7FF' : '#DF9CFF',
                   fontSize: '1.9rem',
                 }}>ASUN PANEL</div>
                 <div className="watermark-sub" style={{
-                  color: isReveladora ? '#D4B8D8' : '#C067E8',
+                  color: isReveladora ? '#B3B7FF' : '#DF9CFF',
                   fontSize: '0.8rem',
                 }}>
 {category === 'llm'
@@ -1451,7 +1445,7 @@ RGartner by R7Signal</>
         <span style={{
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.06em',
-          color: '#C8A2D8',
+          color: isReveladora ? '#B3B7FF' : '#DF9CFF',
         }}>
           {category === 'musica'
             ? '~deepseek/deepseek-v4-flash-latest · lyria-3'

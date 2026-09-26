@@ -247,7 +247,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
           box-shadow: 0 0 10px rgba(200,162,216,0.33), 0 0 22px rgba(200,162,216,0.13);
         }
         .send-btn.left-btn.tito-active.selected {
-          box-shadow: 0 0 10px #E8C84A55, 0 0 22px #E8C84A22;
+          box-shadow: 0 0 10px #D1C49055, 0 0 22px #D1C49022;
         }
         .send-btn.left-btn.ready {
           filter: brightness(1.4);
@@ -277,7 +277,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
           line-height: 1.1;
         }
         .watermark-sub {
-          font-family: 'Space Grotesk', sans-serif;
+          font-family: 'Manrope', sans-serif;
           font-size: 0.8rem;
           line-height: 1.8;
           font-weight: 500;
@@ -285,7 +285,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
           text-align: center;
         }
         .watermark-hint {
-          font-family: 'Space Grotesk', sans-serif;
+          font-family: 'Manrope', sans-serif;
           font-size: 0.75rem;
           color: #2A2830;
           letter-spacing: 0.03em;
@@ -302,7 +302,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
         .tito-panel .watermark-brand,
         .tito-panel .watermark-name,
         .tito-panel .watermark-divider {
-          color: #E8C84A;
+          color: #D1C490;
         }
         .tito-watermark .watermark-hint {
           color: #EDD780;
@@ -320,8 +320,8 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
         }
         .level-btn {
           background: transparent;
-          border: 1px solid #E8C84A33;
-          color: #E8C84A66;
+          border: 1px solid #D1C49033;
+          color: #D1C49066;
           font-family: 'JetBrains Mono', monospace;
           font-size: 11px;
           padding: 4px 10px;
@@ -330,9 +330,9 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
           transition: all 0.2s;
         }
         .level-btn.active {
-          border-color: #E8C84A;
-          color: #E8C84A;
-          box-shadow: 0 0 8px #E8C84A44;
+          border-color: #D1C490;
+          color: #D1C490;
+          box-shadow: 0 0 8px #D1C49044;
         }
 
         .tito-chat {
@@ -361,9 +361,10 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
         .tito-msg {
           max-width: 85%;
           padding: 2px 0;
-          font-family: 'Space Grotesk', sans-serif;
+          font-family: 'Sora', sans-serif;
           font-size: 0.92rem;
           line-height: 1.65;
+          font-weight: 300;
           letter-spacing: 0.02em;
           white-space: pre-wrap;
         }
@@ -374,12 +375,12 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
         .tito-msg--assistant {
           align-self: flex-start;
         }
-        .tito-msg--assistant .tito-msg-content { color: #E8C84A; }
+        .tito-msg--assistant .tito-msg-content { color: #D1C490; }
 
         .tito-handoff-btn {
           background: linear-gradient(90deg, #F5D27A22, #CED2DB22);
-          border: 1px solid #E8C84A;
-          color: #E8C84A;
+          border: 1px solid #D1C490;
+          color: #D1C490;
           font-family: 'JetBrains Mono', monospace;
           font-size: 12px;
           padding: 6px 16px;
@@ -394,7 +395,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
 
         .tito-status {
           flex-shrink: 0;
-          border-top: 1px solid #E8C84A22;
+          border-top: 1px solid #D1C49022;
           background: rgba(9,8,10,0.8);
           padding: 7px 14px;
           display: flex;
@@ -403,14 +404,14 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
           font-family: 'JetBrains Mono', monospace;
           font-size: 0.62rem;
           font-weight: 700;
-          color: #E8C84A;
+          color: #D1C490;
         }
         .tito-cancel-btn {
           background: rgba(232,200,74,0.15);
-          border: 1px solid #E8C84A;
+          border: 1px solid #D1C490;
           border-radius: 5px;
           padding: 4px 12px;
-          color: #E8C84A;
+          color: #D1C490;
           font-size: 0.72rem;
           font-weight: 700;
           letter-spacing: 0.1em;

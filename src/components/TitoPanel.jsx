@@ -33,16 +33,16 @@ const TitoMessageList = memo(function TitoMessageList({ messages, lastAssistantI
           <button
             onClick={onUndo}
             title="Deshacer el último turno"
-            style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}
+            style={{ background: 'transparent', border: '1px solid #D1C49033', borderRadius: 4, padding: '2px 8px', color: '#D1C49066', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#D1C490'; e.currentTarget.style.color = '#D1C490' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1C49033'; e.currentTarget.style.color = '#D1C49066' }}
           >↶ Undo</button>
           <button
             onClick={onRegenerate}
             title="Volver a generar la última respuesta"
-            style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}
+            style={{ background: 'transparent', border: '1px solid #D1C49033', borderRadius: 4, padding: '2px 8px', color: '#D1C49066', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#D1C490'; e.currentTarget.style.color = '#D1C490' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1C49033'; e.currentTarget.style.color = '#D1C49066' }}
           >↻ Regenerate</button>
         </div>
       )}
@@ -567,8 +567,8 @@ RGartner by R7Signal
             onClick={handleConfirmR9}
             style={{
               position: 'absolute', left: r9Btn.x, top: r9Btn.y, transform: 'translateX(-50%)',
-              background: '#1A1920', border: '1px solid #E8C84A', borderRadius: 6,
-              padding: '4px 10px', color: '#E8C84A', fontSize: '0.68rem', fontWeight: 700,
+              background: '#1A1920', border: '1px solid #D1C490', borderRadius: 6,
+              padding: '4px 10px', color: '#D1C490', fontSize: '0.68rem', fontWeight: 700,
               cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", zIndex: 50,
               boxShadow: '0 4px 12px rgba(0,0,0,0.6)', whiteSpace: 'nowrap',
             }}
@@ -585,13 +585,13 @@ RGartner by R7Signal
           padding: '8px 14px',
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <span style={{ fontSize: '0.7rem', color: '#E8C84A', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
+          <span style={{ fontSize: '0.7rem', color: '#D1C490', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
             ⚠ 70k tokens — El contexto es largo. Podés seguir extendiendo la sesión o archivarla en R7 para empezar un chat nuevo: no perderás nada.
           </span>
           <button
             onClick={() => handleSaveR7()}
             disabled={streaming}
-            style={{ background: 'rgba(232,200,74,0.15)', border: '1px solid rgba(232,200,74,0.5)', borderRadius: 4, padding: '3px 10px', color: '#E8C84A', fontSize: '0.65rem', fontWeight: 700, cursor: streaming ? 'not-allowed' : 'pointer', opacity: streaming ? 0.45 : 1, fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
+            style={{ background: 'rgba(232,200,74,0.15)', border: '1px solid rgba(232,200,74,0.5)', borderRadius: 4, padding: '3px 10px', color: '#D1C490', fontSize: '0.65rem', fontWeight: 700, cursor: streaming ? 'not-allowed' : 'pointer', opacity: streaming ? 0.45 : 1, fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
           >Archivar sesión R7</button>
           <button
             onClick={() => setTokenWarningDismissed(true)}
@@ -606,18 +606,18 @@ RGartner by R7Signal
         <div style={{ flex: 1 }} />
         <button
           onClick={handleClear}
-          style={{ background: 'transparent', border: '1px solid #E8C84A33', borderRadius: 4, padding: '2px 8px', color: '#E8C84A66', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A33'; e.currentTarget.style.color = '#E8C84A66' }}
+          style={{ background: 'transparent', border: '1px solid #D1C49033', borderRadius: 4, padding: '2px 8px', color: '#D1C49066', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#D1C490'; e.currentTarget.style.color = '#D1C490' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1C49033'; e.currentTarget.style.color = '#D1C49066' }}
         >🗑 CLS</button>
         {/* X2: archivado manual siempre disponible (con nombre) */}
         <button
           onClick={handleArchiveWithName}
           disabled={streaming}
           title="Archivar y definir próxima sesión"
-          style={{ background: 'transparent', border: '1px solid #E8C84A22', borderRadius: 4, padding: '2px 8px', color: '#8A7A3A', fontSize: '0.65rem', fontWeight: 700, cursor: streaming ? 'not-allowed' : 'pointer', opacity: streaming ? 0.4 : 1, fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
-          onMouseEnter={e => { if (!streaming) { e.currentTarget.style.borderColor = '#E8C84A'; e.currentTarget.style.color = '#E8C84A' } }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8C84A22'; e.currentTarget.style.color = '#8A7A3A' }}
+          style={{ background: 'transparent', border: '1px solid #D1C49022', borderRadius: 4, padding: '2px 8px', color: '#8A7A3A', fontSize: '0.65rem', fontWeight: 700, cursor: streaming ? 'not-allowed' : 'pointer', opacity: streaming ? 0.4 : 1, fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
+          onMouseEnter={e => { if (!streaming) { e.currentTarget.style.borderColor = '#D1C490'; e.currentTarget.style.color = '#D1C490' } }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1C49022'; e.currentTarget.style.color = '#8A7A3A' }}
         >📥 Archivar R7</button>
         {streaming && (
           <button className="tito-cancel-btn" onClick={handleCancel}>
