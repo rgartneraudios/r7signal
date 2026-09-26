@@ -237,7 +237,7 @@ const CochiMessageList = memo(function CochiMessageList({ messages, lastAssistan
     ) : msg.role === 'user' ? (
       <div key={msg.id} className="cd-message-enter" style={{ alignSelf: 'flex-end', maxWidth: '85%', padding: '2px 0' }}>
         <div style={{
-          fontSize: '0.92rem', lineHeight: 1.5, fontFamily: "'Inter', sans-serif",
+          fontSize: '0.92rem', lineHeight: 1.5, fontFamily: "'Sora', sans-serif", fontWeight: 300,
           whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#5FD3E0',
         }}>
           {msg.content}
@@ -252,7 +252,7 @@ const CochiMessageList = memo(function CochiMessageList({ messages, lastAssistan
         </div>
         <ReasoningBlock text={msg.reasoning} />
         <div style={{
-          fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
+          fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Sora', sans-serif", fontWeight: 300,
           color: 'var(--cochi-body)',
         }}>
           <CochiMarkdown content={msg.content} />
@@ -301,7 +301,7 @@ const CochiStreamingBubble = memo(forwardRef(function CochiStreamingBubble({ con
     <div className="cd-message-enter" style={{ alignSelf: 'flex-start', maxWidth: '100%', padding: '2px 0' }}>
       <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase', color: 'var(--cochi-label)' }}>COCHI</div>
       <div style={{
-        fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Inter', sans-serif",
+        fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Sora', sans-serif", fontWeight: 300,
         whiteSpace: 'pre-wrap', wordBreak: 'break-word',
         color: 'var(--cochi-body)',
       }}>{text}</div>
@@ -1753,7 +1753,7 @@ function CochiDesktop({
         <div className="leather-grid" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.7 }} />
 
         {/* Historial */}
-        <div ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{ '--cochi-label': isTerminator ? '#D4B8D8' : '#6A7A8A', '--cochi-body': isTerminator ? '#B9C0CB' : '#C47460', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 4, position: 'relative', zIndex: 1 }}>
+        <div ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{ '--cochi-label': isTerminator ? '#C1C4C9' : '#E3B5A3', '--cochi-body': isTerminator ? '#C1C4C9' : '#E3B5A3', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 4, position: 'relative', zIndex: 1 }}>
 
           {/* Watermark estado vacío */}
           {messages.length === 0 && !loading && (
@@ -1762,16 +1762,16 @@ function CochiDesktop({
               flex: 1, padding: '40px 20px', gap: 10, userSelect: 'none', pointerEvents: 'none',
             }}>
               <div className="watermark-brand" style={{
-                color: isTerminator ? '#B9C0CB' : '#C47460',
+                color: isTerminator ? '#C1C4C9' : '#E3B5A3',
                 fontSize: '1.5rem',
               }}>R7SIGNAL</div>
               <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
               <div className="watermark-name" style={{
-                color: isTerminator ? '#B9C0CB' : '#C47460',
+                color: isTerminator ? '#C1C4C9' : '#E3B5A3',
                 fontSize: '1.9rem',
               }}>COCHI DESKTOP</div>
               <div className="watermark-sub" style={{
-                color: isTerminator ? '#B9C0CB' : '#C47460',
+                color: isTerminator ? '#C1C4C9' : '#E3B5A3',
                 fontSize: '0.8rem',
               }}>
               Cochi es un agente diseñado para administrar tus archivos y tu código.<br />
@@ -2048,14 +2048,10 @@ RGartner by R7Signal
           {loading && <span className="cd-spinner" />}
           <span style={{
             fontWeight: 700,
-            ...(isTerminator
-              ? { backgroundImage:'linear-gradient(135deg, #D5DBDB 15%, #7F8DA3 85%)' }
-              : { backgroundImage:'linear-gradient(135deg, #C47460 15%, #C2C3C4 85%)' }),
-            WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
-            backgroundClip:'text',
+            color: isTerminator ? '#C1C4C9' : '#E3B5A3',
           }}>{selectedModel}</span>
           {activeModelPrice && (
-            <span style={{ color: isTerminator ? 'rgba(127,141,163,0.8)' : 'rgba(196,116,96,0.8)', fontSize: '0.55rem' }}>
+            <span style={{ color: isTerminator ? 'rgba(193,196,201,0.8)' : 'rgba(227,181,163,0.8)', fontSize: '0.55rem' }}>
               · {activeModelPrice.inputPerM}$/M in · {activeModelPrice.outputPerM}$/M out
             </span>
           )}
