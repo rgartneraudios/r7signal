@@ -14,6 +14,7 @@ import {
   SUBAGENT_SYSTEM_PROMPT,
   buildSubagentMessages,
   normalizeBrief,
+  stripLeadingNarration,
   truncateToolResult,
   formatBriefResult,
   subagentActivityDetail,
@@ -51,6 +52,21 @@ checkTrue('sin contexto no agrega CONTEXT', !noCtx[1].content.includes('CONTEXT:
 checkTrue('idioma default Spanish', noCtx[0].content.includes('Spanish'))
 check('robusto sin args', buildSubagentMessages().length, 2)
 checkTrue('prompt declara prohibición de control signals', SUBAGENT_SYSTEM_PROMPT.includes('[STEP_COMPLETE]'))
+checkTrue('prompt incluye BRIEF STYLE (3.4c)', SUBAGENT_SYSTEM_PROMPT.includes('BRIEF STYLE'))
+checkTrue('prompt prohíbe narrar el proceso', SUBAGENT_SYSTEM_PROMPT.includes('NEVER narrate your process'))
+checkTrue('prompt prohíbe secciones meta (Notes/Notas)', SUBAGENT_SYSTEM_PROMPT.includes('"Notes" / "Notas"'))
+checkTrue('prompt exige arrancar con contenido', SUBAGENT_SYSTEM_PROMPT.includes('Start DIRECTLY with the findings'))
+
+console.log('— Fase 3.4c · stripLeadingNarration —')
+check('sin narración → intacto', stripLeadingNarration('Resultado: 42'), 'Resultado: 42')
+check('quita una línea de preámbulo', stripLeadingNarration('Let me compute the total.\nTotal: 42'), 'Total: 42')
+check('quita varias líneas de preámbulo', stripLeadingNarration('The file exists.\nLet me read it.\nLíneas: 114'), 'Líneas: 114')
+check('ignora líneas en blanco iniciales', stripLeadingNarration('\n\n  Now I will answer.\n  Total: 7  '), 'Total: 7')
+check('conserva el cuerpo con viñetas', stripLeadingNarration('Looking at the data\n- a: 1\n- b: 2'), '- a: 1\n- b: 2')
+check('sólo narración → devuelve original', stripLeadingNarration('Let me think about it.'), 'Let me think about it.')
+check('robusto null', stripLeadingNarration(null), '')
+check('robusto sin args', stripLeadingNarration(), '')
+check('no toca narración en medio', stripLeadingNarration('Total: 42\nLet me explain'), 'Total: 42\nLet me explain')
 
 console.log('— normalizeBrief —')
 check('trim', normalizeBrief('  hola  '), 'hola')
@@ -63,6 +79,8 @@ const long = 'a'.repeat(SUBAGENT_BRIEF_MAX_CHARS + 500)
 const normLong = normalizeBrief(long)
 checkTrue('recorta al tope', normLong.length <= SUBAGENT_BRIEF_MAX_CHARS + 40)
 checkTrue('avisa truncado', normLong.includes('[brief truncado]'))
+check('quita preámbulo de narración', normalizeBrief('Let me read the file.\nBytes: 6574'), 'Bytes: 6574')
+check('quita control signals + narración', normalizeBrief('Now I will answer. [STEP_COMPLETE: ok]\nLíneas: 114'), 'Líneas: 114')
 
 console.log('— formatBriefResult —')
 check('ok con label', formatBriefResult({ ok: true, brief: 'B', label: 'L' }), 'BRIEF DEL SUBAGENTE (L):\nB')
