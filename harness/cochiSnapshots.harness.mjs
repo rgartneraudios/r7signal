@@ -12,8 +12,13 @@ import {
   summarizeSnapshot,
   latestSnapshotId,
   safeSessionId,
+  parseTurnNumber,
+  isSnapshotExpired,
+  pruneOldSnapshots,
   SNAPSHOTS_DIR,
   MAX_BACKUP_BYTES,
+  DEFAULT_SNAPSHOT_MAX_AGE_MS,
+  DEFAULT_SNAPSHOT_KEEP_TURNS,
 } from '../src/lib/snapshotStore.js'
 
 let pass = 0
@@ -44,7 +49,12 @@ function makeFakeFs() {
   const calls = []
   return {
     files, dirs, calls,
-    async mkdir(path, opts) { calls.push({ op: 'mkdir', path, opts }); dirs.add(path) },
+    async mkdir(path, opts) {
+      calls.push({ op: 'mkdir', path, opts })
+      const parts = String(path).replace(/\\/g, '/').split('/').filter(Boolean)
+      let acc = ''
+      for (const p of parts) { acc = acc ? `${acc}/${p}` : p; dirs.add(acc) }
+    },
     async writeTextFile(path, text, opts) { calls.push({ op: 'writeTextFile', path, opts }); files.set(path, enc.encode(text)) },
     async readTextFile(path, opts) {
       calls.push({ op: 'readTextFile', path, opts })
@@ -97,6 +107,11 @@ function makeFakeFs() {
 }
 function setText(fake, path, text) { fake.files.set(path, enc.encode(text)) }
 function getText(fake, path) { return fake.files.has(path) ? dec.decode(fake.files.get(path)) : null }
+function setManifest(fake, id, createdAt) {
+  setText(fake, `${SNAPSHOTS_DIR}/${id}/manifest.json`, JSON.stringify({ id, createdAt, entries: [] }))
+}
+function manifestExists(fake, id) { return fake.files.has(`${SNAPSHOTS_DIR}/${id}/manifest.json`) }
+const DAY = 24 * 60 * 60 * 1000
 
 const ROOT = 'ROOT_TEST'
 const opts = (fake) => ({ fs: fake, baseDir: ROOT })
@@ -296,6 +311,72 @@ console.log('\n— clearSessionSnapshots: limpia la sesión al archivarla —')
   await clearSessionSnapshots('sess-clr', opts(fake))
   check('ya no hay latest', await latestSnapshotId('sess-clr', opts(fake)), null)
   check('sin snapshot tras limpiar', fake.files.has(`${SNAPSHOTS_DIR}/${s2.id}/manifest.json`), false)
+}
+
+console.log('\n— parseTurnNumber —')
+check('turn-3 → 3', parseTurnNumber('turn-3'), 3)
+check('turn-12 → 12', parseTurnNumber('turn-12'), 12)
+check('no-turn → null', parseTurnNumber('files'), null)
+check('null → null', parseTurnNumber(null), null)
+
+console.log('\n— isSnapshotExpired (puro) —')
+const now = Date.parse('2026-01-31T00:00:00.000Z')
+check('40 días > 30 días → true', isSnapshotExpired('2025-12-22T00:00:00.000Z', { now }), true)
+check('10 días → false', isSnapshotExpired('2026-01-21T00:00:00.000Z', { now }), false)
+check('mismo instante → false', isSnapshotExpired('2026-01-31T00:00:00.000Z', { now }), false)
+check('fecha inválida → false (se conserva)', isSnapshotExpired('no-es-fecha', { now }), false)
+check('ausente → false', isSnapshotExpired(null, { now }), false)
+check('default maxAgeMs exportado', typeof DEFAULT_SNAPSHOT_MAX_AGE_MS, 'number')
+check('default keepTurns exportado', typeof DEFAULT_SNAPSHOT_KEEP_TURNS, 'number')
+
+console.log('\n— pruneOldSnapshots: conserva los últimos N aunque estén vencidos —')
+{
+  const fake = makeFakeFs()
+  setText(fake, 'C:/ws/a', 'A')
+  for (let i = 0; i < 4; i++) {
+    const s = await beginTurn('sess-prune', opts(fake))
+    await capturePath(s, 'C:/ws/a', opts(fake))
+    setManifest(fake, s.id, '2020-01-01T00:00:00.000Z') // todos vencidos
+  }
+  const res = await pruneOldSnapshots({ ...opts(fake), maxAgeMs: 30 * DAY, keepLatest: 2, now })
+  check('removidos los 2 viejos', res.removed.sort(), ['sess-prune/turn-1', 'sess-prune/turn-2'])
+  check('conservados los 2 últimos', res.kept.sort(), ['sess-prune/turn-3', 'sess-prune/turn-4'])
+  check('turn-1 borrado', manifestExists(fake, 'sess-prune/turn-1'), false)
+  check('turn-4 intacto', manifestExists(fake, 'sess-prune/turn-4'), true)
+  check('latestSnapshotId sigue en turn-4', await latestSnapshotId('sess-prune', opts(fake)), 'sess-prune/turn-4')
+  check('sin errores', res.errors.length, 0)
+}
+
+console.log('\n— pruneOldSnapshots: poda por antigüedad (keepLatest 0) —')
+{
+  const fake = makeFakeFs()
+  setText(fake, 'C:/ws/a', 'A')
+  const s1 = await beginTurn('sess-age', opts(fake)); await capturePath(s1, 'C:/ws/a', opts(fake))
+  const s2 = await beginTurn('sess-age', opts(fake)); await capturePath(s2, 'C:/ws/a', opts(fake))
+  setManifest(fake, s1.id, '2025-12-01T00:00:00.000Z') // 61 días
+  setManifest(fake, s2.id, '2026-01-20T00:00:00.000Z') // 11 días
+  const res = await pruneOldSnapshots({ ...opts(fake), maxAgeMs: 30 * DAY, keepLatest: 0, now })
+  check('sólo cae el vencido', res.removed, ['sess-age/turn-1'])
+  check('el reciente queda', manifestExists(fake, 'sess-age/turn-2'), true)
+}
+
+console.log('\n— pruneOldSnapshots: fecha ilegible se conserva —')
+{
+  const fake = makeFakeFs()
+  setText(fake, 'C:/ws/a', 'A')
+  const s1 = await beginTurn('sess-safe', opts(fake)); await capturePath(s1, 'C:/ws/a', opts(fake))
+  setManifest(fake, s1.id, '???')
+  const res = await pruneOldSnapshots({ ...opts(fake), maxAgeMs: 0, keepLatest: 0, now })
+  check('no borra fecha inválida', manifestExists(fake, 'sess-safe/turn-1'), true)
+  check('kept lo incluye', res.kept, ['sess-safe/turn-1'])
+}
+
+console.log('\n— pruneOldSnapshots: sin snapshots no lanza —')
+{
+  const fake = makeFakeFs()
+  const res = await pruneOldSnapshots(opts(fake))
+  check('removed vacío', res.removed, [])
+  check('kept vacío', res.kept, [])
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

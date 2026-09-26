@@ -15,7 +15,7 @@ import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
-import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots } from '../lib/snapshotStore.js'
+import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots, pruneOldSnapshots } from '../lib/snapshotStore.js'
 import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider, resolveStoredSubagentModel, DEFAULT_SUBAGENT_MODEL } from '../lib/subagent.js'
 import { SubagentBubble, SubagentBrief } from './SubagentView.jsx'
 
@@ -562,6 +562,12 @@ function CochiDesktop({
     }
     loadUser()
   }, [onPreferencesLoaded])
+
+  // Retención de snapshots: poda los turnos vencidos por antigüedad al arrancar
+  // (conserva los últimos N por sesión). Fire-and-forget: nunca debe bloquear.
+  useEffect(() => {
+    pruneOldSnapshots().catch(() => {})
+  }, [])
 
   const savePreferences = async (prefs) => {
     try {

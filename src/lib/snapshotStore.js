@@ -22,6 +22,12 @@ export const SNAPSHOTS_DIR = 'Snapshots'
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024   // 5MB por archivo
 export const MAX_TOTAL_BYTES = 50 * 1024 * 1024   // 50MB por turno
 
+// Retención: una sesión larga puede acumular muchos turnos (hasta 50MB cada uno).
+// La poda por antigüedad borra los turnos VIEJOS, pero NUNCA los últimos N de cada
+// sesión (así undo/regenerate siguen teniendo su snapshot aunque estén vencidos).
+export const DEFAULT_SNAPSHOT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000 // 30 días
+export const DEFAULT_SNAPSHOT_KEEP_TURNS = 20
+
 const defaultFs = {
   readFile, writeFile, readTextFile, writeTextFile, readDir, mkdir, remove, exists, stat,
 }
@@ -271,6 +277,83 @@ export async function clearSessionSnapshots(sessionId, opts = {}) {
   } catch {
     return false
   }
+}
+
+// ─── Retención / poda por antigüedad ─────────────────────────────────────────
+// Número de turno de un nombre de carpeta `turn-<n>`, o null si no aplica.
+export function parseTurnNumber(name) {
+  const m = /^turn-(\d+)$/.exec(String(name || ''))
+  return m ? Number(m[1]) : null
+}
+
+// ¿El snapshot venció? Puro. Fecha inválida/ausente → false (conservador: se
+// conserva; nunca se borra algo que no se puede fechar).
+export function isSnapshotExpired(createdAt, {
+  now = Date.now(),
+  maxAgeMs = DEFAULT_SNAPSHOT_MAX_AGE_MS,
+} = {}) {
+  const t = Date.parse(createdAt)
+  if (!Number.isFinite(t)) return false
+  return (Number(now) - t) > Number(maxAgeMs)
+}
+
+// Poda los snapshots VENCIDOS de todas las sesiones. Conserva SIEMPRE los últimos
+// `keepLatest` turnos de cada sesión (protege undo/regenerate recientes) y todo lo
+// que no se pueda fechar. `maxAgeMs`/`keepLatest`/`now` inyectables (harness).
+// Devuelve { removed, kept, errors } (ids). Nunca lanza.
+export async function pruneOldSnapshots(opts = {}) {
+  const fs = fsFrom(opts)
+  const baseDir = baseDirFrom(opts)
+  const maxAgeMs = Number.isFinite(opts.maxAgeMs) ? opts.maxAgeMs : DEFAULT_SNAPSHOT_MAX_AGE_MS
+  const keepLatest = Number.isFinite(opts.keepLatest) ? Math.max(0, opts.keepLatest) : DEFAULT_SNAPSHOT_KEEP_TURNS
+  const now = opts.now != null ? Number(opts.now) : Date.now()
+
+  const removed = []
+  const kept = []
+  const errors = []
+
+  let sessions = []
+  try {
+    sessions = await fs.readDir(SNAPSHOTS_DIR, { baseDir })
+  } catch {
+    return { removed, kept, errors }
+  }
+
+  for (const s of sessions) {
+    if (!s?.isDirectory) continue
+    const sessionDir = `${SNAPSHOTS_DIR}/${s.name}`
+    let turns = []
+    try {
+      turns = await fs.readDir(sessionDir, { baseDir })
+    } catch { continue }
+
+    const numbered = []
+    for (const t of turns) {
+      const n = parseTurnNumber(t?.name)
+      if (n != null) numbered.push({ name: t.name, n })
+    }
+    if (!numbered.length) continue
+
+    const maxTurn = numbered.reduce((m, t) => Math.max(m, t.n), 0)
+    for (const t of numbered) {
+      const id = `${s.name}/${t.name}`
+      if (maxTurn - t.n < keepLatest) { kept.push(id); continue }
+      let createdAt = null
+      try {
+        const manifest = await loadManifest(id, opts)
+        createdAt = manifest?.createdAt ?? null
+      } catch {}
+      if (!isSnapshotExpired(createdAt, { now, maxAgeMs })) { kept.push(id); continue }
+      try {
+        await fs.remove(snapshotDir(id), { baseDir, recursive: true })
+        removed.push(id)
+      } catch (err) {
+        errors.push({ id, reason: String(err?.message || err) })
+      }
+    }
+  }
+
+  return { removed, kept, errors }
 }
 
 // Id del snapshot más reciente de una sesión (para reanudar tras reiniciar la
