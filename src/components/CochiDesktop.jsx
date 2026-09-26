@@ -6,7 +6,7 @@ import PlanViewer from './PlanViewer'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
-import { normalizeUsage } from '../lib/llmMetrics.js'
+import { normalizeUsage, resolveStoredModel } from '../lib/llmMetrics.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools } from '../lib/cochiTools.js'
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
@@ -548,6 +548,12 @@ function CochiDesktop({
           if (data.lmStudioModel) setLmStudioModel(data.lmStudioModel)
           // Fase 3.4e: restaurar el modelo del subagente si sigue siendo válido.
           setSubagentModel(resolveStoredSubagentModel(data.subagentModel, COCHI_MODELS.map(m => m.id)))
+          // Fase 3.4f: restaurar el modelo del PADRE (incluye proveedores locales).
+          setSelectedModel(resolveStoredModel(
+            data.selectedModel,
+            [...COCHI_MODELS.map(m => m.id), 'ollama', 'lmstudio'],
+            COCHI_MODELS[0].id,
+          ))
         }
         onPreferencesLoaded?.(data)
       } catch {
@@ -563,6 +569,13 @@ function CochiDesktop({
       await writeTextFile('user_preferences.json', JSON.stringify(merged, null, 2), { baseDir: BaseDirectory.AppLocalData })
       setPreferences(merged)
     } catch (err) { console.error('Error saving preferences:', err) }
+  }
+
+  // Fase 3.4f: el modelo del PADRE también se persiste (antes se reseteaba al
+  // recargar, igual que pasaba con el "sub"). Cambiar en la UI guarda la pref.
+  const selectModel = (modelId) => {
+    setSelectedModel(modelId)
+    savePreferences({ selectedModel: modelId })
   }
 
   // Registro estable: el padre guarda la función en un ref; le pasamos un
@@ -1793,7 +1806,7 @@ function CochiDesktop({
           {COCHI_MODELS.map(m => (
             <button
               key={m.id}
-              onClick={() => setSelectedModel(m.id)}
+              onClick={() => selectModel(m.id)}
               style={{
                 padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
                 fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
@@ -1811,7 +1824,7 @@ function CochiDesktop({
           <div style={{ width:1, height:20, background:'rgba(255,255,255,0.05)', flexShrink:0, margin: '0 6px' }} />
 
           <button
-            onClick={() => setSelectedModel('ollama')}
+            onClick={() => selectModel('ollama')}
             style={{
               padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
               fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
@@ -1825,7 +1838,7 @@ function CochiDesktop({
             Ollama
           </button>
           <button
-            onClick={() => setSelectedModel('lmstudio')}
+            onClick={() => selectModel('lmstudio')}
             style={{
               padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
               fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
