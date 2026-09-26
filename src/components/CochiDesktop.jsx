@@ -16,7 +16,8 @@ import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summa
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots } from '../lib/snapshotStore.js'
-import { runSubagent, formatBriefResult } from '../lib/subagent.js'
+import { runSubagent, formatBriefResult, subagentActivityDetail } from '../lib/subagent.js'
+import { SubagentBubble, SubagentBrief } from './SubagentView.jsx'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -235,6 +236,10 @@ const CochiMessageList = memo(function CochiMessageList({ messages, lastAssistan
   return messages.map((msg) => (
     msg.role === 'diff' ? (
       <DiffViewer key={msg.id} diff={msg.diff} />
+    ) : msg.role === 'subagent' ? (
+      <div key={msg.id} className="cd-message-enter" style={{ alignSelf: 'flex-start', maxWidth: '100%', width: '100%', padding: '2px 0' }}>
+        <SubagentBrief sub={msg.sub} renderMarkdown={(content) => <CochiMarkdown content={content} />} />
+      </div>
     ) : msg.role === 'user' ? (
       <div key={msg.id} className="cd-message-enter" style={{ alignSelf: 'flex-end', maxWidth: '85%', padding: '2px 0' }}>
         <div style={{
@@ -366,6 +371,9 @@ function CochiDesktop({
 }) {
   const [messages,        setMessages]        = useState([])
   const [activity,        setActivity]        = useState([])
+  // Fase 3.3c: subagentes vivos del turno (burbuja de estado). El brief ya
+  // cerrado va a `messages` como role 'subagent'. Aquí sólo interesa lo que corre.
+  const [subagents,       setSubagents]       = useState([])
   const [tokens,          setTokens]          = useState(0)
   const [cost,            setCost]            = useState(0)
   // Fase 3.2: input servido desde la caché de prefijo del proveedor (ahorro).
@@ -486,7 +494,7 @@ function CochiDesktop({
         cochiSessionNameRef.current = s.name || null
         snapshotRef.current = null
         sessionPairsRef.current = []
-        setActivity([]); setTodos([]); syncPlan(null)
+        setActivity([]); setSubagents([]); setTodos([]); syncPlan(null)
         setPlanStatus('idle'); setTokenWarningDismissed(false)
         setTokens(0); setCost(0); setCachedTokens(0)
         sessionAllowRef.current = new Set()
@@ -580,6 +588,17 @@ function CochiDesktop({
   // ─── Helpers ──────────────────────────────────────────────────────────────
   function pushActivity(icon, label, detail = '', diff = null) {
     setActivity(prev => [...prev, { icon, label, detail, diff, ts: Date.now() }])
+  }
+
+  // Fase 3.3c: ciclo de vida del registro de un subagente (burbuja viva).
+  function addSubagent(record) {
+    setSubagents(prev => [...prev, record])
+  }
+  function patchSubagent(id, patch) {
+    setSubagents(prev => prev.map(s => (s.id === id ? { ...s, ...patch } : s)))
+  }
+  function addSubagentTool(id, tool) {
+    setSubagents(prev => prev.map(s => (s.id === id ? { ...s, tools: [...s.tools, tool] } : s)))
   }
 
   // Bloque K: todo mensaje visible nace con id único (key de React y ancla del
@@ -925,6 +944,7 @@ function CochiDesktop({
 
     setLoading(true)
     setActivity([])
+    setSubagents([])
     liveRef.current?.clear()
 
     try {
@@ -1263,15 +1283,20 @@ function CochiDesktop({
             // suma al contador del turno del padre.
             if (name === 'spawn_agent') {
               const task = String(args.task || '').trim()
+              const subLabel = args.label ? String(args.label) : ''
               pushActivity(TOOL_ICONS.spawn_agent || '🤖', 'spawn_agent', task.slice(0, 60) || 'sin tarea')
               if (!task) {
                 return { role: 'tool', tool_call_id: toolCall.id, content: '⚠️ spawn_agent requiere "task".' }
               }
+              // Fase 3.3c: se registra el subagente para pintar su estado en vivo
+              // (SubagentBubble). Al cerrar, el brief queda como mensaje destacado.
+              const subId = newMessageId('sub')
+              addSubagent({ id: subId, label: subLabel, task, status: 'running', tools: [] })
               const sub = await runSubagent({
                 provider,
                 task,
                 context: args.context ? String(args.context) : '',
-                label: args.label ? String(args.label) : '',
+                label: subLabel,
                 language: chatLanguage,
                 depth: 1,
                 signal: controller.signal,
@@ -1281,7 +1306,9 @@ function CochiDesktop({
                   return execResult?.modelResult ?? String(execResult)
                 },
                 onActivity: (activity) => {
-                  pushActivity(TOOL_ICONS[activity.name] || '🔧', `sub:${activity.name}`, String(activity.args?.path || activity.args?.pattern || activity.name))
+                  const detail = subagentActivityDetail(activity)
+                  addSubagentTool(subId, { name: activity.name, detail, icon: TOOL_ICONS[activity.name] || '🔧' })
+                  pushActivity(TOOL_ICONS[activity.name] || '🔧', `sub:${activity.name}`, detail)
                 },
                 onUsage: (usage) => {
                   const u = normalizeUsage(usage)
@@ -1293,6 +1320,16 @@ function CochiDesktop({
                   auditLog(`subagent: prompt ${u.promptTokens} · completion ${u.completionTokens} · cached ${u.cachedTokens}`)
                 },
               })
+              const done = {
+                status: sub.ok ? 'ok' : 'error',
+                brief: sub.brief || '',
+                error: sub.error || '',
+                iterations: sub.iterations || 0,
+                usageTotal: sub.usageTotal || null,
+                label: sub.label || subLabel,
+              }
+              patchSubagent(subId, done)
+              pushMessage({ role: 'subagent', sub: { id: subId, task, ...done } })
               return { role: 'tool', tool_call_id: toolCall.id, content: formatBriefResult(sub) }
             }
 
@@ -1455,6 +1492,7 @@ function CochiDesktop({
       setPlanStatus('completed')
       setLoading(false)
       setActivity([])
+      setSubagents([])
       liveRef.current?.clear()
       auditLog(`TOTAL del turno: ${requestCount} request(s) · ${totalTokensAcc} tokens`)
       const finalPlan = planRef.current
@@ -1472,6 +1510,7 @@ function CochiDesktop({
     } catch (err) {
       setLoading(false)
       setActivity([])
+      setSubagents([])
       liveRef.current?.clear()
       setPlanStatus('completed')
       if (err.name !== 'AbortError') {
@@ -1535,7 +1574,7 @@ function CochiDesktop({
       // K2: archiva la sesión (queda en la lista) y promueve su rueda a global.
       persistCurrentSession()
       await promoteWheelToGlobal()
-      setMessages([]); setActivity([]); setTokens(0); setCost(0); setCachedTokens(0)
+      setMessages([]); setActivity([]); setSubagents([]); setTokens(0); setCost(0); setCachedTokens(0)
       setLoading(false); setTokenWarningDismissed(false)
       setTodos([])
       syncPlan(null); setPlanStatus('idle')
@@ -1565,7 +1604,7 @@ function CochiDesktop({
       if (inheritedName) cochiSessionNameRef.current = inheritedName
       persistCurrentSession()
       await promoteWheelToGlobal()
-      setMessages([]); setActivity([]); setTokens(0); setCost(0); setCachedTokens(0)
+      setMessages([]); setActivity([]); setSubagents([]); setTokens(0); setCost(0); setCachedTokens(0)
       setLoading(false); setTokenWarningDismissed(false)
       setTodos([])
       syncPlan(null); setPlanStatus('idle')
@@ -1607,7 +1646,7 @@ function CochiDesktop({
     messagesRef.current = newMsgs
     wheelRef.current = newWheel
     setMessages(newMsgs)
-    setActivity([]); liveRef.current?.clear(); setTodos([])
+    setActivity([]); setSubagents([]); liveRef.current?.clear(); setTodos([])
     setTokenWarningDismissed(false)
     syncPlan(null); setPlanStatus('idle')
     if (permissionResolverRef.current) permissionResolverRef.current('deny')
@@ -1860,6 +1899,15 @@ RGartner by R7Signal
               onConfirm={confirmPlan}
               onCancel={cancelPlan}
             />
+          )}
+
+          {/* Subagentes en vivo (Fase 3.3c) — mini-loop aislado, sólo lectura */}
+          {loading && subagents.some(s => s.status === 'running') && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+              {subagents.filter(s => s.status === 'running').map(s => (
+                <SubagentBubble key={s.id} sub={s} />
+              ))}
+            </div>
           )}
 
           {/* Activity feed */}
