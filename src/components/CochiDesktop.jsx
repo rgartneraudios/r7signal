@@ -74,12 +74,6 @@ function makeStreamingDisplayExtractor() {
 // Respuesta que recibe el modelo cuando el usuario cancela una pregunta de ask_user.
 const ASK_CANCELLED = 'Cancelado por el usuario.'
 
-// ─── Modelos ──────────────────────────────────────────────────────────────────
-const COCHI_TIER_LABEL = {
-  '~deepseek/deepseek-v4-flash-latest': 'Centinela',
-  '~deepseek/deepseek-flash-latest':  'Terminator',
-}
-
 // ─── Compactación de contexto token-aware (Bloque H + L4) ─────────────────────
 // Distinto del pairing guard de pruneApiMessages (Bloque A), que se mantiene
 // intacto como red de seguridad estructural. Cuando la conversación supera el
@@ -361,7 +355,6 @@ const css = `
 //   onMessageConsumed ()             — avisar al padre que se consumió
 //   handoff           { type, content, brief, id } — brief de Asun
 //   onHandoffConsumed ()             — avisar al padre que se consumió
-//   onWorkspaceChange (workspace)    — subir cambio de workspace
 //   onUsage           ({ source, inputTokens, outputTokens, cost }) — report cost
 // ═══════════════════════════════════════════════════════════════════════════════
 function CochiDesktop({
@@ -372,7 +365,6 @@ function CochiDesktop({
   handoff,
   onHandoffConsumed,
   workspace,
-  onWorkspaceChange,
   onUsage,
   onResetUsage,
   onSavePreferences,
@@ -399,7 +391,6 @@ function CochiDesktop({
   const [subagentModel,   setSubagentModel]   = useState(DEFAULT_SUBAGENT_MODEL)
   const [ollamaModel,     setOllamaModel]     = useState('llama3.2')
   const [lmStudioModel,   setLmStudioModel]   = useState('local-model')
-  const [userName,        setUserName]        = useState('')
   const [preferences,     setPreferences]     = useState(null)
   const [showGearMenu,    setShowGearMenu]    = useState(false)
   const gearRef                               = useRef(null)
@@ -474,7 +465,7 @@ function CochiDesktop({
       if (p) { setRemotePrompts(p); onPromptsReady?.('cochi') }
       else setPromptsError(true)
     })
-  }, [])
+  }, [onPromptsReady])
 
   // Bloque L4: al abrir la sesión, cargar la rueda R7 global desde disco.
   useEffect(() => {
@@ -501,7 +492,6 @@ function CochiDesktop({
     })
     cochiSessionIdRef.current = session.id
     saveSession(session).catch(err => console.error('autosave cochi:', err))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, loading])
 
   // Bloque X1: "Cargar como contexto" una sesión guardada. La sesión NO restaura
@@ -552,9 +542,6 @@ function CochiDesktop({
       try {
         const text = await readTextFile('user_preferences.json', { baseDir: BaseDirectory.AppLocalData })
         const data = JSON.parse(text)
-        if (data?.nombre_usuario) {
-          setUserName(data.nombre_usuario)
-        }
         if (data) {
           setPreferences(data)
           if (data.ollamaModel) setOllamaModel(data.ollamaModel)
@@ -566,7 +553,7 @@ function CochiDesktop({
       }
     }
     loadUser()
-  }, [])
+  }, [onPreferencesLoaded])
 
   const savePreferences = async (prefs) => {
     try {
@@ -610,11 +597,6 @@ function CochiDesktop({
     handleSendText(briefText)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handoff?.id])
-
-  // ─── Workspace ────────────────────────────────────────────────────────────
-  function setPermission(permission) {
-    onWorkspaceChange?.({ ...workspace, permission })
-  }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
   function pushActivity(icon, label, detail = '', diff = null) {
@@ -958,7 +940,6 @@ function CochiDesktop({
     }
     let remainingIter = 25
     let totalTokensAcc = 0
-    let totalCostAcc = 0
     let requestCount = 0
 
     const provider = resolveProvider(selectedModel, { preferences, ollamaModel, lmStudioModel })
@@ -1528,7 +1509,6 @@ function CochiDesktop({
           Math.max(0, stepCachedTokens - stepSubCachedTokens),
         )
         const stepCost = ownStepCost + subCost
-        totalCostAcc += stepCost
         setTokens(prev => prev + stepTokens)
         setCost(prev => prev + stepCost)
         setCachedTokens(prev => prev + stepCachedTokens)
@@ -1783,8 +1763,6 @@ function CochiDesktop({
 
   const isTerminator = selectedModel === '~deepseek/deepseek-flash-latest'
   const activeModelPrice = MODEL_PRICES[selectedModel]
-  const activeModelLabel = COCHI_MODELS.find(m => m.id === selectedModel)?.label
-    ?? (selectedModel === 'ollama' ? 'Ollama' : 'LM Studio')
 
   const costStr = cost < 0.001 ? '~0,00€' : `~${cost.toFixed(3).replace('.', ',')}€`
 

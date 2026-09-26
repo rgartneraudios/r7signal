@@ -60,7 +60,7 @@ function MusicChat({ menuNumero, user }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [routing, setRouting] = useState('tito')
+  const [routing] = useState('tito')
   const [audioUrl, setAudioUrl] = useState(null)
   const [generating, setGenerating] = useState(false)
   const [sesionId, setSesionId] = useState(null)
@@ -84,7 +84,7 @@ function MusicChat({ menuNumero, user }) {
       if (!error && sesionData) setSesionId(sesionData.id)
     }
     crearSesion()
-  }, [])
+  }, [user?.id])
 
   useEffect(() => {
     const cargarNombre = async () => {
@@ -99,7 +99,7 @@ function MusicChat({ menuNumero, user }) {
       setNombreUsuario(prefData?.nombre_alternativo || prefData?.nombre_usuario || '')
     }
     cargarNombre()
-  }, [])
+  }, [user?.id])
 
   const handleSend = async () => {
     if (!input.trim() || loading || !sesionId) return
@@ -111,9 +111,6 @@ function MusicChat({ menuNumero, user }) {
     try {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData?.session?.access_token
-
-      const { data: userData } = await supabase.auth.getUser()
-      const userId = userData?.user?.id || user?.id
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/procesar-input`, {
         method: 'POST',

@@ -1,17 +1,18 @@
 ﻿import { useState } from 'react'
-import { supabase } from './supabaseClient'
 import { useAuth } from './context/AuthContext'
 import MenuSystem from './components/MenuSystem'
 import AppHeader from './components/AppHeader'
 import LoginModal from './components/LoginModal'
 import Footer from './components/Footer'
-import CochiDesktop from './components/CochiDesktop'
 import R7Desktop from './components/R7Desktop'
 import Descargas from './components/Descargas'
 
 export default function App() {
   if (window.__TAURI_INTERNALS__) return <R7Desktop />
+  return <WebApp />
+}
 
+function WebApp() {
   const { user, setUser } = useAuth()
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [view, setView] = useState('landing')

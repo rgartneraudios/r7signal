@@ -24,11 +24,6 @@ const MODELS = {
   musica: { chat: '~deepseek/deepseek-v4-flash-latest', gen: 'google/lyria-3-pro-preview' },
 }
 
-// ─── System prompts ───────────────────────────────────────────────────────────
-const LLM_SYSTEM = null
-
-const MUSICA_SYSTEM = null
-
 // ─── Markers ──────────────────────────────────────────────────────────────────
 const COCHI_RE = /\[→ COCHI: ([^\]]+)\]/
 const MUSIC_RE  = /\[MUSIC_READY: ([\s\S]+?)\]/
@@ -141,13 +136,12 @@ function WizardBtn({ label, active, onClick }) {
   )
 }
 
-function AsunImagenFlow({ submenu, onHandoff }) {
+function AsunImagenFlow({ submenu, onUsage }) {
   const [estilos,  setEstilos]  = useState([])
   const [uiState,  setUiState]  = useState('path_select')
   const [brief,    setBrief]    = useState(BLANK_BRIEF)
   const [resultUrl,setResultUrl]= useState(null)
   const [error,    setError]    = useState(null)
-  const [busy,     setBusy]     = useState(false)
   const [preview,  setPreview]  = useState(null)
   const fileRef = useRef(null)
 
@@ -183,7 +177,7 @@ function AsunImagenFlow({ submenu, onHandoff }) {
   }
 
   async function handleGenerate() {
-    setBusy(true); setError(null)
+    setError(null)
     setUiState('processing_imagen')
     try {
       const { data: authData } = await supabase.auth.getUser()
@@ -207,7 +201,7 @@ function AsunImagenFlow({ submenu, onHandoff }) {
     } catch (err) {
       setError(err.message)
       setUiState('confirm')
-    } finally { setBusy(false) }
+    }
   }
 
   // speech helper
@@ -542,7 +536,6 @@ function AsunPanel({
   const [loading,  setLoading]  = useState(false)
   const [promptMusica, setPromptMusica] = useState(null) // prompt listo para Lyria
   const [generating,  setGenerating]   = useState(false)
-  const [audioUrl,    setAudioUrl]     = useState(null)
   const [remotePrompts, setRemotePrompts] = useState(null)
   const [promptsError,  setPromptsError]  = useState(false)
   const [attachedFile, setAttachedFile] = useState(null)
@@ -670,7 +663,7 @@ function AsunPanel({
     messagesRef.current = newMsgs
     wheelRef.current = newWheel
     setMessages(newMsgs)
-    setPromptMusica(null); setAudioUrl(null)
+    setPromptMusica(null)
     return undoneUser
   }
 
@@ -725,7 +718,7 @@ function AsunPanel({
     if (p) { setRemotePrompts(p); onPromptsReady?.('asun') }
     else setPromptsError(true)
   })
-  }, [])
+  }, [onPromptsReady])
 
   // Bloque L4: al abrir la sesión, cargar la rueda R7 global desde disco.
   useEffect(() => {
@@ -751,7 +744,6 @@ function AsunPanel({
     })
     sessionIdRef.current = session.id
     saveSession(session).catch(err => console.error('autosave asun:', err))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, loading, generating])
 
   // Bloque X1: "Cargar como contexto" una sesión guardada. La sesión NO restaura
@@ -773,7 +765,7 @@ function AsunPanel({
         sessionIdRef.current = null
         sessionNameRef.current = s.name || null
         sessionPairsRef.current = []
-        setPromptMusica(null); setAudioUrl(null); setAttachedFile(null)
+        setPromptMusica(null); setAttachedFile(null)
         setTokenWarningDismissed(false); setTokens(0)
         onResetUsage?.('asun')
       }
@@ -1137,7 +1129,6 @@ function AsunPanel({
       }
 
       if (finalUrl) {
-        setAudioUrl(finalUrl)
         setMessages(prev => [...prev, {
           rol: 'asistente', id: newMessageId('asun'),
           contenido: 'Aquí tienes tu canción:',
@@ -1309,7 +1300,7 @@ function AsunPanel({
 
         {/* ── IMAGEN: wizard ── */}
         {category === 'imagen' && (
-          <AsunImagenFlow submenu={submenu} onHandoff={onHandoff} />
+          <AsunImagenFlow submenu={submenu} onUsage={onUsage} />
         )}
 
         {/* ── LLM / MÚSICA: chat ── */}

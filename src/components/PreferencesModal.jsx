@@ -11,7 +11,7 @@ const IDIOMAS = [
   '中文(简体)', '中文(繁體)', '日本語', '한국어', 'हिन्दी', 'العربية'
 ]
 
-export default function PreferencesModal({ onClose, userId, supabase, preferences, onSave, onSaved }) {
+export default function PreferencesModal({ onClose, supabase, preferences, onSave, onSaved }) {
   const [nombreUsuario, setNombreUsuario] = useState(preferences?.nombre_usuario || '')
   const [nombreAlternativo, setNombreAlternativo] = useState(preferences?.nombre_alternativo || '')
   const [chatLanguage, setChatLanguage] = useState(preferences?.chat_language || 'Español')
@@ -20,19 +20,12 @@ export default function PreferencesModal({ onClose, userId, supabase, preference
   const [lmStudioModel, setLmStudioModel] = useState(preferences?.lmStudioModel || 'local-model')
   const [allowRules, setAllowRules] = useState(rulesToText(preferences?.permissions?.allow))
   const [denyRules, setDenyRules] = useState(rulesToText(preferences?.permissions?.deny))
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !preferences && !!supabase)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    if (preferences) {
-      setLoading(false)
-      return
-    }
-    if (!supabase) {
-      setLoading(false)
-      return
-    }
+    if (preferences || !supabase) return
     async function fetchPrefs() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
@@ -57,7 +50,7 @@ export default function PreferencesModal({ onClose, userId, supabase, preference
       setLoading(false)
     }
     fetchPrefs()
-  }, [])
+  }, [preferences, supabase])
 
   async function handleSave() {
     setSaving(true)

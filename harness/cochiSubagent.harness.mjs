@@ -222,7 +222,7 @@ const resilient = await runSubagent({
   task: 't',
   tools: [{ function: { name: 'read_file' } }],
   executeTool: async () => { throw new Error('disco roto') },
-  callModel: async (_o, i) => ({ content: 'brief', toolCalls: [], usage: null, model: 'm' }),
+  callModel: async (_o, _i) => ({ content: 'brief', toolCalls: [], usage: null, model: 'm' }),
 })
 check('executeTool que lanza no rompe el brief', resilient.ok, true)
 check('brief resiliente', resilient.brief, 'brief')
