@@ -12,6 +12,7 @@
     "harness:sessions": "node harness/cochiSessions.harness.mjs",
     "harness:snapshots": "node harness/cochiSnapshots.harness.mjs",
     "harness:llm": "node harness/cochiLlmMetrics.harness.mjs",
+    "harness:subagent": "node harness/cochiSubagent.harness.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
