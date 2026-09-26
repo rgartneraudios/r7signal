@@ -44,6 +44,11 @@ export const MAX_SUBAGENT_TOTAL_TOKENS = 20000
 // cuadrático (prompt 1.7k→8.7k→15.6k). Cada tool result se guarda truncado.
 export const SUBAGENT_TOOL_RESULT_MAX_CHARS = 4000
 
+// 3.4c: el brief salía verboso (narraba el proceso: "The file exists. Let me
+// compute…" + secciones "Notas" sobre el truncado) pese a pedir concisión. Se
+// refuerza con una sección BRIEF STYLE explícita que prohíbe narrar el proceso y
+// las secciones meta. El saneador `stripLeadingNarration` (abajo) es la red de
+// seguridad por si el modelo igual filtra una línea de preámbulo.
 export const SUBAGENT_SYSTEM_PROMPT = [
   'You are a SUBAGENT: a focused, isolated worker spawned by a parent agent to complete ONE delegated task.',
   'You have NO access to the parent conversation or its memory — everything you need is in TASK (and optional CONTEXT).',
@@ -54,7 +59,13 @@ export const SUBAGENT_SYSTEM_PROMPT = [
   '- Do ONLY the delegated task. Do not ask questions; if something is missing, state the assumption you made.',
   '- Never emit the R1/R2/R3 contract and never emit control signals like [STEP_COMPLETE], [STEP_FAILED] or [NEED_REPLAN].',
   '- Return exactly ONE self-contained BRIEF in {{language}} with: findings, decisions, exact identifiers (paths, names, values) and caveats.',
-  '- No preamble, no greeting, no offer to help. Keep it under ~300 words unless the task demands more.',
+  '',
+  'BRIEF STYLE (strict — the parent only sees this text, never your steps):',
+  '- Start DIRECTLY with the findings or the answer. The first line must carry content, never setup.',
+  '- NEVER narrate your process or intentions. Banned openings: "Let me...", "I will...", "Now I...", "First I...", "The file exists...", "I am reading...", "Looking at...".',
+  '- Do NOT describe which tools you used or the order of your steps. Report conclusions, not activity.',
+  '- Do NOT add meta sections about your own process or limits (no "Notes" / "Notas" / "Process" about truncation or effort). If a real caveat matters, fold it into ONE short line at the end.',
+  '- Prefer tight bullets. No preamble, no greeting, no closing, no offer to help. Keep it under ~250 words unless the task demands more.',
 ].join('\n')
 
 // Construye el par [system, user] del subagente. El contexto es opcional: si el
@@ -72,15 +83,36 @@ export function buildSubagentMessages({ task, context = '', language = 'Spanish'
   ]
 }
 
+// 3.4c: red de seguridad del BRIEF STYLE. El modelo a veces arranca el brief con
+// una línea de narración del proceso ("The file exists.", "Let me compute…").
+// Se descartan SÓLO las líneas INICIALES completas que son claramente preámbulo,
+// de forma conservadora: si no queda contenido, se devuelve el original. No toca
+// el cuerpo del brief ni las secciones de advertencia legítimas.
+const LEADING_NARRATION = /^\s*(?:[-*•]\s*)?(?:let me|let us|let's|i will|i'll|i am going to|i'm going to|i am reading|i'm reading|i am checking|i'm checking|now i|next,? i|first,? i|the file (?:exists|is|contains|has)|looking at|reading|checking|i need to|i should|i can now|here is|here's)\b/i
+
+export function stripLeadingNarration(raw) {
+  const text = String(raw ?? '')
+  const lines = text.split('\n')
+  let start = 0
+  while (start < lines.length && lines[start].trim() === '') start++
+  let i = start
+  while (i < lines.length && LEADING_NARRATION.test(lines[i])) i++
+  if (i === start) return text
+  const rest = lines.slice(i).join('\n').trim()
+  return rest || text
+}
+
 // Limpia el brief: quita señales de control que el modelo pudiera filtrar por
-// inercia, recorta espacios y aplica el tope de tamaño. Devuelve '' si no queda
-// nada (el llamador lo trata como fallo controlado).
+// inercia, descarta el preámbulo de narración, recorta espacios y aplica el tope
+// de tamaño. Devuelve '' si no queda nada (el llamador lo trata como fallo
+// controlado).
 export function normalizeBrief(raw) {
   let text = String(raw ?? '')
     .replace(/\[STEP_COMPLETE(?::[\s\S]*?)?\]/g, '')
     .replace(/\[STEP_FAILED(?::[\s\S]*?)?\]/g, '')
     .replace(/\[NEED_REPLAN(?::[\s\S]*?)?\]/g, '')
     .trim()
+  text = stripLeadingNarration(text).trim()
   if (text.length > SUBAGENT_BRIEF_MAX_CHARS) {
     text = text.slice(0, SUBAGENT_BRIEF_MAX_CHARS) + '\n…[brief truncado]'
   }
