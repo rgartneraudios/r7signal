@@ -16,6 +16,7 @@ import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summa
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
 import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots } from '../lib/snapshotStore.js'
+import { runSubagent, formatBriefResult } from '../lib/subagent.js'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -1251,6 +1252,36 @@ function CochiDesktop({
                 header: args.header ? String(args.header) : '',
               }, controller.signal)
               return { role: 'tool', tool_call_id: toolCall.id, content: String(answer) }
+            }
+
+            // ── spawn_agent: delega en un subagente headless (Fase 3.3a) ──────
+            // El subagente corre aislado (sin conversación, sin tools) y devuelve
+            // un brief de texto. Su usage se suma al contador del turno.
+            if (name === 'spawn_agent') {
+              const task = String(args.task || '').trim()
+              pushActivity(TOOL_ICONS.spawn_agent || '🤖', 'spawn_agent', task.slice(0, 60) || 'sin tarea')
+              if (!task) {
+                return { role: 'tool', tool_call_id: toolCall.id, content: '⚠️ spawn_agent requiere "task".' }
+              }
+              const sub = await runSubagent({
+                provider,
+                task,
+                context: args.context ? String(args.context) : '',
+                label: args.label ? String(args.label) : '',
+                language: chatLanguage,
+                depth: 1,
+                signal: controller.signal,
+                onUsage: (usage) => {
+                  const u = normalizeUsage(usage)
+                  stepTokens += u.totalTokens
+                  totalTokensAcc += u.totalTokens
+                  stepInputTokens += u.promptTokens
+                  stepOutputTokens += u.completionTokens
+                  stepCachedTokens += u.cachedTokens
+                  auditLog(`subagent: prompt ${u.promptTokens} · completion ${u.completionTokens} · cached ${u.cachedTokens}`)
+                },
+              })
+              return { role: 'tool', tool_call_id: toolCall.id, content: formatBriefResult(sub) }
             }
 
             // ── Permisos: reglas allow/deny + memoria de sesión + diff ────────

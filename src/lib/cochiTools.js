@@ -612,6 +612,22 @@ export const COCHI_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'spawn_agent',
+      description: 'Delegate ONE self-contained subtask to an isolated subagent and get back a concise BRIEF (plain text). The subagent has NO access to this conversation, the filesystem or tools — put everything it needs in "task" (and optional "context"). Use it for isolated research, drafting or analysis that would otherwise pollute this context. Do NOT use it for file actions (do those yourself) and do NOT spawn a subagent to ask the user anything.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task: { type: 'string', description: 'The self-contained task for the subagent. Be specific about the deliverable.' },
+          context: { type: 'string', description: 'Optional extra context the subagent needs (it cannot see this conversation).' },
+          label: { type: 'string', description: 'Optional short label to identify the returning brief.' },
+        },
+        required: ['task'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'save_to_r9',
       description: 'Save text to shared R9 memory so Asun (or another agent) can read it later. Use ONLY when the user explicitly asks (e.g. "guarda esto en R9"). Never use automatically.',
       parameters: {
@@ -629,11 +645,13 @@ export const COCHI_TOOLS = [
 // ─── Tools filtrados por nivel de permiso del workspace ───────────────────────
 // Evita mandar schemas de escritura/ejecución cuando el modelo no puede usarlos.
 // `scope='read'` (auditoría de gasto) manda SOLO las tools que no mutan el
-// filesystem: en una consulta de lectura pasan 9 tools en vez de 19, y el
-// prefijo cacheable baja ~1.3k tokens por request.
+// filesystem: en una consulta de lectura pasan 10 tools en vez de 20, y el
+// prefijo cacheable baja ~1.3k tokens por request. spawn_agent entra en read:
+// no toca disco (es una llamada headless acotada), pero permite delegar lectura.
 const READ_SCOPE_TOOLS = new Set([
   'read_file', 'read_file_chunk', 'list_dir', 'find_files',
   'search_in_files', 'get_file_info', 'file_exists', 'web_fetch', 'ask_user',
+  'spawn_agent',
 ])
 
 export function getToolsForPermission(permission, scope = 'full') {
@@ -666,6 +684,7 @@ export const TOOL_ICONS = {
   move_file:        'MOVE',
   copy_file:        'COPY',
   save_to_r9:       'R9',
+  spawn_agent:      'AGENT',
   todowrite:        'TODO',
   ask_user:         'ASK',
   web_fetch:        'FETCH',
@@ -983,6 +1002,9 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
 
     case 'ask_user':
       return { modelResult: '⚠️ ask_user debe resolverse en el loop de Cochi (pausa y espera respuesta).', diff: null }
+
+    case 'spawn_agent':
+      return { modelResult: '⚠️ spawn_agent debe resolverse en el loop de Cochi (turno headless del subagente).', diff: null }
 
     case 'delete_file': {
       const existed = await pathExistsCochi(args.path)
