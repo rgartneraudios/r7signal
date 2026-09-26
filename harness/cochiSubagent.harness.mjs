@@ -21,6 +21,7 @@ import {
   subagentActivityDetail,
   describeSubagent,
   resolveSubagentProvider,
+  resolveStoredSubagentModel,
   runSubagent,
 } from '../src/lib/subagent.js'
 import { COCHI_TOOLS, getToolsForPermission, getSubagentTools } from '../src/lib/cochiTools.js'
@@ -342,6 +343,18 @@ await runSubagent({
   callModel: async (o) => { providerSeen.push(o.provider); return { content: 'b', usage: null, model: 'cheap/model' } },
 })
 check('runSubagent recibe el provider del subagente', providerSeen[0].model, 'cheap/model')
+
+console.log('— Fase 3.4e · persistencia del modelo del subagente —')
+const validIds = ['~deepseek/deepseek-v4-flash-latest', '~deepseek/deepseek-flash-latest']
+check('guardado válido → se conserva', resolveStoredSubagentModel('~deepseek/deepseek-flash-latest', validIds), '~deepseek/deepseek-flash-latest')
+check('vacío → default', resolveStoredSubagentModel('', validIds), DEFAULT_SUBAGENT_MODEL)
+check('ausente (undefined) → default', resolveStoredSubagentModel(undefined, validIds), DEFAULT_SUBAGENT_MODEL)
+check('null → default', resolveStoredSubagentModel(null, validIds), DEFAULT_SUBAGENT_MODEL)
+check('desconocido → default', resolveStoredSubagentModel('viejo/modelo', validIds), DEFAULT_SUBAGENT_MODEL)
+check('recorta espacios', resolveStoredSubagentModel('  ~deepseek/deepseek-flash-latest  ', validIds), '~deepseek/deepseek-flash-latest')
+check('sin validIds → acepta tal cual', resolveStoredSubagentModel('cualquiera/x'), 'cualquiera/x')
+check('validIds no-array → acepta tal cual', resolveStoredSubagentModel('x/y', 'nope'), 'x/y')
+check('robusto sin args → default', resolveStoredSubagentModel(), DEFAULT_SUBAGENT_MODEL)
 
 console.log(`\n${pass} PASS · ${fail} FAIL`)
 if (fail) process.exit(1)
