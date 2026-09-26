@@ -9,9 +9,12 @@ import {
   DEFAULT_SUBAGENT_MAX_TOKENS,
   DEFAULT_SUBAGENT_MAX_ITERS,
   SUBAGENT_BRIEF_MAX_CHARS,
+  MAX_SUBAGENT_TOTAL_TOKENS,
+  SUBAGENT_TOOL_RESULT_MAX_CHARS,
   SUBAGENT_SYSTEM_PROMPT,
   buildSubagentMessages,
   normalizeBrief,
+  truncateToolResult,
   formatBriefResult,
   subagentActivityDetail,
   describeSubagent,
@@ -204,7 +207,7 @@ const resilient = await runSubagent({
 check('executeTool que lanza no rompe el brief', resilient.ok, true)
 check('brief resiliente', resilient.brief, 'brief')
 
-check('DEFAULT_SUBAGENT_MAX_ITERS exportado', DEFAULT_SUBAGENT_MAX_ITERS, 8)
+check('DEFAULT_SUBAGENT_MAX_ITERS exportado (3.3d: 5)', DEFAULT_SUBAGENT_MAX_ITERS, 5)
 
 console.log('— Fase 3.3c · observabilidad (helpers puros de UI) —')
 check('detalle: path', subagentActivityDetail({ name: 'read_file', args: { path: 'a.txt' } }), 'a.txt')
@@ -232,6 +235,67 @@ check('vista ok: label por defecto', vOk.label, 'Subagente')
 check('vista sin estado → running', describeSubagent({}).running, true)
 check('vista robusta sin args', describeSubagent().statusLabel, 'trabajando…')
 check('vista tools no-array', describeSubagent({ tools: null }).toolCount, 0)
+
+console.log('— Fase 3.3d · límites: presupuesto + truncado de tool results —')
+check('MAX_SUBAGENT_TOTAL_TOKENS exportado', MAX_SUBAGENT_TOTAL_TOKENS, 20000)
+check('DEFAULT_SUBAGENT_MAX_TOKENS subido (no trunca brief)', DEFAULT_SUBAGENT_MAX_TOKENS, 4096)
+check('truncateToolResult: corto intacto', truncateToolResult('hola'), 'hola')
+check('truncateToolResult: robusto null', truncateToolResult(null), '')
+const bigResult = 'a'.repeat(SUBAGENT_TOOL_RESULT_MAX_CHARS + 200)
+const truncated = truncateToolResult(bigResult)
+checkTrue('truncateToolResult: aplica el tope', truncated.length <= SUBAGENT_TOOL_RESULT_MAX_CHARS + 20)
+checkTrue('truncateToolResult: avisa truncado', truncated.includes('[truncado]'))
+
+console.log('— Fase 3.3d · la rueda del hijo no reenvía volcados —')
+const wheelCalls = []
+let wheelCall = 0
+await runSubagent({
+  provider: fakeProvider,
+  task: 't',
+  tools: [{ function: { name: 'read_file' } }],
+  executeTool: async () => 'X'.repeat(10000),
+  callModel: async (o) => {
+    wheelCalls.push(o)
+    wheelCall++
+    if (wheelCall === 1) {
+      return { content: '', toolCalls: [{ id: 'c1', function: { name: 'read_file', arguments: '{}' } }], usage: { total_tokens: 1 }, model: 'm' }
+    }
+    return { content: 'brief', toolCalls: [], usage: { total_tokens: 1 }, model: 'm' }
+  },
+})
+const wheelToolMsg = wheelCalls[1].messages.find(m => m.role === 'tool')
+checkTrue('tool result truncado en la rueda local', wheelToolMsg.content.length < 10000)
+checkTrue('rueda acotada al tope', wheelToolMsg.content.length <= SUBAGENT_TOOL_RESULT_MAX_CHARS + 20)
+
+console.log('— Fase 3.3d · presupuesto por subagente —')
+const budgeted = await runSubagent({
+  provider: fakeProvider,
+  task: 't',
+  maxTotalTokens: 15000,
+  tools: [{ function: { name: 'read_file' } }],
+  executeTool: async () => 'x',
+  callModel: async (o) => {
+    if (o.onUsage) o.onUsage({ total_tokens: 10000 })
+    return { content: '', toolCalls: [{ id: `c_${Math.random()}`, function: { name: 'read_file', arguments: '{}' } }], usage: { total_tokens: 10000 }, model: 'm' }
+  },
+})
+check('presupuesto agotado → ok false', budgeted.ok, false)
+checkTrue('aviso de presupuesto', budgeted.error.includes('presupuesto'))
+check('corta al superar el tope (2 llamadas)', budgeted.iterations, 2)
+
+const partial = await runSubagent({
+  provider: fakeProvider,
+  task: 't',
+  maxTotalTokens: 5000,
+  tools: [{ function: { name: 'read_file' } }],
+  executeTool: async () => 'x',
+  callModel: async (o) => {
+    if (o.onUsage) o.onUsage({ total_tokens: 6000 })
+    return { content: 'brief parcial', toolCalls: [{ id: 'c', function: { name: 'read_file', arguments: '{}' } }], usage: { total_tokens: 6000 }, model: 'm' }
+  },
+})
+check('presupuesto con texto → ok true (parcial)', partial.ok, true)
+check('brief parcial devuelto', partial.brief, 'brief parcial')
 
 console.log(`\n${pass} PASS · ${fail} FAIL`)
 if (fail) process.exit(1)
