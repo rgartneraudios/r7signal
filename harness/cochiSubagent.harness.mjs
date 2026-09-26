@@ -13,6 +13,8 @@ import {
   buildSubagentMessages,
   normalizeBrief,
   formatBriefResult,
+  subagentActivityDetail,
+  describeSubagent,
   runSubagent,
 } from '../src/lib/subagent.js'
 import { COCHI_TOOLS, getToolsForPermission, getSubagentTools } from '../src/lib/cochiTools.js'
@@ -203,6 +205,33 @@ check('executeTool que lanza no rompe el brief', resilient.ok, true)
 check('brief resiliente', resilient.brief, 'brief')
 
 check('DEFAULT_SUBAGENT_MAX_ITERS exportado', DEFAULT_SUBAGENT_MAX_ITERS, 8)
+
+console.log('— Fase 3.3c · observabilidad (helpers puros de UI) —')
+check('detalle: path', subagentActivityDetail({ name: 'read_file', args: { path: 'a.txt' } }), 'a.txt')
+check('detalle: pattern', subagentActivityDetail({ name: 'search_in_files', args: { pattern: 'foo' } }), 'foo')
+check('detalle: query', subagentActivityDetail({ name: 'find_files', args: { query: '*.js' } }), '*.js')
+check('detalle: url', subagentActivityDetail({ name: 'web_fetch', args: { url: 'https://x' } }), 'https://x')
+check('detalle: fallback al nombre', subagentActivityDetail({ name: 'list_dir' }), 'list_dir')
+check('detalle: robusto sin args', subagentActivityDetail(), '')
+
+const vRunning = describeSubagent({ label: 'L', task: 'tarea', status: 'running', tools: [{ name: 'read_file' }] })
+check('vista running: running true', vRunning.running, true)
+check('vista running: etiqueta', vRunning.statusLabel, 'trabajando…')
+check('vista running: label', vRunning.label, 'L')
+check('vista running: toolCount', vRunning.toolCount, 1)
+check('vista running: sin brief', vRunning.brief, '')
+check('vista error: falló', describeSubagent({ status: 'error', error: 'boom' }).statusLabel, 'falló')
+check('vista error: failed', describeSubagent({ status: 'error' }).failed, true)
+check('vista error: expone error', describeSubagent({ status: 'error', error: 'boom' }).error, 'boom')
+const vOk = describeSubagent({ status: 'ok', brief: 'B', usageTotal: { total_tokens: 120, calls: 2 } })
+check('vista ok: ok true', vOk.ok, true)
+check('vista ok: brief', vOk.brief, 'B')
+check('vista ok: tokens', vOk.totalTokens, 120)
+check('vista ok: llamadas', vOk.calls, 2)
+check('vista ok: label por defecto', vOk.label, 'Subagente')
+check('vista sin estado → running', describeSubagent({}).running, true)
+check('vista robusta sin args', describeSubagent().statusLabel, 'trabajando…')
+check('vista tools no-array', describeSubagent({ tools: null }).toolCount, 0)
 
 console.log(`\n${pass} PASS · ${fail} FAIL`)
 if (fail) process.exit(1)

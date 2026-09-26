@@ -83,6 +83,42 @@ export function formatBriefResult(sub) {
   return `${head}:\n${sub.brief}`
 }
 
+// ─── Fase 3.3c — OBSERVABILIDAD (UI) ─────────────────────────────────────────
+// Helpers PUROS de presentación: la UI (SubagentView) no decide formato, sólo
+// pinta. Así el aspecto del subagente (estado, detalle de cada tool interna,
+// encabezado del brief) queda cubierto por el harness sin tocar React.
+
+// Detalle legible de una actividad interna del subagente (una tool de lectura).
+// Se elige el primer argumento "descriptivo" disponible.
+export function subagentActivityDetail(activity = {}) {
+  const a = activity.args || {}
+  return String(a.path || a.pattern || a.query || a.url || a.name || activity.name || '')
+}
+
+// Normaliza un registro de subagente (el que arma CochiDesktop) a un modelo de
+// vista estable para el render. Tolera campos ausentes (estado "running").
+export function describeSubagent(sub = {}) {
+  const status = sub.status === 'ok' || sub.status === 'error' ? sub.status : 'running'
+  const tools = Array.isArray(sub.tools) ? sub.tools : []
+  const usage = sub.usageTotal || {}
+  return {
+    status,
+    running: status === 'running',
+    ok: status === 'ok',
+    failed: status === 'error',
+    statusLabel: status === 'running' ? 'trabajando…' : status === 'ok' ? 'completado' : 'falló',
+    label: sub.label || 'Subagente',
+    task: sub.task || '',
+    tools,
+    toolCount: tools.length,
+    iterations: sub.iterations || 0,
+    totalTokens: usage.total_tokens || 0,
+    calls: usage.calls || 0,
+    brief: sub.brief || '',
+    error: sub.error || '',
+  }
+}
+
 // Extrae el texto de un resultado de tool (executeTool devuelve {modelResult} o
 // un string). Mantiene el tool result siempre como texto controlado.
 function toolResultText(out) {
