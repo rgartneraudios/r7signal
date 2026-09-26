@@ -10,6 +10,7 @@ import {
   extractReasoningDelta,
   normalizeUsage,
   costBreakdown,
+  resolveStoredModel,
 } from '../src/lib/llmMetrics.js'
 import { calculateCost } from '../src/lib/modelPrices.js'
 
@@ -87,6 +88,20 @@ checkClose('savedByCache 0 sin tarifa cacheada', costBreakdown(GEMINI, {
   prompt_tokens: 1_000_000, completion_tokens: 0,
   prompt_tokens_details: { cached_tokens: 500_000 },
 }).savedByCache, 0)
+
+console.log('— resolveStoredModel (persistencia del modelo, 3.4f) —')
+const parentIds = [CENTINELA, TERMINATOR, 'ollama', 'lmstudio']
+check('guardado válido → se conserva', resolveStoredModel(TERMINATOR, parentIds, CENTINELA), TERMINATOR)
+check('proveedor local válido → se conserva', resolveStoredModel('ollama', parentIds, CENTINELA), 'ollama')
+check('vacío → fallback', resolveStoredModel('', parentIds, CENTINELA), CENTINELA)
+check('undefined → fallback', resolveStoredModel(undefined, parentIds, CENTINELA), CENTINELA)
+check('null → fallback', resolveStoredModel(null, parentIds, CENTINELA), CENTINELA)
+check('desconocido → fallback', resolveStoredModel('viejo/modelo', parentIds, CENTINELA), CENTINELA)
+check('recorta espacios', resolveStoredModel('  ollama  ', parentIds, CENTINELA), 'ollama')
+check('sin validIds → acepta tal cual', resolveStoredModel('cualquiera/x', undefined, CENTINELA), 'cualquiera/x')
+check('validIds no-array → acepta tal cual', resolveStoredModel('x/y', 'nope', CENTINELA), 'x/y')
+check('validIds vacío → acepta tal cual', resolveStoredModel('x/y', [], CENTINELA), 'x/y')
+check('robusto sin args → fallback undefined', resolveStoredModel(), undefined)
 
 console.log(`\n${pass} PASS · ${fail} FAIL`)
 if (fail) process.exit(1)

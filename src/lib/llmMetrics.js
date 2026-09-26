@@ -29,6 +29,19 @@ export function buildReasoningConfig(modelId, override) {
   return enabled ? { enabled: true } : { enabled: false }
 }
 
+// ─── Persistencia del modelo seleccionado ────────────────────────────────────
+// Helper PURO y compartido (3.4e/3.4f): acepta el modelo guardado SÓLO si está
+// entre los ids válidos (catálogo del panel); vacío/desconocido → `fallback`.
+// Recorta espacios. `validIds` inyectable: si no es un array no vacío, acepta el
+// valor tal cual (útil cuando no hay catálogo, p.ej. proveedores locales).
+export function resolveStoredModel(stored, validIds, fallback) {
+  const value = String(stored || '').trim()
+  if (!value) return fallback
+  const ids = Array.isArray(validIds) ? validIds : []
+  if (ids.length && !ids.includes(value)) return fallback
+  return value
+}
+
 // ─── Reasoning del stream ────────────────────────────────────────────────────
 // OpenRouter expone el razonamiento como `delta.reasoning` (string) y/o
 // `delta.reasoning_details` (array de fragmentos). Devuelve el texto incremental

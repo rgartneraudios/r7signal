@@ -22,7 +22,7 @@
 // Módulo inyectable (`callModel`, `executeTool`) para poder correr el harness
 // headless sin red ni disco.
 import { streamChat } from './llmClient.js'
-import { normalizeUsage } from './llmMetrics.js'
+import { normalizeUsage, resolveStoredModel } from './llmMetrics.js'
 
 // 3.3a/3.3b no permiten recursión: el subagente no tiene la tool spawn_agent, así
 // que la profundidad efectiva es 1. El tope queda declarado para 3.3d.
@@ -63,15 +63,11 @@ export function resolveSubagentProvider(parentProvider, options = {}) {
 }
 
 // 3.4e — Persistencia del modelo del subagente. El selector "sub" vivía en estado
-// del panel y se reseteaba al recargar. PURO: acepta el valor guardado SÓLO si
-// está entre los ids válidos (catálogo del padre); si viene vacío/desconocido cae
-// al default. `validIds` inyectable para el harness.
+// del panel y se reseteaba al recargar. Delega en el helper compartido
+// `resolveStoredModel` (3.4f): acepta el valor guardado SÓLO si está entre los
+// ids válidos (catálogo del padre); si viene vacío/desconocido cae al default.
 export function resolveStoredSubagentModel(stored, validIds) {
-  const value = String(stored || '').trim()
-  if (!value) return DEFAULT_SUBAGENT_MODEL
-  const ids = Array.isArray(validIds) ? validIds : []
-  if (ids.length && !ids.includes(value)) return DEFAULT_SUBAGENT_MODEL
-  return value
+  return resolveStoredModel(stored, validIds, DEFAULT_SUBAGENT_MODEL)
 }
 
 // 3.4c: el brief salía verboso (narraba el proceso: "The file exists. Let me
