@@ -27,10 +27,22 @@ import { normalizeUsage } from './llmMetrics.js'
 // 3.3a/3.3b no permiten recursión: el subagente no tiene la tool spawn_agent, así
 // que la profundidad efectiva es 1. El tope queda declarado para 3.3d.
 export const MAX_SUBAGENT_DEPTH = 1
-export const DEFAULT_SUBAGENT_MAX_TOKENS = 1500
+// 3.3d: 1500 truncaba el brief final (prueba manual de 3.3c). El output de los
+// turnos con tools suele ser corto, así que subir el techo no encarece el caso
+// normal; sólo evita cortar la respuesta final.
+export const DEFAULT_SUBAGENT_MAX_TOKENS = 4096
 export const SUBAGENT_BRIEF_MAX_CHARS = 6000
-// Tope de turnos internos del mini-loop aislado (evita bucles infinitos).
-export const DEFAULT_SUBAGENT_MAX_ITERS = 8
+// Tope de turnos internos del mini-loop aislado (evita bucles infinitos). 3.3d:
+// 8→5; la prueba manual gastó 7 llamadas para una tarea trivial.
+export const DEFAULT_SUBAGENT_MAX_ITERS = 5
+// 3.3d — PRESUPUESTO por subagente: si el gasto agregado supera este tope, el
+// mini-loop corta y devuelve un brief parcial (o un aviso controlado). Nunca
+// lanza. Evita que un worker descontrolado multiplique el gasto del turno.
+export const MAX_SUBAGENT_TOTAL_TOKENS = 20000
+// 3.3d — TOPE a los tool results que se acumulan en la rueda del hijo. La rueda
+// acumulativa reenviaba volcados de archivos (23 KB) en cada vuelta → crecimiento
+// cuadrático (prompt 1.7k→8.7k→15.6k). Cada tool result se guarda truncado.
+export const SUBAGENT_TOOL_RESULT_MAX_CHARS = 4000
 
 export const SUBAGENT_SYSTEM_PROMPT = [
   'You are a SUBAGENT: a focused, isolated worker spawned by a parent agent to complete ONE delegated task.',
@@ -126,6 +138,15 @@ function toolResultText(out) {
   return String(out ?? '')
 }
 
+// 3.3d: recorta un tool result antes de meterlo en la rueda del hijo. El tope se
+// aplica a lo que el modelo vuelve a ver en la siguiente vuelta: mata el
+// crecimiento cuadrático sin perder el arranque del resultado.
+export function truncateToolResult(text) {
+  const s = String(text ?? '')
+  if (s.length <= SUBAGENT_TOOL_RESULT_MAX_CHARS) return s
+  return `${s.slice(0, SUBAGENT_TOOL_RESULT_MAX_CHARS)}\n…[truncado]`
+}
+
 /**
  * Ejecuta un subagente headless con CONTEXTO AISLADO. NUNCA lanza: devuelve
  * `{ ok, brief, label, depth, usage, usageTotal, steps, iterations, model, error }`
@@ -150,12 +171,14 @@ function toolResultText(out) {
  * @param {Function} [opts.executeTool] async (name, args) => string|{modelResult} (3.3b)
  * @param {Function} [opts.onActivity] (activity) => void  observabilidad (3.3c)
  * @param {number}   [opts.maxIterations]
+ * @param {number}   [opts.maxTotalTokens] presupuesto agregado (3.3d)
  */
 export async function runSubagent(opts = {}) {
   const {
     provider, task, context = '', label = '', language = 'Spanish',
     maxTokens, depth = 1, signal, onUsage, onActivity,
     tools = null, executeTool = null, maxIterations = DEFAULT_SUBAGENT_MAX_ITERS,
+    maxTotalTokens = MAX_SUBAGENT_TOTAL_TOKENS,
   } = opts
   const callModel = opts.callModel || streamChat
 
@@ -189,6 +212,7 @@ export async function runSubagent(opts = {}) {
   let lastUsage = null
   let lastModel = provider.model
   let iterations = 0
+  let budgetExceeded = false
 
   try {
     for (let iter = 0; iter < maxIterations; iter++) {
@@ -209,6 +233,14 @@ export async function runSubagent(opts = {}) {
 
       const content = result?.content || ''
       const calls = result?.toolCalls || []
+
+      // 3.3d: si el gasto agregado tocó el presupuesto, se corta aquí. Si el
+      // turno traía texto, se devuelve como brief PARCIAL; si no, fallo controlado.
+      if (usageTotal.total_tokens >= maxTotalTokens) {
+        budgetExceeded = true
+        if (String(content).trim()) finalContent = content
+        break
+      }
 
       // Sin tool calls → el subagente emite su brief y termina.
       if (!calls.length) { finalContent = content; break }
@@ -232,11 +264,19 @@ export async function runSubagent(opts = {}) {
         const text = toolResultText(out)
         steps.push({ name, args, result: text.slice(0, 300) })
         if (onActivity) onActivity({ name, args, result: text.slice(0, 120) })
-        messages.push({ role: 'tool', tool_call_id: call.id, content: text })
+        // 3.3d: se guarda truncado en la rueda propia (evita el cuadrático).
+        messages.push({ role: 'tool', tool_call_id: call.id, content: truncateToolResult(text) })
       }
     }
 
     if (!finalContent) {
+      if (budgetExceeded) {
+        return {
+          ok: false,
+          error: `presupuesto del subagente agotado (${usageTotal.total_tokens} tok) sin un brief completo`,
+          depth, steps, iterations, usage: lastUsage, usageTotal, model: lastModel,
+        }
+      }
       return {
         ok: false,
         error: `el subagente agotó sus ${maxIterations} turnos internos sin devolver un brief`,

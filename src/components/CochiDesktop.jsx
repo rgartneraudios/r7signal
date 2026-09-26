@@ -1292,6 +1292,8 @@ function CochiDesktop({
               // (SubagentBubble). Al cerrar, el brief queda como mensaje destacado.
               const subId = newMessageId('sub')
               addSubagent({ id: subId, label: subLabel, task, status: 'running', tools: [] })
+              // Fase 3.3d: contador EN VIVO del subagente (se pinta en la burbuja).
+              const subUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cached_tokens: 0, calls: 0 }
               const sub = await runSubagent({
                 provider,
                 task,
@@ -1317,6 +1319,12 @@ function CochiDesktop({
                   stepInputTokens += u.promptTokens
                   stepOutputTokens += u.completionTokens
                   stepCachedTokens += u.cachedTokens
+                  subUsage.prompt_tokens += u.promptTokens
+                  subUsage.completion_tokens += u.completionTokens
+                  subUsage.total_tokens += u.totalTokens
+                  subUsage.cached_tokens += u.cachedTokens
+                  subUsage.calls += 1
+                  patchSubagent(subId, { usageTotal: { ...subUsage } })
                   auditLog(`subagent: prompt ${u.promptTokens} · completion ${u.completionTokens} · cached ${u.cachedTokens}`)
                 },
               })
@@ -1325,7 +1333,7 @@ function CochiDesktop({
                 brief: sub.brief || '',
                 error: sub.error || '',
                 iterations: sub.iterations || 0,
-                usageTotal: sub.usageTotal || null,
+                usageTotal: sub.usageTotal || subUsage,
                 label: sub.label || subLabel,
               }
               patchSubagent(subId, done)
