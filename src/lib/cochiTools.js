@@ -805,7 +805,15 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       cmd.stdout.on('data', d => { stdout += d })
       cmd.stderr.on('data', d => { stderr += d })
 
-      const child = await cmd.spawn()
+      let child
+      try {
+        child = await cmd.spawn()
+      } catch (err) {
+        return {
+          modelResult: `ERROR al ejecutar comando: ${(err && err.message) || String(err) || 'falló spawn()'}\nCOMANDO: ${args.command}`,
+          diff: null,
+        }
+      }
 
       // Espera de finalización con timeout: si expira, mata el proceso y reporta.
       const result = await new Promise((resolve) => {

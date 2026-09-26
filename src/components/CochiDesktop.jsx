@@ -752,6 +752,7 @@ function CochiDesktop({
       const result = await streamChat({
         provider,
         stream: false,
+        reasoning: false,
         messages: [
           { role: 'system', content: planningPrompt },
           { role: 'user', content: userMessage }
@@ -789,6 +790,7 @@ function CochiDesktop({
       const result = await streamChat({
         provider,
         stream: false,
+        reasoning: false,
         messages: [
           { role: 'system', content: planningPrompt },
           { role: 'user', content: `Necesito dividir este paso en sub-pasos: '${step.description}'. Motivo: ${reason}. Devuelve máximo 3 sub-pasos en el mismo formato JSON.` }
@@ -875,8 +877,6 @@ function CochiDesktop({
 
     try {
       let apiMessages = null // conversación persistente para todo el plan — se arma UNA vez y se comprime al cerrar cada step, nunca se reconstruye desde cero.
-      let technicalSwapped = false // true cuando un turno sin plan (!trackSteps) pasó de Prompt A (personalidad completa) a Prompt B (STEP_EXECUTION_PROMPT, sin personalidad) por necesitar ping-pong de tools.
-      let personalitySystemMsgRef = null // referencia directa (no por contenido) al mensaje de Prompt A dentro de apiMessages, para poder swapearlo sin depender de que remoteSystem siga siendo el mismo string.
       const pairsStartIdx = sessionPairsRef.current.length // Bloque L4: corte para saber qué parejas se emitieron en ESTE request
       let requestFinalText = '' // Bloque L4: R3 visible final del request (para el turno crudo de la rueda)
       while (remainingIter > 0 && !controller.signal.aborted) {
@@ -932,9 +932,6 @@ function CochiDesktop({
             rawTurns: wheel.lastTurn ? [wheel.lastTurn] : [],
             userInput: originalMessageRef.current || '',
           })
-          // Referencia directa al mensaje de personalidad (Prompt A), no su contenido — así el swap
-          // no depende de que remoteSystem siga interpolando igual entre vueltas del while.
-          if (!usesTechnicalPrompt) personalitySystemMsgRef = baseSystemMessages[1]
         }
 
         if (trackSteps) {
@@ -974,6 +971,10 @@ function CochiDesktop({
             signal: controller.signal,
             sessionId: cochiSessionId,
             retries: 3,
+            // Reasoning AUTO: sólo en tareas complejas (plan multi-paso). Un
+            // turno single-pass (lectura/consulta) NO razona — evita sumar
+            // output innecesario en cada llamada.
+            reasoning: trackSteps,
             onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
             onUsage: (usage) => {
               const u = normalizeUsage(usage)
@@ -1009,7 +1010,10 @@ function CochiDesktop({
           if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
             const rawContent = assistantMsg.content || ''
 
-            const useDirectParse = trackSteps ? (isLastStep && !usesTwoPhaseFinal) : !technicalSwapped
+            // Single-pass (!trackSteps): el modelo responde directo R1/R2/R3, sin
+            // swap a STEP_EXECUTION_PROMPT ni wrapper extra (ahorra una llamada
+            // completa y evita el falso "no emitió señal de control válida").
+            const useDirectParse = trackSteps ? (isLastStep && !usesTwoPhaseFinal) : true
             if (useDirectParse) {
               const { r1, r2, r3 } = parseR1R2R3(rawContent)
               const displayContent = (r3 || rawContent)
@@ -1096,6 +1100,7 @@ function CochiDesktop({
                       signal: controller.signal,
                       sessionId: cochiSessionId,
                       retries: 3,
+                      reasoning: trackSteps,
                       onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
                       onUsage: (usage) => {
                         const u = normalizeUsage(usage)
@@ -1165,12 +1170,6 @@ function CochiDesktop({
             }
           }
 
-          if (!trackSteps && !technicalSwapped) {
-            technicalSwapped = true
-            const sysIdx = personalitySystemMsgRef ? apiMessages.indexOf(personalitySystemMsgRef) : -1
-            if (sysIdx !== -1) apiMessages[sysIdx] = { role: 'system', content: STEP_EXECUTION_PROMPT }
-          }
-
           const executeToolCall = async (toolCall) => {
             const name = toolCall.function.name
             let args = {}
@@ -1195,7 +1194,12 @@ function CochiDesktop({
               pushActivity(TOOL_ICONS[name] || '🔧', name, 'denegado por regla')
               return { role: 'tool', tool_call_id: toolCall.id, content: '⛔ Bloqueado: una regla de permisos (deny) impide esta acción.' }
             }
-            if (permRequest.guarded && permDecision !== 'allow' && !sessionAllowRef.current.has(permRequest.signature)) {
+            // Opción (c): dentro de un PLAN confirmado por el usuario, las acciones de
+            // escritura (kind 'edit' y 'fs': write/replace/append/move/copy) se
+            // autorizan solas — el "ejecutar" del plan ya las cubrió. Las
+            // destructivas (run_command, delete_file) SIEMPRE piden permiso.
+            const planAutoAuthorized = trackSteps && permRequest.kind !== 'destructive'
+            if (permRequest.guarded && !planAutoAuthorized && permDecision !== 'allow' && !sessionAllowRef.current.has(permRequest.signature)) {
               // Aprobación por diff: se previsualiza la edición sin escribir nada.
               if (permRequest.kind === 'edit') {
                 try {
@@ -1371,7 +1375,6 @@ function CochiDesktop({
   async function handleSendText(sent) {
     if (!sent || loading || planStatus === 'executing') return
 
-    lastTurnHadToolsRef.current = false // Bloque K3: se evalúa por turno
     lastTurnHadCommandRef.current = false // Fase 3.1
     // Fase 3.1: abre el snapshot del turno. Si no hay mutaciones, no se escribe
     // nada en disco y el snapshot queda vacío (se descarta al resetear).

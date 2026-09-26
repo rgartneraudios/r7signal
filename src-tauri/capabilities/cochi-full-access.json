@@ -83,14 +83,30 @@
     "fs:allow-exists",
     "fs:allow-stat",
     "shell:default",
-    "shell:allow-spawn",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "powershell",
+          "cmd": "powershell",
+          "args": ["-Command", { "validator": "[\\s\\S]*" }],
+          "sidecar": false
+        },
+        {
+          "name": "bash",
+          "cmd": "bash",
+          "args": ["-c", { "validator": "[\\s\\S]*" }],
+          "sidecar": false
+        }
+      ]
+    },
     {
       "identifier": "shell:allow-execute",
       "allow": [
         {
           "name": "powershell",
           "cmd": "powershell",
-          "args": ["-Command", { "validator": ".*" }],
+          "args": ["-Command", { "validator": "[\\s\\S]*" }],
           "sidecar": false
         }
       ]
