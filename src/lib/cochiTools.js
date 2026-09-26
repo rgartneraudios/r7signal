@@ -998,7 +998,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         if (!res.ok) return { modelResult: `⚠️ HTTP ${res.status} al leer ${url}`, diff: null }
         const contentType = res.headers?.get?.('content-type') || ''
         const raw = await res.text()
-        const isJson = /json/i.test(contentType) || /^\s*[\[{]/.test(raw)
+        const isJson = /json/i.test(contentType) || /^\s*[[{]/.test(raw)
         const body = isJson ? raw : htmlToText(raw)
         const truncated = truncateBytes(body, maxBytes)
         return {

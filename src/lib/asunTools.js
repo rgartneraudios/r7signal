@@ -2,7 +2,6 @@ import {
   readDir,
   readFile,
   writeTextFile,
-  writeFile,
   rename,
   mkdir,
   remove,

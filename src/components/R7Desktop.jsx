@@ -53,7 +53,6 @@ export default function R7Desktop() {
   const [activeLeftPanel, setActiveLeftPanel] = useState('asun')
   const [usage, dispatchUsage] = useReducer(usageReducer, USAGE_INIT)
   const [showPrefs, setShowPrefs] = useState(false)
-  const [userName, setUserName] = useState('')
   const [preferences, setPreferences] = useState({ nombre_usuario: '', nombre_alternativo: '', chat_language: 'Español' })
   const [promptsReady, setPromptsReady] = useState({ asun: false, tito: false, cochi: false })
   const [showApiKey, setShowApiKey] = useState(false)
@@ -111,7 +110,7 @@ export default function R7Desktop() {
     if (agent === 'asun' || agent === 'tito') setActiveLeftPanel(agent)
     setPendingSession({ agent, id, nonce: Date.now() })
   }, [])
-const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, cost }) => {
+const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0 }) => {
       dispatchUsage({ type: 'add', source, inputTokens, outputTokens })
     }, [])
 
@@ -535,7 +534,6 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
               onUsage={handleUsage}
               onResetUsage={handleResetUsage}
               onHandoff={handleTitoHandoff}
-              userName={userName}
               preferences={preferences}
               onPromptsReady={handlePromptsReady}
               workspace={workspace}
@@ -555,7 +553,6 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, co
             handoff={handoff}
             onHandoffConsumed={handleConsumeHandoff}
             workspace={workspace}
-            onWorkspaceChange={handleWorkspaceChange}
             onUsage={handleUsage}
             onResetUsage={handleResetUsage}
             onPreferencesLoaded={handlePreferencesLoaded}

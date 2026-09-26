@@ -84,8 +84,6 @@ const TITO_MODELS = {
   deep:   'perplexity/sonar-deep-research',
 };
 
-const TITO_SYSTEM_PROMPT = ''
-
 const extractR3 = (text) => {
   const r3Index = text.indexOf('R3:')
   if (r3Index !== -1) return text.slice(r3Index + 3).trim()
@@ -121,7 +119,7 @@ const needsWebSearch = (message) => {
 function TitoPanel({ 
   pendingMessage, onMessageConsumed, 
   pendingSession, onSessionConsumed,
-  onUsage, onResetUsage, onHandoff, userName,
+  onUsage, onResetUsage, onHandoff,
   preferences = {},
   onPromptsReady,
 }) {
@@ -132,7 +130,6 @@ function TitoPanel({
   const liveRef = useRef(null)
   const [searchLevel, setSearchLevel] = useState('rapido');
   const [streaming, setStreaming] = useState(false);
-  const [cancelled, setCancelled] = useState(false);
   const [remotePrompts, setRemotePrompts] = useState(null);
   const [promptsError, setPromptsError] = useState(false);
   const abortRef = useRef(null);
@@ -280,6 +277,7 @@ function TitoPanel({
       sendMessage(pendingMessage.text);
       onMessageConsumed?.();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingMessage]);
 
   // Scroll al final (Bloque M/N: scrollTop directo en el contenedor en vez de
@@ -296,7 +294,7 @@ function TitoPanel({
       if (p) { setRemotePrompts(p); onPromptsReady?.('tito') }
       else setPromptsError(true)
     })
-  }, [])
+  }, [onPromptsReady])
 
   // Bloque L4: al abrir la sesión, cargar la rueda R7 global desde disco.
   useEffect(() => {
@@ -322,7 +320,6 @@ function TitoPanel({
     })
     sessionIdRef.current = session.id
     saveSession(session).catch(err => console.error('autosave tito:', err))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, streaming]);
 
   // Bloque X1: "Cargar como contexto" una sesión guardada. La sesión NO restaura
@@ -386,7 +383,6 @@ function TitoPanel({
     const userMsg = { id: newMessageId('tito'), role: 'user', content: text };
     setMessages(prev => [...prev, userMsg]);
     setStreaming(true);
-    setCancelled(false);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -494,7 +490,6 @@ function TitoPanel({
 
   const handleCancel = () => {
     abortRef.current?.abort();
-    setCancelled(true);
     setStreaming(false);
   };
 

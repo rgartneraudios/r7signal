@@ -730,7 +730,7 @@ fontFamily: "'Boogaloo',cursive",
   )
 }
 
-export default function Chat00ImgVid({ menuActivo, user, volverAMenus }) {
+export default function Chat00ImgVid({ menuActivo, user }) {
   const menuNumero = menuActivo?.menu_numero ?? 0
   const esChat00 = menuNumero === 0
 

@@ -16,7 +16,6 @@ export const MODEL_PRICES = {
   'bytedance-seed/seedream-5-0-pro':       { perImage: 0.045 },
   // Asun — Música
   'google/lyria-3-pro-preview':            { perSong: 0.08 },
-  '~deepseek/deepseek-v4-flash-latest':       { inputPerM: 0.05, outputPerM: 0.16, cachedInputPerM: 0.01 },
   // Tito
   'perplexity/sonar':                      { inputPerM: 1, outputPerM: 1  },
   'perplexity/sonar-deep-research':        { inputPerM: 2, outputPerM: 8  },
