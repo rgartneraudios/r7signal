@@ -58,8 +58,9 @@ export const SubagentBubble = memo(function SubagentBubble({ sub }) {
       {v.toolCount > 8 && (
         <div style={{ fontSize: '0.58rem', color: '#6A7A8A', letterSpacing: '0.08em' }}>+{v.toolCount - 8} acción(es) más…</div>
       )}
-      {(v.iterations > 0 || v.totalTokens > 0) && (
+      {(v.iterations > 0 || v.totalTokens > 0 || v.model) && (
         <div style={{ fontSize: '0.58rem', color: '#6A7A8A', letterSpacing: '0.08em', marginTop: 2 }}>
+          {v.model ? `${v.model.replace(/^~/, '').split('/').pop()} · ` : ''}
           {v.iterations > 0 ? `${v.iterations} turno(s) interno(s)` : ''}
           {v.iterations > 0 && v.totalTokens > 0 ? ' · ' : ''}
           {v.totalTokens > 0 ? `${v.totalTokens.toLocaleString()} tok` : ''}
@@ -110,7 +111,7 @@ export const SubagentBrief = memo(function SubagentBrief({ sub, renderMarkdown }
           🤖 Brief del subagente · {v.label}
         </span>
         <span style={{ fontSize: '0.6rem', color: v.failed ? '#FF4466' : '#8A868B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          {v.statusLabel}{v.calls ? ` · ${v.calls} llamada(s)` : ''}{v.totalTokens ? ` · ${v.totalTokens.toLocaleString()} tok` : ''}
+          {v.statusLabel}{v.model ? ` · ${v.model.replace(/^~/, '').split('/').pop()}` : ''}{v.calls ? ` · ${v.calls} llamada(s)` : ''}{v.totalTokens ? ` · ${v.totalTokens.toLocaleString()} tok` : ''}
         </span>
       </div>
       <div style={{

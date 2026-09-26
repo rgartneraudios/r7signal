@@ -43,6 +43,22 @@ export const MAX_SUBAGENT_TOTAL_TOKENS = 20000
 // acumulativa reenviaba volcados de archivos (23 KB) en cada vuelta → crecimiento
 // cuadrático (prompt 1.7k→8.7k→15.6k). Cada tool result se guarda truncado.
 export const SUBAGENT_TOOL_RESULT_MAX_CHARS = 4000
+// 3.4d — MODELO PROPIO del subagente. Por defecto el más barato del catálogo de
+// Cochi (input ~$0.04/M): un worker de lectura de salida corta no necesita el
+// modelo del padre. Los proveedores LOCALES (Ollama/LM Studio) no ofrecen
+// catálogo y conservan el modelo del padre.
+export const DEFAULT_SUBAGENT_MODEL = '~deepseek/deepseek-flash-latest'
+
+// Devuelve el provider EFECTIVO del subagente a partir del provider del padre.
+// PURO (no muta): si el padre es local, lo hereda tal cual; si no, sólo cambia
+// `model` (url/headers/key del padre ya sirven). `options.model` inyectable.
+export function resolveSubagentProvider(parentProvider, options = {}) {
+  if (!parentProvider) return parentProvider
+  if (parentProvider.isLocal) return parentProvider
+  const model = String(options.model || DEFAULT_SUBAGENT_MODEL).trim()
+  if (!model || model === parentProvider.model) return parentProvider
+  return { ...parentProvider, model }
+}
 
 // 3.4c: el brief salía verboso (narraba el proceso: "The file exists. Let me
 // compute…" + secciones "Notas" sobre el truncado) pese a pedir concisión. Se
@@ -160,6 +176,7 @@ export function describeSubagent(sub = {}) {
     calls: usage.calls || 0,
     brief: sub.brief || '',
     error: sub.error || '',
+    model: sub.model || '',
   }
 }
 

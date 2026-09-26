@@ -11,6 +11,7 @@ import {
   SUBAGENT_BRIEF_MAX_CHARS,
   MAX_SUBAGENT_TOTAL_TOKENS,
   SUBAGENT_TOOL_RESULT_MAX_CHARS,
+  DEFAULT_SUBAGENT_MODEL,
   SUBAGENT_SYSTEM_PROMPT,
   buildSubagentMessages,
   normalizeBrief,
@@ -19,6 +20,7 @@ import {
   formatBriefResult,
   subagentActivityDetail,
   describeSubagent,
+  resolveSubagentProvider,
   runSubagent,
 } from '../src/lib/subagent.js'
 import { COCHI_TOOLS, getToolsForPermission, getSubagentTools } from '../src/lib/cochiTools.js'
@@ -314,6 +316,32 @@ const partial = await runSubagent({
 })
 check('presupuesto con texto → ok true (parcial)', partial.ok, true)
 check('brief parcial devuelto', partial.brief, 'brief parcial')
+
+console.log('— Fase 3.4d · modelo propio del subagente —')
+check('DEFAULT_SUBAGENT_MODEL exportado', DEFAULT_SUBAGENT_MODEL, '~deepseek/deepseek-flash-latest')
+const parentProv = { model: '~deepseek/deepseek-v4-flash-latest', url: 'http://or', headers: { Authorization: 'k' }, supportsUsage: true, isLocal: false }
+const subProv = resolveSubagentProvider(parentProv)
+check('openrouter: cambia al modelo barato', subProv.model, DEFAULT_SUBAGENT_MODEL)
+checkTrue('openrouter: conserva url/headers', subProv.url === 'http://or' && subProv.headers.Authorization === 'k')
+checkTrue('openrouter: conserva supportsUsage', subProv.supportsUsage === true)
+check('openrouter: no muta el provider del padre', parentProv.model, '~deepseek/deepseek-v4-flash-latest')
+check('modelo inyectable', resolveSubagentProvider(parentProv, { model: 'custom/model' }).model, 'custom/model')
+check('modelo vacío → default', resolveSubagentProvider(parentProv, { model: '' }).model, DEFAULT_SUBAGENT_MODEL)
+const localSub = { model: 'llama3.2', url: 'http://localhost', headers: {}, isLocal: true }
+check('local: hereda el modelo del padre', resolveSubagentProvider(localSub).model, 'llama3.2')
+check('local: mismo objeto (sin copia)', resolveSubagentProvider(localSub), localSub)
+check('sin provider → undefined', resolveSubagentProvider(), undefined)
+check('mismo modelo → mismo objeto', resolveSubagentProvider({ model: 'x', isLocal: false }, { model: 'x' }).model, 'x')
+check('describeSubagent expone model', describeSubagent({ status: 'ok', model: 'm/1' }).model, 'm/1')
+check('describeSubagent sin model → ""', describeSubagent({}).model, '')
+
+const providerSeen = []
+await runSubagent({
+  provider: resolveSubagentProvider(fakeProvider, { model: 'cheap/model' }),
+  task: 't',
+  callModel: async (o) => { providerSeen.push(o.provider); return { content: 'b', usage: null, model: 'cheap/model' } },
+})
+check('runSubagent recibe el provider del subagente', providerSeen[0].model, 'cheap/model')
 
 console.log(`\n${pass} PASS · ${fail} FAIL`)
 if (fail) process.exit(1)
