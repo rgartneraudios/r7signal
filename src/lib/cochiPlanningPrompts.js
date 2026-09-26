@@ -60,18 +60,11 @@ export function needsPlanning(message) {
   ]
   if (!hasWriteVerb && queryVerbsAnywhere.some(k => msg.includes(k))) return false
 
-  // Filesystem / agentic keywords — planning needed
-  const agentic = [
-    ...writeVerbs,
-    'archivo', 'carpeta', 'directorio', 'fichero',
-    'package.json', 'jsx', 'tsx', 'js', 'ts', 'css',
-  ]
-  if (agentic.some(k => msg.includes(k)) && hasWriteVerb) return true
-
-  // Default: if message is short and has no agentic keywords, skip planning
-  if (msg.length < 60) return false
-
-  return true
+  // Planificación SOLO cuando hay intención real de mutación/ejecución
+  // (writeVerbs). Un mensaje largo de lectura/análisis NO debe pagar una llamada
+  // de planner: antes el fallback por longitud (`msg.length >= 60 → true`)
+  // disparaba el planner en consultas simples y sumaba tokens + fricción.
+  return hasWriteVerb
 }
 
 // Parsea la respuesta cruda del planner (JSON, con o sin fences) al shape que
