@@ -79,6 +79,65 @@ export async function pathExistsCochi(path) {
   try { return await exists(path) } catch { return false }
 }
 
+// Separa una ruta en { dir, base, sep } respetando el separador original.
+function splitPath(p) {
+  const s = String(p || '')
+  const i = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'))
+  if (i < 0) return { dir: '', base: s, sep: '\\' }
+  return { dir: s.slice(0, i), base: s.slice(i + 1), sep: s[i] }
+}
+
+function levenshtein(a, b) {
+  if (a === b) return 0
+  if (!a.length) return b.length
+  if (!b.length) return a.length
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    const curr = [i]
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+    }
+    prev = curr
+  }
+  return prev[b.length]
+}
+
+// Auditoría de gasto (P0.2): si una ruta no existe, sugiere los nombres más
+// parecidos del mismo directorio. Evita que el modelo gaste un round-trip
+// completo llamando a find_files para recuperarse de un typo en el nombre.
+async function rankClosestPaths(target) {
+  try {
+    const { dir, base, sep } = splitPath(target)
+    if (!dir || !base) return []
+    const entries = await readDir(dir)
+    const b = base.toLowerCase()
+    return entries
+      .map(e => ({ path: `${dir}${sep}${e.name}`, dist: levenshtein(b, String(e.name).toLowerCase()) }))
+      .sort((x, y) => x.dist - y.dist)
+  } catch { return [] }
+}
+
+export async function suggestClosestPaths(target, max = 3) {
+  const scored = await rankClosestPaths(target)
+  if (!scored.length) return []
+  const { base } = splitPath(target)
+  const threshold = Math.max(2, Math.floor(String(base).length / 3))
+  const close = scored.filter(s => s.dist <= threshold)
+  return (close.length ? close : scored).slice(0, max).map(s => s.path)
+}
+
+// Sólo para read_file: devuelve el match más cercano si es un typo leve.
+export async function findClosestPath(target, maxDist = 2) {
+  const scored = await rankClosestPaths(target)
+  return scored.length && scored[0].dist <= maxDist ? scored[0].path : null
+}
+
+async function notFoundSuffix(target) {
+  const suggestions = await suggestClosestPaths(target)
+  return suggestions.length ? `\n¿Quisiste decir?: ${suggestions.join(' | ')}` : ''
+}
+
 // ─── OS detection ─────────────────────────────────────────────────────────────
 function getPlatform() {
   const ua = navigator.userAgent.toLowerCase()
@@ -279,7 +338,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: 'Read the full text content of a file. Use get_file_info first to check size. For large files prefer read_file_chunk.',
+      description: "Read a file's full text. For large files prefer read_file_chunk (check size first).",
       parameters: {
         type: 'object',
         properties: { path: { type: 'string', description: 'Absolute path.' } },
@@ -291,7 +350,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'read_file_chunk',
-      description: 'Read a specific line range from a file without loading it all. Token-efficient for large files. Capped at 150 lines per call — if endLine is omitted or exceeds the cap, only 150 lines from startLine are returned; call again with a new startLine to continue.',
+      description: 'Read a line range from a file without loading it all. Capped at 150 lines per call; call again with a new startLine to continue.',
       parameters: {
         type: 'object',
         properties: {
@@ -322,7 +381,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'replace_in_file',
-      description: 'Replace text inside a file surgically. No need to read or rewrite the whole file. By default oldText must appear exactly once; set replaceAll: true to replace every occurrence.',
+      description: 'Replace oldText with newText inside a file. oldText must match exactly once unless replaceAll: true.',
       parameters: {
         type: 'object',
         properties: {
@@ -366,7 +425,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'find_files',
-      description: 'Find files by glob pattern recursively. Supports * (within a segment), ** (any depth), ? (single char), {a,b} (alternatives) and [abc] (char class). If the pattern contains "/" it matches the path relative to dirPath (e.g. "src/**/*.jsx"); otherwise it matches the file name (e.g. "*.jsx"). Skips node_modules and .git.',
+      description: 'Find files by glob recursively (*, **, ?, {a,b}, [abc]). Pattern with "/" matches relative path, else file name. Skips node_modules and .git.',
       parameters: {
         type: 'object',
         properties: {
@@ -382,7 +441,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'search_in_files',
-      description: 'Search for text or a regular expression inside files recursively. Returns file path, line number, and matching line. Use instead of read_file + manual search. Max 50 results.',
+      description: 'Search text or regex inside files recursively. Returns path:line. Max 50 results.',
       parameters: {
         type: 'object',
         properties: {
@@ -400,7 +459,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'get_file_info',
-      description: 'Get file metadata: size in bytes and KB, line count. Zero content sent to context. Use before read_file on unknown files.',
+      description: 'Get file size (bytes, KB) and line count. No content sent. Use before read_file on unknown files.',
       parameters: {
         type: 'object',
         properties: { path: { type: 'string' } },
@@ -424,7 +483,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'run_command',
-      description: 'Run a shell command. Uses PowerShell on Windows, bash on macOS/Linux. Use only when no other tool covers the need. Output is capped (64KB) and the process is killed if it exceeds the timeout (default 120s, max 600s).',
+      description: 'Run a shell command (PowerShell on Windows, bash on macOS/Linux). Output capped at 64KB; killed on timeout (default 120s, max 600s).',
       parameters: {
         type: 'object',
         properties: {
@@ -440,7 +499,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'todowrite',
-      description: 'Create or update the task list for the current work. Pass the COMPLETE list every time — it replaces the previous one. Use it to plan and track multi-step work and keep the user informed of progress. Keep at most one task as in_progress at a time.',
+      description: 'Create or update the task list. Pass the COMPLETE list every time (replaces previous). At most one task in_progress.',
       parameters: {
         type: 'object',
         properties: {
@@ -465,7 +524,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'ask_user',
-      description: 'Pause and ask the user a question, then wait for their answer. Use this whenever you need a decision, clarification, or a missing value you cannot infer — do not guess. Provide options for quick choices when possible; the user can always type a free-form answer too.',
+      description: 'Pause and ask the user a question, then wait for the answer. Use for decisions, clarification, or missing values — do not guess. Provide options for quick choices when possible.',
       parameters: {
         type: 'object',
         properties: {
@@ -482,7 +541,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'web_fetch',
-      description: 'Fetch a URL over HTTP(S) and return its content as text. HTML is converted to plain text; JSON is returned as-is. The request times out (default 30s) and the output is capped (default 100KB). Use for documentation, APIs, or reading a page the user references. Do not use it to run a web search.',
+      description: 'Fetch an http(s) URL and return text (HTML→text, JSON as-is). Timeout 30s, output capped 100KB. Not for web search.',
       parameters: {
         type: 'object',
         properties: {
@@ -522,7 +581,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'move_file',
-      description: 'Move or rename a file or directory. Works for both. Refuses to overwrite an existing destination unless overwrite: true.',
+      description: 'Move or rename a file or directory. Refuses to overwrite unless overwrite: true.',
       parameters: {
         type: 'object',
         properties: {
@@ -538,7 +597,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'copy_file',
-      description: 'Copy a file or a directory (recursively). Refuses to overwrite an existing destination unless overwrite: true.',
+      description: 'Copy a file or a directory (recursively). Refuses to overwrite unless overwrite: true.',
       parameters: {
         type: 'object',
         properties: {
@@ -569,11 +628,20 @@ export const COCHI_TOOLS = [
 
 // ─── Tools filtrados por nivel de permiso del workspace ───────────────────────
 // Evita mandar schemas de escritura/ejecución cuando el modelo no puede usarlos.
-export function getToolsForPermission(permission) {
+// `scope='read'` (auditoría de gasto) manda SOLO las tools que no mutan el
+// filesystem: en una consulta de lectura pasan 9 tools en vez de 19, y el
+// prefijo cacheable baja ~1.3k tokens por request.
+const READ_SCOPE_TOOLS = new Set([
+  'read_file', 'read_file_chunk', 'list_dir', 'find_files',
+  'search_in_files', 'get_file_info', 'file_exists', 'web_fetch', 'ask_user',
+])
+
+export function getToolsForPermission(permission, scope = 'full') {
   const canWrite = permission === 'write' || permission === 'readwrite' || permission === 'full'
   const canRun   = permission === 'full'
   return COCHI_TOOLS.filter(t => {
     const name = t.function.name
+    if (scope === 'read' && !READ_SCOPE_TOOLS.has(name)) return false
     if (['write_file', 'replace_in_file', 'append_to_file', 'create_dir', 'move_file', 'copy_file'].includes(name)) return canWrite
     if (['run_command', 'delete_file'].includes(name)) return canRun
     return true
@@ -647,11 +715,29 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
           }
         }
       } catch {}
-      return { modelResult: await readTextFile(args.path), diff: null }
+      try {
+        return { modelResult: await readTextFile(args.path), diff: null }
+      } catch (err) {
+        // Typos: si el nombre no existe pero hay un match muy cercano en la
+        // misma carpeta, se lee directo y se avisa — colapsa 2-3 round-trips.
+        const best = await findClosestPath(args.path)
+        if (best) {
+          try {
+            const content = await readTextFile(best)
+            return { modelResult: `⚠️ No existe: ${args.path}\nLeído el archivo más parecido: ${best}\n\n${content}`, diff: null }
+          } catch {}
+        }
+        return { modelResult: `ERROR: ${err.message}${await notFoundSuffix(args.path)}`, diff: null }
+      }
     }
 
     case 'read_file_chunk': {
-      const text  = await readTextFile(args.path)
+      let text
+      try {
+        text  = await readTextFile(args.path)
+      } catch (err) {
+        return { modelResult: `ERROR: ${err.message}${await notFoundSuffix(args.path)}`, diff: null }
+      }
       const lines = text.split('\n')
       const start = Math.max(0, (args.startLine ?? 1) - 1)
       const MAX_CHUNK_LINES = 150
@@ -775,13 +861,13 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         const bytes  = new TextEncoder().encode(text).length
         return { modelResult: JSON.stringify({ path: args.path, sizeBytes: bytes, sizeKB: (bytes / 1024).toFixed(1), lines }), diff: null }
       } catch (err) {
-        return { modelResult: `ERROR: ${err.message}`, diff: null }
+        return { modelResult: `ERROR: ${err.message}${await notFoundSuffix(args.path)}`, diff: null }
       }
     }
 
     case 'file_exists': {
       const result = await exists(args.path)
-      return { modelResult: result ? `✅ Existe: ${args.path}` : `❌ No existe: ${args.path}`, diff: null }
+      return { modelResult: result ? `✅ Existe: ${args.path}` : `❌ No existe: ${args.path}${await notFoundSuffix(args.path)}`, diff: null }
     }
 
     case 'save_to_r9': {
@@ -900,7 +986,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
 
     case 'delete_file': {
       const existed = await pathExistsCochi(args.path)
-      if (!existed) return { modelResult: `⚠️ No existe: ${args.path}`, diff: null }
+      if (!existed) return { modelResult: `⚠️ No existe: ${args.path}${await notFoundSuffix(args.path)}`, diff: null }
       await snap(args.path)
       await remove(args.path)
       return { modelResult: `🗑️ Eliminado: ${args.path}`, diff: null }
@@ -918,7 +1004,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
     }
 
     case 'move_file': {
-      if (!(await pathExistsCochi(args.fromPath))) return { modelResult: `⚠️ No existe: ${args.fromPath}`, diff: null }
+      if (!(await pathExistsCochi(args.fromPath))) return { modelResult: `⚠️ No existe: ${args.fromPath}${await notFoundSuffix(args.fromPath)}`, diff: null }
       const destExists = await pathExistsCochi(args.toPath)
       if (destExists && args.overwrite !== true) {
         return { modelResult: `⚠️ El destino ya existe: ${args.toPath}. Pasa overwrite: true para reemplazarlo.`, diff: null }
@@ -933,7 +1019,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
 
     case 'copy_file': {
       const info = await stat(args.fromPath).catch(() => null)
-      if (!info) return { modelResult: `⚠️ No existe: ${args.fromPath}`, diff: null }
+      if (!info) return { modelResult: `⚠️ No existe: ${args.fromPath}${await notFoundSuffix(args.fromPath)}`, diff: null }
       const destExists = await pathExistsCochi(args.toPath)
       if (destExists && args.overwrite !== true) {
         return { modelResult: `⚠️ El destino ya existe: ${args.toPath}. Pasa overwrite: true para reemplazarlo.`, diff: null }

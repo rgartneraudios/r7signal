@@ -112,6 +112,36 @@ const READ_ONLY_TOOLS = new Set([
   'search_in_files', 'get_file_info', 'file_exists', 'web_fetch',
 ])
 
+// Contexto base local del sistema (compartido por arranque y wrapper). El
+// SESSION_TOKENS se retiró (auditoría de gasto): cambiaba en cada turno e
+// invalidaba la caché de prefijo entre turnos. La instrucción de batching (P0)
+// evita que cada tool independiente cueste un round-trip completo.
+const BATCHING_RULE =
+  'When you need several independent read-only tool calls (existence, size, listing, lookup), emit them ALL in ONE assistant turn as parallel tool calls; never one per turn. Only sequence calls that depend on a previous result. If the user names a file, read it directly — do not add get_file_info/file_exists probes unless you actually need the size.'
+
+// Auditoría de gasto (Sesión H): traza por request sólo en dev (F12 → consola).
+// Permite ver dónde se va el gasto: nº de requests, tamaño del prefijo, tools y
+// desglose input/output/cached/reasoning de cada llamada.
+const auditLog = import.meta.env.DEV
+  ? (...args) => console.debug('[cochi:audit]', ...args)
+  : () => {}
+
+function buildSystemContext(workspacePath, permissionLabel, { technical = false } = {}) {
+  const lines = [
+    'SYSTEM CONTEXT',
+    'You are operating on a Windows system. Use absolute paths only.',
+    `Active workspace: ${workspacePath || 'not set'} (access level: ${permissionLabel}).`,
+  ]
+  if (!technical) {
+    lines.push(
+      'Memory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.',
+      'Read memory files only when the user explicitly asks about past operations.',
+    )
+  }
+  lines.push(BATCHING_RULE)
+  return lines.join('\n')
+}
+
 // Genera un resumen de los mensajes descartados por la compactación a partir de
 // los R1/R2 YA emitidos (D9: cero llamadas extra al modelo). Si no hay pares
 // recuperables devuelve null y el llamador usa el placeholder estático.
@@ -758,6 +788,17 @@ function CochiDesktop({
           { role: 'user', content: userMessage }
         ],
         maxTokens: 1400,
+        // Auditoría de gasto: el planner también consume y antes NO se contaba
+        // (el total de la barra subestimaba). Se suma al contador del turno.
+        onUsage: (usage) => {
+          const u = normalizeUsage(usage)
+          setTokens(prev => prev + u.totalTokens)
+          setCachedTokens(prev => prev + u.cachedTokens)
+          const cost = calculateCost(selectedModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
+          setCost(prev => prev + cost)
+          onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost })
+          auditLog(`planner: prompt ${u.promptTokens} · completion ${u.completionTokens} · cached ${u.cachedTokens}`)
+        },
       })
 
       const plan = parsePlanResponse(result.content)
@@ -796,6 +837,15 @@ function CochiDesktop({
           { role: 'user', content: `Necesito dividir este paso en sub-pasos: '${step.description}'. Motivo: ${reason}. Devuelve máximo 3 sub-pasos en el mismo formato JSON.` }
         ],
         maxTokens: 600,
+        onUsage: (usage) => {
+          const u = normalizeUsage(usage)
+          setTokens(prev => prev + u.totalTokens)
+          setCachedTokens(prev => prev + u.cachedTokens)
+          const cost = calculateCost(selectedModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
+          setCost(prev => prev + cost)
+          onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost })
+          auditLog(`replan: prompt ${u.promptTokens} · completion ${u.completionTokens} · cached ${u.cachedTokens}`)
+        },
       })
 
       const text = result.content || ''
@@ -831,7 +881,7 @@ function CochiDesktop({
     }
   }
 
-  async function executeAllSteps() {
+  async function executeAllSteps(scope = 'full') {
     setPlanStatus('executing')
     if (!remotePrompts) {
       setLoading(false)
@@ -858,6 +908,7 @@ function CochiDesktop({
     let remainingIter = 25
     let totalTokensAcc = 0
     let totalCostAcc = 0
+    let requestCount = 0
 
     const provider = resolveProvider(selectedModel, { preferences, ollamaModel, lmStudioModel })
     const permissionLabel = workspace.permission === 'read' ? 'read-only' : workspace.permission === 'write' ? 'write' : 'full access'
@@ -899,26 +950,26 @@ function CochiDesktop({
         const isLastStep = !trackSteps || stepIndex === currentPlan.steps.length - 1
 
         const remoteSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
-        const sessionTotal = tokens + totalTokensAcc
 
-        const usesTwoPhaseFinal = trackSteps && isLastStep
+        // Auditoría de gasto (Sesión H, camino de escritura): un plan de 1 paso
+        // NO paga el two-phase (prompt técnico + wrapper de traducción): se
+        // resuelve como single-pass emitiendo R1/R2/R3 directo. Y el reasoning
+        // queda SÓLO para planes realmente complejos (≥3 pasos), no para
+        // cualquier write — antes un plan de 1 paso razonaba y disparaba el total.
+        const planStepCount = trackSteps ? currentPlan.steps.length : 0
+        const useReasoning = trackSteps && planStepCount >= 3
+        const usesTwoPhaseFinal = trackSteps && isLastStep && planStepCount > 1
         const usesTechnicalPrompt = !isLastStep || usesTwoPhaseFinal
 
         if (apiMessages === null) {
           // Arranca la conversación (del plan, o del turno único si no hay plan) — UNA sola vez.
           const baseSystemMessages = usesTechnicalPrompt
             ? [
-                {
-                  role: 'system',
-                  content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).`
-                },
+                { role: 'system', content: buildSystemContext(workspace.path, permissionLabel, { technical: true }) },
                 { role: 'system', content: STEP_EXECUTION_PROMPT },
               ]
             : [
-                {
-                  role: 'system',
-                  content: `SYSTEM CONTEXT\nYou are operating on a Windows system. Use absolute paths only.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.\nSESSION_TOKENS: ${sessionTotal}`
-                },
+                { role: 'system', content: buildSystemContext(workspace.path, permissionLabel) },
                 { role: 'system', content: remoteSystem },
               ]
           // Bloque L4 — prompt híbrido (D3/D8): system estable -> bloque R7 ->
@@ -963,18 +1014,26 @@ function CochiDesktop({
 
           const isWrapperCall = false
 
+          const toolsForRequest = isWrapperCall ? null : getToolsForPermission(workspace.permission, scope)
+          requestCount++
+          const reqAudit = { msgs: apiMessages.length, calls: 0, prompt: 0, completion: 0, cached: 0, reasoning: 0 }
+          if (import.meta.env.DEV) {
+            reqAudit.msgChars = JSON.stringify(apiMessages).length
+            reqAudit.toolChars = toolsForRequest ? JSON.stringify(toolsForRequest).length : 0
+          }
+
           const extractDisplay = makeStreamingDisplayExtractor()
           const streamed = await streamChat({
             provider,
             messages: apiMessages,
-            ...(isWrapperCall ? {} : { tools: getToolsForPermission(workspace.permission), toolChoice: 'auto' }),
+            ...(isWrapperCall ? {} : { tools: toolsForRequest, toolChoice: 'auto' }),
             signal: controller.signal,
             sessionId: cochiSessionId,
             retries: 3,
             // Reasoning AUTO: sólo en tareas complejas (plan multi-paso). Un
             // turno single-pass (lectura/consulta) NO razona — evita sumar
             // output innecesario en cada llamada.
-            reasoning: trackSteps,
+            reasoning: useReasoning,
             onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
             onUsage: (usage) => {
               const u = normalizeUsage(usage)
@@ -983,11 +1042,18 @@ function CochiDesktop({
               stepInputTokens += u.promptTokens
               stepOutputTokens += u.completionTokens
               stepCachedTokens += u.cachedTokens
+              reqAudit.prompt += u.promptTokens
+              reqAudit.completion += u.completionTokens
+              reqAudit.cached += u.cachedTokens
+              reqAudit.reasoning += u.reasoningTokens
             },
           })
           liveRef.current?.flush()
           liveRef.current?.clear()
           if (streamed.reasoning) stepReasoning = streamed.reasoning
+          reqAudit.calls = streamed.toolCalls?.length || 0
+          reqAudit.finish = streamed.finishReason
+          auditLog(`request #${requestCount}`, reqAudit)
 
           if (streamed.finishReason === 'length') {
             if (trackSteps) updateStepStatus(step.id, 'failed', 'Respuesta cortada por límite de tokens (finish_reason=length)')
@@ -1017,9 +1083,9 @@ function CochiDesktop({
             if (useDirectParse) {
               const { r1, r2, r3 } = parseR1R2R3(rawContent)
               const displayContent = (r3 || rawContent)
-                .replace(/\[STEP_COMPLETE:[\s\S]*?\]/, '')
-                .replace(/\[STEP_FAILED:[\s\S]*?\]/, '')
-                .replace(/\[NEED_REPLAN:[\s\S]*?\]/, '')
+                .replace(/\[STEP_COMPLETE(?::[\s\S]*?)?\]/g, '')
+                .replace(/\[STEP_FAILED(?::[\s\S]*?)?\]/g, '')
+                .replace(/\[NEED_REPLAN(?::[\s\S]*?)?\]/g, '')
                 .trim()
 
               const completeMatch = rawContent.match(/\[STEP_COMPLETE:\s*(.*?)\]/)
@@ -1084,7 +1150,7 @@ function CochiDesktop({
                     const wrapperMessages = [
                       {
                         role: 'system',
-                        content: `SYSTEM CONTEXT\nYou are operating on a Windows system.\nActive workspace: ${workspace.path || 'not set'} (access level: ${permissionLabel}).\nMemory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.\nRead memory files only when the user explicitly asks about past operations.\nSESSION_TOKENS: ${sessionTotal}`
+                        content: buildSystemContext(workspace.path, permissionLabel)
                       },
                       { role: 'system', content: remoteSystem },
                       {
@@ -1100,7 +1166,7 @@ function CochiDesktop({
                       signal: controller.signal,
                       sessionId: cochiSessionId,
                       retries: 3,
-                      reasoning: trackSteps,
+                      reasoning: useReasoning,
                       onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
                       onUsage: (usage) => {
                         const u = normalizeUsage(usage)
@@ -1116,9 +1182,9 @@ function CochiDesktop({
                     const wrapperRaw = wrapperStreamed.content || ''
                     const { r1, r2, r3 } = parseR1R2R3(wrapperRaw)
                     const displayContent = (r3 || wrapperRaw)
-                      .replace(/\[STEP_COMPLETE:[\s\S]*?\]/, '')
-                      .replace(/\[STEP_FAILED:[\s\S]*?\]/, '')
-                      .replace(/\[NEED_REPLAN:[\s\S]*?\]/, '')
+                      .replace(/\[STEP_COMPLETE(?::[\s\S]*?)?\]/g, '')
+                      .replace(/\[STEP_FAILED(?::[\s\S]*?)?\]/g, '')
+                      .replace(/\[NEED_REPLAN(?::[\s\S]*?)?\]/g, '')
                       .trim()
                     await appendToMemory(r1, r2)
                     sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
@@ -1347,7 +1413,7 @@ function CochiDesktop({
       setLoading(false)
       setActivity([])
       liveRef.current?.clear()
-
+      auditLog(`TOTAL del turno: ${requestCount} request(s) · ${totalTokensAcc} tokens`)
       const finalPlan = planRef.current
       if (finalPlan) {
         const successful = finalPlan.steps.filter(s => s.status === 'completed').length
@@ -1394,7 +1460,10 @@ function CochiDesktop({
     } else {
       syncPlan(null)
       setPlanStatus('idle')
-      await executeAllSteps()
+      // Auditoría de gasto: intención de lectura => scope 'read' (9 tools, no 19).
+      // Si el mensaje tuviera intención de mutación, needsPlanning lo habría
+      // mandado al planner y este camino no se ejecuta.
+      await executeAllSteps('read')
     }
   }
 
