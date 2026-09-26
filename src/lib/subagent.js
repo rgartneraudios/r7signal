@@ -43,11 +43,13 @@ export const MAX_SUBAGENT_TOTAL_TOKENS = 20000
 // acumulativa reenviaba volcados de archivos (23 KB) en cada vuelta → crecimiento
 // cuadrático (prompt 1.7k→8.7k→15.6k). Cada tool result se guarda truncado.
 export const SUBAGENT_TOOL_RESULT_MAX_CHARS = 4000
-// 3.4d — MODELO PROPIO del subagente. Por defecto el más barato del catálogo de
-// Cochi (input ~$0.04/M): un worker de lectura de salida corta no necesita el
-// modelo del padre. Los proveedores LOCALES (Ollama/LM Studio) no ofrecen
-// catálogo y conservan el modelo del padre.
-export const DEFAULT_SUBAGENT_MODEL = '~deepseek/deepseek-flash-latest'
+// 3.4d — MODELO PROPIO del subagente. Por defecto Centinela
+// (~deepseek/deepseek-v4-flash-latest): mejor calidad para el worker de lectura
+// delegado, aun siendo barato (input ~$0.05/M, output ~$0.32/M). Decisión de
+// Roberto tras la prueba manual de 3.4d (antes se usaba Terminator, el más barato
+// en input pero con peor desempeño como worker). Los proveedores LOCALES
+// (Ollama/LM Studio) no ofrecen catálogo y conservan el modelo del padre.
+export const DEFAULT_SUBAGENT_MODEL = '~deepseek/deepseek-v4-flash-latest'
 
 // Devuelve el provider EFECTIVO del subagente a partir del provider del padre.
 // PURO (no muta): si el padre es local, lo hereda tal cual; si no, sólo cambia
