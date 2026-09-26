@@ -114,6 +114,10 @@ const READ_ONLY_TOOLS = new Set([
   'search_in_files', 'get_file_info', 'file_exists', 'web_fetch',
 ])
 
+// Fase 3.4 (perf UI): nº máximo de acciones del feed que se pintan en vivo. Las
+// anteriores se resumen para no engordar el DOM durante turnos con subagente.
+const ACTIVITY_FEED_LIMIT = 12
+
 // Contexto base local del sistema (compartido por arranque y wrapper). El
 // SESSION_TOKENS se retiró (auditoría de gasto): cambiaba en cada turno e
 // invalidaba la caché de prefijo entre turnos. La instrucción de batching (P0)
@@ -197,6 +201,12 @@ const CochiMarkdown = memo(function CochiMarkdown({ content }) {
   )
 })
 
+// Fase 3.4: inyector ESTABLE de markdown para las tarjetas de brief. Antes se
+// creaba una flecha nueva en cada render de CochiMessageList, lo que invalidaba
+// el memo de SubagentBrief y forzaba a reconstruir el árbol del brief en cada
+// commit. Al ser módulo-nivel, la identidad es constante y el memo se respeta.
+const renderCochiMarkdown = (content) => <CochiMarkdown content={content} />
+
 // ─── Bloque de razonamiento (Fase 3.2) ───────────────────────────────────────
 // Colapsable y cerrado por defecto: el reasoning es diagnóstico, no respuesta.
 // Sólo lo emiten los modelos de la whitelist (MODEL_CAPS), hoy los DeepSeek de Cochi.
@@ -238,7 +248,7 @@ const CochiMessageList = memo(function CochiMessageList({ messages, lastAssistan
       <DiffViewer key={msg.id} diff={msg.diff} />
     ) : msg.role === 'subagent' ? (
       <div key={msg.id} className="cd-message-enter" style={{ alignSelf: 'flex-start', maxWidth: '100%', width: '100%', padding: '2px 0' }}>
-        <SubagentBrief sub={msg.sub} renderMarkdown={(content) => <CochiMarkdown content={content} />} />
+        <SubagentBrief sub={msg.sub} renderMarkdown={renderCochiMarkdown} />
       </div>
     ) : msg.role === 'user' ? (
       <div key={msg.id} className="cd-message-enter" style={{ alignSelf: 'flex-end', maxWidth: '85%', padding: '2px 0' }}>
@@ -428,11 +438,20 @@ function CochiDesktop({
 
   // Scroll al final (Bloque M/N: scrollTop directo en el contenedor en vez de
   // scrollIntoView, que fuerza layout síncrono y puede escalar a ancestros).
+  // Fase 3.4: se instrumenta en dev. Leer `scrollHeight` fuerza un layout
+  // síncrono del contenedor: si el chat es largo, ese reflow es la causa de la
+  // `[Violation] 'forced reflow'` vista al cerrar un turno con subagente. Esta
+  // traza mide cuánto cuesta para decidir si hay que acotar el DOM del chat.
   useEffect(() => {
     const el = chatContainerRef.current
     if (!el) return
+    const t0 = performance.now()
     if (loading) el.scrollTop = el.scrollHeight
     else el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    if (import.meta.env.DEV) {
+      const dt = performance.now() - t0
+      if (dt > 50) console.debug('[cochi:perf] scroll/layout', Math.round(dt), 'ms · mensajes', messages.length)
+    }
   }, [messages.length, loading])
 
   // Reset del input de ask_user al abrir una nueva pregunta
@@ -1918,25 +1937,35 @@ RGartner by R7Signal
             </div>
           )}
 
-          {/* Activity feed */}
-          {loading && activity.length > 0 && (
-            <div style={{
-              background: '#18171C', border: '1px dashed #232227', borderRadius: 8,
-              padding: '10px 14px', alignSelf: 'flex-start', maxWidth: '100%',
-              display: 'flex', flexDirection: 'column', gap: 4,
-            }}>
-              <div style={{ fontSize: '0.68rem', color: '#6A7A8A', letterSpacing: '0.15em', fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' }}>🔄 Cochi trabajando…</div>
-              {activity.map((a, i) => (
-                <div key={i} className="cd-activity-item" style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: '0.8rem', color: '#FF4466', textShadow: '0 0 8px rgba(255,68,102,0.6)' }}>{a.icon}</span>
-                  <div>
-                    <span style={{ fontSize: '0.65rem', color: '#8A868B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{a.label} </span>
-                    <span style={{ fontSize: '0.65rem', color: '#D4D8DC', fontFamily: "'JetBrains Mono', monospace" }}>{a.detail}</span>
+          {/* Activity feed — Fase 3.4: acotado a las últimas N acciones. Un turno
+              con subagente puede acumular decenas de herramientas internas; pintar
+              todas hace crecer el DOM y encarece el layout del commit que cierra el
+              turno. Se muestran las últimas y se resume lo anterior. */}
+          {loading && activity.length > 0 && (() => {
+            const shown = activity.slice(-ACTIVITY_FEED_LIMIT)
+            const hiddenCount = activity.length - shown.length
+            return (
+              <div style={{
+                background: '#18171C', border: '1px dashed #232227', borderRadius: 8,
+                padding: '10px 14px', alignSelf: 'flex-start', maxWidth: '100%',
+                display: 'flex', flexDirection: 'column', gap: 4,
+              }}>
+                <div style={{ fontSize: '0.68rem', color: '#6A7A8A', letterSpacing: '0.15em', fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' }}>🔄 Cochi trabajando…</div>
+                {hiddenCount > 0 && (
+                  <div style={{ fontSize: '0.6rem', color: '#5A585C', letterSpacing: '0.08em' }}>+{hiddenCount} acción(es) anterior(es)…</div>
+                )}
+                {shown.map((a, i) => (
+                  <div key={i} className="cd-activity-item" style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '0.8rem', color: '#FF4466', textShadow: '0 0 8px rgba(255,68,102,0.6)' }}>{a.icon}</span>
+                    <div>
+                      <span style={{ fontSize: '0.65rem', color: '#8A868B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{a.label} </span>
+                      <span style={{ fontSize: '0.65rem', color: '#D4D8DC', fontFamily: "'JetBrains Mono', monospace" }}>{a.detail}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )
+          })()}
           {loading && activity.length === 0 && (
             <div style={{ textAlign: 'center', padding: 20, color: '#6A7A8A' }}>
               <div className="cd-pulse" style={{ display: 'inline-block', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Procesando turno…</div>

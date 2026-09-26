@@ -6,6 +6,7 @@
 //     del chat (la única cosa que cruza la frontera del subagente).
 // La decisión de formato vive en los helpers puros de subagent.js
 // (describeSubagent / subagentActivityDetail); aquí sólo se pinta.
+import { memo, useEffect, useState } from 'react'
 import { describeSubagent } from '../lib/subagent.js'
 
 const ACCENT = '#E0A85F'
@@ -26,7 +27,7 @@ function StatusDot({ running }) {
 }
 
 // Burbuja viva. `sub` es el registro que arma CochiDesktop; se normaliza aquí.
-export function SubagentBubble({ sub }) {
+export const SubagentBubble = memo(function SubagentBubble({ sub }) {
   const v = describeSubagent(sub)
   return (
     <div style={{
@@ -66,14 +67,36 @@ export function SubagentBubble({ sub }) {
       )}
     </div>
   )
+})
+
+// Fase 3.4 — Markdown diferido un frame. El brief llega justo cuando el
+// subagente termina: en el MISMO commit se desmonta la burbuja viva, se actualiza
+// el feed y se inserta el brief. Si el markdown del brief (ReactMarkdown +
+// SyntaxHighlighter) se parsea en ese commit, el frame que cierra el subagente
+// paga el costo completo (Violation 'message' handler + forced reflow vistos en
+// la prueba de 3.3b). Aquí el commit urgente pinta el brief como texto plano
+// (barato) y el parseo del markdown se hace en el siguiente frame (rAF), fuera
+// de la ruta crítica. Una vez listo, el markdown reemplaza al texto plano.
+function DeferredMarkdown({ content, render }) {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setReady(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+  if (!ready) return <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{content}</div>
+  return render(content)
 }
 
 // Tarjeta de brief cerrado en el historial. `renderMarkdown` es opcional (se
 // inyecta CochiMarkdown desde el panel) para no duplicar el chunk de markdown.
-export function SubagentBrief({ sub, renderMarkdown }) {
+// Memoizada (Fase 3.4): el brief ya cerrado no debe re-renderizarse cuando el
+// panel cambia por actividad/subagentes; `sub` es estable tras el push.
+export const SubagentBrief = memo(function SubagentBrief({ sub, renderMarkdown }) {
   const v = describeSubagent(sub)
   const body = v.ok
-    ? (renderMarkdown ? renderMarkdown(v.brief) : v.brief)
+    ? (renderMarkdown
+        ? <DeferredMarkdown content={v.brief} render={renderMarkdown} />
+        : v.brief)
     : `⚠️ ${v.error || 'El subagente no devolvió un brief.'}`
   return (
     <div style={{
@@ -99,4 +122,4 @@ export function SubagentBrief({ sub, renderMarkdown }) {
       </div>
     </div>
   )
-}
+})
