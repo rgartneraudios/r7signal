@@ -8,7 +8,7 @@ import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
-import { TOOL_ICONS, executeTool, getToolsForPermission } from '../lib/cochiTools.js'
+import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools } from '../lib/cochiTools.js'
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
@@ -1254,9 +1254,13 @@ function CochiDesktop({
               return { role: 'tool', tool_call_id: toolCall.id, content: String(answer) }
             }
 
-            // ── spawn_agent: delega en un subagente headless (Fase 3.3a) ──────
-            // El subagente corre aislado (sin conversación, sin tools) y devuelve
-            // un brief de texto. Su usage se suma al contador del turno.
+            // ── spawn_agent: delega en un subagente headless (Fase 3.3a/3.3b) ──
+            // El subagente corre con CONTEXTO PROPIO: su mini-loop y sus turnos
+            // internos viven en una lista local y NO se fusionan con el R7 del
+            // padre. Sólo devuelve un brief de texto. Scope de SÓLO LECTURA
+            // (getSubagentTools): puede leer/buscar/navegar, no escribe ni
+            // ejecuta (permisos/presupuesto por subagente = 3.3d). Su usage se
+            // suma al contador del turno del padre.
             if (name === 'spawn_agent') {
               const task = String(args.task || '').trim()
               pushActivity(TOOL_ICONS.spawn_agent || '🤖', 'spawn_agent', task.slice(0, 60) || 'sin tarea')
@@ -1271,6 +1275,14 @@ function CochiDesktop({
                 language: chatLanguage,
                 depth: 1,
                 signal: controller.signal,
+                tools: getSubagentTools(workspace.permission),
+                executeTool: async (subName, subArgs) => {
+                  const execResult = await executeTool(subName, subArgs, workspace.permission, workspace.path)
+                  return execResult?.modelResult ?? String(execResult)
+                },
+                onActivity: (activity) => {
+                  pushActivity(TOOL_ICONS[activity.name] || '🔧', `sub:${activity.name}`, String(activity.args?.path || activity.args?.pattern || activity.name))
+                },
                 onUsage: (usage) => {
                   const u = normalizeUsage(usage)
                   stepTokens += u.totalTokens

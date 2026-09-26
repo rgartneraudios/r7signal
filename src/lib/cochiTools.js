@@ -666,6 +666,19 @@ export function getToolsForPermission(permission, scope = 'full') {
   })
 }
 
+// ─── Scope del subagente (Fase 3.3b: contexto/scope aislado) ──────────────────
+// El subagente trabaja aislado y hoy es SÓLO LECTURA (permisos/presupuesto = 3.3d).
+// Excluye:
+//   · spawn_agent → sin recursión (MAX_SUBAGENT_DEPTH = 1).
+//   · ask_user    → no hay UI que responda dentro del subagente.
+// Reusa el scope 'read' (no muta disco) y quita las tools interactivas.
+export const SUBAGENT_EXCLUDED_TOOLS = new Set(['spawn_agent', 'ask_user'])
+
+export function getSubagentTools(permission = 'full') {
+  return getToolsForPermission(permission, 'read')
+    .filter(t => !SUBAGENT_EXCLUDED_TOOLS.has(t.function.name))
+}
+
 // ─── Tool icons (UI) ──────────────────────────────────────────────────────────
 export const TOOL_ICONS = {
   read_file:        'READ',

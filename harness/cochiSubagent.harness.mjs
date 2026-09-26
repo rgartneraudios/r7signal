@@ -1,10 +1,13 @@
-// Harness de verificación de Fase 3.3a (subagentes — contrato / plumbing).
+// Harness de verificación de la Fase 3.3 (subagentes): contrato/plumbing (3.3a) +
+// contexto/scope aislado (3.3b).
 // Ejecutar:  node harness/cochiSubagent.harness.mjs   (o npm run harness:subagent)
-// Cubre la lógica PURA + el contrato de runSubagent con un `callModel` inyectado
-// (sin red). También verifica el registro de la tool spawn_agent y su scope.
+// Cubre la lógica PURA + el contrato de runSubagent con `callModel`/`executeTool`
+// inyectados (sin red ni disco). Verifica el mini-loop aislado, el scope de solo
+// lectura del subagente y que el R7 del padre nunca se toca.
 import {
   MAX_SUBAGENT_DEPTH,
   DEFAULT_SUBAGENT_MAX_TOKENS,
+  DEFAULT_SUBAGENT_MAX_ITERS,
   SUBAGENT_BRIEF_MAX_CHARS,
   SUBAGENT_SYSTEM_PROMPT,
   buildSubagentMessages,
@@ -12,7 +15,7 @@ import {
   formatBriefResult,
   runSubagent,
 } from '../src/lib/subagent.js'
-import { COCHI_TOOLS, getToolsForPermission } from '../src/lib/cochiTools.js'
+import { COCHI_TOOLS, getToolsForPermission, getSubagentTools } from '../src/lib/cochiTools.js'
 
 let pass = 0
 let fail = 0
@@ -110,6 +113,96 @@ checkTrue('requiere task', JSON.stringify(spawn.function.parameters.required), J
 checkTrue('scope read incluye spawn_agent', getToolsForPermission('full', 'read').some(t => t.function.name === 'spawn_agent'))
 checkTrue('permiso read incluye spawn_agent (no muta disco)', getToolsForPermission('read', 'read').some(t => t.function.name === 'spawn_agent'))
 checkTrue('scope full incluye spawn_agent', getToolsForPermission('full', 'full').some(t => t.function.name === 'spawn_agent'))
+
+console.log('— Fase 3.3b · scope aislado del subagente (getSubagentTools) —')
+const subTools = getSubagentTools('full').map(t => t.function.name)
+checkTrue('incluye read_file', subTools.includes('read_file'))
+checkTrue('incluye search_in_files', subTools.includes('search_in_files'))
+checkTrue('excluye spawn_agent (sin recursión)', !subTools.includes('spawn_agent'))
+checkTrue('excluye ask_user (sin UI)', !subTools.includes('ask_user'))
+checkTrue('no incluye tools de escritura', !subTools.some(n => ['write_file', 'replace_in_file', 'append_to_file', 'create_dir', 'move_file', 'copy_file'].includes(n)))
+checkTrue('no incluye run_command', !subTools.includes('run_command'))
+checkTrue('no incluye delete_file', !subTools.includes('delete_file'))
+checkTrue('no incluye todowrite/save_to_r9', !subTools.includes('todowrite') && !subTools.includes('save_to_r9'))
+checkTrue('todas las del subagente son de lectura', subTools.every(n => getToolsForPermission('full', 'read').some(t => t.function.name === n)))
+
+console.log('— Fase 3.3b · mini-loop aislado (rueda/contexto propios) —')
+const parentWheel = { r7: '── Turno 1 ──\nR1: pidió X\nR2: hizo X', lastTurn: { user: 'u', assistant: 'a' } }
+const parentSnapshot = JSON.stringify(parentWheel)
+
+const subCalls = []
+let subCall = 0
+const loopCall = async (opts) => {
+  subCall++
+  subCalls.push({ opts, msgLen: opts.messages.length })
+  if (opts.onUsage) opts.onUsage({ prompt_tokens: 50, completion_tokens: 10, total_tokens: 60 })
+  if (subCall === 1) {
+    return {
+      content: '',
+      toolCalls: [{ id: 'call_1', function: { name: 'read_file', arguments: JSON.stringify({ path: 'a.txt' }) } }],
+      usage: { prompt_tokens: 50, completion_tokens: 10, total_tokens: 60 },
+      model: 'sub/model',
+    }
+  }
+  return {
+    content: '  Brief final [STEP_COMPLETE: ok] ',
+    toolCalls: [],
+    usage: { prompt_tokens: 70, completion_tokens: 20, total_tokens: 90 },
+    model: 'sub/model',
+  }
+}
+const executed = []
+const looped = await runSubagent({
+  provider: fakeProvider,
+  task: 'leé a.txt',
+  tools: getSubagentTools('full'),
+  executeTool: async (name, args) => { executed.push({ name, args }); return { modelResult: `contenido de ${args.path}` } },
+  callModel: loopCall,
+})
+check('loop ok', looped.ok, true)
+check('loop brief normalizado', looped.brief, 'Brief final')
+check('loop iteraciones = 2', looped.iterations, 2)
+check('loop steps = 1', looped.steps.length, 1)
+check('tool ejecutada con args', executed, [{ name: 'read_file', args: { path: 'a.txt' } }])
+check('usage total agregado (2 llamadas)', looped.usageTotal, { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120, cached_tokens: 0, calls: 2 })
+checkTrue('misma rueda local entre turnos', subCalls[0].opts.messages === subCalls[1].opts.messages)
+checkTrue('rueda local creció con el turno interno', subCalls[1].msgLen > subCalls[0].msgLen)
+checkTrue('tool result en la rueda local', subCalls[1].opts.messages.some(m => m.role === 'tool' && m.content.includes('contenido de a.txt')))
+checkTrue('tools se enviaron al modelo', Array.isArray(subCalls[0].opts.tools) && subCalls[0].opts.tools.length > 0)
+check('toolChoice auto', subCalls[0].opts.toolChoice, 'auto')
+checkTrue('aislado: resultado sin r7 ni pares', !('r7' in looped) && !('pairs' in looped))
+check('aislado: R7 del padre intacto', JSON.stringify(parentWheel), parentSnapshot)
+
+const noToolsFirst = []
+await runSubagent({ provider: fakeProvider, task: 't', callModel: async (o) => { noToolsFirst.push(o); return { content: 'b', usage: null, model: 'm' } } })
+checkTrue('sin tools no manda tools', noToolsFirst[0].tools === undefined)
+
+const runaway = await runSubagent({
+  provider: fakeProvider,
+  task: 't',
+  maxIterations: 3,
+  tools: [{ function: { name: 'read_file' } }],
+  executeTool: async () => 'x',
+  callModel: async (o) => {
+    if (o.onUsage) o.onUsage({ total_tokens: 5 })
+    return { content: '', toolCalls: [{ id: `c_${Math.random()}`, function: { name: 'read_file', arguments: '{}' } }], usage: { total_tokens: 5 }, model: 'm' }
+  },
+})
+check('runaway → ok false', runaway.ok, false)
+checkTrue('runaway avisa turnos internos', runaway.error.includes('turnos internos'))
+check('runaway respeta maxIterations', runaway.iterations, 3)
+
+const resilient = await runSubagent({
+  provider: fakeProvider,
+  task: 't',
+  tools: [{ function: { name: 'read_file' } }],
+  executeTool: async () => { throw new Error('disco roto') },
+  callModel: async (_o, i) => ({ content: 'brief', toolCalls: [], usage: null, model: 'm' }),
+})
+check('executeTool que lanza no rompe el brief', resilient.ok, true)
+check('brief resiliente', resilient.brief, 'brief')
+
+check('DEFAULT_SUBAGENT_MAX_ITERS exportado', DEFAULT_SUBAGENT_MAX_ITERS, 8)
 
 console.log(`\n${pass} PASS · ${fail} FAIL`)
 if (fail) process.exit(1)
