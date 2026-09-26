@@ -438,20 +438,29 @@ function CochiDesktop({
 
   // Scroll al final (Bloque M/N: scrollTop directo en el contenedor en vez de
   // scrollIntoView, que fuerza layout síncrono y puede escalar a ancestros).
-  // Fase 3.4: se instrumenta en dev. Leer `scrollHeight` fuerza un layout
-  // síncrono del contenedor: si el chat es largo, ese reflow es la causa de la
-  // `[Violation] 'forced reflow'` vista al cerrar un turno con subagente. Esta
-  // traza mide cuánto cuesta para decidir si hay que acotar el DOM del chat.
+  // Fase 3.4a: se midió el reflow en dev (bajó de 2379ms a 117ms al acotar el
+  // feed/markdown) pero aún disparaba `[Violation] Forced reflow`: leer
+  // `scrollHeight` durante el flush de efectos pasivos fuerza un layout síncrono.
+  // Fase 3.4b: el scroll se difiere con DOBLE rAF. Los callbacks de rAF corren
+  // ANTES del layout/paint del frame, así que uno solo seguiría forzando reflow;
+  // el segundo ya corre con el layout del frame anterior resuelto → lectura
+  // limpia y sin Violation. Se conserva la traza DEV por si vuelve a escalar.
   useEffect(() => {
     const el = chatContainerRef.current
     if (!el) return
-    const t0 = performance.now()
-    if (loading) el.scrollTop = el.scrollHeight
-    else el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-    if (import.meta.env.DEV) {
-      const dt = performance.now() - t0
-      if (dt > 50) console.debug('[cochi:perf] scroll/layout', Math.round(dt), 'ms · mensajes', messages.length)
-    }
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const t0 = performance.now()
+        if (loading) el.scrollTop = el.scrollHeight
+        else el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+        if (import.meta.env.DEV) {
+          const dt = performance.now() - t0
+          if (dt > 50) console.debug('[cochi:perf] scroll/layout', Math.round(dt), 'ms · mensajes', messages.length)
+        }
+      })
+    })
+    return () => { cancelAnimationFrame(raf1); if (raf2) cancelAnimationFrame(raf2) }
   }, [messages.length, loading])
 
   // Reset del input de ask_user al abrir una nueva pregunta
