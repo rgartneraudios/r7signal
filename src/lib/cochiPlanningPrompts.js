@@ -34,10 +34,11 @@ export function needsPlanning(message) {
 
   // Write/execute verbs — these are what actually justify step tracking
   const writeVerbs = [
-    'crea', 'crear', 'cre ', 'escribe', 'modifica', 'modif',
-    'elimina', 'borra', 'mueve', 'copia', 'renombra',
-    'ejecuta', 'instala', 'instalar', 'añade', 'agrega',
-    'refactori', 'implement', 'migra', 'actualiza',
+    'crea', 'crear', 'cre ', 'escribe', 'escrib', 'modifica', 'modif', 'edita',
+    'elimina', 'elimin', 'borra', 'mueve', 'copia', 'renombra', 'guarda', 'guard',
+    'salva', 'salv', 'exporta', 'export', 'delet', 'remove', 'write',
+    'ejecuta', 'instala', 'instalar', 'añade', 'agrega', 'genera',
+    'refactori', 'implement', 'migra', 'actualiza', 'patch', 'mkdir',
     'npm', 'yarn', 'pip', 'cargo', '/cochi',
   ]
   const hasWriteVerb = writeVerbs.some(k => msg.includes(k))

@@ -83,6 +83,10 @@ function buildBody({ provider, messages, tools, toolChoice = 'auto', stream, ses
   if (tools && tools.length) {
     body.tools = tools
     body.tool_choice = toolChoice
+    // Auditoría de gasto (P0): permite al modelo emitir varias llamadas
+    // independientes en UN solo turno. Sin esto, cada tool costaba un round-trip
+    // completo reenviando system + schemas (≈3.8k tokens c/u).
+    if (provider.supportsUsage) body.parallel_tool_calls = true
   }
   return body
 }
