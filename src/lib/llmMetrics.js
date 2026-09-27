@@ -12,6 +12,9 @@ import { calculateCost } from './modelPrices.js'
 export const MODEL_CAPS = {
   '~deepseek/deepseek-v4-flash-latest': { reasoning: true },
   '~deepseek/deepseek-flash-latest':    { reasoning: true },
+  // IrmaMax (Asun, incl. Modo Proyecto): su endpoint EXIGE reasoning y rechaza
+  // `enabled:false` (API 400). Marcado como requerido: gana sobre cualquier override.
+  'google/gemini-3.8-flash':            { reasoning: true, reasoningRequired: true },
 }
 
 export function getModelCapabilities(modelId) {
@@ -22,9 +25,16 @@ export function supportsReasoning(modelId) {
   return getModelCapabilities(modelId).reasoning === true
 }
 
-// Config que se manda a OpenRouter. `override` (true/false) gana sobre el flag
-// del modelo; sin override decide la capacidad declarada.
+// Algunos modelos no permiten APAGAR el razonamiento (`enabled:false` → 400).
+export function reasoningRequired(modelId) {
+  return getModelCapabilities(modelId).reasoningRequired === true
+}
+
+// Config que se manda a OpenRouter. Si el modelo EXIGE reasoning, siempre ON
+// (el override no puede apagarlo). Si no, `override` (true/false) gana sobre el
+// flag del modelo; sin override decide la capacidad declarada.
 export function buildReasoningConfig(modelId, override) {
+  if (reasoningRequired(modelId)) return { enabled: true }
   const enabled = override != null ? !!override : supportsReasoning(modelId)
   return enabled ? { enabled: true } : { enabled: false }
 }

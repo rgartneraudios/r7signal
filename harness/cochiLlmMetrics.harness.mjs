@@ -6,6 +6,7 @@ import {
   MODEL_CAPS,
   getModelCapabilities,
   supportsReasoning,
+  reasoningRequired,
   buildReasoningConfig,
   extractReasoningDelta,
   normalizeUsage,
@@ -36,16 +37,21 @@ const GEMINI = 'google/gemini-3.8-flash'
 console.log('— capacidades por modelo (whitelist) —')
 check('Centinela soporta reasoning', supportsReasoning(CENTINELA), true)
 check('Terminator soporta reasoning', supportsReasoning(TERMINATOR), true)
-check('Gemini NO soporta reasoning', supportsReasoning(GEMINI), false)
+check('Gemini soporta reasoning', supportsReasoning(GEMINI), true)
+check('Gemini EXIGE reasoning', reasoningRequired(GEMINI), true)
+check('Centinela NO exige reasoning', reasoningRequired(CENTINELA), false)
+check('modelo desconocido NO exige reasoning', reasoningRequired('x/y'), false)
 check('modelo desconocido NO soporta reasoning', supportsReasoning('x/y'), false)
 check('getModelCapabilities default {}', getModelCapabilities('x/y'), {})
-check('MODEL_CAPS sólo declara whitelist', Object.keys(MODEL_CAPS).sort(), [CENTINELA, TERMINATOR].sort())
+check('MODEL_CAPS declara whitelist + Gemini', Object.keys(MODEL_CAPS).sort(), [CENTINELA, TERMINATOR, GEMINI].sort())
 
 console.log('— buildReasoningConfig (flag por modelo + override) —')
 check('flag ON → enabled', buildReasoningConfig(CENTINELA), { enabled: true })
-check('flag OFF → disabled', buildReasoningConfig(GEMINI), { enabled: false })
+check('Gemini default → enabled', buildReasoningConfig(GEMINI), { enabled: true })
+check('modelo sin flag → disabled', buildReasoningConfig('x/y'), { enabled: false })
 check('override false gana sobre flag ON', buildReasoningConfig(CENTINELA, false), { enabled: false })
-check('override true gana sobre flag OFF', buildReasoningConfig(GEMINI, true), { enabled: true })
+check('override true gana sobre modelo sin flag', buildReasoningConfig('x/y', true), { enabled: true })
+check('override false NO puede apagar un modelo que exige reasoning', buildReasoningConfig(GEMINI, false), { enabled: true })
 
 console.log('— extractReasoningDelta —')
 check('delta.reasoning string', extractReasoningDelta({ reasoning: 'pienso' }), 'pienso')
