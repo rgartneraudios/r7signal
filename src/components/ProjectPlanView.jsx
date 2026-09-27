@@ -186,7 +186,7 @@ export default function ProjectPlanView({ onSendToCochi, onClose, onCountChange 
                 color: ACCENT, fontSize: '0.62rem', fontWeight: 700, cursor: 'pointer',
                 fontFamily: "'Space Grotesk', sans-serif",
               }}
-            >→ Enviar tablero a Cochi</button>
+            >→ Enviar la Planificación a Cochi</button>
           </div>
 
           {/* Bloques */}
