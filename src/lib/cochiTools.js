@@ -18,6 +18,16 @@ const MAX_FETCH_BYTES = 100 * 1024        // 100KB
 const DEFAULT_FETCH_TIMEOUT = 30 * 1000   // 30s
 const MAX_FETCH_TIMEOUT = 120 * 1000      // 2 min
 
+// Directorio de trabajo de run_command. La tool expone `cwd` opcional, pero si el
+// modelo NO lo manda debe usarse la RAÍZ DEL WORKSPACE: antes el shell caía al cwd
+// del proceso (src-tauri), ejecutando comandos en el lugar equivocado. Puro.
+export function resolveCommandCwd(args, workspaceRoot) {
+  const explicit = typeof args?.cwd === 'string' ? args.cwd.trim() : ''
+  if (explicit) return explicit
+  const root = typeof workspaceRoot === 'string' ? workspaceRoot.trim() : ''
+  return root || undefined
+}
+
 // Convierte HTML a texto plano legible: quita scripts/estilos, respeta saltos
 // de bloque y decodifica las entidades más comunes.
 function htmlToText(html) {
@@ -982,7 +992,8 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         Math.max(Number(args.timeoutMs) || DEFAULT_COMMAND_TIMEOUT, 1000),
         MAX_COMMAND_TIMEOUT,
       )
-      const options = args.cwd ? { cwd: args.cwd } : undefined
+      const cwd = resolveCommandCwd(args, workspaceRoot)
+      const options = cwd ? { cwd } : undefined
       const cmd = os === 'windows'
         ? Command.create('powershell', ['-Command', args.command], options)
         : Command.create('bash', ['-c', args.command], options)
