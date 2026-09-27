@@ -49,6 +49,11 @@ export function needsPlanning(message) {
     'ejecuta', 'instala', 'instalar', 'añade', 'agrega', 'genera',
     'refactori', 'implement', 'migra', 'actualiza', 'patch', 'mkdir',
     'npm', 'yarn', 'pip', 'cargo', '/cochi',
+    // PRUEBA T3 (27/09): verbos de mutación que FALTABAN. Sin ellos el mensaje
+    // caía en single-pass 'read' (sin tools de escritura) y el modelo alucinaba
+    // "hecho" mientras el disco no cambiaba. "cambiá"→"cambia", etc.
+    'cambia', 'reemplaz', 'sobrescrib', 'update', 'subi', 'setea',
+    'insert', 'correg', 'corrig', 'arregl', 'convert',
   ]
   const hasWriteVerb = writeVerbs.some(k => msg.includes(k))
 

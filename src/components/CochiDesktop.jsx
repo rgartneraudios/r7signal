@@ -1748,13 +1748,28 @@ function CochiDesktop({
   async function maybeRevertFiles() {
     const snap = snapshotRef.current
     snapshotRef.current = null
-    if (!snap) return
+    // El aviso de run_command debe salir SIEMPRE que el turno haya ejecutado un
+    // comando, incluso si no tocó archivos (turno de sólo comando): antes el
+    // early-return de count===0 lo dejaba inalcanzable (bug T3e).
+    const ranCommand = lastTurnHadCommandRef.current
+    const commandWarning = () => pushMessage({
+      role: 'assistant',
+      content: '⚠️ Este turno ejecutó run_command: sus efectos NO se pueden revertir.',
+    })
+    if (!snap) {
+      if (ranCommand) commandWarning()
+      return
+    }
     const info = summarizeSnapshot(snap)
-    if (info.count === 0) { await discardTurn(snap); return }
+    if (info.count === 0) {
+      await discardTurn(snap)
+      if (ranCommand) commandWarning()
+      return
+    }
     const list = info.paths.slice(0, 12).map(p => `• ${p}`).join('\n')
     const more = info.paths.length > 12 ? `\n… y ${info.paths.length - 12} más` : ''
     const warn = info.unrevertible.length ? `\n\n⚠️ ${info.unrevertible.length} archivo(s) eran demasiado grandes y NO se podrán restaurar.` : ''
-    const cmdWarn = lastTurnHadCommandRef.current ? '\n\n⚠️ Este turno ejecutó run_command: sus efectos NO se pueden revertir.' : ''
+    const cmdWarn = ranCommand ? '\n\n⚠️ Este turno ejecutó run_command: sus efectos NO se pueden revertir.' : ''
     const ok = window.confirm(`Este turno modificó ${info.count} archivo(s):\n${list}${more}${warn}${cmdWarn}\n\n¿Revertir los archivos a su estado anterior?`)
     if (!ok) { await discardTurn(snap); return }
     try {
