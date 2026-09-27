@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { listR9Files, readR9File } from '../lib/r9Store.js'
 import { listSessions, deleteSession, renameSession } from '../lib/sessionStore.js'
+import ProjectPlanView from './ProjectPlanView.jsx'
 
 const TABS = [
   { key: 'sessions', label: 'Sesiones', accent: '#6B9EC4' },
+  { key: 'plans', label: 'Planes', accent: '#E0A85F' },
   { key: 'r9', label: 'R9 · Selecciones', accent: '#C8A2D8' },
 ]
 
@@ -13,10 +15,11 @@ function formatWhen(iso) {
   try { return new Date(iso).toLocaleString('es-ES') } catch { return '' }
 }
 
-export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenSession }) {
+export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenSession, onSendToCochi }) {
   const [tab, setTab] = useState('sessions')
   const [r9Files, setR9Files] = useState([])
   const [sessions, setSessions] = useState([])
+  const [plansCount, setPlansCount] = useState(0)
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(null)
   const [contentCache, setContentCache] = useState({})
@@ -102,6 +105,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
 
   const list = r9Files
   const activeAccent = TABS.find(t => t.key === tab)?.accent
+  const countFor = (key) => key === 'sessions' ? sessions.length : key === 'plans' ? plansCount : r9Files.length
 
   return (
     <div style={{
@@ -145,7 +149,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
                 fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.75rem',
                 fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
               }}
-            >{t.label} ({t.key === 'sessions' ? sessions.length : r9Files.length})</button>
+            >{t.label} ({countFor(t.key)})</button>
           ))}
         </div>
 
@@ -155,11 +159,18 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
               Cargando…
             </div>
           )}
-          {!loading && (tab === 'sessions' ? sessions.length === 0 : list.length === 0) && (
+          {!loading && tab !== 'plans' && (tab === 'sessions' ? sessions.length === 0 : list.length === 0) && (
             <div style={{ color: '#6B7075', fontSize: '0.8rem', textAlign: 'center', marginTop: 30 }}>
               {tab === 'r9' ? 'Sin selecciones guardadas todavía.'
                 : 'Sin sesiones guardadas todavía.'}
             </div>
+          )}
+          {tab === 'plans' && (
+            <ProjectPlanView
+              onSendToCochi={onSendToCochi}
+              onClose={onClose}
+              onCountChange={setPlansCount}
+            />
           )}
           {tab === 'sessions' && sessions.map(session => (
             <div key={session.id} style={{
@@ -204,7 +215,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
               }}>{formatWhen(session.updatedAt)}</span>
             </div>
           ))}
-          {tab !== 'sessions' && list.map(file => (
+          {tab === 'r9' && list.map(file => (
             <div key={file.path} style={{
               border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8,
               background: '#131215', overflow: 'hidden',

@@ -67,6 +67,16 @@ export function normalizeStatus(status) {
   return PLAN_STATUS.PENDING
 }
 
+// ─── Etiqueta legible del estado (UI del tablero, Bloque E2) ──────────────────
+export const STATUS_LABEL = {
+  [PLAN_STATUS.PENDING]:     'Pendiente',
+  [PLAN_STATUS.IN_PROGRESS]: 'En curso',
+  [PLAN_STATUS.DONE]:        'Hecho',
+}
+export function statusLabel(status) {
+  return STATUS_LABEL[normalizeStatus(status)]
+}
+
 // ─── Normalización de un bloque (tolera claves en ES/EN) ──────────────────────
 export function normalizeBlock(raw, index = 0) {
   const r = raw && typeof raw === 'object' ? raw : {}
@@ -174,6 +184,23 @@ export function planToHandoffText(plan, blockId) {
   lines.push(`Criterio de hecho: ${block.evidence || '(sin definir)'}`)
   lines.push(`Plan completo: ${plan.blocks.map((b, i) => `${b.id}${i === idx ? '←' : ''} ${b.title}`).join(' · ')}`)
   return lines.join('\n')
+}
+
+// Payload de "Enviar a Cochi" de UN bloque (Bloque E2): atajo canónico hacia el
+// panel de ejecución. NO es fuente de verdad — el tablero lo es (el usuario
+// también podrá pedirle a Cochi que lea el JSON). Devuelve null si no hay bloque.
+export function planBlockHandoff(plan, blockId) {
+  const content = planToHandoffText(plan, blockId)
+  if (!content) return null
+  const block = (blockId && getBlock(plan, blockId)) || nextBlock(plan)
+  if (!block) return null
+  return {
+    type:    'plan',
+    planId:  plan.id,
+    blockId: block.id,
+    brief:   `Ejecutá el bloque ${block.id} ("${block.title}") del plan "${plan.title}". Cumplí su criterio de verificación y no avances al siguiente bloque sin confirmación.`,
+    content,
+  }
 }
 
 // ─── Disco (inyectable) ──────────────────────────────────────────────────────

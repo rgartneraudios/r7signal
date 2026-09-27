@@ -466,6 +466,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0 }) 
           onInsertAsun={handleInsertAsun}
           onInsertCochi={handleInsertCochi}
           onOpenSession={handleOpenSession}
+          onSendToCochi={handleAsunHandoff}
         />
       )}
 

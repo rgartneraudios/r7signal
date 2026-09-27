@@ -17,7 +17,9 @@ import {
   setBlockStatus,
   planProgress,
   nextBlock,
+  statusLabel,
   planToHandoffText,
+  planBlockHandoff,
   savePlan,
   loadPlan,
   listPlans,
@@ -173,6 +175,32 @@ check('incluye evidencia', handoff.includes('Criterio de hecho: npm build ok'), 
 check('marca el bloque actual', handoff.includes('A← Setup'), true)
 check('plan vacío → cadena vacía', planToHandoffText(makePlan({ title: 'x' })), '')
 check('plan null → cadena vacía', planToHandoffText(null), '')
+
+console.log('\n— statusLabel: etiqueta legible del estado (E2) —')
+check('pending → Pendiente', statusLabel('pending'), 'Pendiente')
+check('in_progress → En curso', statusLabel('in_progress'), 'En curso')
+check('done → Hecho', statusLabel('done'), 'Hecho')
+check('variante ES "hecho" → Hecho', statusLabel('hecho'), 'Hecho')
+check('desconocido → Pendiente', statusLabel('zzz'), 'Pendiente')
+check('vacío → Pendiente', statusLabel(''), 'Pendiente')
+
+console.log('\n— planBlockHandoff: payload "Enviar a Cochi" (E2) —')
+const boardPlan = makePlan({ id: 'plan-b2', title: 'App', now: '2026-01-01T00:00:00.000Z', blocks: [
+  { id: 'A', title: 'Setup', evidence: 'build ok' },
+  { id: 'B', title: 'Login', evidence: 'harness 5/5' },
+]})
+const hA = planBlockHandoff(boardPlan, 'A')
+check('type plan', hA.type, 'plan')
+check('planId', hA.planId, 'plan-b2')
+check('blockId explícito', hA.blockId, 'A')
+check('brief menciona el bloque', hA.brief.includes('bloque A'), true)
+check('content = handoff del bloque', hA.content, planToHandoffText(boardPlan, 'A'))
+const hDefault = planBlockHandoff(boardPlan)
+check('sin blockId → primer pendiente', hDefault.blockId, 'A')
+const inProgPlan = { ...boardPlan, blocks: [{ ...boardPlan.blocks[0], status: 'done' }, { ...boardPlan.blocks[1], status: 'in_progress' }] }
+check('prefiere el bloque en curso', planBlockHandoff(inProgPlan).blockId, 'B')
+check('plan vacío → null', planBlockHandoff(makePlan({ title: 'x' })), null)
+check('plan null → null', planBlockHandoff(null), null)
 
 console.log('\n— constantes —')
 check('PLANS_DIR', PLANS_DIR, 'Plans')
