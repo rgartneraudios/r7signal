@@ -2,6 +2,7 @@ import { readTextFile, writeTextFile, readDir, exists, mkdir, remove, stat, rena
 import { Command } from '@tauri-apps/plugin-shell'
 import { writeR9File } from './r9Store.js'
 import { capturePath } from './snapshotStore.js'
+import { listPlans, loadPlan, savePlan, setBlockStatus, planBoardList, planToText, planProgress, PLAN_STATUS, PLAN_STATUSES, getBlock } from './planStore.js'
 
 // Tope de lectura de texto — evita meter megabytes al contexto del modelo.
 const MAX_READ_BYTES = 1 * 1024 * 1024 // 1MB
@@ -640,6 +641,45 @@ export const COCHI_TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'list_project_plans',
+      description: 'List the project plans on the board (created by Asun in Project mode). Each plan is a project segmented into blocks A/B/C with a status and a "done when" criterion. Call this FIRST when the user mentions a plan but not which one — then use ask_user to let them choose if there is more than one.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_project_plan',
+      description: 'Read the full canonical board of ONE project plan: title, progress, and every block with its status, description and "done when" criterion. Use the planId from list_project_plans; if omitted, reads the most recently updated plan.',
+      parameters: {
+        type: 'object',
+        properties: {
+          planId: { type: 'string', description: 'Plan id (from list_project_plans). Omit for the most recent plan.' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_plan_block',
+      description: 'Update the STATUS of one block on the board (you own the status; Asun owns the definition). Set status to in_progress when you start and done when you meet the block\'s "done when" criterion. Marking done REQUIRES evidence (what you ran/verified). Never rewrite the block definition.',
+      parameters: {
+        type: 'object',
+        properties: {
+          planId: { type: 'string', description: 'Plan id (from list_project_plans). Omit for the most recent plan.' },
+          blockId: { type: 'string', description: 'Block id (A, B, C...).' },
+          status: { type: 'string', enum: PLAN_STATUSES, description: 'New status: pending | in_progress | done.' },
+          evidence: { type: 'string', description: 'Required when status is "done": how you verified it (harness/test/commit/manual). Recorded in the block evidence log.' },
+        },
+        required: ['blockId', 'status'],
+      },
+    },
+  },
 ]
 
 // ─── Tools filtrados por nivel de permiso del workspace ───────────────────────
@@ -652,6 +692,10 @@ const READ_SCOPE_TOOLS = new Set([
   'read_file', 'read_file_chunk', 'list_dir', 'find_files',
   'search_in_files', 'get_file_info', 'file_exists', 'web_fetch', 'ask_user',
   'spawn_agent',
+  // Bloque E3: tablero del plan (vive en AppLocalData\Plans, NO en el workspace).
+  // Se exponen en scope 'read' porque no mutan el disco del usuario; update solo
+  // toca el artefacto del plan (Cochi es dueño del estado, P3).
+  'list_project_plans', 'read_project_plan', 'update_plan_block',
 ])
 
 export function getToolsForPermission(permission, scope = 'full') {
@@ -701,6 +745,9 @@ export const TOOL_ICONS = {
   todowrite:        'TODO',
   ask_user:         'ASK',
   web_fetch:        'FETCH',
+  list_project_plans:  'PLANS',
+  read_project_plan:   'PLAN',
+  update_plan_block:   'PLAN✎',
 }
 
 // ─── Executors ────────────────────────────────────────────────────────────────
@@ -1018,6 +1065,51 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
 
     case 'spawn_agent':
       return { modelResult: '⚠️ spawn_agent debe resolverse en el loop de Cochi (turno headless del subagente).', diff: null }
+
+    // ── Bloque E3: tablero del plan de proyecto ──────────────────────────────
+    case 'list_project_plans': {
+      try {
+        const plans = planBoardList(await listPlans())
+        if (plans.length === 0) return { modelResult: 'El tablero de planes está vacío (todavía no hay proyectos de Asun).', diff: null }
+        const lines = plans.map(p => `· ${p.title} [${p.id}] — ${p.done}/${p.total} bloques (${p.percent}%)`)
+        return { modelResult: `Planes en el tablero (${plans.length}):\n${lines.join('\n')}`, diff: null }
+      } catch (err) {
+        return { modelResult: `ERROR al listar planes: ${err.message}`, diff: null }
+      }
+    }
+
+    case 'read_project_plan': {
+      try {
+        let plan = args.planId ? await loadPlan(args.planId) : null
+        if (!plan) plan = (await listPlans())[0] || null
+        if (!plan) return { modelResult: 'No hay plan para leer (tablero vacío o planId inexistente).', diff: null }
+        return { modelResult: planToText(plan), diff: null }
+      } catch (err) {
+        return { modelResult: `ERROR al leer el plan: ${err.message}`, diff: null }
+      }
+    }
+
+    case 'update_plan_block': {
+      try {
+        let plan = args.planId ? await loadPlan(args.planId) : null
+        if (!plan) plan = (await listPlans())[0] || null
+        if (!plan) return { modelResult: 'No hay plan para actualizar.', diff: null }
+        const blockId = String(args.blockId ?? '').trim()
+        if (!getBlock(plan, blockId)) {
+          return { modelResult: `El bloque "${blockId}" no existe en "${plan.title}". Bloques: ${plan.blocks.map(b => b.id).join(', ')}.`, diff: null }
+        }
+        const status = String(args.status ?? '').trim().toLowerCase()
+        if (status === PLAN_STATUS.DONE && !String(args.evidence ?? '').trim()) {
+          return { modelResult: '⛔ Para marcar un bloque como "done" aportá `evidence` (cómo lo verificaste).', diff: null }
+        }
+        const updated = setBlockStatus(plan, blockId, status, { author: 'cochi', note: args.evidence })
+        await savePlan(updated)
+        const prog = planProgress(updated)
+        return { modelResult: `✅ Bloque ${blockId} → ${status}. Avance del plan: ${prog.done}/${prog.total} (${prog.percent}%).`, diff: null }
+      } catch (err) {
+        return { modelResult: `ERROR al actualizar el bloque: ${err.message}`, diff: null }
+      }
+    }
 
     case 'delete_file': {
       const existed = await pathExistsCochi(args.path)

@@ -7,6 +7,7 @@ import {
   planProgress,
   nextBlock,
   planBlockHandoff,
+  planBoardHandoff,
   statusLabel,
   PLAN_STATUS,
 } from '../lib/planStore.js'
@@ -81,6 +82,14 @@ export default function ProjectPlanView({ onSendToCochi, onClose, onCountChange 
   function send(blockId) {
     if (!plan) return
     const payload = planBlockHandoff(plan, blockId)
+    if (!payload) return
+    onSendToCochi?.(payload)
+    onClose?.()
+  }
+
+  function sendBoard() {
+    if (!plan) return
+    const payload = planBoardHandoff(plan)
     if (!payload) return
     onSendToCochi?.(payload)
     onClose?.()
@@ -167,6 +176,17 @@ export default function ProjectPlanView({ onSendToCochi, onClose, onCountChange 
             ) : (
               <span style={{ fontSize: '0.7rem', color: '#7FD1A8', fontWeight: 700 }}>✓ Plan completo</span>
             )}
+
+            {/* E3: leer/preguntar desde Cochi (tablero completo, no un bloque) */}
+            <button
+              onClick={sendBoard}
+              style={{
+                alignSelf: 'flex-start', background: 'transparent',
+                border: `1px solid ${ACCENT}55`, borderRadius: 5, padding: '3px 9px',
+                color: ACCENT, fontSize: '0.62rem', fontWeight: 700, cursor: 'pointer',
+                fontFamily: "'Space Grotesk', sans-serif",
+              }}
+            >→ Enviar tablero a Cochi</button>
           </div>
 
           {/* Bloques */}
@@ -195,6 +215,11 @@ export default function ProjectPlanView({ onSendToCochi, onClose, onCountChange 
                 {block.evidence && (
                   <span style={{ fontSize: '0.68rem', color: '#7A8FA0', lineHeight: 1.5 }}>
                     ✓ Hecho cuando: {block.evidence}
+                  </span>
+                )}
+                {block.evidenceLog?.length > 0 && (
+                  <span style={{ fontSize: '0.66rem', color: '#7FD1A8', lineHeight: 1.5 }}>
+                    ↳ Evidencia ({block.evidenceLog[block.evidenceLog.length - 1].by}): {block.evidenceLog[block.evidenceLog.length - 1].text}
                   </span>
                 )}
 

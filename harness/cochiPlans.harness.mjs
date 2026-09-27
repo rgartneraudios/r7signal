@@ -20,6 +20,9 @@ import {
   statusLabel,
   planToHandoffText,
   planBlockHandoff,
+  planBoardList,
+  planToText,
+  planBoardHandoff,
   savePlan,
   loadPlan,
   listPlans,
@@ -96,10 +99,10 @@ check('undefined → pending', normalizeStatus(undefined), 'pending')
 console.log('\n— normalizeBlock: claves ES/EN + id por índice —')
 check('id por defecto según índice', normalizeBlock({ title: 't', evidence: 'e' }, 2).id, 'C')
 check('claves EN', normalizeBlock({ title: 't', description: 'd', evidence: 'e' }, 0), {
-  id: 'A', title: 't', description: 'd', evidence: 'e', status: 'pending', updatedAt: null, updatedBy: null,
+  id: 'A', title: 't', description: 'd', evidence: 'e', status: 'pending', updatedAt: null, updatedBy: null, evidenceLog: [],
 })
 check('claves ES', normalizeBlock({ titulo: 't', descripcion: 'd', evidencia: 'e', estado: 'hecho' }, 0), {
-  id: 'A', title: 't', description: 'd', evidence: 'e', status: 'done', updatedAt: null, updatedBy: null,
+  id: 'A', title: 't', description: 'd', evidence: 'e', status: 'done', updatedAt: null, updatedBy: null, evidenceLog: [],
 })
 check('recorta espacios', normalizeBlock({ id: '  X  ', title: '  t  ' }, 0).id, 'X')
 check('bloque null → objeto vacío', normalizeBlock(null, 1).id, 'B')
@@ -201,6 +204,45 @@ const inProgPlan = { ...boardPlan, blocks: [{ ...boardPlan.blocks[0], status: 'd
 check('prefiere el bloque en curso', planBlockHandoff(inProgPlan).blockId, 'B')
 check('plan vacío → null', planBlockHandoff(makePlan({ title: 'x' })), null)
 check('plan null → null', planBlockHandoff(null), null)
+
+console.log('\n— evidenceLog: evidencia de estado (E3) —')
+check('normalizeBlock añade evidenceLog []', normalizeBlock({ title: 't' }, 0).evidenceLog, [])
+check('normalizeBlock preserva evidenceLog', normalizeBlock({ evidenceLog: [{ text: 'e' }] }, 0).evidenceLog.length, 1)
+const notePlan = setBlockStatus(boardPlan, 'A', 'done', { now: '2026-05-05T00:00:00.000Z', author: 'cochi', note: 'harness 5/5' })
+check('note → entrada en evidenceLog', notePlan.blocks[0].evidenceLog[0], { at: '2026-05-05T00:00:00.000Z', by: 'cochi', text: 'harness 5/5' })
+check('sin note → evidenceLog intacto', setBlockStatus(boardPlan, 'A', 'in_progress').blocks[0].evidenceLog, [])
+check('note vacía/espacios → sin entrada', setBlockStatus(boardPlan, 'A', 'done', { note: '   ' }).blocks[0].evidenceLog, [])
+
+console.log('\n— planBoardList: resumen para list_project_plans (E3) —')
+const boardList = planBoardList([
+  makePlan({ id: 'plan-l1', title: 'Uno', blocks: [{ status: 'done' }, { status: 'pending' }] }),
+  makePlan({ id: 'plan-l2', title: 'Dos', blocks: [{ status: 'done' }, { status: 'done' }] }),
+])
+check('una fila por plan', boardList.length, 2)
+check('resumen del plan 1', { id: boardList[0].id, title: boardList[0].title, done: boardList[0].done, total: boardList[0].total, percent: boardList[0].percent },
+  { id: 'plan-l1', title: 'Uno', done: 1, total: 2, percent: 50 })
+check('planBoardList no-array → []', planBoardList(null), [])
+
+console.log('\n— planToText: plan completo canónico para Cochi (E3) —')
+const boardText = planToText(boardPlan)
+check('incluye cabecera', boardText.includes('[PLAN R7 · plan-b2] App'), true)
+check('incluye avance', boardText.includes('Avance: 0/2'), true)
+check('incluye bloque con estado', boardText.includes('Bloque A · Pendiente — Setup'), true)
+check('incluye criterio de hecho', boardText.includes('Criterio de hecho: build ok'), true)
+check('plan vacío → cadena vacía', planToText(makePlan({ title: 'x' })), '')
+const textWithLog = planToText(notePlan)
+check('incluye última evidencia del log', textWithLog.includes('Evidencia (cochi): harness 5/5'), true)
+
+console.log('\n— planBoardHandoff: enviar tablero completo a Cochi (E3) —')
+const boardH = planBoardHandoff(boardPlan)
+check('type plan', boardH.type, 'plan')
+check('planId', boardH.planId, 'plan-b2')
+check('blockId null (a nivel plan)', boardH.blockId, null)
+check('brief pide leer con read_project_plan', boardH.brief.includes('read_project_plan'), true)
+check('brief menciona ask_user si hay varios', boardH.brief.includes('ask_user'), true)
+check('content = planToText', boardH.content, planToText(boardPlan))
+check('plan vacío → null', planBoardHandoff(makePlan({ title: 'x' })), null)
+check('plan null → null', planBoardHandoff(null), null)
 
 console.log('\n— constantes —')
 check('PLANS_DIR', PLANS_DIR, 'Plans')

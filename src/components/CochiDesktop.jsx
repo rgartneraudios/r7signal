@@ -106,6 +106,7 @@ function estimateTokens(messages) {
 const READ_ONLY_TOOLS = new Set([
   'read_file', 'read_file_chunk', 'list_dir', 'find_files',
   'search_in_files', 'get_file_info', 'file_exists', 'web_fetch',
+  'list_project_plans', 'read_project_plan',
 ])
 
 // Fase 3.4 (perf UI): nº máximo de acciones del feed que se pintan en vivo. Las

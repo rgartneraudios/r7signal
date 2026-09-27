@@ -88,6 +88,7 @@ export function normalizeBlock(raw, index = 0) {
     status:      normalizeStatus(r.status ?? r.estado),
     updatedAt:   r.updatedAt ?? null,
     updatedBy:   r.updatedBy ?? null,
+    evidenceLog: Array.isArray(r.evidenceLog) ? r.evidenceLog : [],
   }
 }
 
@@ -137,12 +138,21 @@ export function getBlock(plan, blockId) {
 
 // P3: actualiza SÓLO el estado de un bloque (definición intacta). Puro: devuelve
 // un plan NUEVO y no muta el original. blockId desconocido → plan sin cambios.
-export function setBlockStatus(plan, blockId, status, { now, author = 'cochi' } = {}) {
+// `note` opcional (Bloque E3): se agrega al evidenceLog del bloque (evidencia de
+// Cochi al marcar). El evidenceLog es del lado ESTADO, no toca la definición.
+export function setBlockStatus(plan, blockId, status, { now, author = 'cochi', note } = {}) {
   const when = now || new Date().toISOString()
   const base = normalizePlan(plan, { id: plan?.id, now: plan?.updatedAt })
   if (!getBlock(base, blockId)) return base
+  const noteText = str(note)
   const blocks = base.blocks.map(b => b.id === blockId
-    ? { ...b, status: normalizeStatus(status), updatedAt: when, updatedBy: author }
+    ? {
+        ...b,
+        status: normalizeStatus(status),
+        updatedAt: when,
+        updatedBy: author,
+        evidenceLog: noteText ? [...b.evidenceLog, { at: when, by: author, text: noteText }] : b.evidenceLog,
+      }
     : b)
   return { ...base, blocks, updatedAt: when }
 }
@@ -200,6 +210,57 @@ export function planBlockHandoff(plan, blockId) {
     blockId: block.id,
     brief:   `Ejecutá el bloque ${block.id} ("${block.title}") del plan "${plan.title}". Cumplí su criterio de verificación y no avances al siguiente bloque sin confirmación.`,
     content,
+  }
+}
+
+// ─── Lectura para agentes (Bloque E3) ────────────────────────────────────────
+// Resumen del tablero para elegir plan cuando hay varios (list_project_plans).
+export function planBoardList(plans) {
+  return (Array.isArray(plans) ? plans : []).map(p => {
+    const prog = planProgress(p)
+    return {
+      id: p.id,
+      title: p.title,
+      done: prog.done,
+      total: prog.total,
+      percent: prog.percent,
+      updatedAt: p.updatedAt,
+    }
+  })
+}
+
+// Texto canónico y autocontenido del plan completo, para que Cochi lo lea DIRECTO
+// (read_project_plan) sin re-interpretar el chat de Asun (P2).
+export function planToText(plan) {
+  if (!plan || !Array.isArray(plan.blocks) || plan.blocks.length === 0) return ''
+  const prog = planProgress(plan)
+  const lines = [
+    `[PLAN R7 · ${plan.id}] ${plan.title}`,
+    `Avance: ${prog.done}/${prog.total} bloques (${prog.percent}%)`,
+  ]
+  if (plan.description) lines.push(`Alcance: ${plan.description}`)
+  lines.push('')
+  for (const b of plan.blocks) {
+    lines.push(`Bloque ${b.id} · ${statusLabel(b.status)} — ${b.title}`)
+    if (b.description) lines.push(`  Qué hacer: ${b.description}`)
+    lines.push(`  Criterio de hecho: ${b.evidence || '(sin definir)'}`)
+    const last = b.evidenceLog?.[b.evidenceLog.length - 1]
+    if (last?.text) lines.push(`  Evidencia (${last.by}): ${last.text}`)
+  }
+  return lines.join('\n')
+}
+
+// Handoff a nivel PLAN (Bloque E3): "Enviar tablero a Cochi". Le da el planId y
+// la instrucción de leer el tablero y preguntar (ask_user) qué hacer, en vez del
+// contrato de un bloque concreto.
+export function planBoardHandoff(plan) {
+  if (!plan || !Array.isArray(plan.blocks) || plan.blocks.length === 0) return null
+  return {
+    type:    'plan',
+    planId:  plan.id,
+    blockId: null,
+    brief:   `Leé el tablero del plan "${plan.title}" con read_project_plan (planId "${plan.id}") y preguntame qué bloque querés ejecutar o actualizar. Si hay más de un plan en el tablero, listalos primero con list_project_plans y usá ask_user para que yo elija.`,
+    content: planToText(plan),
   }
 }
 
