@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, memo, forwardRef, useImperativeHandle, lazy, Suspense } from 'react'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
 import DiffViewer from './DiffViewer'
-import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, needsPlanning, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages } from '../lib/cochiPlanningPrompts'
+import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, needsPlanning, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded } from '../lib/cochiPlanningPrompts'
 import PlanViewer from './PlanViewer'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
@@ -1065,6 +1065,11 @@ function CochiDesktop({
         const MAX_INNER = 15
         let stepCompleted = false
         let stepResultSummary = 'Completado'
+        // HALLAZGO Test 2: evidencia de trabajo del step. Se enciende apenas el
+        // modelo emite tool_calls en CUALQUIER iteración interna del step, para
+        // que un cierre en prosa (sin señal de control) no se dé por exitoso si
+        // el paso nunca ejecutó nada.
+        let stepHadToolCall = false
 
         const toolCallCounts = new Map()
         const REPEAT_WARN_THRESHOLD = 3
@@ -1135,6 +1140,7 @@ function CochiDesktop({
             ...(streamed.toolCalls?.length ? { tool_calls: streamed.toolCalls } : {}),
           }
           apiMessages.push(assistantMsg)
+          if (assistantMsg.tool_calls?.length) stepHadToolCall = true
 
           if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
             const rawContent = assistantMsg.content || ''
@@ -1189,11 +1195,25 @@ function CochiDesktop({
                 stepCompleted = true
                 break
               } else {
-                if (trackSteps) updateStepStatus(step.id, 'completed', 'Completado')
+                // Sin señal de control. Sólo es éxito si el step ejecutó al
+                // menos una herramienta; si no, se marca fallo (evita el falso
+                // "1 de 1 pasos exitosos" del Test 2). El single-pass sin plan
+                // (!trackSteps) NO se afecta: ahí la prosa ES el resultado.
+                const silentOk = stepSilentlySucceeded({ trackSteps, stepHadToolCall })
+                if (trackSteps) {
+                  updateStepStatus(step.id, silentOk ? 'completed' : 'failed',
+                    silentOk ? 'Completado' : 'Sin señal de control ni ejecución de herramientas')
+                }
                 await appendToMemory(r1, r2)
                 sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
                 requestFinalText = displayContent
                 pushMessage({ role: 'assistant', content: displayContent, reasoning: stepReasoning || undefined })
+                if (!silentOk) {
+                  pushMessage({
+                    role: 'assistant',
+                    content: '⚠️ El paso no ejecutó ninguna herramienta ni emitió señal de control. No lo doy por completado.'
+                  })
+                }
                 stepCompleted = true
                 break
               }

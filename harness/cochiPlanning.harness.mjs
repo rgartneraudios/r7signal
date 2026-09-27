@@ -3,7 +3,7 @@
 // Ejecutar:  node harness/cochiPlanning.harness.mjs   (o npm run harness:planning)
 // Cubre la lógica PURA: needsPlanning (intención single-pass vs multi-paso) y
 // parsePlanResponse (forma del JSON del planner).
-import { needsPlanning, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages } from '../src/lib/cochiPlanningPrompts.js'
+import { needsPlanning, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded } from '../src/lib/cochiPlanningPrompts.js'
 
 let pass = 0
 let fail = 0
@@ -105,6 +105,13 @@ check('respuesta vacia se ignora', collapseStepMessages([
 ], 0, 'x').length, 1)
 check('robusto sin argumentos', collapseStepMessages(undefined, 0, 'x'), [{ role: 'assistant', content: '[STEP 1 RESULT: x]' }])
 check('prefijo exportado', USER_ANSWER_PREFIX, 'USER ANSWER:')
+
+console.log('- stepSilentlySucceeded: no dar por exitoso un step sin trabajo (Test 2) -')
+check('single-pass sin plan: la prosa es resultado', stepSilentlySucceeded({ trackSteps: false, stepHadToolCall: false }), true)
+check('plan + tool ejecutada -> exito', stepSilentlySucceeded({ trackSteps: true, stepHadToolCall: true }), true)
+check('plan sin tool -> fallo (no completar)', stepSilentlySucceeded({ trackSteps: true, stepHadToolCall: false }), false)
+check('plan, flag ausente -> fallo', stepSilentlySucceeded({ trackSteps: true }), false)
+check('sin argumentos -> true (single-pass)', stepSilentlySucceeded(undefined), true)
 
 console.log(`\n${pass} PASS - ${fail} FAIL`)
 if (fail) process.exit(1)

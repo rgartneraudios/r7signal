@@ -108,6 +108,20 @@ export function collapseStepMessages(stepMessages, stepIndex, stepResultSummary)
   return kept
 }
 
+// HALLAZGO Test 2: un step de un plan SOLO puede cerrarse como exitoso si
+// aportó evidencia de trabajo. En el camino direct-parse (un plan de 1 paso
+// resuelve como single-pass con el prompt R1/R2/R3) el modelo puede responder
+// SÓLO prosa, sin señal de control y sin llamar a ninguna herramienta. Antes ese
+// caso se marcaba "Completado" a secas — así un plan de 1 paso "Preguntar al
+// usuario" quedaba exitoso sin haber llamado a ask_user, y un write sin escribir
+// nada también "completaba". Regla: completed si ejecutó al menos una tool;
+// si no, fallo. El single-pass SIN plan (!trackSteps) no se toca: ahí la prosa
+// ES el resultado. Puro y testeable.
+export function stepSilentlySucceeded({ trackSteps, stepHadToolCall } = {}) {
+  if (!trackSteps) return true
+  return stepHadToolCall === true
+}
+
 // Parsea la respuesta cruda del planner (JSON, con o sin fences) al shape que
 // consume el loop. Lanza si la forma es inválida para que generatePlan caiga a
 // su plan de fallback.
