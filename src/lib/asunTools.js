@@ -265,7 +265,7 @@ export function getProjectTools() {
       type: 'function',
       function: {
         name: 'save_project_plan',
-        description: 'Guarda/actualiza el PLAN del proyecto en el tablero persistente (fuera del workspace). Llamala SÓLO después de entrevistar al usuario y tener el alcance claro. Segmentá el proyecto en bloques cortos y verificables (A/B/C/...). Cada bloque DEBE incluir su criterio de "hecho" (evidence): cómo se comprueba (harness/test/commit/prueba manual). Llamala una sola vez con el plan completo; pasá planId para actualizar un plan existente.',
+        description: 'Guarda/actualiza el PLAN del proyecto en el tablero persistente (fuera del workspace). Llamala SÓLO después de entrevistar al usuario y tener el alcance claro. Segmentá el proyecto en bloques cortos y verificables (A/B/C/...). Cada bloque DEBE incluir su criterio de "hecho" (evidence): cómo se comprueba (harness/test/commit/prueba manual). Llamala una sola vez con el plan completo; pasá planId para actualizar un plan existente. Al actualizar podés mandar SÓLO los bloques que cambian: el tablero conserva la definición de los no reenviados y el ESTADO (avance/evidencia) de todos.',
         parameters: {
           type: 'object',
           properties: {
@@ -415,7 +415,7 @@ export async function executeTool(toolName, toolArgs, workspace) {
         description: toolArgs.description ?? toolArgs.descripcion,
         blocks: toolArgs.blocks ?? toolArgs.bloques,
       })
-      const saved = await savePlan(plan)
+      const saved = await savePlan(plan, { merge: true })
       const prog = planProgress(saved)
       return JSON.stringify({
         saved: true,

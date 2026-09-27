@@ -168,6 +168,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
           {tab === 'plans' && (
             <ProjectPlanView
               onSendToCochi={onSendToCochi}
+              onSendToAsun={onInsertAsun}
               onClose={onClose}
               onCountChange={setPlansCount}
             />

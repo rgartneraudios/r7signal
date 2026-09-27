@@ -2,7 +2,7 @@ import { readTextFile, writeTextFile, readDir, exists, mkdir, remove, stat, rena
 import { Command } from '@tauri-apps/plugin-shell'
 import { writeR9File } from './r9Store.js'
 import { capturePath } from './snapshotStore.js'
-import { listPlans, loadPlan, savePlan, setBlockStatus, planBoardList, planToText, planProgress, PLAN_STATUS, PLAN_STATUSES, getBlock } from './planStore.js'
+import { listPlans, loadPlan, savePlan, setBlockStatus, requestReplan, planBoardList, planToText, planProgress, PLAN_STATUS, PLAN_STATUSES, getBlock } from './planStore.js'
 
 // Tope de lectura de texto — evita meter megabytes al contexto del modelo.
 const MAX_READ_BYTES = 1 * 1024 * 1024 // 1MB
@@ -680,6 +680,23 @@ export const COCHI_TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'request_replan',
+      description: 'Register that a block on the board is BADLY DEFINED (wrong scope, missing dependency, impossible evidence...) and propose a correction, INSTEAD of deviating silently. Does NOT rewrite the block (Asun owns the definition): it raises a proposal the user arbitrates. Requires a reason and a concrete proposal. Do not use it to update status.',
+      parameters: {
+        type: 'object',
+        properties: {
+          planId: { type: 'string', description: 'Plan id (from list_project_plans). Omit for the most recent plan.' },
+          blockId: { type: 'string', description: 'Block id (A, B, C...).' },
+          reason: { type: 'string', description: 'What is wrong or impossible about the current block definition.' },
+          proposal: { type: 'string', description: 'Concrete correction you propose for the block definition.' },
+        },
+        required: ['blockId', 'reason', 'proposal'],
+      },
+    },
+  },
 ]
 
 // ─── Tools filtrados por nivel de permiso del workspace ───────────────────────
@@ -696,6 +713,8 @@ const READ_SCOPE_TOOLS = new Set([
   // Se exponen en scope 'read' porque no mutan el disco del usuario; update solo
   // toca el artefacto del plan (Cochi es dueño del estado, P3).
   'list_project_plans', 'read_project_plan', 'update_plan_block',
+  // Bloque E4: propuesta de re-plan (toca sólo el artefacto del plan, no el disco).
+  'request_replan',
 ])
 
 export function getToolsForPermission(permission, scope = 'full') {
@@ -716,7 +735,9 @@ export function getToolsForPermission(permission, scope = 'full') {
 //   · spawn_agent → sin recursión (MAX_SUBAGENT_DEPTH = 1).
 //   · ask_user    → no hay UI que responda dentro del subagente.
 // Reusa el scope 'read' (no muta disco) y quita las tools interactivas.
-export const SUBAGENT_EXCLUDED_TOOLS = new Set(['spawn_agent', 'ask_user'])
+// También quita las que MUTAN el tablero de planes (update_plan_block/request_replan):
+// aunque no tocan el disco del usuario, el subagente es de SÓLO LECTURA.
+export const SUBAGENT_EXCLUDED_TOOLS = new Set(['spawn_agent', 'ask_user', 'update_plan_block', 'request_replan'])
 
 export function getSubagentTools(permission = 'full') {
   return getToolsForPermission(permission, 'read')
@@ -748,6 +769,7 @@ export const TOOL_ICONS = {
   list_project_plans:  'PLANS',
   read_project_plan:   'PLAN',
   update_plan_block:   'PLAN✎',
+  request_replan:      'PLAN⚠',
 }
 
 // ─── Executors ────────────────────────────────────────────────────────────────
@@ -1108,6 +1130,28 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         return { modelResult: `✅ Bloque ${blockId} → ${status}. Avance del plan: ${prog.done}/${prog.total} (${prog.percent}%).`, diff: null }
       } catch (err) {
         return { modelResult: `ERROR al actualizar el bloque: ${err.message}`, diff: null }
+      }
+    }
+
+    case 'request_replan': {
+      try {
+        let plan = args.planId ? await loadPlan(args.planId) : null
+        if (!plan) plan = (await listPlans())[0] || null
+        if (!plan) return { modelResult: 'No hay plan para proponer un re-plan.', diff: null }
+        const blockId = String(args.blockId ?? '').trim()
+        if (!getBlock(plan, blockId)) {
+          return { modelResult: `El bloque "${blockId}" no existe en "${plan.title}". Bloques: ${plan.blocks.map(b => b.id).join(', ')}.`, diff: null }
+        }
+        const reason = String(args.reason ?? '').trim()
+        const proposal = String(args.proposal ?? '').trim()
+        if (!reason || !proposal) {
+          return { modelResult: '⛔ Para proponer un re-plan aportá `reason` (qué está mal) y `proposal` (cómo corregirlo).', diff: null }
+        }
+        const updated = requestReplan(plan, blockId, { reason, proposal, author: 'cochi' })
+        await savePlan(updated)
+        return { modelResult: `⚠️ Re-plan registrado para el bloque ${blockId}. Queda PENDIENTE de decisión del usuario (aprobarlo o pedir a Asun que amende). No te desvíes: esperá la resolución.`, diff: null }
+      } catch (err) {
+        return { modelResult: `ERROR al registrar el re-plan: ${err.message}`, diff: null }
       }
     }
 

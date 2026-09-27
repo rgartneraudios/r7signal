@@ -4,10 +4,13 @@ import {
   deletePlan,
   savePlan,
   setBlockStatus,
+  resolveReplan,
+  hasPendingReplan,
   planProgress,
   nextBlock,
   planBlockHandoff,
   planBoardHandoff,
+  planReplanAsunHandoff,
   statusLabel,
   PLAN_STATUS,
 } from '../lib/planStore.js'
@@ -24,7 +27,7 @@ const STATUS_ORDER = [PLAN_STATUS.PENDING, PLAN_STATUS.IN_PROGRESS, PLAN_STATUS.
 // Vista del drawer: define (Asun) y estado (aquí el usuario lo marca a mano; en
 // E3 Cochi lo actualizará con setBlockStatus). El handoff a Cochi es un ATAJO:
 // manda el bloque canónico (planBlockHandoff), nunca el plan en prosa.
-export default function ProjectPlanView({ onSendToCochi, onClose, onCountChange }) {
+export default function ProjectPlanView({ onSendToCochi, onSendToAsun, onClose, onCountChange }) {
   const [plans, setPlans] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -65,6 +68,32 @@ export default function ProjectPlanView({ onSendToCochi, onClose, onCountChange 
     } finally {
       setBusy(false)
     }
+  }
+
+  // Bloque E4: el usuario arbitra la propuesta de re-plan de Cochi.
+  async function resolve(blockId, resolution) {
+    if (!plan || busy) return
+    setBusy(true)
+    try {
+      const updated = resolveReplan(plan, blockId, resolution, { author: 'user' })
+      await savePlan(updated)
+      setPlans(prev => prev.map(p => (p.id === updated.id ? updated : p)))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Bloque E4: "Que Asun amende". Se descarta la propuesta y se envía a Asun el
+  // texto para que redefina el bloque (Asun re-guarda sólo lo que cambia).
+  function askAsun(blockId) {
+    if (!plan) return
+    const payload = planReplanAsunHandoff(plan, blockId)
+    if (!payload) return
+    onSendToAsun?.(payload.content)
+    resolve(blockId, 'dismissed')
+    onClose?.()
   }
 
   async function handleDelete() {
@@ -221,6 +250,49 @@ export default function ProjectPlanView({ onSendToCochi, onClose, onCountChange 
                   <span style={{ fontSize: '0.66rem', color: '#7FD1A8', lineHeight: 1.5 }}>
                     ↳ Evidencia ({block.evidenceLog[block.evidenceLog.length - 1].by}): {block.evidenceLog[block.evidenceLog.length - 1].text}
                   </span>
+                )}
+
+                {/* Bloque E4: propuesta de re-plan de Cochi (pendiente de decisión) */}
+                {hasPendingReplan(block) && (
+                  <div style={{
+                    border: '1px solid #E0575F66', borderLeft: '3px solid #E0575F',
+                    borderRadius: 6, background: '#E0575F12', padding: '7px 8px',
+                    display: 'flex', flexDirection: 'column', gap: 5,
+                  }}>
+                    <span style={{ fontSize: '0.68rem', color: '#E0575F', fontWeight: 700 }}>
+                      ⚠ Re-plan propuesto por {block.replan.requestedBy}
+                    </span>
+                    <span style={{ fontSize: '0.68rem', color: '#C9A9AC', lineHeight: 1.5 }}>
+                      Problema: {block.replan.reason}
+                    </span>
+                    {block.replan.proposal && (
+                      <span style={{ fontSize: '0.68rem', color: '#9BA3A8', lineHeight: 1.5 }}>
+                        Propuesta: {block.replan.proposal}
+                      </span>
+                    )}
+                    <div style={{ display: 'flex', gap: 5, marginTop: 1 }}>
+                      <button
+                        disabled={busy}
+                        onClick={() => resolve(block.id, 'approved')}
+                        style={{
+                          flex: 1, padding: '4px 7px', borderRadius: 6,
+                          border: '1px solid #7FD1A8', background: '#7FD1A81A',
+                          color: '#7FD1A8', fontSize: '0.62rem', fontWeight: 700,
+                          cursor: busy ? 'default' : 'pointer', fontFamily: "'Space Grotesk', sans-serif",
+                        }}
+                      >✓ Aprobar desviación</button>
+                      <button
+                        disabled={busy}
+                        onClick={() => askAsun(block.id)}
+                        style={{
+                          flex: 1, padding: '4px 7px', borderRadius: 6,
+                          border: '1px solid #C8A2D8', background: '#C8A2D81A',
+                          color: '#C8A2D8', fontSize: '0.62rem', fontWeight: 700,
+                          cursor: busy ? 'default' : 'pointer', fontFamily: "'Space Grotesk', sans-serif",
+                        }}
+                      >→ Que Asun amende</button>
+                    </div>
+                  </div>
                 )}
 
                 {/* Control de estado (manual en E2; Cochi lo hará en E3) */}

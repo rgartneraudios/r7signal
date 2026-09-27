@@ -7,6 +7,8 @@ import {
   PLAN_STATUS,
   PLAN_STATUSES,
   DEFAULT_BLOCK_STATUS,
+  REPLAN_STATUS,
+  REPLAN_STATUSES,
   newPlanId,
   blockIdFromIndex,
   normalizeStatus,
@@ -15,6 +17,13 @@ import {
   makePlan,
   getBlock,
   setBlockStatus,
+  normalizeReplan,
+  normalizeReplanStatus,
+  hasPendingReplan,
+  pendingReplans,
+  requestReplan,
+  resolveReplan,
+  mergePlanDefinition,
   planProgress,
   nextBlock,
   statusLabel,
@@ -23,6 +32,7 @@ import {
   planBoardList,
   planToText,
   planBoardHandoff,
+  planReplanAsunHandoff,
   savePlan,
   loadPlan,
   listPlans,
@@ -99,10 +109,10 @@ check('undefined → pending', normalizeStatus(undefined), 'pending')
 console.log('\n— normalizeBlock: claves ES/EN + id por índice —')
 check('id por defecto según índice', normalizeBlock({ title: 't', evidence: 'e' }, 2).id, 'C')
 check('claves EN', normalizeBlock({ title: 't', description: 'd', evidence: 'e' }, 0), {
-  id: 'A', title: 't', description: 'd', evidence: 'e', status: 'pending', updatedAt: null, updatedBy: null, evidenceLog: [],
+  id: 'A', title: 't', description: 'd', evidence: 'e', status: 'pending', updatedAt: null, updatedBy: null, evidenceLog: [], replan: null,
 })
 check('claves ES', normalizeBlock({ titulo: 't', descripcion: 'd', evidencia: 'e', estado: 'hecho' }, 0), {
-  id: 'A', title: 't', description: 'd', evidence: 'e', status: 'done', updatedAt: null, updatedBy: null, evidenceLog: [],
+  id: 'A', title: 't', description: 'd', evidence: 'e', status: 'done', updatedAt: null, updatedBy: null, evidenceLog: [], replan: null,
 })
 check('recorta espacios', normalizeBlock({ id: '  X  ', title: '  t  ' }, 0).id, 'X')
 check('bloque null → objeto vacío', normalizeBlock(null, 1).id, 'B')
@@ -244,9 +254,99 @@ check('content = planToText', boardH.content, planToText(boardPlan))
 check('plan vacío → null', planBoardHandoff(makePlan({ title: 'x' })), null)
 check('plan null → null', planBoardHandoff(null), null)
 
+console.log('\n— normalizeReplan / normalizeReplanStatus: propuesta de re-plan (E4) —')
+check('status approved', normalizeReplanStatus('approved'), 'approved')
+check('status "aprobada" → approved', normalizeReplanStatus('aprobada'), 'approved')
+check('status "descartada" → dismissed', normalizeReplanStatus('descartada'), 'dismissed')
+check('status "rejected" → dismissed', normalizeReplanStatus('rejected'), 'dismissed')
+check('status desconocido → pending', normalizeReplanStatus('zzz'), 'pending')
+check('replan null → null', normalizeReplan(null), null)
+check('replan vacío → null', normalizeReplan({}), null)
+check('replan sin reason/proposal → null', normalizeReplan({ status: 'pending' }), null)
+check('replan EN', normalizeReplan({ reason: 'r', proposal: 'p' }), {
+  status: 'pending', reason: 'r', proposal: 'p', requestedAt: null, requestedBy: 'cochi', resolvedAt: null, resolvedBy: null,
+})
+check('replan claves ES', normalizeReplan({ motivo: 'r', propuesta: 'p', estado: 'aprobada' }).status, 'approved')
+check('normalizeBlock incluye replan', normalizeBlock({ title: 't', replan: { reason: 'r', proposal: 'p' } }, 0).replan.status, 'pending')
+
+console.log('\n— requestReplan: registrar propuesta sin tocar la definición (E4) —')
+const e4Plan = makePlan({ id: 'plan-e4', title: 'App', now: '2026-01-01T00:00:00.000Z', blocks: [
+  { id: 'A', title: 'login', description: 'hacer login', evidence: 'test login' },
+  { id: 'B', title: 'perfil', evidence: 'prueba manual' },
+]})
+const req = requestReplan(e4Plan, 'A', { reason: 'falta dependencia X', proposal: 'añadir paso de instalación de X', now: '2026-06-06T00:00:00.000Z', author: 'cochi' })
+check('replan pendiente', req.blocks[0].replan.status, 'pending')
+check('replan reason', req.blocks[0].replan.reason, 'falta dependencia X')
+check('replan proposal', req.blocks[0].replan.proposal, 'añadir paso de instalación de X')
+check('replan requestedAt', req.blocks[0].replan.requestedAt, '2026-06-06T00:00:00.000Z')
+check('replan requestedBy', req.blocks[0].replan.requestedBy, 'cochi')
+check('no cambia el status', req.blocks[0].status, 'pending')
+check('definición intacta', { t: req.blocks[0].title, d: req.blocks[0].description, e: req.blocks[0].evidence }, { t: 'login', d: 'hacer login', e: 'test login' })
+check('no muta el original', e4Plan.blocks[0].replan, null)
+check('plan updatedAt', req.updatedAt, '2026-06-06T00:00:00.000Z')
+check('bloque desconocido → sin replan', requestReplan(e4Plan, 'Z', { reason: 'r', proposal: 'p' }).blocks[0].replan, null)
+check('sin reason ni proposal → sin cambios', requestReplan(e4Plan, 'A', {}).blocks[0].replan, null)
+check('hasPendingReplan true', hasPendingReplan(req.blocks[0]), true)
+check('hasPendingReplan false sin replan', hasPendingReplan(e4Plan.blocks[0]), false)
+check('pendingReplans cuenta 1', pendingReplans(req).length, 1)
+
+console.log('\n— resolveReplan: el usuario arbitra (E4) —')
+const approved = resolveReplan(req, 'A', 'approved', { now: '2026-07-07T00:00:00.000Z', author: 'user' })
+check('status approved', approved.blocks[0].replan.status, 'approved')
+check('resolvedAt', approved.blocks[0].replan.resolvedAt, '2026-07-07T00:00:00.000Z')
+check('resolvedBy', approved.blocks[0].replan.resolvedBy, 'user')
+check('aprobación va al evidenceLog', approved.blocks[0].evidenceLog[0], { at: '2026-07-07T00:00:00.000Z', by: 'user', text: 'Desviación aprobada: añadir paso de instalación de X' })
+check('ya no queda pendiente', hasPendingReplan(approved.blocks[0]), false)
+check('pendingReplans 0', pendingReplans(approved).length, 0)
+check('no muta la propuesta original', req.blocks[0].replan.status, 'pending')
+const dismissed = resolveReplan(req, 'A', 'dismissed', { now: '2026-07-07T00:00:00.000Z', author: 'user' })
+check('status dismissed', dismissed.blocks[0].replan.status, 'dismissed')
+check('descartar NO toca el evidenceLog', dismissed.blocks[0].evidenceLog, [])
+check('resolución inválida → dismissed', resolveReplan(req, 'A', 'zzz').blocks[0].replan.status, 'dismissed')
+check('bloque sin replan → sin cambios', resolveReplan(e4Plan, 'A', 'approved').blocks[0].evidenceLog, [])
+
+console.log('\n— re-plan en los textos canónicos (E4) —')
+check('planToText resalta re-plan pendiente', planToText(req).includes('RE-PLAN PROPUESTO'), true)
+check('planToText cuenta re-planes', planToText(req).includes('Re-planes pendientes'), true)
+check('planToHandoffText avisa re-plan', planToHandoffText(req, 'A').includes('RE-PLAN PROPUESTO'), true)
+check('planBoardList cuenta re-planes', planBoardList([req])[0].replans, 1)
+check('planBoardList sin re-plan → 0', planBoardList([e4Plan])[0].replans, 0)
+check('planToText marca aprobada', planToText(approved).includes('Desviación APROBADA'), true)
+
+console.log('\n— planReplanAsunHandoff: enviar el re-plan a Asun (E4) —')
+const asunH = planReplanAsunHandoff(req, 'A')
+check('type replan', asunH.type, 'replan')
+check('planId', asunH.planId, 'plan-e4')
+check('blockId', asunH.blockId, 'A')
+check('content pide save_project_plan', asunH.content.includes('save_project_plan'), true)
+check('content pide amendar la definición', asunH.content.includes('Amendá la DEFINICIÓN'), true)
+check('bloque sin replan → null', planReplanAsunHandoff(e4Plan, 'A'), null)
+check('bloque desconocido → null', planReplanAsunHandoff(req, 'Z'), null)
+
+console.log('\n— mergePlanDefinition: Asun re-emite sólo lo que cambia (E4) —')
+const prevDef = makePlan({ id: 'plan-m', title: 'App', now: '2026-01-01T00:00:00.000Z', blocks: [
+  { id: 'A', title: 'viejoA', evidence: 'evA' },
+  { id: 'B', title: 'B', evidence: 'evB' },
+]})
+const prevWithState = resolveReplan(requestReplan(setBlockStatus(prevDef, 'A', 'done', { note: 'ok', now: '2026-02-02T00:00:00.000Z' }), 'B', { reason: 'r', proposal: 'p', now: '2026-02-02T00:00:00.000Z' }), 'B', 'dismissed', { now: '2026-02-03T00:00:00.000Z' })
+const nextDef = makePlan({ id: 'plan-m', title: 'App', now: '2026-03-03T00:00:00.000Z', blocks: [
+  { id: 'A', title: 'nuevoA', description: 'dA', evidence: 'evA2' },
+  { id: 'C', title: 'C', evidence: 'evC' },
+]})
+const mergedPlan = mergePlanDefinition(prevWithState, nextDef)
+check('A definición nueva', { t: mergedPlan.blocks[0].title, e: mergedPlan.blocks[0].evidence }, { t: 'nuevoA', e: 'evA2' })
+check('A estado conservado (done)', mergedPlan.blocks[0].status, 'done')
+check('A evidenceLog conservado', mergedPlan.blocks[0].evidenceLog[0].text, 'ok')
+check('B conservado entero', { id: mergedPlan.blocks[1].id, t: mergedPlan.blocks[1].title }, { id: 'B', t: 'B' })
+check('B replan conservado', mergedPlan.blocks[1].replan.status, 'dismissed')
+check('C nuevo al final', { i: mergedPlan.blocks.length, id: mergedPlan.blocks[2].id }, { i: 3, id: 'C' })
+check('orden A,B,C', mergedPlan.blocks.map(b => b.id).join(','), 'A,B,C')
+
 console.log('\n— constantes —')
 check('PLANS_DIR', PLANS_DIR, 'Plans')
 check('PLAN_STATUSES', PLAN_STATUSES, ['pending', 'in_progress', 'done'])
+check('REPLAN_STATUSES', REPLAN_STATUSES, ['pending', 'approved', 'dismissed'])
+check('REPLAN_STATUS.APPROVED', REPLAN_STATUS.APPROVED, 'approved')
 check('DEFAULT_BLOCK_STATUS', DEFAULT_BLOCK_STATUS, 'pending')
 check('PLAN_STATUS.DONE', PLAN_STATUS.DONE, 'done')
 
@@ -281,6 +381,31 @@ check('list vacío sin carpeta', (await listPlans({ fs: makeFakeFs(), baseDir: '
 check('delete ok', await deletePlan('plan-x', opts), true)
 check('delete borró el archivo', fs.files.has('Plans/plan-x.json'), false)
 check('delete inexistente → false', await deletePlan('nope', opts), false)
+
+console.log('\n— savePlan merge: preserva estado + bloques no reenviados (E4) —')
+const fs2 = makeFakeFs()
+const opts2 = { fs: fs2, baseDir: 'BASE' }
+await savePlan(makePlan({ id: 'plan-mg', title: 'App', now: '2026-01-01T00:00:00.000Z', blocks: [
+  { id: 'A', title: 'A', evidence: 'evA' },
+  { id: 'B', title: 'B', evidence: 'evB' },
+] }), opts2)
+await savePlan(setBlockStatus(await loadPlan('plan-mg', opts2), 'A', 'done', { note: 'ok' }), opts2)
+// Asun re-emite SÓLO el bloque A (cambia definición) sin mandar B, con merge.
+await savePlan(makePlan({ id: 'plan-mg', title: 'App', blocks: [
+  { id: 'A', title: 'A2', evidence: 'evA2' },
+] }), { ...opts2, merge: true })
+const mg = await loadPlan('plan-mg', opts2)
+check('merge: definición de A actualizada', mg.blocks[0].title, 'A2')
+check('merge: estado de A conservado', mg.blocks[0].status, 'done')
+check('merge: evidenceLog de A conservado', mg.blocks[0].evidenceLog[0].text, 'ok')
+check('merge: B no reenviado se conserva', mg.blocks.length, 2)
+check('merge: B intacto', mg.blocks[1].id, 'B')
+// Sin merge, Asun machacaría el tablero (comportamiento previo).
+await savePlan(makePlan({ id: 'plan-mg', title: 'App', blocks: [
+  { id: 'A', title: 'A3', evidence: 'evA3' },
+] }), opts2)
+const noMerge = await loadPlan('plan-mg', opts2)
+check('sin merge: sólo queda A (machaca)', noMerge.blocks.length, 1)
 
 console.log(`\n${pass} PASS · ${fail} FAIL`)
 if (fail > 0) process.exit(1)

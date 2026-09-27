@@ -25,6 +25,18 @@ export const PLAN_STATUS = {
 export const PLAN_STATUSES = [PLAN_STATUS.PENDING, PLAN_STATUS.IN_PROGRESS, PLAN_STATUS.DONE]
 export const DEFAULT_BLOCK_STATUS = PLAN_STATUS.PENDING
 
+// Bloque E4: propuesta de re-plan. Cochi (dueño del ESTADO) registra que un
+// bloque está mal definido SIN reescribirlo; el usuario arbitra:
+//   pending   → propuesta viva, esperando decisión humana.
+//   approved  → se aprueba la desviación (Cochi sigue; queda en evidenceLog).
+//   dismissed → se descarta; el usuario pidió a Asun que amende la definición.
+export const REPLAN_STATUS = {
+  PENDING:   'pending',
+  APPROVED:  'approved',
+  DISMISSED: 'dismissed',
+}
+export const REPLAN_STATUSES = [REPLAN_STATUS.PENDING, REPLAN_STATUS.APPROVED, REPLAN_STATUS.DISMISSED]
+
 const defaultFs = { writeTextFile, readTextFile, readDir, mkdir, remove }
 function fsFrom(opts) {
   return opts?.fs ?? defaultFs
@@ -77,6 +89,33 @@ export function statusLabel(status) {
   return STATUS_LABEL[normalizeStatus(status)]
 }
 
+// ─── Normalización de una propuesta de re-plan (lado ESTADO, Bloque E4) ───────
+export function normalizeReplanStatus(status) {
+  const s = str(status).toLowerCase().replace(/[-\s]+/g, '_')
+  if (s === 'approved' || s === 'aprobada' || s === 'aprobado' || s === 'accepted') return REPLAN_STATUS.APPROVED
+  if (s === 'dismissed' || s === 'descartada' || s === 'descartado' || s === 'rejected' || s === 'rechazada') return REPLAN_STATUS.DISMISSED
+  return REPLAN_STATUS.PENDING
+}
+
+// Normaliza el objeto `replan` de un bloque. Vacío/ausente → null (sin propuesta).
+// Tolera claves ES/EN. No muta.
+export function normalizeReplan(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw
+  const reason = str(r.reason ?? r.motivo ?? r.why)
+  const proposal = str(r.proposal ?? r.propuesta ?? r.suggestion ?? r.sugerencia)
+  if (!reason && !proposal) return null
+  return {
+    status:      normalizeReplanStatus(r.status ?? r.estado),
+    reason,
+    proposal,
+    requestedAt: r.requestedAt ?? null,
+    requestedBy: str(r.requestedBy) || 'cochi',
+    resolvedAt:  r.resolvedAt ?? null,
+    resolvedBy:  r.resolvedBy ?? null,
+  }
+}
+
 // ─── Normalización de un bloque (tolera claves en ES/EN) ──────────────────────
 export function normalizeBlock(raw, index = 0) {
   const r = raw && typeof raw === 'object' ? raw : {}
@@ -89,6 +128,7 @@ export function normalizeBlock(raw, index = 0) {
     updatedAt:   r.updatedAt ?? null,
     updatedBy:   r.updatedBy ?? null,
     evidenceLog: Array.isArray(r.evidenceLog) ? r.evidenceLog : [],
+    replan:      normalizeReplan(r.replan),
   }
 }
 
@@ -157,6 +197,63 @@ export function setBlockStatus(plan, blockId, status, { now, author = 'cochi', n
   return { ...base, blocks, updatedAt: when }
 }
 
+// ─── Propuesta de re-plan (Bloque E4) ────────────────────────────────────────
+export function hasPendingReplan(block) {
+  return block?.replan?.status === REPLAN_STATUS.PENDING
+}
+
+// Bloques con una propuesta de re-plan VIVA (pendiente de decisión humana).
+export function pendingReplans(plan) {
+  return (plan?.blocks || []).filter(hasPendingReplan)
+}
+
+// Cochi registra que un bloque está mal definido, SIN reescribir la definición
+// (P3: Asun es dueña de definición; Cochi del estado). Puro: devuelve un plan
+// NUEVO. No cambia el `status` del bloque. blockId desconocido → sin cambios.
+export function requestReplan(plan, blockId, { reason, proposal, now, author = 'cochi' } = {}) {
+  const when = now || new Date().toISOString()
+  const base = normalizePlan(plan, { id: plan?.id, now: plan?.updatedAt })
+  if (!getBlock(base, blockId)) return base
+  const replan = normalizeReplan({
+    status: REPLAN_STATUS.PENDING,
+    reason,
+    proposal,
+    requestedAt: when,
+    requestedBy: author,
+  })
+  if (!replan) return base
+  const blocks = base.blocks.map(b => b.id === blockId
+    ? { ...b, replan, updatedAt: when, updatedBy: author }
+    : b)
+  return { ...base, blocks, updatedAt: when }
+}
+
+// El usuario arbitra la propuesta (Bloque E4). `resolution` = approved | dismissed.
+// Si se APRUEBA, la desviación queda registrada TAMBIÉN en el evidenceLog (nota
+// por defecto); si se DESCARTA, no se toca la evidencia. Puro; no muta.
+export function resolveReplan(plan, blockId, resolution, { now, author = 'user', note } = {}) {
+  const when = now || new Date().toISOString()
+  const base = normalizePlan(plan, { id: plan?.id, now: plan?.updatedAt })
+  const block = getBlock(base, blockId)
+  if (!block || !block.replan) return base
+  const status = normalizeReplanStatus(resolution)
+  const finalStatus = status === REPLAN_STATUS.PENDING ? REPLAN_STATUS.DISMISSED : status
+  const approved = finalStatus === REPLAN_STATUS.APPROVED
+  const noteText = str(note) || (approved && block.replan.proposal ? `Desviación aprobada: ${block.replan.proposal}` : '')
+  const blocks = base.blocks.map(b => b.id === blockId
+    ? {
+        ...b,
+        updatedAt: when,
+        updatedBy: author,
+        replan: { ...b.replan, status: finalStatus, resolvedAt: when, resolvedBy: author },
+        evidenceLog: (approved && noteText)
+          ? [...b.evidenceLog, { at: when, by: author, text: noteText }]
+          : b.evidenceLog,
+      }
+    : b)
+  return { ...base, blocks, updatedAt: when }
+}
+
 // Resumen de avance del tablero.
 export function planProgress(plan) {
   const blocks = plan?.blocks || []
@@ -192,6 +289,10 @@ export function planToHandoffText(plan, blockId) {
   ]
   if (block.description) lines.push(`Qué hacer: ${block.description}`)
   lines.push(`Criterio de hecho: ${block.evidence || '(sin definir)'}`)
+  if (hasPendingReplan(block)) {
+    lines.push(`⚠ RE-PLAN PROPUESTO (pendiente de decisión humana; NO te desvíes en silencio): ${block.replan.reason}`)
+    if (block.replan.proposal) lines.push(`   Propuesta: ${block.replan.proposal}`)
+  }
   lines.push(`Plan completo: ${plan.blocks.map((b, i) => `${b.id}${i === idx ? '←' : ''} ${b.title}`).join(' · ')}`)
   return lines.join('\n')
 }
@@ -224,6 +325,7 @@ export function planBoardList(plans) {
       done: prog.done,
       total: prog.total,
       percent: prog.percent,
+      replans: pendingReplans(p).length,
       updatedAt: p.updatedAt,
     }
   })
@@ -234,16 +336,24 @@ export function planBoardList(plans) {
 export function planToText(plan) {
   if (!plan || !Array.isArray(plan.blocks) || plan.blocks.length === 0) return ''
   const prog = planProgress(plan)
+  const pendingRep = pendingReplans(plan).length
   const lines = [
     `[PLAN R7 · ${plan.id}] ${plan.title}`,
     `Avance: ${prog.done}/${prog.total} bloques (${prog.percent}%)`,
   ]
+  if (pendingRep) lines.push(`⚠ Re-planes pendientes de decisión del usuario: ${pendingRep}`)
   if (plan.description) lines.push(`Alcance: ${plan.description}`)
   lines.push('')
   for (const b of plan.blocks) {
     lines.push(`Bloque ${b.id} · ${statusLabel(b.status)} — ${b.title}`)
     if (b.description) lines.push(`  Qué hacer: ${b.description}`)
     lines.push(`  Criterio de hecho: ${b.evidence || '(sin definir)'}`)
+    if (hasPendingReplan(b)) {
+      lines.push(`  ⚠ RE-PLAN PROPUESTO (${b.replan.requestedBy}): ${b.replan.reason}`)
+      if (b.replan.proposal) lines.push(`     Propuesta: ${b.replan.proposal}`)
+    } else if (b.replan?.status === REPLAN_STATUS.APPROVED) {
+      lines.push(`  ↘ Desviación APROBADA por el usuario: ${b.replan.proposal || b.replan.reason}`)
+    }
     const last = b.evidenceLog?.[b.evidenceLog.length - 1]
     if (last?.text) lines.push(`  Evidencia (${last.by}): ${last.text}`)
   }
@@ -264,6 +374,31 @@ export function planBoardHandoff(plan) {
   }
 }
 
+// Handoff al AGENTE PLANIFICADOR (Asun) cuando el usuario decide que amende la
+// definición (Bloque E4). No es una llamada entre agentes: es el texto que el
+// usuario envía a Asun (que re-guarda con save_project_plan). Devuelve null si
+// el bloque no tiene propuesta.
+export function planReplanAsunHandoff(plan, blockId) {
+  const block = getBlock(plan, blockId)
+  if (!block || !block.replan) return null
+  const lines = [
+    `[RE-PLAN · ${plan.id}] Bloque ${block.id} de "${plan.title}"`,
+    `Definición actual: ${block.title}${block.description ? ` — ${block.description}` : ''}`,
+    `Criterio de hecho actual: ${block.evidence || '(sin definir)'}`,
+    `Cochi reportó un problema: ${block.replan.reason}`,
+    `Propuesta de Cochi: ${block.replan.proposal || '(sin propuesta)'}`,
+    '',
+    `Amendá la DEFINICIÓN del bloque ${block.id} (title/description/evidence) con save_project_plan, pasando planId "${plan.id}" y SÓLO los bloques que cambian — el tablero conserva el estado del resto. No cambies el estado (eso es de Cochi).`,
+  ]
+  return {
+    type:    'replan',
+    planId:  plan.id,
+    blockId: block.id,
+    brief:   `Amendá la definición del bloque ${block.id} de "${plan.title}" según el re-plan propuesto por Cochi.`,
+    content: lines.join('\n'),
+  }
+}
+
 // ─── Disco (inyectable) ──────────────────────────────────────────────────────
 async function writePlanFile(plan, opts = {}) {
   const fs = fsFrom(opts)
@@ -273,21 +408,61 @@ async function writePlanFile(plan, opts = {}) {
   return plan
 }
 
+// Bloque E4: merge por id DEFINICIÓN↔ESTADO. Pensado para que Asun pueda
+// re-emitir SÓLO los bloques que cambian sin perder el avance del tablero:
+//   · bloques del disco que Asun reenvía → definición NUEVA + estado VIEJO
+//     (status/evidenceLog/replan/updatedBy).
+//   · bloques del disco que Asun NO reenvía → se conservan tal cual.
+//   · bloques nuevos (sin match) → tal cual vienen.
+// Se respeta el orden del disco; los nuevos van al final. Puro.
+export function mergePlanDefinition(prev, next) {
+  const before = normalizePlan(prev, { id: prev?.id })
+  const incoming = normalizePlan(next, { id: next?.id })
+  const incomingById = new Map(incoming.blocks.map(b => [b.id, b]))
+  const usedIds = new Set()
+  const merged = []
+  for (const pb of before.blocks) {
+    const nb = incomingById.get(pb.id)
+    if (nb) {
+      usedIds.add(pb.id)
+      merged.push({
+        ...nb,
+        status:      pb.status,
+        updatedAt:   pb.updatedAt,
+        updatedBy:   pb.updatedBy,
+        evidenceLog: pb.evidenceLog,
+        replan:      pb.replan,
+      })
+    } else {
+      merged.push(pb)
+    }
+  }
+  for (const nb of incoming.blocks) {
+    if (!usedIds.has(nb.id)) merged.push(nb)
+  }
+  return { ...incoming, blocks: merged }
+}
+
 // Crea o actualiza un plan. Preserva `createdAt` (y el `author`) ya persistidos
 // para que una actualización de estado hecha por Cochi no reescriba la definición.
+// `merge: true` (Bloque E4, uso de Asun): funde por id con el plan del disco
+// conservando el ESTADO de los bloques existentes (ver mergePlanDefinition).
 export async function savePlan(plan, opts = {}) {
   const fs = fsFrom(opts)
   const baseDir = baseDirFrom(opts)
+  const merge = opts?.merge === true
   const normalized = normalizePlan(plan, { id: plan?.id })
   let prev = null
   try {
     const raw = await fs.readTextFile(`${PLANS_DIR}/${normalized.id}.json`, { baseDir })
     prev = JSON.parse(raw)
   } catch {}
-  const merged = {
-    ...normalized,
-    createdAt: prev?.createdAt || normalized.createdAt,
-    author: prev?.author || normalized.author,
+  let merged = normalized
+  if (merge && prev) merged = mergePlanDefinition(prev, normalized)
+  merged = {
+    ...merged,
+    createdAt: prev?.createdAt || merged.createdAt,
+    author: prev?.author || merged.author,
   }
   return writePlanFile(merged, opts)
 }
