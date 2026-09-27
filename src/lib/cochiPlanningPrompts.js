@@ -22,6 +22,25 @@ export function needsPlanning(message) {
   ]
   if (conversational.some(r => r.test(msg))) return false
 
+  // Tablero de proyecto (Proyecto IrmaMax): las tools del tablero
+  // (list_project_plans/read_project_plan/update_plan_block/request_replan)
+  // viven en scope 'read' y funcionan bien en single-pass (E3/E4 verificados).
+  // Un mensaje sobre el tablero NO debe caer en el planner multi-paso: ahí el
+  // planId elegido por ask_user no se propaga y el loop técnico agota las
+  // iteraciones. El token "bloque" sólo cuenta como board si hay contexto de
+  // plan/proyecto, para no secuestrar pedidos genéricos ("creá un bloque de…").
+  const boardTokens = [
+    'tablero', 're-plan', 'replan', 'request_replan', 'update_plan_block',
+    'read_project_plan', 'list_project_plans', 'save_project_plan',
+    'project_plan', 'plan de proyecto', 'planificacion',
+  ]
+  const boardBlockTokens = ['bloque', 'block']
+  const boardContextTokens = ['plan', 'tablero', 'proyecto', 'planificacion']
+  const hasBoardToken = boardTokens.some(k => msg.includes(k))
+  const hasBoardBlock = boardBlockTokens.some(k => msg.includes(k)) &&
+    boardContextTokens.some(k => msg.includes(k))
+  if (hasBoardToken || hasBoardBlock) return false
+
   // Write/execute verbs — these are what actually justify step tracking
   const writeVerbs = [
     'crea', 'crear', 'cre ', 'escribe', 'escrib', 'modifica', 'modif', 'edita',
@@ -56,6 +75,37 @@ export function needsPlanning(message) {
   // de planner: antes el fallback por longitud (`msg.length >= 60 → true`)
   // disparaba el planner en consultas simples y sumaba tokens + fricción.
   return hasWriteVerb
+}
+
+// Prefijo con el que ask_user devuelve la respuesta del usuario como tool result.
+// Centralizado para que el colapso de steps (abajo) reconozca esas respuestas.
+export const USER_ANSWER_PREFIX = 'USER ANSWER:'
+
+// HARDENING vs TABLERO: al cerrar un step, el diálogo técnico crudo se colapsa
+// a un único resumen para no arrastrar tokens. Pero las respuestas de ask_user
+// son información que aportó el usuario (p.ej. el planId elegido en el tablero)
+// y DEBEN sobrevivir al colapso: si se descartan, el step siguiente no sabe qué
+// eligió y no converge ("Agotadas iteraciones disponibles"). Puro y testeable.
+export function collapseStepMessages(stepMessages, stepIndex, stepResultSummary) {
+  const userAnswers = (Array.isArray(stepMessages) ? stepMessages : [])
+    .filter(m => m?.role === 'tool'
+      && typeof m.content === 'string'
+      && m.content.startsWith(USER_ANSWER_PREFIX))
+    .map(m => m.content.slice(USER_ANSWER_PREFIX.length).trim())
+    .filter(Boolean)
+
+  const kept = [
+    { role: 'assistant', content: `[STEP ${stepIndex + 1} RESULT: ${stepResultSummary}]` },
+  ]
+  if (userAnswers.length > 0) {
+    kept.push({
+      role: 'system',
+      content: 'USER_CLARIFICATIONS: respuestas que dio el usuario en pasos previos '
+        + '(usá estos datos — p.ej. un planId — en vez de volver a preguntar):\n'
+        + userAnswers.map(a => `- ${a}`).join('\n'),
+    })
+  }
+  return kept
 }
 
 // Parsea la respuesta cruda del planner (JSON, con o sin fences) al shape que

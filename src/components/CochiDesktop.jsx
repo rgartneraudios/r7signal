@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, memo, forwardRef, useImperativeHandle, lazy, Suspense } from 'react'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
 import DiffViewer from './DiffViewer'
-import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, needsPlanning, parsePlanResponse } from '../lib/cochiPlanningPrompts'
+import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, needsPlanning, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages } from '../lib/cochiPlanningPrompts'
 import PlanViewer from './PlanViewer'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
@@ -691,7 +691,7 @@ function CochiDesktop({
     const text = String(answer ?? '').trim()
     if (!text) return
     pushMessage({ role: 'user', content: text })
-    askResolverRef.current?.(`USER ANSWER: ${text}`)
+    askResolverRef.current?.(`${USER_ANSWER_PREFIX} ${text}`)
   }
 
   function toggleAskCheck(option) {
@@ -1499,10 +1499,13 @@ function CochiDesktop({
         }
 
         if (trackSteps && stepCompleted) {
-          // Colapsa el diálogo técnico crudo de este step a un solo mensaje resumen.
-          apiMessages = apiMessages.slice(0, stepStartIndex).concat([
-            { role: 'assistant', content: `[STEP ${stepIndex + 1} RESULT: ${stepResultSummary}]` }
-          ])
+          // Colapsa el diálogo técnico crudo de este step a un solo mensaje
+          // resumen, PRESERVANDO las respuestas de ask_user (HARDENING vs
+          // TABLERO): el planId elegido por el usuario debe llegar al step
+          // siguiente en vez de perderse en el colapso.
+          apiMessages = apiMessages.slice(0, stepStartIndex).concat(
+            collapseStepMessages(apiMessages.slice(stepStartIndex), stepIndex, stepResultSummary)
+          )
         }
 
         if (!stepCompleted) {
