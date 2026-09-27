@@ -52,8 +52,8 @@ export function calculateCost(modelId, inputTokens = 0, outputTokens = 0, type =
 
 // Asun LLM tier names
 export const ASUN_MODELS = [
-  { id: 'deepseek/deepseek-v4-flash-vision-exp', label: 'Intuitiva',  vision: true  },
-  { id: 'google/gemini-3.8-flash',             label: 'Reveladora', vision: true },
+  { id: 'deepseek/deepseek-v4-flash-vision-exp', label: 'MaríaBase',  vision: true  },
+  { id: 'google/gemini-3.8-flash',             label: 'IrmaMax', vision: true },
 ]
 
 // Cochi tier names

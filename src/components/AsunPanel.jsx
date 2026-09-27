@@ -540,7 +540,7 @@ function AsunPanel({
   const [promptsError,  setPromptsError]  = useState(false)
   const [attachedFile, setAttachedFile] = useState(null)
   const [selectedLLMModel, setSelectedLLMModel] = useState(ASUN_MODELS[0].id)
-  const isReveladora = selectedLLMModel === 'google/gemini-3.8-flash'
+  const isIrmaMax = selectedLLMModel === 'google/gemini-3.8-flash'
   const [projectMode, setProjectMode] = useState(false) // Modo Proyecto — Arquitecto Senior, toggle ortogonal
   const messagesEndRef = useRef(null)
   const chatContainerRef = useRef(null)
@@ -1147,6 +1147,13 @@ function AsunPanel({
     }
   }
 
+  // ─── Cambio de modelo LLM ──────────────────────────────────────────────────
+  // El modo Proyecto es exclusivo de IrmaMax: al pasar a MaríaBase se desactiva.
+  function selectLLMModel(id) {
+    setSelectedLLMModel(id)
+    if (id !== 'google/gemini-3.8-flash') setProjectMode(false)
+  }
+
   // ─── Cambio de categoría ───────────────────────────────────────────────────
   function changeCategory(cat) {
     if (cat !== 'llm' && projectMode) setProjectMode(false) // Imagen/Música desactivan Proyecto automáticamente
@@ -1259,7 +1266,7 @@ function AsunPanel({
               {cat === 'llm' ? 'LLM' : cat === 'imagen' ? 'IMAGEN' : 'MÚSICA'}
             </button>
           ))}
-          {category === 'llm' && (
+          {category === 'llm' && isIrmaMax && (
             <button
               className={`asun-header-btn${projectMode ? ' active' : ''}`}
               onClick={() => setProjectMode(v => !v)}
@@ -1275,8 +1282,8 @@ function AsunPanel({
                 ? ASUN_MODELS.map(m => (
                     <button key={m.id}
                       className={`asun-header-btn${selectedLLMModel === m.id ? ' active' : ''}`}
-                      onClick={() => setSelectedLLMModel(m.id)}
-                      style={selectedLLMModel === m.id ? { color: m.id === 'google/gemini-3.8-flash' ? '#B3B7FF' : '#DF9CFF' } : undefined}
+                      onClick={() => selectLLMModel(m.id)}
+                      style={selectedLLMModel === m.id ? { color: m.id === 'google/gemini-3.8-flash' ? '#FA7A9A' : '#DF9CFF' } : undefined}
                     >
                       {m.label}
                     </button>
@@ -1306,8 +1313,8 @@ function AsunPanel({
         {/* ── LLM / MÚSICA: chat ── */}
         {category !== 'imagen' && (
           <div ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{
-            '--asun-label': isReveladora ? '#B3B7FF' : '#DF9CFF',
-            '--asun-body': isReveladora ? '#B3B7FF' : '#DF9CFF',
+            '--asun-label': isIrmaMax ? '#FA7A9A' : '#DF9CFF',
+            '--asun-body': isIrmaMax ? '#FA7A9A' : '#DF9CFF',
             display: 'flex', flexDirection: 'column',
             gap: 14, padding: '16px 16px 24px',
             flex: 1, position: 'relative',
@@ -1320,22 +1327,22 @@ function AsunPanel({
                 userSelect: 'none', pointerEvents: 'none',
               }}>
                 <div className="watermark-brand" style={{
-                color: isReveladora ? '#B3B7FF' : '#DF9CFF',
+                color: isIrmaMax ? '#FA7A9A' : '#DF9CFF',
                 fontSize: '1.5rem',
               }}>R7SIGNAL</div>
                 <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
                 <div className="watermark-name" style={{
-                  color: isReveladora ? '#B3B7FF' : '#DF9CFF',
+                  color: isIrmaMax ? '#FA7A9A' : '#DF9CFF',
                   fontSize: '1.9rem',
                 }}>ASUN PANEL</div>
                 <div className="watermark-sub" style={{
-                  color: isReveladora ? '#B3B7FF' : '#DF9CFF',
+                  color: isIrmaMax ? '#FA7A9A' : '#DF9CFF',
                   fontSize: '0.8rem',
                 }}>
 {category === 'llm'
                       ? <>Asun es un agente diseñado para conversar, generar imágenes y música.<br />
 Tiene dos selectores con dos modelos distintos:<br />
-Intuitiva y Reveladora, según el tipo de conversación que necesites.<br />
+MaríaBase e IrmaMax, según el tipo de conversación que necesites.<br />
 Las imágenes y la música se generan <br />
 con modelos aptos y testeados para cada tipo de contenido.<br />
 Asun puede leer y escribir dentro de su propia área de trabajo,<br />
@@ -1436,7 +1443,7 @@ RGartner by R7Signal</>
         <span style={{
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.06em',
-          color: isReveladora ? '#B3B7FF' : '#DF9CFF',
+          color: isIrmaMax ? '#FA7A9A' : '#DF9CFF',
         }}>
           {category === 'musica'
             ? '~deepseek/deepseek-v4-flash-latest · lyria-3'
