@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient'
 import { ASUN_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
 import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
 import { readFile } from '@tauri-apps/plugin-fs'
-import { getAsunTools, executeTool, pathExists } from '../lib/asunTools.js'
+import { getAsunTools, getProjectTools, executeTool, pathExists } from '../lib/asunTools.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
@@ -872,7 +872,9 @@ function AsunPanel({
       )
 
       const model   = selectedLLMModel
-      const tools   = projectMode ? [] : getAsunTools(workspace) // Proyecto es puro texto — sin tool calls
+      // Bloque E1: el modo Proyecto ya no es "puro texto" — Asun cuenta con la
+      // tool save_project_plan para volcar el plan segmentado en su tablero.
+      const tools   = projectMode ? getProjectTools() : getAsunTools(workspace)
 
       // Construir contenido inicial del usuario
       const userContent = []
@@ -984,7 +986,7 @@ function AsunPanel({
 
           let toolResult = ''
           try {
-            if (['save_to_r9', 'write_text_file', 'create_dir', 'move_file', 'delete_file'].includes(toolName)) {
+            if (['save_to_r9', 'write_text_file', 'create_dir', 'move_file', 'delete_file', 'save_project_plan'].includes(toolName)) {
               lastTurnMutatedRef.current = true // Bloque K3: regenerate avisa
             }
             toolResult = await executeTool(toolName, toolArgs, workspace)

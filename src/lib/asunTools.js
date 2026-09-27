@@ -9,6 +9,7 @@ import {
   stat,
 } from '@tauri-apps/plugin-fs'
 import { writeR9File } from './r9Store.js'
+import { makePlan, savePlan, planProgress } from './planStore.js'
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
 
@@ -254,6 +255,54 @@ export function getAsunTools(workspace) {
   return tools
 }
 
+// ─── Tools del MODO PROYECTO (Bloque E1) ──────────────────────────────────────
+// El modo Proyecto es puro texto + este único artefacto: Asun vuelca el plan
+// segmentado en el tablero persistente. No toca el workspace del usuario (vive
+// en AppLocalData/Plans), así que no pasa por el gate de permisos de escritura.
+export function getProjectTools() {
+  return [
+    {
+      type: 'function',
+      function: {
+        name: 'save_project_plan',
+        description: 'Guarda/actualiza el PLAN del proyecto en el tablero persistente (fuera del workspace). Llamala SÓLO después de entrevistar al usuario y tener el alcance claro. Segmentá el proyecto en bloques cortos y verificables (A/B/C/...). Cada bloque DEBE incluir su criterio de "hecho" (evidence): cómo se comprueba (harness/test/commit/prueba manual). Llamala una sola vez con el plan completo; pasá planId para actualizar un plan existente.',
+        parameters: {
+          type: 'object',
+          properties: {
+            planId: {
+              type: 'string',
+              description: 'id del plan a actualizar. Omitilo para crear uno nuevo.',
+            },
+            title: {
+              type: 'string',
+              description: 'Título corto del proyecto.',
+            },
+            description: {
+              type: 'string',
+              description: 'Resumen del alcance acordado en la entrevista.',
+            },
+            blocks: {
+              type: 'array',
+              description: 'Bloques del plan, en orden de ejecución.',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', description: 'Etiqueta corta (A, B, C...). Si se omite, se asigna por orden.' },
+                  title: { type: 'string', description: 'Tarea concreta del bloque.' },
+                  description: { type: 'string', description: 'Qué hay que hacer, breve y accionable.' },
+                  evidence: { type: 'string', description: 'CÓMO se verifica que el bloque está hecho (harness/test/commit/prueba). Obligatorio.' },
+                },
+                required: ['title', 'evidence'],
+              },
+            },
+          },
+          required: ['title', 'blocks'],
+        },
+      },
+    },
+  ]
+}
+
 // ─── Ejecutores de tools ──────────────────────────────────────────────────────
 
 export async function executeTool(toolName, toolArgs, workspace) {
@@ -357,6 +406,24 @@ export async function executeTool(toolName, toolArgs, workspace) {
     case 'save_to_r9': {
       const entry = await writeR9File('r9', toolArgs.content, { source: 'asun', label: toolArgs.label })
       return `Guardado en R9: ${entry.fileName}`
+    }
+
+    case 'save_project_plan': {
+      const plan = makePlan({
+        id: toolArgs.planId ?? toolArgs.id,
+        title: toolArgs.title ?? toolArgs.titulo,
+        description: toolArgs.description ?? toolArgs.descripcion,
+        blocks: toolArgs.blocks ?? toolArgs.bloques,
+      })
+      const saved = await savePlan(plan)
+      const prog = planProgress(saved)
+      return JSON.stringify({
+        saved: true,
+        id: saved.id,
+        title: saved.title,
+        blocks: saved.blocks.length,
+        progress: prog,
+      })
     }
 
     case 'write_text_file': {
