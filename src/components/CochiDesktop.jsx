@@ -1088,6 +1088,9 @@ function CochiDesktop({
           if (import.meta.env.DEV) {
             reqAudit.msgChars = JSON.stringify(apiMessages).length
             reqAudit.toolChars = toolsForRequest ? JSON.stringify(toolsForRequest).length : 0
+            reqAudit.msgDetail = apiMessages
+              .map((m, i) => `${i}:${m.role}:${typeof m.content === 'string' ? m.content.length : '?'}`)
+              .join(' ')
           }
 
           const extractDisplay = makeStreamingDisplayExtractor()
@@ -1121,7 +1124,13 @@ function CochiDesktop({
           if (streamed.reasoning) stepReasoning = streamed.reasoning
           reqAudit.calls = streamed.toolCalls?.length || 0
           reqAudit.finish = streamed.finishReason
-          auditLog(`request #${requestCount}`, reqAudit)
+          auditLog(
+            `request #${requestCount} · msgs ${reqAudit.msgs} · chars ${reqAudit.msgChars}` +
+            ` · toolsChars ${reqAudit.toolChars} · calls ${reqAudit.calls}` +
+            ` · prompt ${reqAudit.prompt} · completion ${reqAudit.completion}` +
+            ` · cached ${reqAudit.cached} · reasoning ${reqAudit.reasoning} · finish ${reqAudit.finish}`
+          )
+          if (import.meta.env.DEV) auditLog(`  └ msgs: ${reqAudit.msgDetail}`)
 
           if (streamed.finishReason === 'length') {
             if (trackSteps) updateStepStatus(step.id, 'failed', 'Respuesta cortada por límite de tokens (finish_reason=length)')
