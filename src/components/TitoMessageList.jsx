@@ -1,0 +1,63 @@
+import { memo, forwardRef, useImperativeHandle } from 'react'
+import { useLiveStream } from '../hooks/useLiveStream.js'
+
+// ─── Lista de mensajes memoizada (Bloque P) ──────────────────────────────────
+// Mientras llega el streaming, el placeholder cambia ~30 veces/seg. Sin esto,
+// React re-renderizaba TODA la conversación (y re-rasterizaba cada burbuja con
+// degradado) por frame. El comparador ignora los callbacks (se refrescan al
+// cerrar el turno) y sólo compara los mensajes cerrados por referencia.
+export const TitoMessageList = memo(function TitoMessageList({ messages, lastAssistantId, streaming, onUndo, onRegenerate, onHandoff }) {
+  return messages.map((msg) => (
+    <div key={msg.id} className={`tito-msg tito-msg--${msg.role}`}>
+      <div className="tito-msg-content">{msg.content}</div>
+      {msg.hasHandoff && (
+        <button
+          className="tito-handoff-btn"
+          onClick={() => {
+            const m = msg.content.match(/\[→ COCHI:\s*(.+?)\]/s);
+            if (m) onHandoff?.(m[1].trim());
+          }}
+        >→ Enviar a Cochi</button>
+      )}
+      {msg.role === 'assistant' && msg.id === lastAssistantId && !streaming && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button
+            onClick={onUndo}
+            title="Deshacer el último turno"
+            style={{ background: 'transparent', border: '1px solid #D1C49033', borderRadius: 4, padding: '2px 8px', color: '#D1C49066', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#D1C490'; e.currentTarget.style.color = '#D1C490' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1C49033'; e.currentTarget.style.color = '#D1C49066' }}
+          >↶ Undo</button>
+          <button
+            onClick={onRegenerate}
+            title="Volver a generar la última respuesta"
+            style={{ background: 'transparent', border: '1px solid #D1C49033', borderRadius: 4, padding: '2px 8px', color: '#D1C49066', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#D1C490'; e.currentTarget.style.color = '#D1C490' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1C49033'; e.currentTarget.style.color = '#D1C49066' }}
+          >↻ Regenerate</button>
+        </div>
+      )}
+    </div>
+  ))
+}, (prev, next) => {
+  if (prev.lastAssistantId !== next.lastAssistantId) return false
+  if (prev.streaming !== next.streaming) return false
+  if (prev.messages.length !== next.messages.length) return false
+  for (let i = 0; i < prev.messages.length; i++) if (prev.messages[i] !== next.messages[i]) return false
+  return true
+})
+
+// ─── Burbuja en vivo (Bloque Q) ──────────────────────────────────────────────
+// El texto en vivo vive DENTRO de este componente y su throttle; el loop de
+// streaming empuja por ref. Así el panel (y su lista memoizada) no se re-ejecuta
+// por frame: sólo se repinta esta burbuja.
+export const TitoStreamingBubble = memo(forwardRef(function TitoStreamingBubble({ containerRef }, ref) {
+  const { text, push, flush, clear } = useLiveStream(containerRef)
+  useImperativeHandle(ref, () => ({ push, flush, clear }), [push, flush, clear])
+  if (!text) return null
+  return (
+    <div className="tito-msg tito-msg--assistant">
+      <div className="tito-msg-content">{text}</div>
+    </div>
+  )
+}))

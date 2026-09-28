@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, memo } from 'react'
 import { supabase } from '../supabaseClient'
-import { ASUN_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
+import { ASUN_MODELS, calculateCost } from '../lib/modelPrices.js'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { readFile } from '@tauri-apps/plugin-fs'
 import { getAsunTools, getProjectTools, executeTool, pathExists } from '../lib/asunTools.js'
 import { parseR1R2R3, extractR3Visible, extractR3Streaming } from '../lib/parseR1R2R3.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
-import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
+import { useFrameThrottle } from '../lib/streamThrottle.js'
 import { closeWheelTurn, buildWheelMessages } from '../lib/r7Wheel.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
@@ -16,6 +16,12 @@ import { useAgentPrompts } from '../hooks/useAgentPrompts.js'
 import { useR9Selection } from '../hooks/useR9Selection.js'
 import { useStableCallback } from '../hooks/useStableCallback.js'
 import { TokenWarningBanner } from './TokenWarningBanner.jsx'
+import AsunImagenFlow from './AsunImagenFlow.jsx'
+import { AsunMessageList, AsunStreamingBubble } from './AsunMessageList.jsx'
+import AsunHeader from './AsunHeader.jsx'
+import AsunWatermark from './AsunWatermark.jsx'
+import AsunStatusBar from './AsunStatusBar.jsx'
+import AsunMusicFooter from './AsunMusicFooter.jsx'
 import { open } from '@tauri-apps/plugin-dialog'
 
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
@@ -56,462 +62,6 @@ async function streamOR(model, messages, onChunk, onUsage, sessionId, signal) {
     },
   })
   return result.content
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// WIZARD IMAGEN
-// ═══════════════════════════════════════════════════════════════════════════════
-const ASUN_SPEECH = {
-  path_select:       '¿Empezamos desde cero o tienes una imagen de referencia?',
-  lore_select:       'Elige el estilo visual para tu imagen.',
-  image_upload:      'Sube tu imagen de referencia (máx. 4MB) y dime qué quieres ver.',
-  briefing_vista:    (n) => `Estilo ${n}. ¿Cómo encuadramos la escena?`,
-  momento_dia:       '¿En qué momento del día transcurre la escena?',
-  clima:             '¿Qué clima o estación ambienta?',
-  epoca:             '¿Época o temática?',
-  paleta_select:     'Elige una paleta de colores.',
-  briefing_formato:  '¿En qué formato?',
-  ubicacion:         '¿Interior o exterior?',
-  briefing_objetos:  '¿Qué objetos, personajes o escenas quieres ver?',
-  confirm:           'Todo listo. ¿Generamos?',
-  processing_imagen: 'Asun generando imagen...',
-  result:            '¿No te convence? Podemos volver a empezar.',
-}
-const BTN_VISTA    = [
-  { label: 'Súper cerca',    value: 'extreme_close_up' },
-  { label: 'Retrato',        value: 'medium_close_up' },
-  { label: 'Primera persona',value: 'first_person_pov' },
-  { label: 'Cuerpo entero',  value: 'full_body' },
-  { label: 'Paisaje amplio', value: 'wide_panoramic' },
-]
-const BTN_FORMATO  = [
-  { label: 'Horizontal 16:9', value: 'horizontal' },
-  { label: 'Vertical 9:16',   value: 'vertical' },
-  { label: 'Cuadrado 1:1',    value: 'cuadrado' },
-]
-const BTN_UBICACION = [
-  { label: 'Interior', value: 'interior_setting' },
-  { label: 'Exterior', value: 'exterior_setting' },
-]
-const BTN_MOMENTO  = [
-  { label: 'Pleno día', value: 'clear_bright_daylight' },
-  { label: 'Amanecer',  value: 'misty_soft_morning' },
-  { label: 'Atardecer', value: 'warm_golden_hour_sunset' },
-  { label: 'Noche',     value: 'dark_midnight' },
-]
-const BTN_CLIMA    = [
-  { label: 'Despejado', value: 'clear_weather' },
-  { label: 'Lluvioso',  value: 'rain_falling_wet' },
-  { label: 'Nevado',    value: 'freezing_snowy' },
-  { label: 'Neblina',   value: 'dense_mysterious_fog' },
-  { label: 'Otoñal',    value: 'autumn_leaves' },
-  { label: 'Primaveral',value: 'blooming_spring' },
-]
-const BTN_EPOCA    = [
-  { label: 'Moderno',   value: 'contemporary_modern' },
-  { label: 'Futurista', value: 'futuristic_sci_fi' },
-  { label: 'Medieval',  value: 'ancient_medieval' },
-  { label: 'Fantasía',  value: 'whimsical_fantasy' },
-]
-const BTN_PALETA   = [
-  { label: 'Cálidos',   value: 'warm_amber_orange' },
-  { label: 'Fríos',     value: 'cool_blue_teal' },
-  { label: 'Pastel',    value: 'soft_pastel' },
-  { label: 'B/N',       value: 'monochrome_bw' },
-  { label: 'Vibrante',  value: 'vibrant_highly_saturated' },
-  { label: 'Apagado',   value: 'muted_desaturated' },
-]
-
-const BLANK_BRIEF = {
-  path: null, estilo_id: null, estilo_nombre: null,
-  vista: null, orientacion: null, objetos: '',
-  ubicacion: null, momento_dia: null, clima: null, epoca: null,
-  paleta_color: null, imagen_b64: null,
-}
-
-function WizardBtn({ label, active, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className={active ? 'asun-wbtn active' : 'asun-wbtn'}
-    >
-      {label}
-    </button>
-  )
-}
-
-function AsunImagenFlow({ submenu, onUsage }) {
-  const [estilos,  setEstilos]  = useState([])
-  const [uiState,  setUiState]  = useState('path_select')
-  const [brief,    setBrief]    = useState(BLANK_BRIEF)
-  const [resultUrl,setResultUrl]= useState(null)
-  const [error,    setError]    = useState(null)
-  const [preview,  setPreview]  = useState(null)
-  const fileRef = useRef(null)
-
-  useEffect(() => {
-    supabase.from('estilos_imagen_public').select('*').order('orden')
-      .then(({ data }) => { if (data) setEstilos(data) })
-  }, [])
-
-  function reset() {
-    setBrief(BLANK_BRIEF); setPreview(null); setError(null)
-  }
-  function set(k, v) { setBrief(p => ({ ...p, [k]: v })) }
-
-  function handlePath(path) {
-    set('path', path)
-    setUiState(path === 'A' ? 'lore_select' : 'image_upload')
-  }
-  function handleEstilo(e) {
-    setBrief(p => ({ ...p, estilo_id: e.id, estilo_nombre: e.nombre }))
-    setUiState('briefing_vista')
-  }
-  function handleFile(ev) {
-    const file = ev.target.files[0]
-    if (!file) return
-    if (file.size > 4 * 1024 * 1024) { setError('Imagen supera 4MB.'); return }
-    setError(null)
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      setPreview(e.target.result)
-      set('imagen_b64', e.target.result)
-    }
-    reader.readAsDataURL(file)
-  }
-
-  async function handleGenerate() {
-    setError(null)
-    setUiState('processing_imagen')
-    try {
-      const { data: authData } = await supabase.auth.getUser()
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/generar-asset`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON}` },
-        body: JSON.stringify({
-          ...brief,
-          modelo_id: MODELS.imagen[submenu],
-          user_id: authData?.user?.id || null,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error al generar imagen')
-      setResultUrl(data.image_url || data.image_b64)
-      setUiState('result')
-      const imageCost = calculateCost(MODELS.imagen[submenu], 0, 0, 'image')
-      if (typeof onUsage === 'function') {
-        onUsage({ source: 'asun', inputTokens: 0, outputTokens: 0, cost: imageCost })
-      }
-    } catch (err) {
-      setError(err.message)
-      setUiState('confirm')
-    }
-  }
-
-  // speech helper
-  const speech = (() => {
-    switch (uiState) {
-      case 'path_select':       return ASUN_SPEECH.path_select
-      case 'lore_select':       return ASUN_SPEECH.lore_select
-      case 'image_upload':      return ASUN_SPEECH.image_upload
-      case 'briefing_vista':    return ASUN_SPEECH.briefing_vista(brief.estilo_nombre || '')
-      case 'briefing_formato':  return ASUN_SPEECH.briefing_formato
-      case 'ubicacion':         return ASUN_SPEECH.ubicacion
-      case 'briefing_objetos':  return ASUN_SPEECH.briefing_objetos
-      case 'momento_dia':       return ASUN_SPEECH.momento_dia
-      case 'clima':             return ASUN_SPEECH.clima
-      case 'epoca':             return ASUN_SPEECH.epoca
-      case 'paleta_select':     return ASUN_SPEECH.paleta_select
-      case 'confirm':           return ASUN_SPEECH.confirm
-      case 'processing_imagen': return ASUN_SPEECH.processing_imagen
-      case 'result':            return ASUN_SPEECH.result
-      default:                  return ''
-    }
-  })()
-
-  return (
-    <div style={{ padding: '16px 20px', maxWidth: 660, margin: '0 auto', width: '100%' }}>
-      {/* Burbuja Asun */}
-      <div style={{
-        background: '#15151C', border: '1px solid #201F23',
-        borderLeft: '3px solid #C8A2D8', borderRadius: 12,
-        padding: '18px 22px', marginBottom: 24,
-        color: '#E8EAEC', fontSize: '1.35rem', lineHeight: 1.7,
-        fontFamily: "'Boogaloo', cursive", fontWeight: 400,
-        letterSpacing: '0.04em', whiteSpace: 'pre-wrap',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-      }}>
-        <span style={{
-          fontSize: '0.75rem', fontWeight: 400, letterSpacing: '0.2em',
-          textTransform: 'uppercase', display: 'block', marginBottom: 6,
-          fontFamily: "'Space Grotesk', sans-serif", color: '#C8A2D8',
-        }}>Asun</span>
-        {speech}
-      </div>
-
-      {error && (
-        <div style={{
-          background: 'rgba(138,95,101,0.12)', border: '1px solid #8A5F65',
-          borderRadius: 8, padding: '12px 16px', marginBottom: 16,
-          color: '#D4A0A8', fontSize: '0.9rem', fontFamily: "'Space Grotesk', sans-serif",
-        }}>{error}</div>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-        {/* PATH SELECT */}
-        {uiState === 'path_select' && (
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-            <WizardBtn label="Desde cero"         onClick={() => handlePath('A')} />
-            <WizardBtn label="Tengo una imagen"    onClick={() => handlePath('B')} />
-          </div>
-        )}
-
-        {/* LORE SELECT */}
-        {uiState === 'lore_select' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
-            {estilos.map(est => {
-              const label = { 'Ilustración 3D': 'Ilustración 1', 'Ilustración 2D': 'Ilustración 2', 'Pintura': 'Digital' }[est.nombre] || est.nombre
-              return (
-                <button key={est.id} onClick={() => handleEstilo(est)} className="asun-wbtn" style={{ padding: 10, flexDirection: 'column', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <img src={est.preview_url} alt={est.nombre} style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 6 }} />
-                  <span style={{ fontSize: '0.78rem' }}>{label}</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
-
-        {/* IMAGE UPLOAD */}
-        {uiState === 'image_upload' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
-            <div onClick={() => fileRef.current?.click()} style={{
-              width: '100%', maxWidth: 380, minHeight: 120,
-              border: '2px dashed #201F23', borderRadius: 10,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 8, cursor: 'pointer', padding: 16,
-              background: preview ? 'transparent' : 'rgba(255,255,255,0.015)',
-            }}>
-              {preview
-                ? <img src={preview} alt="Preview" style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 6, objectFit: 'contain' }} />
-                : <><span style={{ fontSize: '1.8rem', color: '#3A3840' }}>+</span><span style={{ color: '#8A868B', fontSize: '0.8rem' }}>Haz clic para subir (máx. 4MB)</span></>
-              }
-            </div>
-            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
-            {preview && (
-              <>
-                <textarea
-                  value={brief.objetos}
-                  onChange={e => set('objetos', e.target.value)}
-                  placeholder="Describe lo que quieres ver..."
-                  rows={3}
-                  style={{
-                    width: '100%', maxWidth: 380,
-                    background: '#09080A', border: '1px solid #1C1B1F', borderRadius: 8,
-                    padding: '12px 14px', color: '#E0E2E4', fontSize: '1rem',
-                    fontFamily: "'Boogaloo', cursive", outline: 'none', resize: 'vertical', lineHeight: 1.6,
-                  }}
-                />
-                <WizardBtn label="Siguiente" onClick={() => {
-                  if (!brief.objetos.trim()) { setError('Escribe qué quieres ver.'); return }
-                  setError(null); setUiState('momento_dia')
-                }} />
-              </>
-            )}
-          </div>
-        )}
-
-        {/* VISTA */}
-        {uiState === 'briefing_vista' && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-            {BTN_VISTA.map(b => <WizardBtn key={b.value} label={b.label} active={brief.vista === b.value} onClick={() => { set('vista', b.value); setUiState('briefing_formato') }} />)}
-          </div>
-        )}
-
-        {/* FORMATO */}
-        {uiState === 'briefing_formato' && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-            {BTN_FORMATO.map(b => <WizardBtn key={b.value} label={b.label} active={brief.orientacion === b.value} onClick={() => { set('orientacion', b.value); setUiState('ubicacion') }} />)}
-          </div>
-        )}
-
-        {/* UBICACION */}
-        {uiState === 'ubicacion' && (
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-            {BTN_UBICACION.map(b => <WizardBtn key={b.value} label={b.label} active={brief.ubicacion === b.value} onClick={() => { set('ubicacion', b.value); setUiState('momento_dia') }} />)}
-          </div>
-        )}
-
-        {/* MOMENTO DIA */}
-        {uiState === 'momento_dia' && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-            {BTN_MOMENTO.map(b => <WizardBtn key={b.value} label={b.label} active={brief.momento_dia === b.value} onClick={() => { set('momento_dia', b.value); setUiState('clima') }} />)}
-          </div>
-        )}
-
-        {/* CLIMA */}
-        {uiState === 'clima' && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-            {BTN_CLIMA.map(b => <WizardBtn key={b.value} label={b.label} active={brief.clima === b.value} onClick={() => { set('clima', b.value); setUiState('epoca') }} />)}
-          </div>
-        )}
-
-        {/* EPOCA */}
-        {uiState === 'epoca' && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-            {BTN_EPOCA.map(b => <WizardBtn key={b.value} label={b.label} active={brief.epoca === b.value} onClick={() => { set('epoca', b.value); setUiState('paleta_select') }} />)}
-          </div>
-        )}
-
-        {/* PALETA */}
-        {uiState === 'paleta_select' && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-            {BTN_PALETA.map(b => <WizardBtn key={b.value} label={b.label} active={brief.paleta_color === b.value} onClick={() => { set('paleta_color', b.value); setUiState('briefing_objetos') }} />)}
-          </div>
-        )}
-
-        {/* OBJETOS */}
-        {uiState === 'briefing_objetos' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
-            <textarea
-              value={brief.objetos}
-              onChange={e => set('objetos', e.target.value)}
-              placeholder="Describe lo que quieres ver..."
-              rows={3}
-              style={{
-                width: '100%', maxWidth: 380,
-                background: '#09080A', border: '1px solid #1C1B1F', borderRadius: 8,
-                padding: '12px 14px', color: '#E0E2E4', fontSize: '1rem',
-                fontFamily: "'Boogaloo', cursive", outline: 'none', resize: 'vertical', lineHeight: 1.6,
-              }}
-            />
-            <WizardBtn label="Siguiente" onClick={() => {
-              if (!brief.objetos.trim()) { setError('Escribe qué quieres ver.'); return }
-              setError(null); setUiState('confirm')
-            }} />
-          </div>
-        )}
-
-        {/* CONFIRM */}
-        {uiState === 'confirm' && (
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-            <button onClick={handleGenerate} style={{
-              padding: '12px 28px', background: 'rgba(200,162,216,0.12)',
-              border: '1px solid #C8A2D8', borderRadius: 10,
-              color: '#E8EAEC', cursor: 'pointer', fontFamily: "'Boogaloo', cursive",
-              fontSize: '1.1rem', letterSpacing: '0.04em',
-            }}>¡Generar!</button>
-            <WizardBtn label="Cambiar algo" onClick={() => { reset(); setUiState('lore_select') }} />
-          </div>
-        )}
-
-        {/* PROCESSING */}
-        {uiState === 'processing_imagen' && (
-          <div style={{ textAlign: 'center', padding: 24 }}>
-            <div className="asun-spinner" style={{ margin: '0 auto 12px' }} />
-            <span style={{ color: '#8A868B', fontSize: '0.9rem', fontFamily: "'Space Grotesk', sans-serif" }}>
-              Generando con {submenu === 'occidente' ? 'Grok' : 'SeedDream'}...
-            </span>
-          </div>
-        )}
-
-        {/* RESULT */}
-        {uiState === 'result' && resultUrl && (
-          <div style={{ textAlign: 'center' }}>
-            <img src={resultUrl} alt="Resultado" style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid #201F23' }} />
-            <div style={{ marginTop: 14, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <WizardBtn label="Nueva imagen" onClick={() => { reset(); setUiState('path_select') }} />
-            </div>
-          </div>
-        )}
-
-      </div>
-      <div style={{ height: 40 }} />
-    </div>
-  )
-}
-
-// ─── Burbuja + lista memoizada (Bloque P) ─────────────────────────────────────
-// La lista cerrada se memoiza: mientras llega el streaming (~30fps) sólo se
-// repinta la burbuja en vivo, no todo el historial (que además re-rasterizaba
-// el degradado de cada mensaje). El comparador ignora los callbacks, que se
-// refrescan al cerrar el turno.
-function AsunBubble({ msg, isLast, showActions, canRegenerate, onUndo, onRegenerate, onHandoff }) {
-  const isUser = msg.rol === 'usuario'
-  return (
-    <div style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
-      <div className="asun-msg-bubble">
-        {msg.rol === 'asistente' && (
-          <span style={{
-            fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.15em',
-            textTransform: 'uppercase', display: 'block', marginBottom: 4,
-            color: 'var(--asun-label)',
-            fontFamily: "'Space Grotesk', sans-serif",
-          }}>Asun</span>
-        )}
-        <div style={{ color: isUser ? '#5FD3E0' : 'var(--asun-body)' }}>{msg.contenido}</div>
-        {msg.audioUrl && (
-          <audio controls src={msg.audioUrl} style={{ marginTop: 10, width: '100%' }} />
-        )}
-        {msg.handoffBrief && (
-          <button
-            className="asun-handoff-btn"
-            onClick={() => onHandoff?.({ type: 'text', content: msg.contenido, brief: msg.handoffBrief })}
-          >
-            → Enviar a Cochi
-          </button>
-        )}
-        {msg.rol === 'asistente' && isLast && showActions && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button
-              onClick={onUndo}
-              title="Deshacer el último turno"
-              style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
-            >↶ Undo</button>
-            {canRegenerate && (
-              <button
-                onClick={onRegenerate}
-                title="Volver a generar la última respuesta"
-                style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
-              >↻ Regenerate</button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-const AsunMessageList = memo(function AsunMessageList({ messages, lastAssistantId, showActions, canRegenerate, onUndo, onRegenerate, onHandoff }) {
-  return messages.map(msg => (
-    <AsunBubble
-      key={msg.id}
-      msg={msg}
-      isLast={msg.id === lastAssistantId}
-      showActions={showActions}
-      canRegenerate={canRegenerate}
-      onUndo={onUndo}
-      onRegenerate={onRegenerate}
-      onHandoff={onHandoff}
-    />
-  ))
-}, (prev, next) => {
-  if (prev.lastAssistantId !== next.lastAssistantId) return false
-  if (prev.showActions !== next.showActions) return false
-  if (prev.canRegenerate !== next.canRegenerate) return false
-  if (prev.messages.length !== next.messages.length) return false
-  for (let i = 0; i < prev.messages.length; i++) if (prev.messages[i] !== next.messages[i]) return false
-  return true
-})
-
-function AsunStreamingBubble({ msg, containerRef }) {
-  const scrollIfSticky = useStickToBottom(containerRef)
-  useEffect(() => { scrollIfSticky() }, [msg.contenido, scrollIfSticky])
-  return <AsunBubble msg={msg} isLast={false} showActions={false} canRegenerate={false} />
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1081,65 +631,24 @@ function AsunPanel({
       `}</style>
 
       {/* ── Header: categorías + submenú ── */}
-      <div style={{
-        flexShrink: 0,
-        borderBottom: '1px solid rgba(255,255,255,0.04)',
-        background: 'rgba(9,8,10,0.5)',
-        padding: '10px 16px 8px',
-      }}>
-        {/* Categorías + Submenú en la misma fila */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <div style={{ flex: 1 }} />
-          {['llm', 'imagen', 'musica'].map(cat => (
-            <button key={cat}
-              className={`asun-header-btn${category === cat ? ' active' : ''}`}
-              onClick={() => changeCategory(cat)}
-            >
-              {cat === 'llm' ? 'LLM' : cat === 'imagen' ? 'IMAGEN' : 'MÚSICA'}
-            </button>
-          ))}
-          {category === 'llm' && isIrmaMax && (
-            <button
-              className={`asun-header-btn${projectMode ? ' active' : ''}`}
-              onClick={() => setProjectMode(v => !v)}
-              title="Arquitecto Senior — entrevista y arma el plan segmentado"
-            >
-              PROYECTO
-            </button>
-          )}
-          <div style={{ flex: 1 }} />
-          {category !== 'musica' && (
-            <>
-              {category === 'llm'
-                ? ASUN_MODELS.map(m => (
-                    <button key={m.id}
-                      className={`asun-header-btn${selectedLLMModel === m.id ? ' active' : ''}`}
-                      onClick={() => selectLLMModel(m.id)}
-                      style={selectedLLMModel === m.id ? { color: m.id === 'google/gemini-3.8-flash' ? '#FA7A9A' : '#DF9CFF' } : undefined}
-                    >
-                      {m.label}
-                    </button>
-                  ))
-                : ['occidente', 'asia'].map(s => (
-                    <button key={s}
-                      className={`asun-header-btn${submenu === s ? ' active' : ''}`}
-                      onClick={() => setSubmenu(s)}
-                    >
-                      {s === 'occidente' ? 'OCCIDENTE' : 'ASIA'}
-                    </button>
-                  ))
-              }
-            </>
-          )}
-        </div>
-      </div>
+      <AsunHeader
+        category={category}
+        onCategoryChange={changeCategory}
+        isIrmaMax={isIrmaMax}
+        projectMode={projectMode}
+        onToggleProject={() => setProjectMode(v => !v)}
+        selectedLLMModel={selectedLLMModel}
+        onSelectLLMModel={selectLLMModel}
+        submenu={submenu}
+        onSubmenuChange={setSubmenu}
+      />
 
       {/* ── Contenido ── */}
       <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', position: 'relative', display: 'flex', flexDirection: 'column' }}>
 
         {/* ── IMAGEN: wizard ── */}
         {category === 'imagen' && (
-          <AsunImagenFlow submenu={submenu} onUsage={onUsage} />
+          <AsunImagenFlow submenu={submenu} onUsage={onUsage} imageModelId={MODELS.imagen[submenu]} />
         )}
 
         {/* ── LLM / MÚSICA: chat ── */}
@@ -1152,54 +661,7 @@ function AsunPanel({
             flex: 1, position: 'relative',
           }}>
             {messages.length === 0 && (
-              <div className="asun-watermark" style={{
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
-                flex: 1, padding: '40px 20px', gap: 10,
-                userSelect: 'none', pointerEvents: 'none',
-              }}>
-                <div className="watermark-brand" style={{
-                color: isIrmaMax ? '#FA7A9A' : '#DF9CFF',
-                fontSize: '1.5rem',
-              }}>R7SIGNAL</div>
-                <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
-                <div className="watermark-name" style={{
-                  color: isIrmaMax ? '#FA7A9A' : '#DF9CFF',
-                  fontSize: '1.9rem',
-                }}>ASUN PANEL</div>
-                <div className="watermark-sub" style={{
-                  color: isIrmaMax ? '#FA7A9A' : '#DF9CFF',
-                  fontSize: '0.8rem',
-                }}>
-{category === 'llm'
-                      ? <>Asun es un agente diseñado para conversar, generar imágenes y música.<br />
-Tiene dos selectores con dos modelos distintos:<br />
-MaríaBase e IrmaMax, según el tipo de conversación que necesites.<br />
-Las imágenes y la música se generan <br />
-con modelos aptos y testeados para cada tipo de contenido.<br />
-Asun puede leer y escribir dentro de su propia área de trabajo,<br />
-siempre con tu confirmación antes de borrar o sobreescribir algo.<br />
-Si necesitas administrar archivos o generar código,<br />
-ese trabajo es de Cochi — cambia de panel y decile qué necesitás.<br />
-La función Proyecto activa un modo de planificación:<br />
-Asun entrevista la tarea y arma un plan segmentado<br />
-para que lo ejecuten Cochi, Tito y el propio Asun en modo Standard.<br />
-Cuando necesites empezar de cero, usa el botón CLS al pie del Panel;<br />
-limpiará el chat por completo, sin dejar rastro.<br />
-A los 70.000 tokens aparecerá R7 para guardar tus avances.<br />
-R7 creará un resumen de la tarea junto al último mensaje.<br />
-Y si preferís conservar solo fragmentos específicos o líneas de código,<br />
-R9 te permitirá seleccionarlos con total precisión —<br />
-o simplemente pedile a Asun que guarde lo último en un txt.<br />
-Encontrarás el contenido de R7 y R9 en el compartimento<br />
-junto a la rueda dentada.<br />
-<br />
-NOTA: Asun tiene incorporado un tono de personalidad específico vía prompt<br />
-que no es posible cambiar en esta versión.<br />
-RGartner by R7Signal</>
-                      : <>Cuéntale a Asun tu estilo musical.<br />Cuando tenga el concepto, genera con Lyria.</>}
-                </div>
-              </div>
+              <AsunWatermark category={category} isIrmaMax={isIrmaMax} />
             )}
 
             <AsunMessageList
@@ -1254,105 +716,23 @@ RGartner by R7Signal</>
       />
 
       {/* ── Status bar ── */}
-      <div style={{
-        flexShrink: 0,
-        borderTop: '1px solid rgba(255,255,255,0.04)',
-        background: 'rgba(9,8,10,0.8)',
-        padding: '7px 14px',
-        display: 'flex', alignItems: 'center', gap: 10,
-      }}>
-        <span style={{
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.06em',
-          color: isIrmaMax ? '#FA7A9A' : '#DF9CFF',
-        }}>
-          {category === 'musica'
-            ? '~deepseek/deepseek-v4-flash-latest · lyria-3'
-            : category === 'llm'
-              ? (() => {
-                  const p = MODEL_PRICES[selectedLLMModel]
-                  return `${selectedLLMModel}${p ? ` · $${p.inputPerM}/M in · $${p.outputPerM}/M out` : ''}`
-                })()
-              : `${submenu === 'occidente' ? 'x-ai/grok-imagine' : 'bytedance/seedream-5'}`
-          }
-        </span>
-
-        {/* Attach button (only LLM) */}
-        {category === 'llm' && (
-          <button onClick={handleAttachFile} title="Adjuntar archivo"
-            style={{
-              background: 'transparent', border: '1px solid #2F2D35', borderRadius: 4,
-              padding: '1px 6px', cursor: 'pointer', fontSize: '0.8rem', lineHeight: 1.4,
-              color: attachedFile ? '#C8A2D8' : '#6A6870',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = '#C8A2D8'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = '#2F2D35'}
-          >
-            📎
-          </button>
-        )}
-
-        {/* Attachment preview */}
-        {attachedFile && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            background: '#1A1922', border: '1px solid #2F2D35', borderRadius: 4,
-            padding: '2px 8px', fontSize: '0.6rem', color: '#ccc',
-            fontFamily: "'JetBrains Mono', monospace",
-          }}>
-            {attachedFile.type === 'image'
-              ? <img src={`data:${attachedFile.mimeType};base64,${attachedFile.base64}`} alt="" style={{ width: 20, height: 20, borderRadius: 2, objectFit: 'cover' }} />
-              : <span style={{ color: '#C8A2D8', fontSize: '0.65rem' }}>📄</span>
-            }
-            <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{attachedFile.name}</span>
-            <span
-              onClick={() => setAttachedFile(null)}
-              style={{ cursor: 'pointer', color: '#6A6870', marginLeft: 2, fontSize: '0.7rem' }}
-              onMouseEnter={e => e.currentTarget.style.color = '#D4D8DC'}
-              onMouseLeave={e => e.currentTarget.style.color = '#6A6870'}
-            >✕</span>
-          </div>
-        )}
-
-        <div style={{ flex: 1 }} />
-
-        {/* CLS */}
-        <button
-          onClick={handleClear}
-          style={{ background: 'transparent', border: '1px solid #1F1E22', borderRadius: 4, padding: '2px 8px', color: '#8A868B', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#D4D8DC'; e.currentTarget.style.color = '#D4D8DC' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#1F1E22'; e.currentTarget.style.color = '#8A868B' }}
-        >🗑 CLS</button>
-
-        {/* X2: archivado manual siempre disponible (con nombre) */}
-        <button
-          onClick={handleArchiveWithName}
-          disabled={loading || generating}
-          title="Archivar y definir próxima sesión"
-          style={{ background: 'transparent', border: '1px solid #2E2440', borderRadius: 4, padding: '2px 8px', color: '#8A6AA0', fontSize: '0.65rem', fontWeight: 700, cursor: (loading || generating) ? 'not-allowed' : 'pointer', opacity: (loading || generating) ? 0.4 : 1, fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
-          onMouseEnter={e => { if (!(loading || generating)) { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' } }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#2E2440'; e.currentTarget.style.color = '#8A6AA0' }}
-        >📥 Archivar R7</button>
-      </div>
+      <AsunStatusBar
+        category={category}
+        submenu={submenu}
+        isIrmaMax={isIrmaMax}
+        selectedLLMModel={selectedLLMModel}
+        attachedFile={attachedFile}
+        onAttachFile={handleAttachFile}
+        onRemoveAttachedFile={() => setAttachedFile(null)}
+        loading={loading}
+        generating={generating}
+        onClear={handleClear}
+        onArchiveWithName={handleArchiveWithName}
+      />
 
       {/* ── Footer música: botón generar ── */}
-      {category === 'musica' && promptMusica && (
-        <div style={{
-          flexShrink: 0,
-          borderTop: '1px solid rgba(255,255,255,0.04)',
-          background: 'rgba(9,8,10,0.7)',
-          padding: '10px 16px',
-          display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10,
-        }}>
-          <span style={{
-            fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.75rem',
-            color: '#4A4850', letterSpacing: '0.05em',
-          }}>Concepto listo</span>
-          <button className="asun-gen-btn" disabled={generating} onClick={generateMusic}>
-            {generating ? 'Generando...' : '🎵 Generar con Lyria'}
-          </button>
-        </div>
+      {category === 'musica' && (
+        <AsunMusicFooter promptMusica={promptMusica} generating={generating} onGenerate={generateMusic} />
       )}
     </div>
   )

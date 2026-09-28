@@ -1,6 +1,5 @@
-import { useState, useRef, useEffect, memo, forwardRef, useImperativeHandle, lazy, Suspense } from 'react'
+import { useState, useRef, useEffect, memo } from 'react'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
-import DiffViewer from './DiffViewer'
 import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, needsPlanning } from '../lib/cochiPlanningPrompts'
 import PlanViewer from './PlanViewer'
 import { interpolatePrompt } from '../lib/promptLoader.js'
@@ -16,13 +15,20 @@ import { LANE, laneForMessage, markInput, LANE_SWITCH_HINT, buildTaskFinish, cle
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots, pruneOldSnapshots } from '../lib/snapshotStore.js'
 import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider, resolveStoredSubagentModel, DEFAULT_SUBAGENT_MODEL } from '../lib/subagent.js'
-import { SubagentBubble, SubagentBrief } from './SubagentView.jsx'
-import { useLiveStream } from '../hooks/useLiveStream.js'
+import { SubagentBubble } from './SubagentView.jsx'
 import { useWheelSession } from '../hooks/useWheelSession.js'
 import { useAgentPrompts } from '../hooks/useAgentPrompts.js'
 import { useR9Selection } from '../hooks/useR9Selection.js'
 import { useStableCallback } from '../hooks/useStableCallback.js'
 import { TokenWarningBanner } from './TokenWarningBanner.jsx'
+import { CochiMessageList, CochiStreamingBubble } from './CochiMessageList.jsx'
+import CochiHeader from './CochiHeader.jsx'
+import CochiWatermark from './CochiWatermark.jsx'
+import CochiActivityFeed from './CochiActivityFeed.jsx'
+import CochiTodoList from './CochiTodoList.jsx'
+import CochiPermissionPanel from './CochiPermissionPanel.jsx'
+import CochiAskUserPanel from './CochiAskUserPanel.jsx'
+import CochiStatusBar from './CochiStatusBar.jsx'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -121,10 +127,6 @@ const READ_ONLY_TOOLS = new Set([
   'list_project_plans', 'read_project_plan',
 ])
 
-// Fase 3.4 (perf UI): nº máximo de acciones del feed que se pintan en vivo. Las
-// anteriores se resumen para no engordar el DOM durante turnos con subagente.
-const ACTIVITY_FEED_LIMIT = 12
-
 // Contexto base local del sistema (compartido por arranque y wrapper). El
 // SESSION_TOKENS se retiró (auditoría de gasto): cambiaba en cada turno e
 // invalidaba la caché de prefijo entre turnos. La instrucción de batching (P0)
@@ -193,135 +195,6 @@ function extractCompleteSteps(dropped) {
   }
   return { markers, prefix: firstMarker === 1 ? dropped[0].content : null }
 }
-
-// ─── Markdown memoizado y en carga diferida (Bloques M/V) ────────────────────
-// ReactMarkdown + SyntaxHighlighter son caros. Van en su propio módulo cargado
-// con `import()` dinámico: el arranque no parsea ese chunk (~730 kB) y sólo se
-// trae al primer mensaje con markdown. La memoización por `content` evita que
-// los mensajes ya cerrados se re-rendericen durante el streaming.
-const LazyCochiMarkdown = lazy(() => import('./CochiMarkdown'))
-const CochiMarkdown = memo(function CochiMarkdown({ content }) {
-  return (
-    <Suspense fallback={<div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{content}</div>}>
-      <LazyCochiMarkdown content={content} />
-    </Suspense>
-  )
-})
-
-// Fase 3.4: inyector ESTABLE de markdown para las tarjetas de brief. Antes se
-// creaba una flecha nueva en cada render de CochiMessageList, lo que invalidaba
-// el memo de SubagentBrief y forzaba a reconstruir el árbol del brief en cada
-// commit. Al ser módulo-nivel, la identidad es constante y el memo se respeta.
-const renderCochiMarkdown = (content) => <CochiMarkdown content={content} />
-
-// ─── Bloque de razonamiento (Fase 3.2) ───────────────────────────────────────
-// Colapsable y cerrado por defecto: el reasoning es diagnóstico, no respuesta.
-// Sólo lo emiten los modelos de la whitelist (MODEL_CAPS), hoy los DeepSeek de Cochi.
-function ReasoningBlock({ text }) {
-  if (!text) return null
-  return (
-    <details style={{
-      marginBottom: 8,
-      border: '1px solid rgba(207,68,77,0.18)',
-      borderRadius: 6,
-      background: 'rgba(207,68,77,0.04)',
-    }}>
-      <summary style={{
-        cursor: 'pointer', padding: '6px 10px',
-        fontSize: '0.68rem', letterSpacing: '0.14em', fontWeight: 700,
-        textTransform: 'uppercase', color: 'var(--cochi-label)',
-        userSelect: 'none',
-      }}>
-        🧠 Razonamiento
-      </summary>
-      <div style={{
-        padding: '4px 12px 10px',
-        fontSize: '0.82rem', lineHeight: 1.55, fontStyle: 'italic',
-        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-        color: 'rgba(255,255,255,0.55)',
-      }}>
-        {text}
-      </div>
-    </details>
-  )
-}
-
-// ─── Historial memoizado (Bloque N) ──────────────────────────────────────────
-// Antes vivía inline: cada frame de `liveStream` (~30fps) re-renderizaba TODO el
-// historial. Al aislarlo, el stream sólo repinta la burbuja en vivo.
-const CochiMessageList = memo(function CochiMessageList({ messages, lastAssistantId, loading, onUndo, onRegenerate }) {
-  return messages.map((msg) => (
-    msg.role === 'diff' ? (
-      <DiffViewer key={msg.id} diff={msg.diff} />
-    ) : msg.role === 'subagent' ? (
-      <div key={msg.id} className="cd-message-enter" style={{ alignSelf: 'flex-start', maxWidth: '100%', width: '100%', padding: '2px 0' }}>
-        <SubagentBrief sub={msg.sub} renderMarkdown={renderCochiMarkdown} />
-      </div>
-    ) : msg.role === 'user' ? (
-      <div key={msg.id} className="cd-message-enter" style={{ alignSelf: 'flex-end', maxWidth: '85%', padding: '2px 0' }}>
-        <div style={{
-          fontSize: '0.92rem', lineHeight: 1.5, fontFamily: "'Sora', sans-serif", fontWeight: 300,
-          whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#5FD3E0',
-        }}>
-          {msg.content}
-        </div>
-      </div>
-    ) : (
-      <div key={msg.id} className="cd-message-enter" style={{ alignSelf: 'flex-start', maxWidth: '100%', padding: '2px 0' }}>
-        <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase',
-          color: 'var(--cochi-label)',
-        }}>
-          COCHI
-        </div>
-        <ReasoningBlock text={msg.reasoning} />
-        <div style={{
-          fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Sora', sans-serif", fontWeight: 300,
-          color: 'var(--cochi-body)',
-        }}>
-          <CochiMarkdown content={msg.content} />
-        </div>
-        {msg.id === lastAssistantId && !loading && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button
-              onClick={onUndo}
-              title="Deshacer el último turno"
-              style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
-            >↶ Undo</button>
-            <button
-              onClick={onRegenerate}
-              title="Volver a ejecutar la última petición"
-              style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
-            >↻ Regenerate</button>
-          </div>
-        )}
-      </div>
-    )
-  ))
-})
-
-// ─── Burbuja de streaming aislada (Bloque P) ─────────────────────────────────
-// El texto en vivo vive DENTRO de este componente. Cada frame del throttle
-// repinta SÓLO esta burbuja; el panel (1900+ líneas) deja de re-renderizarse por
-// token. `push/flush/clear` se invocan por ref desde el loop de streaming.
-const CochiStreamingBubble = memo(forwardRef(function CochiStreamingBubble({ containerRef }, ref) {
-  const { text, push, flush, clear } = useLiveStream(containerRef)
-  useImperativeHandle(ref, () => ({ push, flush, clear }), [push, flush, clear])
-  if (!text) return null
-  return (
-    <div className="cd-message-enter" style={{ alignSelf: 'flex-start', maxWidth: '100%', padding: '2px 0' }}>
-      <div style={{ fontSize: '0.68rem', marginBottom: 6, letterSpacing: '0.18em', fontWeight: 700, textTransform: 'uppercase', color: 'var(--cochi-label)' }}>COCHI</div>
-      <div style={{
-        fontSize: '0.95rem', lineHeight: 1.6, fontFamily: "'Sora', sans-serif", fontWeight: 300,
-        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-        color: 'var(--cochi-body)',
-      }}>{text}</div>
-    </div>
-  )
-}))
 
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 const css = `
@@ -1736,128 +1609,16 @@ function CochiDesktop({
       <style>{css}</style>
 
       {/* ── Header compacto ── */}
-      <div style={{
-        flexShrink: 0,
-        borderBottom: '1px solid rgba(255,255,255,0.04)',
-        background: 'rgba(9,8,10,0.5)',
-        padding: '10px 14px',
-        display: 'flex', alignItems: 'center',
-      }}>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
-          {COCHI_MODELS.map(m => {
-            const isSelected = selectedModel === m.id
-            const isCentinela = m.label === 'Centinela'
-            return (
-              <button
-                key={m.id}
-                onClick={() => selectModel(m.id)}
-                style={{
-                  padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
-                  fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
-                  background: isSelected ? '#2a2a35' : 'transparent',
-                  border: '1px solid',
-                  borderColor: isSelected ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
-                  color: isCentinela ? 'transparent' : (isSelected ? '#C0C0C0' : 'rgba(207,68,77,0.5)'),
-                  transition: 'all 0.2s',
-                }}
-              >
-                {isCentinela
-                  ? <span style={{
-                      backgroundImage: 'linear-gradient(to right, #C47460, #C2C3C4)',
-                      WebkitBackgroundClip: 'text',
-                      backgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                      color: 'transparent',
-                    }}>{m.label}</span>
-                  : m.label}
-              </button>
-            )
-          })}
-
-          <div style={{ width:1, height:20, background:'rgba(255,255,255,0.05)', flexShrink:0, margin: '0 6px' }} />
-
-          <button
-            onClick={() => selectModel('ollama')}
-            style={{
-              padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
-              fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
-              background: selectedModel === 'ollama' ? '#2a2a35' : 'transparent',
-              border: '1px solid',
-              borderColor: selectedModel === 'ollama' ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
-              color: selectedModel === 'ollama' ? '#C0C0C0' : 'rgba(207,68,77,0.5)',
-              transition: 'all 0.2s',
-            }}
-          >
-            Ollama
-          </button>
-          <button
-            onClick={() => selectModel('lmstudio')}
-            style={{
-              padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
-              fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
-              background: selectedModel === 'lmstudio' ? '#2a2a35' : 'transparent',
-              border: '1px solid',
-              borderColor: selectedModel === 'lmstudio' ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
-              color: selectedModel === 'lmstudio' ? '#C0C0C0' : 'rgba(207,68,77,0.5)',
-              transition: 'all 0.2s',
-            }}
-          >
-            LM Studio
-          </button>
-
-          {/* Local model name input */}
-          {selectedModel === 'ollama' && (
-            <input
-              value={ollamaModel}
-              onChange={e => setOllamaModel(e.target.value)}
-              placeholder="modelo"
-              style={{
-                background: 'transparent', border: 'none', borderBottom: '1px solid #424045',
-                fontSize: '0.65rem', padding: '0 4px', outline: 'none', width: 80,
-                fontFamily: "'JetBrains Mono', monospace", color: '#C0C0C0',
-              }}
-            />
-          )}
-          {selectedModel === 'lmstudio' && (
-            <input
-              value={lmStudioModel}
-              onChange={e => setLmStudioModel(e.target.value)}
-              placeholder="modelo"
-              style={{
-                background: 'transparent', border: 'none', borderBottom: '1px solid #424045',
-                fontSize: '0.65rem', padding: '0 4px', outline: 'none', width: 80,
-                fontFamily: "'JetBrains Mono', monospace", color: '#C0C0C0',
-              }}
-            />
-          )}
-
-          {/* Fase 3.4d — modelo propio del subagente (spawn_agent). Sólo aplica
-              a OpenRouter; con proveedor local se hereda el modelo del padre. */}
-          <div style={{ width:1, height:20, background:'rgba(255,255,255,0.05)', flexShrink:0, margin: '0 6px' }} />
-          <span style={{
-            fontFamily: "'JetBrains Mono', monospace", fontSize: '10px',
-            letterSpacing: '0.12em', textTransform: 'uppercase',
-            color: (selectedModel === 'ollama' || selectedModel === 'lmstudio') ? '#3a3a42' : 'rgba(224,168,95,0.7)',
-          }}>
-            sub
-          </span>
-          <select
-            value={subagentModel}
-            onChange={e => { setSubagentModel(e.target.value); savePreferences({ subagentModel: e.target.value }) }}
-            disabled={selectedModel === 'ollama' || selectedModel === 'lmstudio'}
-            title="Modelo del subagente (spawn_agent)"
-            style={{
-              background: '#1a1a20', borderRadius: 4, cursor: 'pointer',
-              fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
-              border: '1px solid rgba(224,168,95,0.35)',
-              color: (selectedModel === 'ollama' || selectedModel === 'lmstudio') ? '#5a5a62' : '#E0A85F',
-              padding: '3px 6px', outline: 'none',
-            }}
-          >
-            {COCHI_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-          </select>
-        </div>
-      </div>
+      <CochiHeader
+        selectedModel={selectedModel}
+        onSelectModel={selectModel}
+        ollamaModel={ollamaModel}
+        onOllamaModelChange={setOllamaModel}
+        lmStudioModel={lmStudioModel}
+        onLmStudioModelChange={setLmStudioModel}
+        subagentModel={subagentModel}
+        onSubagentModelChange={(v) => { setSubagentModel(v); savePreferences({ subagentModel: v }) }}
+      />
 
       {/* ── Chat panel ── */}
       <div style={{
@@ -1872,50 +1633,7 @@ function CochiDesktop({
         <div ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{ '--cochi-label': isTerminator ? '#C1C4C9' : '#E3B5A3', '--cochi-body': isTerminator ? '#C1C4C9' : '#E3B5A3', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 4, position: 'relative', zIndex: 1 }}>
 
           {/* Watermark estado vacío */}
-          {messages.length === 0 && !loading && (
-            <div className="cochi-watermark" style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              flex: 1, padding: '40px 20px', gap: 10, userSelect: 'none', pointerEvents: 'none',
-            }}>
-              <div className="watermark-brand" style={{
-                color: isTerminator ? '#C1C4C9' : '#E3B5A3',
-                fontSize: '1.5rem',
-              }}>R7SIGNAL</div>
-              <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
-              <div className="watermark-name" style={{
-                color: isTerminator ? '#C1C4C9' : '#E3B5A3',
-                fontSize: '1.9rem',
-              }}>COCHI DESKTOP</div>
-              <div className="watermark-sub" style={{
-                color: isTerminator ? '#C1C4C9' : '#E3B5A3',
-                fontSize: '0.8rem',
-              }}>
-              Cochi es un agente diseñado para administrar tus archivos y tu código.<br />
-Tiene dos selectores con dos modelos distintos : <br />
-Centinela para tareas técnicas cotidianas,<br />
-Terminator para decisiones de mayor calibre.<br />
-Ambos modelos fueron seleccionados conscientemente <br />
-para equilibrar velocidad y capacidad según la exigencia de cada tarea.<br />
-También puedes operar a Cochi <br />
-con tus propios modelos locales vía Ollama o LM Studio.<br />
-Con tu autorización, Cochi administra archivos y código <br />
-desde la ventana Workspace en la cabecera.<br />
-Las operaciones sensibles —borrado, sobreescritura—<br />
-requieren siempre tu confirmación explícita. Ninguna se ejecuta sin ella.<br />
-El botón CLS, en la base del Panel, <br />
-purga el chat y reinicia la operación desde cero.<br />
-A los 70.000 tokens, R7 guarda un resumen de la tarea junto al último mensaje.<br />
-R9 permite seleccionar puntualmente párrafos o fragmentos de código <br />
-para extraer datos específicos.<br />
-El contenido de R7 y R9 se encuentra <br />
-en el compartimento junto a la rueda dentada.<br />
-<br />
-NOTA: Cochi tiene incorporado un tono de personalidad específico vía prompt<br />
-que no es posible cambiar en esta versión. <br />
-RGartner by R7Signal
-              </div>
-            </div>
-          )}
+          {messages.length === 0 && !loading && <CochiWatermark isTerminator={isTerminator} />}
 
           <CochiMessageList
             messages={messages}
@@ -1948,36 +1666,7 @@ RGartner by R7Signal
               con subagente puede acumular decenas de herramientas internas; pintar
               todas hace crecer el DOM y encarece el layout del commit que cierra el
               turno. Se muestran las últimas y se resume lo anterior. */}
-          {loading && activity.length > 0 && (() => {
-            const shown = activity.slice(-ACTIVITY_FEED_LIMIT)
-            const hiddenCount = activity.length - shown.length
-            return (
-              <div style={{
-                background: '#18171C', border: '1px dashed #232227', borderRadius: 8,
-                padding: '10px 14px', alignSelf: 'flex-start', maxWidth: '100%',
-                display: 'flex', flexDirection: 'column', gap: 4,
-              }}>
-                <div style={{ fontSize: '0.68rem', color: '#6A7A8A', letterSpacing: '0.15em', fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' }}>🔄 Cochi trabajando…</div>
-                {hiddenCount > 0 && (
-                  <div style={{ fontSize: '0.6rem', color: '#5A585C', letterSpacing: '0.08em' }}>+{hiddenCount} acción(es) anterior(es)…</div>
-                )}
-                {shown.map((a, i) => (
-                  <div key={i} className="cd-activity-item" style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: '0.8rem', color: '#FF4466', textShadow: '0 0 8px rgba(255,68,102,0.6)' }}>{a.icon}</span>
-                    <div>
-                      <span style={{ fontSize: '0.65rem', color: '#8A868B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{a.label} </span>
-                      <span style={{ fontSize: '0.65rem', color: '#D4D8DC', fontFamily: "'JetBrains Mono', monospace" }}>{a.detail}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )
-          })()}
-          {loading && activity.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 20, color: '#6A7A8A' }}>
-              <div className="cd-pulse" style={{ display: 'inline-block', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Procesando turno…</div>
-            </div>
-          )}
+          {loading && <CochiActivityFeed activity={activity} />}
           {loading && (
             <CochiStreamingBubble ref={liveRef} containerRef={chatContainerRef} />
           )}
@@ -1998,36 +1687,7 @@ RGartner by R7Signal
       </div>
 
       {/* ── Lista de tareas (todowrite) ── */}
-      {todos.length > 0 && (
-        <div style={{
-          flexShrink: 0,
-          borderTop: '1px solid rgba(255,255,255,0.04)',
-          background: 'rgba(9,8,10,0.6)',
-          padding: '8px 14px',
-          maxHeight: 150,
-          overflowY: 'auto',
-        }}>
-          <div style={{ fontSize: '0.62rem', letterSpacing: '0.15em', fontWeight: 700, color: '#6A7A8A', textTransform: 'uppercase', marginBottom: 4 }}>
-            📋 Plan de tareas
-          </div>
-          {todos.map(t => (
-            <div key={t.id} style={{
-              display: 'flex', gap: 6, alignItems: 'flex-start',
-              fontFamily: "'JetBrains Mono', monospace", fontSize: '0.7rem', lineHeight: 1.5,
-              color: t.status === 'completed' ? '#5A585C'
-                : t.status === 'in_progress' ? '#D4D8DC'
-                : t.status === 'cancelled' ? '#5A585C'
-                : '#8A868B',
-              textDecoration: t.status === 'completed' ? 'line-through' : 'none',
-            }}>
-              <span style={{ color: t.status === 'in_progress' ? '#E8C84A' : t.status === 'completed' ? '#6A9A6A' : '#6A7A8A' }}>
-                {t.status === 'completed' ? '☑' : t.status === 'in_progress' ? '▶' : t.status === 'cancelled' ? '✖' : '☐'}
-              </span>
-              <span style={{ wordBreak: 'break-word' }}>{t.content}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      <CochiTodoList todos={todos} />
 
       {/* ── Token warning banner ── */}
       <TokenWarningBanner
@@ -2043,180 +1703,38 @@ RGartner by R7Signal
       />
 
       {/* ── Permisos — aprobación en sesión y por diff (Bloque I) ── */}
-      {pendingPermission && (
-        <div style={{
-          flexShrink: 0,
-          borderTop: '1px solid rgba(255,68,102,0.35)',
-          background: 'rgba(255,68,102,0.05)',
-          padding: '10px 14px',
-          display: 'flex', flexDirection: 'column', gap: 8,
-        }}>
-          <div style={{ fontSize: '0.62rem', letterSpacing: '0.15em', fontWeight: 700, color: '#FF4466', textTransform: 'uppercase' }}>
-            🔐 Cochi solicita permiso · {pendingPermission.title}
-          </div>
-          <div style={{ fontSize: '0.78rem', color: '#D4D8DC', fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-            {pendingPermission.detail}
-          </div>
-          {pendingPermission.diff && (
-            <div style={{ maxHeight: 260, overflowY: 'auto' }}>
-              <DiffViewer diff={pendingPermission.diff} />
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <button
-              onClick={() => resolvePermission('deny')}
-              style={{ background: 'rgba(255,68,102,0.12)', border: '1px solid #FF4466', borderRadius: 4, padding: '6px 12px', color: '#FF4466', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-            >Denegar</button>
-            <button
-              onClick={() => resolvePermission('allow')}
-              style={{ background: 'rgba(106,122,138,0.15)', border: '1px solid #6A7A8A', borderRadius: 4, padding: '6px 12px', color: '#C0C0C0', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-            >Permitir una vez</button>
-            <button
-              onClick={() => resolvePermission('allow_session')}
-              style={{ background: 'rgba(176,245,39,0.12)', border: '1px solid #B0F527', borderRadius: 4, padding: '6px 12px', color: '#B0F527', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-            >Permitir siempre en esta sesión</button>
-            <button
-              onClick={() => { addPermanentRule(pendingPermission).then(() => resolvePermission('allow')) }}
-              style={{ background: 'transparent', border: '1px solid #2F2D35', borderRadius: 4, padding: '6px 12px', color: '#8A868B', fontSize: '0.72rem', cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-            >＋ Guardar regla allow</button>
-          </div>
-          <div style={{ fontSize: '0.6rem', color: '#6A7A8A', fontFamily: "'JetBrains Mono', monospace" }}>
-            Sesión: {sessionAllowRef.current.size} acción(es) autorizada(s) · Reglas: {permissionRules.allow.length} allow / {permissionRules.deny.length} deny
-          </div>
-        </div>
-      )}
+      <CochiPermissionPanel
+        pendingPermission={pendingPermission}
+        permissionRules={permissionRules}
+        sessionAllowCount={sessionAllowRef.current.size}
+        onResolve={resolvePermission}
+        onAddPermanentRule={addPermanentRule}
+      />
 
       {/* ── ask_user panel — pausa y espera respuesta ── */}
-      {pendingQuestion && (
-        <div style={{
-          flexShrink: 0,
-          borderTop: '1px solid rgba(232,200,74,0.35)',
-          background: 'rgba(232,200,74,0.05)',
-          padding: '10px 14px',
-          display: 'flex', flexDirection: 'column', gap: 8,
-        }}>
-          <div style={{ fontSize: '0.62rem', letterSpacing: '0.15em', fontWeight: 700, color: '#E8C84A', textTransform: 'uppercase' }}>
-            ❓ Cochi pregunta{pendingQuestion.header ? ` · ${pendingQuestion.header}` : ''}
-          </div>
-          <div style={{ fontSize: '0.85rem', color: '#D4D8DC', fontFamily: "'Inter', sans-serif", lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-            {pendingQuestion.question}
-          </div>
-          {pendingQuestion.options?.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {pendingQuestion.options.map((opt, i) => {
-                const selected = askChecks.includes(opt)
-                return (
-                  <button
-                    key={i}
-                    onClick={() => pendingQuestion.multiple ? toggleAskCheck(opt) : submitAsk(opt)}
-                    style={{
-                      background: selected ? 'rgba(232,200,74,0.2)' : 'transparent',
-                      border: `1px solid ${selected ? '#E8C84A' : '#424045'}`,
-                      borderRadius: 4, padding: '4px 10px', cursor: 'pointer',
-                      color: selected ? '#E8C84A' : '#C0C0C0', fontSize: '0.72rem',
-                      fontFamily: "'Space Grotesk', sans-serif",
-                    }}
-                  >{opt}</button>
-                )
-              })}
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input
-              autoFocus
-              value={askInput}
-              onChange={e => setAskInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') submitAsk(askInput) }}
-              placeholder={pendingQuestion.multiple ? 'O escribe tu respuesta…' : 'Escribe tu respuesta…'}
-              style={{
-                flex: 1, background: '#131215', border: '1px solid #232227', borderRadius: 4,
-                padding: '6px 10px', color: '#D4D8DC', fontSize: '0.8rem', outline: 'none',
-                fontFamily: "'Inter', sans-serif",
-              }}
-            />
-            {pendingQuestion.multiple && (
-              <button
-                onClick={() => submitAsk(askChecks.join(', '))}
-                disabled={askChecks.length === 0}
-                style={{
-                  background: 'rgba(232,200,74,0.15)', border: '1px solid #E8C84A', borderRadius: 4,
-                  padding: '6px 12px', color: '#E8C84A', fontSize: '0.72rem', fontWeight: 700,
-                  cursor: askChecks.length === 0 ? 'not-allowed' : 'pointer',
-                  opacity: askChecks.length === 0 ? 0.5 : 1,
-                  fontFamily: "'Space Grotesk', sans-serif",
-                }}
-              >Enviar</button>
-            )}
-            <button
-              onClick={() => submitAsk(askInput)}
-              style={{ background: 'rgba(106,122,138,0.15)', border: '1px solid #6A7A8A', borderRadius: 4, padding: '6px 12px', color: '#C0C0C0', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-            >Responder</button>
-            <button
-              onClick={() => submitAsk('(sin respuesta)')}
-              style={{ background: 'transparent', border: '1px solid #1F1E22', borderRadius: 4, padding: '6px 10px', color: '#8A868B', fontSize: '0.72rem', cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-            >Omitir</button>
-          </div>
-        </div>
-      )}
+      <CochiAskUserPanel
+        pendingQuestion={pendingQuestion}
+        askInput={askInput}
+        onAskInputChange={setAskInput}
+        askChecks={askChecks}
+        onSubmit={submitAsk}
+        onToggleCheck={toggleAskCheck}
+      />
 
       {/* ── Status bar (sustituye al input propio) ── */}
-      <div style={{
-        flexShrink: 0,
-        borderTop: '1px solid rgba(255,255,255,0.04)',
-        background: 'rgba(9,8,10,0.8)',
-        padding: '7px 14px',
-        display: 'flex', alignItems: 'center', gap: 10,
-      }}>
-        {/* Modelo activo */}
-        <div style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: '0.62rem', fontFamily: "'JetBrains Mono', monospace" }}>
-          {loading && <span className="cd-spinner" />}
-          <span style={{
-            fontWeight: 700,
-            color: isTerminator ? '#C1C4C9' : '#E3B5A3',
-          }}>{selectedModel}</span>
-          {activeModelPrice && (
-            <span style={{ color: isTerminator ? 'rgba(193,196,201,0.8)' : 'rgba(227,181,163,0.8)', fontSize: '0.55rem' }}>
-              · {activeModelPrice.inputPerM}$/M in · {activeModelPrice.outputPerM}$/M out
-            </span>
-          )}
-          {(cost > 0 || cachedTokens > 0) && (
-            <span title="Coste estimado (input cacheado con descuento)" style={{ color: '#5FD3E0', fontSize: '0.55rem' }}>
-              · {costStr}{cachedTokens > 0 ? ` · ⚡ ${cachedTokens.toLocaleString('es')} cacheados` : ''}
-            </span>
-          )}
-          {planStatus === 'planning' && <span style={{ color: '#8A868B', fontSize: '0.65rem', marginLeft: 4 }}>(planificando...)</span>}
-        </div>
-
-        <div style={{ flex: 1 }} />
-
-        {/* CLS */}
-        <button
-          onClick={handleClear}
-          style={{ background: 'transparent', border: '1px solid #1F1E22', borderRadius: 4, padding: '2px 8px', color: '#8A868B', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#D4D8DC'; e.currentTarget.style.color = '#D4D8DC' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#1F1E22'; e.currentTarget.style.color = '#8A868B' }}
-        >🗑 CLS</button>
-
-        {/* X2: archivado manual siempre disponible (con nombre) */}
-        <button
-          onClick={handleArchiveWithName}
-          disabled={loading || planStatus === 'executing'}
-          title="Archivar y definir próxima sesión"
-          style={{ background: 'transparent', border: '1px solid #3A2A20', borderRadius: 4, padding: '2px 8px', color: '#B07A4A', fontSize: '0.65rem', fontWeight: 700, cursor: (loading || planStatus === 'executing') ? 'not-allowed' : 'pointer', opacity: (loading || planStatus === 'executing') ? 0.4 : 1, fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
-          onMouseEnter={e => { if (!(loading || planStatus === 'executing')) { e.currentTarget.style.borderColor = '#E8762A'; e.currentTarget.style.color = '#E8762A' } }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#3A2A20'; e.currentTarget.style.color = '#B07A4A' }}
-        >📥 Archivar R7</button>
-
-        {/* Cancelar (solo cuando loading) */}
-        {loading && (
-          <button
-            onClick={handleEsc}
-            style={{ background: 'rgba(106,122,138,0.15)', border: '1px solid #6A7A8A', borderRadius: 5, padding: '4px 12px', color: '#C0C0C0', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(106,122,138,0.3)'; e.currentTarget.style.borderColor = '#6A7A8A' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(106,122,138,0.15)'; e.currentTarget.style.borderColor = '#6A7A8A' }}
-          >■ CANCELAR</button>
-        )}
-      </div>
+      <CochiStatusBar
+        loading={loading}
+        selectedModel={selectedModel}
+        isTerminator={isTerminator}
+        activeModelPrice={activeModelPrice}
+        costStr={costStr}
+        cachedTokens={cachedTokens}
+        cost={cost}
+        planStatus={planStatus}
+        onClear={handleClear}
+        onArchiveWithName={handleArchiveWithName}
+        onCancel={handleEsc}
+      />
     </div>
   )
 }

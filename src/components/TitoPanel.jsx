@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo, forwardRef, useImperativeHandle } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { calculateCost } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
@@ -7,73 +7,15 @@ import { parseR1R2R3, extractR3Visible, extractR3Streaming } from '../lib/parseR
 import { closeWheelTurn, buildWheelMessages } from '../lib/r7Wheel.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
-import { useLiveStream } from '../hooks/useLiveStream.js'
 import { useWheelSession } from '../hooks/useWheelSession.js'
 import { useAgentPrompts } from '../hooks/useAgentPrompts.js'
 import { useR9Selection } from '../hooks/useR9Selection.js'
 import { useStableCallback } from '../hooks/useStableCallback.js'
 import { TokenWarningBanner } from './TokenWarningBanner.jsx'
-
-// ─── Lista de mensajes memoizada (Bloque P) ──────────────────────────────────
-// Mientras llega el streaming, el placeholder cambia ~30 veces/seg. Sin esto,
-// React re-renderizaba TODA la conversación (y re-rasterizaba cada burbuja con
-// degradado) por frame. El comparador ignora los callbacks (se refrescan al
-// cerrar el turno) y sólo compara los mensajes cerrados por referencia.
-const TitoMessageList = memo(function TitoMessageList({ messages, lastAssistantId, streaming, onUndo, onRegenerate, onHandoff }) {
-  return messages.map((msg) => (
-    <div key={msg.id} className={`tito-msg tito-msg--${msg.role}`}>
-      <div className="tito-msg-content">{msg.content}</div>
-      {msg.hasHandoff && (
-        <button
-          className="tito-handoff-btn"
-          onClick={() => {
-            const m = msg.content.match(/\[→ COCHI:\s*(.+?)\]/s);
-            if (m) onHandoff?.(m[1].trim());
-          }}
-        >→ Enviar a Cochi</button>
-      )}
-      {msg.role === 'assistant' && msg.id === lastAssistantId && !streaming && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button
-            onClick={onUndo}
-            title="Deshacer el último turno"
-            style={{ background: 'transparent', border: '1px solid #D1C49033', borderRadius: 4, padding: '2px 8px', color: '#D1C49066', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#D1C490'; e.currentTarget.style.color = '#D1C490' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1C49033'; e.currentTarget.style.color = '#D1C49066' }}
-          >↶ Undo</button>
-          <button
-            onClick={onRegenerate}
-            title="Volver a generar la última respuesta"
-            style={{ background: 'transparent', border: '1px solid #D1C49033', borderRadius: 4, padding: '2px 8px', color: '#D1C49066', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#D1C490'; e.currentTarget.style.color = '#D1C490' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1C49033'; e.currentTarget.style.color = '#D1C49066' }}
-          >↻ Regenerate</button>
-        </div>
-      )}
-    </div>
-  ))
-}, (prev, next) => {
-  if (prev.lastAssistantId !== next.lastAssistantId) return false
-  if (prev.streaming !== next.streaming) return false
-  if (prev.messages.length !== next.messages.length) return false
-  for (let i = 0; i < prev.messages.length; i++) if (prev.messages[i] !== next.messages[i]) return false
-  return true
-})
-
-// ─── Burbuja en vivo (Bloque Q) ──────────────────────────────────────────────
-// El texto en vivo vive DENTRO de este componente y su throttle; el loop de
-// streaming empuja por ref. Así el panel (y su lista memoizada) no se re-ejecuta
-// por frame: sólo se repinta esta burbuja.
-const TitoStreamingBubble = memo(forwardRef(function TitoStreamingBubble({ containerRef }, ref) {
-  const { text, push, flush, clear } = useLiveStream(containerRef)
-  useImperativeHandle(ref, () => ({ push, flush, clear }), [push, flush, clear])
-  if (!text) return null
-  return (
-    <div className="tito-msg tito-msg--assistant">
-      <div className="tito-msg-content">{text}</div>
-    </div>
-  )
-}))
+import { TitoMessageList, TitoStreamingBubble } from './TitoMessageList.jsx'
+import TitoHeader from './TitoHeader.jsx'
+import TitoWatermark from './TitoWatermark.jsx'
+import TitoStatusBar from './TitoStatusBar.jsx'
 
 const TITO_MODELS = {
   rapido: 'perplexity/sonar',
@@ -329,49 +271,12 @@ function TitoPanel({
   return (
     <div className="tito-panel">
       {/* Header */}
-      <div className="tito-header">
-        <div className="tito-level-selector">
-          {[
-            { key: 'rapido', label: '⚡ Rápido', model: 'sonar' },
-            { key: 'deep',   label: '🔬 Deep',   model: 'deep-research' },
-            { key: 'pro',    label: '🔍 Pro',    model: 'sonar-pro' },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              className={`level-btn ${searchLevel === key ? 'active' : ''}`}
-              onClick={() => setSearchLevel(key)}
-            >{label}</button>
-          ))}
-        </div>
-      </div>
+      <TitoHeader searchLevel={searchLevel} onSearchLevelChange={setSearchLevel} />
 
       {/* Chat area */}
       <div className="tito-chat" ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{ position: 'relative' }}>
         {isEmpty ? (
-          <div className="tito-watermark">
-            <div className="watermark-brand" style={{ fontSize: '1.5rem' }}>R7SIGNAL</div>
-            <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
-            <div className="watermark-name" style={{ fontSize: '1.9rem' }}>TITO RESEARCH</div>
-            <div className="watermark-sub" style={{ fontSize: '0.8rem' }}>Tito es un agente especializado en buscar información,<br />
-con modelos de Perplexity en distintos niveles<br />
-según la profundidad que necesite tu búsqueda.<br />
-Selecciona el nivel de búsqueda en los selectores del Panel.<br />
-Tito no administra archivos ni código — para eso está Cochi.<br />
-El botón CLS, al pie del Panel, limpia el chat<br />
-y reinicia la búsqueda desde cero.<br />
-A los 70.000 tokens aparece R7 para guardar el resumen<br />
-de la tarea junto al último mensaje.<br />
-Y si solo necesitás fragmentos puntuales <br />
-párrafos sueltos o pedazos de código, <br />
-R9 permite seleccionarlos con precisión.<br />
-El contenido de R7 y R9 se encuentra en el compartimento<br />
-junto a la rueda dentada.<br />
-<br />
-NOTA: Tito tiene incorporado un tono de personalidad específico vía prompt<br />
-que no es posible cambiar en esta versión.<br />
-RGartner by R7Signal
-	</div>
-          </div>
+          <TitoWatermark />
         ) : (
           <>
             <TitoMessageList
@@ -414,30 +319,13 @@ RGartner by R7Signal
       />
 
       {/* Status bar */}
-      <div className="tito-status">
-        <span>⚡ {TITO_MODELS[searchLevel]}</span>
-        <div style={{ flex: 1 }} />
-        <button
-          onClick={handleClear}
-          style={{ background: 'transparent', border: '1px solid #D1C49033', borderRadius: 4, padding: '2px 8px', color: '#D1C49066', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#D1C490'; e.currentTarget.style.color = '#D1C490' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1C49033'; e.currentTarget.style.color = '#D1C49066' }}
-        >🗑 CLS</button>
-        {/* X2: archivado manual siempre disponible (con nombre) */}
-        <button
-          onClick={handleArchiveWithName}
-          disabled={streaming}
-          title="Archivar y definir próxima sesión"
-          style={{ background: 'transparent', border: '1px solid #D1C49022', borderRadius: 4, padding: '2px 8px', color: '#8A7A3A', fontSize: '0.65rem', fontWeight: 700, cursor: streaming ? 'not-allowed' : 'pointer', opacity: streaming ? 0.4 : 1, fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
-          onMouseEnter={e => { if (!streaming) { e.currentTarget.style.borderColor = '#D1C490'; e.currentTarget.style.color = '#D1C490' } }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#D1C49022'; e.currentTarget.style.color = '#8A7A3A' }}
-        >📥 Archivar R7</button>
-        {streaming && (
-          <button className="tito-cancel-btn" onClick={handleCancel}>
-            CANCELAR
-          </button>
-        )}
-      </div>
+      <TitoStatusBar
+        modelLabel={TITO_MODELS[searchLevel]}
+        streaming={streaming}
+        onClear={handleClear}
+        onArchiveWithName={handleArchiveWithName}
+        onCancel={handleCancel}
+      />
     </div>
   );
 }
