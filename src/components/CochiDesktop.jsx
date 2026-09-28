@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, memo } from 'react'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, needsPlanning } from '../lib/cochiPlanningPrompts'
+import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, needsPlanning, isMutatingTool, stepCompletionNudge } from '../lib/cochiPlanningPrompts'
 import PlanViewer from './PlanViewer'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
@@ -11,7 +11,7 @@ import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools } from
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { buildWheelMessages, summarizeFromPairs, commitR7Turn, closeWheelTask } from '../lib/r7Wheel.js'
-import { LANE, laneForMessage, markInput, LANE_SWITCH_HINT, buildTaskFinish, cleanR5, taskSucceeded, TASK_SYSTEM_PROMPT } from '../lib/cochiLanes.js'
+import { LANE, laneForMessage, markInput, LANE_SWITCH_HINT, buildTaskFinish, cleanR5, taskSucceeded, TASK_SYSTEM_PROMPT, isToolError } from '../lib/cochiLanes.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots, pruneOldSnapshots } from '../lib/snapshotStore.js'
 import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider, resolveStoredSubagentModel, DEFAULT_SUBAGENT_MODEL } from '../lib/subagent.js'
@@ -885,6 +885,12 @@ function CochiDesktop({
         // que un cierre en prosa (sin señal de control) no se dé por exitoso si
         // el paso nunca ejecutó nada.
         let stepHadToolCall = false
+        // RED ANTI-AUTO-VERIFICACIÓN (A-bis 28/09): una vez que el step APLICÓ una
+        // mutación, se cuentan las iteraciones internas que siguen sin mutar
+        // (lecturas/comandos de "confirmación"). Si el modelo no cierra, se lo
+        // empuja a [STEP_COMPLETE] y, si insiste, el runtime cierra el step.
+        let stepMutated = false
+        let verifyOnlyIters = 0
 
         const toolCallCounts = new Map()
         const REPEAT_WARN_THRESHOLD = 3
@@ -1142,6 +1148,10 @@ function CochiDesktop({
                 shortLabel = `${execResult.todos.length} tarea(s)`
               }
             } catch (err) { modelResult = `ERROR: ${err.message}` }
+            // RED ANTI-AUTO-VERIFICACIÓN: una mutación APLICADA (sin error) marca
+            // el step como "ya mutó" para forzar el cierre si el modelo se pone a
+            // verificar en bucle.
+            if (isMutatingTool(name) && !isToolError(modelResult)) stepMutated = true
             pushActivity(icon, name, shortLabel, diff)
             if (diff) pushMessage({ role: 'diff', diff })
             // Bitácora real del turno para el JUEZ (R4): nombre, salida y archivo.
@@ -1206,6 +1216,23 @@ function CochiDesktop({
               role: 'system',
               content: `⚠️ REPETITION_WARNING: Has llamado a "${maxRepeatSignature.split(':')[0]}" con argumentos casi idénticos ${maxRepeatCount} veces. No repitas la misma búsqueda. Usa la información que ya tienes para decidir la acción final, o si no es suficiente, responde con [STEP_FAILED: motivo claro] explicando qué falta.`
             })
+          }
+
+          // RED ANTI-AUTO-VERIFICACIÓN (A-bis 28/09): el step YA mutó y el modelo
+          // sigue emitiendo iteraciones que no mutan (lecturas/comandos de
+          // "confirmación"). Se lo empuja a emitir [STEP_COMPLETE]; si lo ignora,
+          // el runtime cierra el step por él en vez de quemar las ~15 iteraciones.
+          if (trackSteps && stepMutated) {
+            const mutatedThisIter = assistantMsg.tool_calls.some(c => isMutatingTool(c.function.name))
+            verifyOnlyIters = mutatedThisIter ? 0 : verifyOnlyIters + 1
+            const nudge = stepCompletionNudge({ stepMutated, verifyOnlyIters })
+            if (nudge?.force) {
+              stepResultSummary = 'Mutación aplicada'
+              updateStepStatus(step.id, 'completed', stepResultSummary)
+              stepCompleted = true
+              break
+            }
+            if (nudge?.message) apiMessages.push({ role: 'system', content: nudge.message })
           }
 
           apiMessages = await pruneApiMessages(apiMessages)

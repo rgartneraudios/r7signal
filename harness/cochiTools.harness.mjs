@@ -2,7 +2,7 @@
 // Ejecutar:  node harness/cochiTools.harness.mjs   (o npm run harness:tools)
 // El foco actual es resolveCommandCwd: run_command debe caer a la raíz del
 // workspace cuando el modelo no manda `cwd` (bug: corría en el cwd del proceso).
-import { resolveCommandCwd } from '../src/lib/cochiTools.js'
+import { resolveCommandCwd, buildShellInvocation } from '../src/lib/cochiTools.js'
 
 let pass = 0
 let fail = 0
@@ -30,6 +30,32 @@ check('cwd no-string cae a la raiz', resolveCommandCwd({ cwd: 123 }, ROOT), ROOT
 check('recorta espacios del cwd', resolveCommandCwd({ cwd: '  C:\\otro  ' }, ROOT), 'C:\\otro')
 check('recorta espacios de la raiz', resolveCommandCwd({}, '  C:\\root  '), 'C:\\root')
 check('root solo espacios -> undefined', resolveCommandCwd({}, '   '), undefined)
+
+console.log('- buildShellInvocation: stdout UTF-8 (A-bis 28/09) -')
+{
+  const win = buildShellInvocation('windows', 'python script.py')
+  check('windows: programa powershell', win.program, 'powershell')
+  check('windows: usa -Command', win.args[0], '-Command')
+  check('windows: conserva el comando del usuario', win.args[1].endsWith('python script.py'), true)
+  check('windows: fija OutputEncoding UTF-8', win.args[1].includes('[Console]::OutputEncoding'), true)
+  check('windows: fija code page 65001', win.args[1].includes('chcp 65001'), true)
+  check('windows: PYTHONIOENCODING utf-8', win.args[1].includes("PYTHONIOENCODING='utf-8'"), true)
+  check('windows: PYTHONUNBUFFERED (flush)', win.args[1].includes("PYTHONUNBUFFERED='1'"), true)
+  check('windows: PYTHONUTF8', win.args[1].includes("PYTHONUTF8='1'"), true)
+  check('windows: no inyecta el prologue en otros SO', buildShellInvocation('linux', 'x').args[1].includes('chcp'), false)
+}
+{
+  const lin = buildShellInvocation('linux', 'echo hola')
+  check('linux: programa bash', lin.program, 'bash')
+  check('linux: usa -c', lin.args[0], '-c')
+  check('linux: comando intacto', lin.args[1], 'echo hola')
+}
+{
+  const mac = buildShellInvocation('macos', 'ls')
+  check('macos: programa bash', mac.program, 'bash')
+  check('macos: comando intacto', mac.args[1], 'ls')
+}
+check('windows: comando vacio no rompe', buildShellInvocation('windows', undefined).args[1].endsWith('\n'), true)
 
 console.log(`\n${pass} PASS - ${fail} FAIL`)
 if (fail) process.exit(1)

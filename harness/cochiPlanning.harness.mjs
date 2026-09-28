@@ -3,7 +3,7 @@
 // Ejecutar:  node harness/cochiPlanning.harness.mjs   (o npm run harness:planning)
 // Cubre la lógica PURA: needsPlanning (intención single-pass vs multi-paso) y
 // parsePlanResponse (forma del JSON del planner).
-import { needsPlanning, needsTools, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded } from '../src/lib/cochiPlanningPrompts.js'
+import { needsPlanning, needsTools, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isMutatingTool, stepCompletionNudge, STEP_VERIFY_NUDGE_AT, STEP_VERIFY_FORCE_AT, PLANNING_SYSTEM_PROMPT } from '../src/lib/cochiPlanningPrompts.js'
 
 let pass = 0
 let fail = 0
@@ -148,6 +148,45 @@ check('plan + tool ejecutada -> exito', stepSilentlySucceeded({ trackSteps: true
 check('plan sin tool -> fallo (no completar)', stepSilentlySucceeded({ trackSteps: true, stepHadToolCall: false }), false)
 check('plan, flag ausente -> fallo', stepSilentlySucceeded({ trackSteps: true }), false)
 check('sin argumentos -> true (single-pass)', stepSilentlySucceeded(undefined), true)
+
+console.log('- red anti-auto-verificacion (A-bis 28/09) -')
+check('write_file muta', isMutatingTool('write_file'), true)
+check('replace_in_file muta', isMutatingTool('replace_in_file'), true)
+check('append_to_file muta', isMutatingTool('append_to_file'), true)
+check('delete_file muta', isMutatingTool('delete_file'), true)
+check('move_file muta', isMutatingTool('move_file'), true)
+check('update_plan_block muta', isMutatingTool('update_plan_block'), true)
+check('run_command NO muta (es la verificacion del E2E)', isMutatingTool('run_command'), false)
+check('read_file NO muta', isMutatingTool('read_file'), false)
+check('search_in_files NO muta', isMutatingTool('search_in_files'), false)
+check('get_file_info NO muta', isMutatingTool('get_file_info'), false)
+check('name vacio NO muta', isMutatingTool(''), false)
+check('name null NO muta', isMutatingTool(null), false)
+
+check('sin mutacion -> sin red', stepCompletionNudge({ stepMutated: false, verifyOnlyIters: 99 }), null)
+check('recien mutado -> sin red', stepCompletionNudge({ stepMutated: true, verifyOnlyIters: 0 }), null)
+check('1 verif -> todavia sin aviso', stepCompletionNudge({ stepMutated: true, verifyOnlyIters: 1 }), null)
+{
+  const n = stepCompletionNudge({ stepMutated: true, verifyOnlyIters: 2 })
+  check('2 verif -> aviso (no force)', [n.force, /STEP_ALREADY_APPLIED/.test(n.message)], [false, true])
+}
+{
+  const n = stepCompletionNudge({ stepMutated: true, verifyOnlyIters: 4 })
+  check('4 verif -> force', [n.force, typeof n.reason], [true, 'string'])
+}
+check('constantes exportadas', [STEP_VERIFY_NUDGE_AT, STEP_VERIFY_FORCE_AT], [2, 4])
+check('defaults coinciden con constantes', [
+  stepCompletionNudge({ stepMutated: true, verifyOnlyIters: STEP_VERIFY_NUDGE_AT }).force,
+  stepCompletionNudge({ stepMutated: true, verifyOnlyIters: STEP_VERIFY_FORCE_AT }).force,
+], [false, true])
+check('robusto sin argumentos', stepCompletionNudge(), null)
+check('verifyOnlyIters no numerico', stepCompletionNudge({ stepMutated: true, verifyOnlyIters: 'x' }), null)
+
+console.log('- prompt local de planning alineado con el remoto (A-bis 28/09) -')
+check('exige JSON solo', PLANNING_SYSTEM_PROMPT.includes('ONLY a JSON object'), true)
+check('cadena lineal read->write = un paso', PLANNING_SYSTEM_PROMPT.includes('ONE SINGLE STEP'), true)
+check('write->verify = un paso', PLANNING_SYSTEM_PROMPT.includes('verify X') && PLANNING_SYSTEM_PROMPT.includes('ONE step'), true)
+check('destructivas en su propio paso', PLANNING_SYSTEM_PROMPT.includes('their own separate step'), true)
 
 console.log(`\n${pass} PASS - ${fail} FAIL`)
 if (fail) process.exit(1)

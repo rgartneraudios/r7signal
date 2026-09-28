@@ -208,6 +208,55 @@ export function stepSilentlySucceeded({ trackSteps, stepHadToolCall } = {}) {
   return stepHadToolCall === true
 }
 
+// ── RED ANTI-AUTO-VERIFICACIÓN (A-bis 28/09) ────────────────────────────────
+// Herramientas que APLICAN una mutación real (disco del usuario o artefacto de
+// plan). Tras aplicar una, lo correcto es CERRAR el step con [STEP_COMPLETE];
+// si el modelo se pone a "confirmar" con lecturas/comandos, el runtime lo empuja
+// a cerrar y, si ignora el aviso, cierra el step por él (antes quemaba las ~15
+// iteraciones y fallaba el paso, o alucinaba). run_command queda FUERA a
+// propósito: el guard anti-repetición ya existe para comandos idénticos, pero
+// el bucle del E2E login usaba comandos DISTINTOS (`cmd /c`, Out-String,
+// result.txt) y por eso necesitaba contar como verificación, no como mutación.
+// Puro y testeable.
+export const MUTATING_TOOLS = new Set([
+  'write_file', 'replace_in_file', 'append_to_file', 'create_dir',
+  'move_file', 'copy_file', 'delete_file',
+  'update_plan_block', 'request_replan', 'save_to_r9',
+])
+
+export function isMutatingTool(name) {
+  return MUTATING_TOOLS.has(String(name || ''))
+}
+
+export const STEP_VERIFY_NUDGE_AT = 2
+export const STEP_VERIFY_FORCE_AT = 4
+
+// Decide la red tras una mutación ya aplicada en el step:
+//   · null                     → nada que hacer.
+//   · { force:false, message } → inyectar el aviso para que emita la señal.
+//   · { force:true, reason }   → cerrar el step por él (completed).
+export function stepCompletionNudge({
+  stepMutated,
+  verifyOnlyIters,
+  nudgeAt = STEP_VERIFY_NUDGE_AT,
+  forceAt = STEP_VERIFY_FORCE_AT,
+} = {}) {
+  if (!stepMutated) return null
+  const n = Number(verifyOnlyIters) || 0
+  if (n >= forceAt) {
+    return { force: true, reason: 'mutación ya aplicada; verificación redundante sin cerrar' }
+  }
+  if (n >= nudgeAt) {
+    return {
+      force: false,
+      message:
+        'STEP_ALREADY_APPLIED: the change has already been applied and the tool results above confirm it. ' +
+        'Do NOT run more reads or verification commands. Emit [STEP_COMPLETE: <one-line factual result>] now and stop.',
+    }
+  }
+  return null
+}
+
 // Parsea la respuesta cruda del planner (JSON, con o sin fences) al shape que
 // consume el loop. Lanza si la forma es inválida para que generatePlan caiga a
 // su plan de fallback.

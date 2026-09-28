@@ -28,6 +28,35 @@ export function resolveCommandCwd(args, workspaceRoot) {
   return root || undefined
 }
 
+// Prologue de PowerShell para que run_command capture stdout LIMPIO y en UTF-8.
+// En Windows, cuando la salida de PowerShell se REDIRIGE (siempre, acá), escribe
+// en la OEM code page (cp850/cp1252) y el texto no-ASCII llegaba sucio/corrupto.
+// Peor con Python: al no ver consola bufferea y codifica con la locale (cp1252),
+// así que su stdout llegaba vacío o ilegible y el modelo se ponía a "verificar"
+// en bucle. Se fija la code page UTF-8 del shell y, para los procesos hijos,
+// PYTHONIOENCODING/PYTHONUTF8 (encoding) y PYTHONUNBUFFERED (flush inmediato).
+// Puro y testeable.
+const POWERSHELL_OUTPUT_PROLOGUE = [
+  "$ProgressPreference='SilentlyContinue'",
+  "$ErrorActionPreference='Continue'",
+  'chcp 65001 > $null',
+  'try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch {}',
+  '$OutputEncoding = New-Object System.Text.UTF8Encoding $false',
+  "$env:PYTHONIOENCODING='utf-8'",
+  "$env:PYTHONUTF8='1'",
+  "$env:PYTHONUNBUFFERED='1'",
+].join('; ') + '\n'
+
+// Arma el programa + args del shell según plataforma, con el prologue de UTF-8
+// en Windows. Separado de la ejecución para poder testearlo headless.
+export function buildShellInvocation(os, command) {
+  const cmd = String(command ?? '')
+  if (os === 'windows') {
+    return { program: 'powershell', args: ['-Command', `${POWERSHELL_OUTPUT_PROLOGUE}${cmd}`] }
+  }
+  return { program: 'bash', args: ['-c', cmd] }
+}
+
 // Convierte HTML a texto plano legible: quita scripts/estilos, respeta saltos
 // de bloque y decodifica las entidades más comunes.
 function htmlToText(html) {
@@ -994,9 +1023,8 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       )
       const cwd = resolveCommandCwd(args, workspaceRoot)
       const options = cwd ? { cwd } : undefined
-      const cmd = os === 'windows'
-        ? Command.create('powershell', ['-Command', args.command], options)
-        : Command.create('bash', ['-c', args.command], options)
+      const { program, args: shellArgs } = buildShellInvocation(os, args.command)
+      const cmd = Command.create(program, shellArgs, options)
 
       let stdout = ''
       let stderr = ''
