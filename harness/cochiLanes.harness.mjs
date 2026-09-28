@@ -102,6 +102,14 @@ check('trunca la salida a maxChars', big.includes('TOOL RESULTS (truncated):'), 
 check('R4 incluye resultados de LECTURA (no solo comandos)',
   buildTaskFinish({ ok: true, toolLog: [{ name: 'list_dir', result: '8 archivos' }] }).includes('[list_dir] 8 archivos'), true)
 
+const r4read = buildTaskFinish({
+  ok: true,
+  toolLog: [{ name: 'read_file', result: `${'a'.repeat(1400)}"react": "^18.2.0"` }],
+})
+check('result de lectura largo NO se corta a 500 (bug 29/09)', r4read.includes('"react": "^18.2.0"'), true)
+check('sin truncar NO rotula (truncated)', r4read.includes('TOOL RESULTS (truncated):'), false)
+check('sin truncar usa el rotulo limpio', r4read.includes('TOOL RESULTS:'), true)
+
 console.log('\n— cleanR5: normaliza el cierre visible —')
 check('quita prefijo R5:', cleanR5('R5: 100% Roberto — hecho'), '100% Roberto — hecho')
 check('quita prefijo en negrita', cleanR5('**R5:** 100% Roberto — hecho'), '100% Roberto — hecho')

@@ -49,15 +49,17 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
 - `src/lib/` — lógica pura, testeable con harness. Es donde vive el grueso.
   - `cochiLanes.js` — loop de dos carriles, `taskSucceeded` (juez), `buildTaskFinish` (R4), `cleanR5`.
   - `cochiPlanningPrompts.js` — `needsTools` (carril), `needsRunCommand` (comando suelto),
-    `needsPlanning` (planner), parseo de planes, `stripLeadGreetings`.
-  - `cochiTools.js` — tools, permisos por scope, tablero, `buildShellInvocation`,
-    `formatRunCommandOutput` (exit code SIEMPRE). La coaching de tools vive en las
-    descriptions de cada tool (no en el system).
+    `needsPlanning` (planner), parseo de planes, `stripLeadGreetings`, `stepSilentlySucceeded`
+    (un step solo cierra si ejecutó ≥1 tool) + `isEmptyStepResponse`/nudges de reintento.
+  - `cochiTools.js` — tools (incl. `delete_dir`, destructiva con snapshot), permisos por scope,
+    tablero, `buildShellInvocation`, `formatRunCommandOutput` (exit code SIEMPRE). La coaching
+    de tools vive en las descriptions de cada tool (no en el system).
   - `r7Wheel.js` / `r9Store.js` — rueda R7 y almacén global.
   - `sessionStore.js` / `planStore.js` / `snapshotStore.js` — sesiones / planes / snapshots.
   - `llmClient.js` / `llmMetrics.js` / `modelPrices.js` — fetch/SSE común, capacidades,
     reasoning, costos.
-  - `subagent.js` — mini-loop aislado (hoy sólo lectura) → brief.
+  - `subagent.js` — mini-loop aislado (hoy sólo lectura) → brief. Topes: tool result 8000 chars,
+    8 iteraciones, 20k tokens.
   - `promptLoader.js` — carga prompts de Supabase (cache por agente) + `interpolatePrompt`.
   - `cochiPermissions.js` — allow/deny + `isBlockedUrl`.
 - `src/components/` — UI. `CochiDesktop.jsx` es el orquestador del carril; los paneles
@@ -101,6 +103,13 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
 - **`run_command` corre con cwd = raíz del workspace** (`resolveCommandCwd`).
 - **Reasoning**: Gemini/IrmaMax EXIGEN reasoning (API 400 si se apaga; el override no puede
   apagarlo). Reasoning ON sólo en planes complejos (`planStepCount >= 3`).
+- **Tito**: usa SÓLO Perplexity (`TITO_MODELS[searchLevel]`). `z-ai` está descartado del
+  proyecto (el modelo del chat casual no va hardcodeado).
+- **Cierre de step (tarea)**: `[STEP_COMPLETE]` NO cuenta si el step no ejecutó ninguna tool →
+  se reintenta una vez con nudge y, si insiste, `failed`. Una respuesta vacía del modelo
+  (completion ~1 token) recibe el mismo reintento (`isEmptyStepResponse`).
+- **R4 (evidencia)**: cada tool result viaja hasta 3000 chars (total 6000); el rótulo dice
+  `(truncated)` sólo si de verdad cortó. Antes 500 chars rompían tareas de lectura.
 - **SSRF**: `isBlockedUrl` es corte por globs; falta validar la IP resuelta en Rust.
 - **Tarifas de `cached_tokens`**: ESTIMADAS (~20%), pendiente verificar contra OpenRouter.
 - **Snapshots**: `run_command` está FUERA de alcance (sólo aviso). Undo/Regenerate
@@ -108,12 +117,15 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
 
 ## Deuda / pendientes (ver histórico completo en `output/Analisis-Cochi.txt`)
 
-- Bloque C (E2E en app): permisos por paso en plan multi-paso, single-pass sin falso error
-  "no emitió señal de control", bloque 🧠 Razonamiento colapsable + cached_tokens, E2E de
-  Undo/Regenerate.
-- X1/X2 + K3 + L4/W: drawer/nombre editable, cargar como contexto, undo/regenerate en los
-  3 paneles, rueda entre sesiones, no crear `.r9` en el workspace.
+- Bloque C + A-ter + X1/X2/K3/L4/W: ✅ VERIFICADOS en app (29/09). Incluye: permisos por paso,
+  single-pass sin falso error, bloque 🧠 Razonamiento + cached_tokens, Undo/Regenerate con
+  reversión de disco, drawer/nombre editable, rueda entre sesiones, typo y `parallel_tool_calls`.
+- Agujeros cerrados en el E2E (29/09): falso completado sin tool, evidencia R4 truncada a 500
+  chars, falta de tool para borrar carpetas (`delete_dir`), respuesta vacía del modelo.
 - Subagentes que escriben (hoy sólo lectura, `MAX_SUBAGENT_DEPTH=1`).
 - Shell revertible (run_command en snapshots).
+- Menor: el brief del subagente a veces filtra narración inicial en la misma línea (el
+  `stripLeadingNarration` es por línea completa). Cambiar de sesión con un turno en vuelo no
+  aborta (puede contaminar el R7 de la entrante).
 - Modelos: Centinela = DeepSeek V4 Flash 0731 · Terminator = DeepSeek V4.1 Flash
   (rotación manual). El subagente usa Centinela.

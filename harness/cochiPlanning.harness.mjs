@@ -3,7 +3,7 @@
 // Ejecutar:  node harness/cochiPlanning.harness.mjs   (o npm run harness:planning)
 // Cubre la lógica PURA: needsPlanning (intención single-pass vs multi-paso) y
 // parsePlanResponse (forma del JSON del planner).
-import { needsPlanning, needsTools, needsCommand, needsRunCommand, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isMutatingTool, stepCompletionNudge, STEP_VERIFY_NUDGE_AT, STEP_VERIFY_FORCE_AT, PLANNING_SYSTEM_PROMPT, touchesBoard } from '../src/lib/cochiPlanningPrompts.js'
+import { needsPlanning, needsTools, needsCommand, needsRunCommand, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isEmptyStepResponse, EMPTY_STEP_NUDGE, NO_ACTION_COMPLETE_NUDGE, isMutatingTool, stepCompletionNudge, STEP_VERIFY_NUDGE_AT, STEP_VERIFY_FORCE_AT, PLANNING_SYSTEM_PROMPT, touchesBoard } from '../src/lib/cochiPlanningPrompts.js'
 
 let pass = 0
 let fail = 0
@@ -149,11 +149,26 @@ check('plan sin tool -> fallo (no completar)', stepSilentlySucceeded({ trackStep
 check('plan, flag ausente -> fallo', stepSilentlySucceeded({ trackSteps: true }), false)
 check('sin argumentos -> true (single-pass)', stepSilentlySucceeded(undefined), true)
 
+console.log('- isEmptyStepResponse: retry anti-respuesta-vacia (29/09) -')
+check('vacio -> true', isEmptyStepResponse(''), true)
+check('undefined -> true', isEmptyStepResponse(undefined), true)
+check('null -> true', isEmptyStepResponse(null), true)
+check('solo espacios -> true', isEmptyStepResponse('   \n\t '), true)
+check('prosa -> false', isEmptyStepResponse('Listo'), false)
+check('senal de control -> false', isEmptyStepResponse('[STEP_COMPLETE: ok]'), false)
+check('nudge no vacio', isEmptyStepResponse(EMPTY_STEP_NUDGE), false)
+check('nudge pide accion o señal', /\[STEP_COMPLETE/.test(EMPTY_STEP_NUDGE), true)
+check('nudge de falso completado pide tool', /delete_dir/.test(NO_ACTION_COMPLETE_NUDGE), true)
+check('nudge de falso completado no vacio', isEmptyStepResponse(NO_ACTION_COMPLETE_NUDGE), false)
+check('completado sin tool NO tiene respaldo', stepSilentlySucceeded({ trackSteps: true, stepHadToolCall: false }), false)
+check('completado con tool SI tiene respaldo', stepSilentlySucceeded({ trackSteps: true, stepHadToolCall: true }), true)
+
 console.log('- red anti-auto-verificacion (A-bis 28/09) -')
 check('write_file muta', isMutatingTool('write_file'), true)
 check('replace_in_file muta', isMutatingTool('replace_in_file'), true)
 check('append_to_file muta', isMutatingTool('append_to_file'), true)
 check('delete_file muta', isMutatingTool('delete_file'), true)
+check('delete_dir muta', isMutatingTool('delete_dir'), true)
 check('move_file muta', isMutatingTool('move_file'), true)
 check('update_plan_block muta', isMutatingTool('update_plan_block'), true)
 check('run_command NO muta (es la verificacion del E2E)', isMutatingTool('run_command'), false)

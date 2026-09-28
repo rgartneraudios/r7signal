@@ -89,8 +89,9 @@ export function buildTaskFinish({
   steps = [],
   toolLog = [],
   nombre = '',
-  maxChars = 1500,
+  maxChars = 6000,
 } = {}) {
+  const PER_TOOL_CHARS = 3000
   const lines = [
     'R4: FINISH (internal system report — do NOT re-execute anything, do NOT emit commands or tool calls).',
     `RESULT: ${ok ? 'SUCCESS' : 'FAILURE'}`,
@@ -115,12 +116,13 @@ export function buildTaskFinish({
   if (files.length) lines.push(`FILES TOUCHED: ${files.join('; ')}`)
 
   const outputs = toolLog
-    .map(t => `[${t.name}] ${String(t.result ?? '').replace(/\s+/g, ' ').trim().slice(0, 500)}`)
+    .map(t => `[${t.name}] ${String(t.result ?? '').replace(/\s+/g, ' ').trim().slice(0, PER_TOOL_CHARS)}`)
     .filter(Boolean)
   if (outputs.length) {
     let joined = outputs.join('\n')
-    if (joined.length > maxChars) joined = joined.slice(0, maxChars)
-    lines.push('TOOL RESULTS (truncated):', joined)
+    const wasTruncated = joined.length > maxChars
+    if (wasTruncated) joined = joined.slice(0, maxChars)
+    lines.push(wasTruncated ? 'TOOL RESULTS (truncated):' : 'TOOL RESULTS:', joined)
   }
 
   lines.push(

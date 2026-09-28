@@ -251,6 +251,24 @@ export function stepSilentlySucceeded({ trackSteps, stepHadToolCall } = {}) {
   return stepHadToolCall === true
 }
 
+// Respuesta vacía del modelo (sin contenido y sin tool_calls) en el primer
+// request de un step. El modelo a veces devuelve un completion de ~1 token:
+// sin señal de control y sin tool, el step se marcaba failed por diseño, pero
+// no hubo intención de fallar — conviene reintentar una vez antes de condenarlo.
+export function isEmptyStepResponse(content) {
+  return !String(content ?? '').trim()
+}
+
+export const EMPTY_STEP_NUDGE =
+  'Your previous reply was empty. Act on the CURRENT STEP now: call the tool the step needs, or, if it is already done, reply exactly with [STEP_COMPLETE: <one-line factual result>].'
+
+// El modelo declaró [STEP_COMPLETE] pero no ejecutó NINGUNA tool en el step. Un
+// step de ejecución debe actuar con una tool; si no, el "completado" es una
+// alucinación (p.ej. "carpeta borrada" sin llamar a delete_dir). Se reintenta
+// una vez; si insiste, el step se marca failed.
+export const NO_ACTION_COMPLETE_NUDGE =
+  'STEP_COMPLETE was received but NO tool was executed in this step. A step must perform its action with a tool — call the required tool now (to delete a folder use delete_dir). Only if there is genuinely nothing to execute, reply [STEP_FAILED: <concrete reason>].'
+
 // ── RED ANTI-AUTO-VERIFICACIÓN (A-bis 28/09) ────────────────────────────────
 // Herramientas que APLICAN una mutación real (disco del usuario o artefacto de
 // plan). Tras aplicar una, lo correcto es CERRAR el step con [STEP_COMPLETE];
@@ -263,7 +281,7 @@ export function stepSilentlySucceeded({ trackSteps, stepHadToolCall } = {}) {
 // Puro y testeable.
 export const MUTATING_TOOLS = new Set([
   'write_file', 'replace_in_file', 'append_to_file', 'create_dir',
-  'move_file', 'copy_file', 'delete_file',
+  'move_file', 'copy_file', 'delete_file', 'delete_dir',
   'update_plan_block', 'request_replan', 'save_to_r9',
 ])
 

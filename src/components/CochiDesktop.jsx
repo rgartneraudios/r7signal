@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, memo } from 'react'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, needsPlanning, needsRunCommand, isMutatingTool, stepCompletionNudge, touchesBoard } from '../lib/cochiPlanningPrompts'
+import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isEmptyStepResponse, EMPTY_STEP_NUDGE, NO_ACTION_COMPLETE_NUDGE, needsPlanning, needsRunCommand, isMutatingTool, stepCompletionNudge, touchesBoard } from '../lib/cochiPlanningPrompts'
 import PlanViewer from './PlanViewer'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
@@ -842,6 +842,8 @@ function CochiDesktop({
       let pendingAssistant = opts.assistantMsg || null
       // Bitácora REAL de herramientas del turno (la usa el JUEZ para armar R4).
       const taskToolLog = []
+      // Fase 3.2: razonamiento del planner (planes complejos) para el bloque 🧠.
+      let taskReasoning = ''
       while (remainingIter > 0 && !controller.signal.aborted) {
         const currentPlan = planRef.current
 
@@ -889,6 +891,10 @@ function CochiDesktop({
         // que un cierre en prosa (sin señal de control) no se dé por exitoso si
         // el paso nunca ejecutó nada.
         let stepHadToolCall = false
+        // Respuesta vacía del modelo (completion ~1 token, sin tool_calls) o
+        // cierre en falso (STEP_COMPLETE sin ninguna tool): se reintenta UNA vez
+        // con un nudge antes de condenar el step a failed.
+        let stepNudged = false
         // RED ANTI-AUTO-VERIFICACIÓN (A-bis 28/09): una vez que el step APLICÓ una
         // mutación, se cuentan las iteraciones internas que siguen sin mutar
         // (lecturas/comandos de "confirmación"). Si el modelo no cierra, se lo
@@ -952,6 +958,9 @@ function CochiDesktop({
             })
             liveRef.current?.flush()
             liveRef.current?.clear()
+            if (useReasoning && streamed.reasoning) {
+              taskReasoning = (taskReasoning ? `${taskReasoning}\n\n` : '') + streamed.reasoning
+            }
             reqAudit.calls = streamed.toolCalls?.length || 0
             reqAudit.finish = streamed.finishReason
             auditLog(
@@ -985,14 +994,30 @@ function CochiDesktop({
             // Carril tarea: NO hay R1/R2/R3. Con plan, el step cierra con una
             // señal de control; sin plan (escape), el stop del modelo cierra la
             // tarea. El cierre visible (R5) lo redacta aparte el finalizador.
+            // Respuesta vacía al ARRANCAR el step (sin tools aún): el modelo a
+            // veces devuelve un completion de ~1 token; se reintenta una vez.
+            if (trackSteps && !stepHadToolCall && !stepNudged && isEmptyStepResponse(assistantMsg.content)) {
+              stepNudged = true
+              apiMessages.push({ role: 'user', content: EMPTY_STEP_NUDGE })
+              continue
+            }
             if (trackSteps) {
               const rawContent = assistantMsg.content || ''
               const completeMatch = rawContent.match(/\[STEP_COMPLETE:\s*(.*?)\]/)
               const failedMatch = rawContent.match(/\[STEP_FAILED:\s*(.*?)\]/)
               const replanMatch = rawContent.match(/\[NEED_REPLAN:\s*(.*?)\]/)
               if (completeMatch) {
-                stepResultSummary = completeMatch[1].trim()
-                updateStepStatus(step.id, 'completed', stepResultSummary)
+                if (stepSilentlySucceeded({ trackSteps, stepHadToolCall })) {
+                  stepResultSummary = completeMatch[1].trim()
+                  updateStepStatus(step.id, 'completed', stepResultSummary)
+                } else if (!stepNudged) {
+                  stepNudged = true
+                  apiMessages.push({ role: 'user', content: NO_ACTION_COMPLETE_NUDGE })
+                  continue
+                } else {
+                  stepResultSummary = 'FAILED: declaró completado sin ejecutar herramientas'
+                  updateStepStatus(step.id, 'failed', 'Declaró completado sin ejecutar herramientas')
+                }
               } else if (failedMatch) {
                 const reason = failedMatch[1].trim()
                 stepResultSummary = `FAILED: ${reason}`
@@ -1303,7 +1328,7 @@ function CochiDesktop({
             const successful = planSteps.filter(s => s.status === 'completed').length
             pushMessage({
               role: 'assistant',
-              content: `Tarea completada: ${successful}/${planSteps.length} pasos. Fallos: `
+              content: `Plan: ${successful}/${planSteps.length} pasos completados. Fallos: `
                 + failedSteps.map(s => `${s.description} (${s.result || 'sin motivo'})`).join('; ')
             })
           }
@@ -1343,7 +1368,7 @@ function CochiDesktop({
           liveRef.current?.clear()
           const r5 = cleanR5(r5Streamed.content)
             || (ok ? `100% ${nombreAlternativo} — tarea completada.` : `0% ${nombreAlternativo} — no se pudo completar.`)
-          pushMessage({ role: 'assistant', content: r5, reasoning: r5Streamed.reasoning || undefined })
+          pushMessage({ role: 'assistant', content: r5, reasoning: (r5Streamed.reasoning || taskReasoning || '').slice(0, 8000) || undefined })
           wheelRef.current = closeWheelTask(wheelRef.current, r5)
         } catch (r5Err) {
           if (r5Err.name !== 'AbortError') {

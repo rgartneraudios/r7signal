@@ -150,6 +150,7 @@ checkTrue('excluye mutadores del tablero (E4)', !subTools.includes('update_plan_
 checkTrue('no incluye tools de escritura', !subTools.some(n => ['write_file', 'replace_in_file', 'append_to_file', 'create_dir', 'move_file', 'copy_file'].includes(n)))
 checkTrue('no incluye run_command', !subTools.includes('run_command'))
 checkTrue('no incluye delete_file', !subTools.includes('delete_file'))
+checkTrue('no incluye delete_dir', !subTools.includes('delete_dir'))
 checkTrue('no incluye todowrite/save_to_r9', !subTools.includes('todowrite') && !subTools.includes('save_to_r9'))
 checkTrue('todas las del subagente son de lectura', subTools.every(n => getToolsForPermission('full', 'read').some(t => t.function.name === n)))
 
@@ -229,7 +230,8 @@ const resilient = await runSubagent({
 check('executeTool que lanza no rompe el brief', resilient.ok, true)
 check('brief resiliente', resilient.brief, 'brief')
 
-check('DEFAULT_SUBAGENT_MAX_ITERS exportado (3.3d: 5)', DEFAULT_SUBAGENT_MAX_ITERS, 5)
+check('DEFAULT_SUBAGENT_MAX_ITERS exportado (29/09: 8)', DEFAULT_SUBAGENT_MAX_ITERS, 8)
+checkTrue('prompt guia a no releer / resumir (29/09)', SUBAGENT_SYSTEM_PROMPT.includes('Read each file ONCE'))
 
 console.log('— Fase 3.3c · observabilidad (helpers puros de UI) —')
 check('detalle: path', subagentActivityDetail({ name: 'read_file', args: { path: 'a.txt' } }), 'a.txt')

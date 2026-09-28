@@ -48,6 +48,9 @@ console.log('\n— No rompimos lo previo (Bloque I/J) —')
 const rules2 = { allow: ['run_command:npm *'], deny: ['delete_file:**/*.lock'] }
 check('run_command:npm * allow', evaluatePermission(buildPermissionRequest('run_command', { command: 'npm install' }), rules2), 'allow')
 check('delete_file lock deny', evaluatePermission(buildPermissionRequest('delete_file', { path: 'C:/x/y.lock' }), rules2), 'deny')
+check('delete_dir es guarded', buildPermissionRequest('delete_dir', { path: 'C:/x/y' }).guarded, true)
+check('delete_dir es destructivo', buildPermissionRequest('delete_dir', { path: 'C:/x/y' }).kind, 'destructive')
+check('delete_dir deny por regla', evaluatePermission(buildPermissionRequest('delete_dir', { path: 'C:/x/y.dir' }), { allow: [], deny: ['delete_dir:**/*.dir'] }), 'deny')
 check('web_fetch regla deny de usuario matchea URL', evaluatePermission(buildPermissionRequest('web_fetch', { url: 'https://evil.com/x' }), { allow: [], deny: ['web_fetch:https://evil.com/**'] }), 'deny')
 check('web_fetch regla allow de usuario matchea URL', evaluatePermission(buildPermissionRequest('web_fetch', { url: 'https://example.com/x' }), { allow: ['web_fetch:https://example.com/**'], deny: [] }), 'allow')
 

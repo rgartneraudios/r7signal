@@ -640,6 +640,18 @@ export const COCHI_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'delete_dir',
+      description: 'Delete a directory and everything inside it (recursively). Use this instead of run_command to remove folders. Destructive — always requires user confirmation.',
+      parameters: {
+        type: 'object',
+        properties: { path: { type: 'string', description: 'Absolute path of the directory to delete.' } },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'create_dir',
       description: 'Create a directory (and any missing parent directories). No-op if it already exists.',
       parameters: {
@@ -810,7 +822,7 @@ export function getToolsForPermission(permission, scope = 'full') {
     if (scope === 'read' && !READ_SCOPE_TOOLS.has(name)) return false
     if (scope === 'task' && TASK_SCOPE_EXCLUDED.has(name)) return false
     if (['write_file', 'replace_in_file', 'append_to_file', 'create_dir', 'move_file', 'copy_file'].includes(name)) return canWrite
-    if (['run_command', 'delete_file'].includes(name)) return canRun
+    if (['run_command', 'delete_file', 'delete_dir'].includes(name)) return canRun
     return true
   })
 }
@@ -844,6 +856,7 @@ export const TOOL_ICONS = {
   file_exists:      'CHCK',
   run_command:      'EXEC',
   delete_file:      'DEL',
+  delete_dir:       'RMDIR',
   create_dir:       'MKDIR',
   move_file:        'MOVE',
   copy_file:        'COPY',
@@ -874,8 +887,8 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
 
   if (!canWrite && ['write_file', 'replace_in_file', 'append_to_file', 'create_dir', 'move_file', 'copy_file'].includes(name))
     return { modelResult: '⛔ Bloqueado: permiso Solo Lectura. Cambia el nivel en Workspace.', diff: null }
-  if (!canRun && (name === 'run_command' || name === 'delete_file'))
-    return { modelResult: '⛔ Bloqueado: activa Full Access para operaciones destructivas (run_command, delete_file).', diff: null }
+  if (!canRun && (name === 'run_command' || name === 'delete_file' || name === 'delete_dir'))
+    return { modelResult: '⛔ Bloqueado: activa Full Access para operaciones destructivas (run_command, delete_file, delete_dir).', diff: null }
 
   // Sandbox: deny-list de rutas de sistema y containment dentro del workspace.
   for (const key of ['path', 'dirPath', 'fromPath', 'toPath', 'cwd']) {
@@ -1242,6 +1255,16 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       await snap(args.path)
       await remove(args.path)
       return { modelResult: `🗑️ Eliminado: ${args.path}`, diff: null }
+    }
+
+    case 'delete_dir': {
+      const existed = await pathExistsCochi(args.path)
+      if (!existed) return { modelResult: `⚠️ No existe: ${args.path}${await notFoundSuffix(args.path)}`, diff: null }
+      const info = await stat(args.path).catch(() => null)
+      if (info && !info.isDirectory) return { modelResult: `⛔ No es un directorio: ${args.path} (usá delete_file)`, diff: null }
+      await snap(args.path)
+      await remove(args.path, { recursive: true })
+      return { modelResult: `🗑️ Carpeta eliminada: ${args.path}`, diff: null }
     }
 
     case 'create_dir': {

@@ -172,7 +172,7 @@ function TitoPanel({
     try {
       // Conversational guard — skip web search for casual messages
       if (!needsWebSearch(text)) {
-        const chatModel = 'z-ai/glm-5.3-flash'
+        const chatModel = TITO_MODELS[searchLevel]
         // Fase 3.2: streaming vía llmClient (retry + usage normalizado).
         const result = await streamChat({
           provider: resolveProvider(chatModel),

@@ -33,16 +33,18 @@ export const MAX_SUBAGENT_DEPTH = 1
 export const DEFAULT_SUBAGENT_MAX_TOKENS = 4096
 export const SUBAGENT_BRIEF_MAX_CHARS = 6000
 // Tope de turnos internos del mini-loop aislado (evita bucles infinitos). 3.3d:
-// 8→5; la prueba manual gastó 7 llamadas para una tarea trivial.
-export const DEFAULT_SUBAGENT_MAX_ITERS = 5
+// 8→5; E2E 29/09: 5 no alcanzaba para archivos largos (una lectura por chunk),
+// vuelve a 8 con la guía de "leer una vez y resumir" del system prompt.
+export const DEFAULT_SUBAGENT_MAX_ITERS = 8
 // 3.3d — PRESUPUESTO por subagente: si el gasto agregado supera este tope, el
 // mini-loop corta y devuelve un brief parcial (o un aviso controlado). Nunca
 // lanza. Evita que un worker descontrolado multiplique el gasto del turno.
 export const MAX_SUBAGENT_TOTAL_TOKENS = 20000
 // 3.3d — TOPE a los tool results que se acumulan en la rueda del hijo. La rueda
 // acumulativa reenviaba volcados de archivos (23 KB) en cada vuelta → crecimiento
-// cuadrático (prompt 1.7k→8.7k→15.6k). Cada tool result se guarda truncado.
-export const SUBAGENT_TOOL_RESULT_MAX_CHARS = 4000
+// cuadrático (prompt 1.7k→8.7k→15.6k). Cada tool result se guarda truncado. E2E
+// 29/09: 4000 obligaba a releer archivos de ~19 KB hasta agotar los turnos.
+export const SUBAGENT_TOOL_RESULT_MAX_CHARS = 8000
 // 3.4d — MODELO PROPIO del subagente. Por defecto Centinela
 // (~deepseek/deepseek-v4-flash-latest): mejor calidad para el worker de lectura
 // delegado, aun siendo barato (input ~$0.05/M, output ~$0.32/M). Decisión de
@@ -83,6 +85,7 @@ export const SUBAGENT_SYSTEM_PROMPT = [
   '',
   'Rules:',
   '- Do ONLY the delegated task. Do not ask questions; if something is missing, state the assumption you made.',
+  '- You have a LIMITED number of turns. Read each file ONCE and summarize from what you got; do not re-read or re-search the same thing. Tool results may be truncated — work with what you have instead of looping.',
   '- Never emit the R1/R2/R3 contract and never emit control signals like [STEP_COMPLETE], [STEP_FAILED] or [NEED_REPLAN].',
   '- Return exactly ONE self-contained BRIEF in {{language}} with: findings, decisions, exact identifiers (paths, names, values) and caveats.',
   '',

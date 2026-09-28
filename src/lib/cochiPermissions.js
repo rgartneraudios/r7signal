@@ -20,6 +20,7 @@
 export const GUARDED_TOOLS = new Set([
   'run_command',
   'delete_file',
+  'delete_dir',
   'write_file',
   'replace_in_file',
   'append_to_file',
@@ -30,7 +31,7 @@ export const GUARDED_TOOLS = new Set([
 // Ediciones de contenido: se aprueban mostrando el diff anticipado.
 const EDIT_TOOLS = new Set(['write_file', 'replace_in_file', 'append_to_file'])
 // Operaciones destructivas/irreversibles.
-const DESTRUCTIVE_TOOLS = new Set(['run_command', 'delete_file'])
+const DESTRUCTIVE_TOOLS = new Set(['run_command', 'delete_file', 'delete_dir'])
 
 export const PERMISSION_RULE_HINT =
   'Una regla por línea con formato tool:patrón (glob). Ej: run_command:npm * · delete_file:**/*.lock'
@@ -190,6 +191,8 @@ function describe(name, args = {}) {
       return { title: 'EJECUTAR COMANDO', detail: `${args.command || ''}${args.cwd ? `\n(cwd: ${args.cwd})` : ''}` }
     case 'delete_file':
       return { title: 'BORRAR ARCHIVO/CARPETA', detail: String(args.path || '') }
+    case 'delete_dir':
+      return { title: 'BORRAR CARPETA', detail: String(args.path || '') }
     case 'move_file':
       return { title: 'MOVER / RENOMBRAR', detail: `${args.fromPath || ''}\n→ ${args.toPath || ''}` }
     case 'copy_file':
