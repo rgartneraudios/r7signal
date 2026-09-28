@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, memo, forwardRef, useImperativeHandle, lazy, Suspense } from 'react'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
 import DiffViewer from './DiffViewer'
-import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, needsPlanning, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded } from '../lib/cochiPlanningPrompts'
+import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded } from '../lib/cochiPlanningPrompts'
 import PlanViewer from './PlanViewer'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
@@ -11,7 +11,8 @@ import { getOpenRouterKey } from '../lib/localConfig.js'
 import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools } from '../lib/cochiTools.js'
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
-import { closeWheelTurn, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
+import { buildWheelMessages, summarizeFromPairs, commitR7Turn, closeWheelTask } from '../lib/r7Wheel.js'
+import { LANE, laneForMessage, markInput, LANE_SWITCH_HINT, buildTaskFinish, cleanR5, taskSucceeded } from '../lib/cochiLanes.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots, pruneOldSnapshots } from '../lib/snapshotStore.js'
 import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider, resolveStoredSubagentModel, DEFAULT_SUBAGENT_MODEL } from '../lib/subagent.js'
@@ -437,7 +438,7 @@ function CochiDesktop({
     onResetUsage,
     onError: (msg) => pushMessage({ role: 'assistant', content: msg }),
   })
-  const { wheelRef, sessionPairsRef, messagesRef, sessionIdRef } = session
+  const { wheelRef, messagesRef, sessionIdRef } = session
 
   // Prompts remotos + selección R9 (compartidos).
   const { remotePrompts, promptsError } = useAgentPrompts('cochi', onPromptsReady)
@@ -869,7 +870,7 @@ function CochiDesktop({
     }
   }
 
-  async function executeAllSteps(scope = 'full') {
+  async function executeAllSteps(scope = 'full', opts = {}) {
     setPlanStatus('executing')
     if (!remotePrompts) {
       setLoading(false)
@@ -917,13 +918,44 @@ function CochiDesktop({
     setSubagents([])
     liveRef.current?.clear()
 
+    const remoteSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
+    const trackSteps = planRef.current !== null
+    const planStepCount = trackSteps ? planRef.current.steps.length : 0
+
     try {
-      let apiMessages = null // conversación persistente para todo el plan — se arma UNA vez y se comprime al cerrar cada step, nunca se reconstruye desde cero.
-      const pairsStartIdx = sessionPairsRef.current.length // Bloque L4: corte para saber qué parejas se emitieron en ESTE request
-      let requestFinalText = '' // Bloque L4: R3 visible final del request (para el turno crudo de la rueda)
+      // CARRIL TAREA (28/09): viaja SOLO el IN del usuario. NADA de R7 (la rueda
+      // queda congelada durante la tarea). Cada paso es un ping-pong de comandos
+      // y resultados; al cerrar, el SISTEMA manda R4 con el resultado REAL y el
+      // modelo redacta el R5. El escape desde conversacional reusa sus mensajes.
+      let apiMessages
+      if (opts.messages) {
+        // Escape: se reusan los mensajes conversacionales y se inserta la
+        // corrección de carril DESPUÉS de los system y ANTES del IN.
+        const firstNonSystem = opts.messages.findIndex(m => m.role !== 'system')
+        const at = firstNonSystem === -1 ? opts.messages.length : firstNonSystem
+        apiMessages = [
+          ...opts.messages.slice(0, at),
+          { role: 'system', content: LANE_SWITCH_HINT },
+          ...opts.messages.slice(at),
+        ]
+      } else if (trackSteps) {
+        apiMessages = [
+          { role: 'system', content: buildSystemContext(workspace.path, permissionLabel, { technical: true }) },
+          { role: 'system', content: STEP_EXECUTION_PROMPT },
+          { role: 'user', content: markInput(LANE.TASK, originalMessageRef.current || '') },
+        ]
+      } else {
+        apiMessages = [
+          { role: 'system', content: buildSystemContext(workspace.path, permissionLabel) },
+          { role: 'system', content: remoteSystem },
+          { role: 'user', content: markInput(LANE.TASK, originalMessageRef.current || '') },
+        ]
+      }
+      let pendingAssistant = opts.assistantMsg || null
+      // Bitácora REAL de herramientas del turno (la usa el JUEZ para armar R4).
+      const taskToolLog = []
       while (remainingIter > 0 && !controller.signal.aborted) {
         const currentPlan = planRef.current
-        const trackSteps = currentPlan !== null
 
         let step = null
         let stepIndex = -1
@@ -938,43 +970,10 @@ function CochiDesktop({
           planRef.current.currentStepIndex = stepIndex
         }
 
-        const isLastStep = !trackSteps || stepIndex === currentPlan.steps.length - 1
-
-        const remoteSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
-
-        // Auditoría de gasto (Sesión H, camino de escritura): un plan de 1 paso
-        // NO paga el two-phase (prompt técnico + wrapper de traducción): se
-        // resuelve como single-pass emitiendo R1/R2/R3 directo. Y el reasoning
-        // queda SÓLO para planes realmente complejos (≥3 pasos), no para
-        // cualquier write — antes un plan de 1 paso razonaba y disparaba el total.
-        const planStepCount = trackSteps ? currentPlan.steps.length : 0
+        // Reasoning AUTO: sólo en tareas complejas (plan ≥3 pasos). El carril
+        // tarea SIEMPRE usa el prompt técnico (no emite R1/R2/R3); el cierre R5
+        // se redacta aparte a partir del R4 que arma el sistema.
         const useReasoning = trackSteps && planStepCount >= 3
-        const usesTwoPhaseFinal = trackSteps && isLastStep && planStepCount > 1
-        const usesTechnicalPrompt = !isLastStep || usesTwoPhaseFinal
-
-        if (apiMessages === null) {
-          // Arranca la conversación (del plan, o del turno único si no hay plan) — UNA sola vez.
-          const baseSystemMessages = usesTechnicalPrompt
-            ? [
-                { role: 'system', content: buildSystemContext(workspace.path, permissionLabel, { technical: true }) },
-                { role: 'system', content: STEP_EXECUTION_PROMPT },
-              ]
-            : [
-                { role: 'system', content: buildSystemContext(workspace.path, permissionLabel) },
-                { role: 'system', content: remoteSystem },
-              ]
-          // Bloque L4 — prompt híbrido (D3/D8): system estable -> bloque R7 ->
-          // último turno crudo -> input actual. El bloque R7 va ANTES del input
-          // del usuario y crece sólo por append al final, así el prefijo
-          // [system + R7 v(n-1)] se mantiene cacheable por el proveedor.
-          const wheel = wheelRef.current
-          apiMessages = buildWheelMessages({
-            systemMessages: baseSystemMessages,
-            r7: wheel.r7,
-            rawTurns: wheel.lastTurn ? [wheel.lastTurn] : [],
-            userInput: originalMessageRef.current || '',
-          })
-        }
 
         if (trackSteps) {
           apiMessages.push({
@@ -993,7 +992,6 @@ function CochiDesktop({
         let stepSubInputTokens = 0
         let stepSubOutputTokens = 0
         let stepSubCachedTokens = 0
-        let stepReasoning = ''
         let innerIter = 0
         const MAX_INNER = 15
         let stepCompleted = false
@@ -1013,252 +1011,114 @@ function CochiDesktop({
           innerIter++
           remainingIter--
 
-          const isWrapperCall = false
+          let assistantMsg
+          if (pendingAssistant) {
+            // Escape desde el carril conversacional: el modelo YA emitió
+            // tool_calls en la llamada conversacional; se ejecutan directamente
+            // sin volver a pedirle al modelo.
+            assistantMsg = pendingAssistant
+            pendingAssistant = null
+            apiMessages.push(assistantMsg)
+          } else {
+            const toolsForRequest = getToolsForPermission(workspace.permission, scope)
+            requestCount++
+            const reqAudit = { msgs: apiMessages.length, calls: 0, prompt: 0, completion: 0, cached: 0, reasoning: 0 }
+            if (import.meta.env.DEV) {
+              reqAudit.msgChars = JSON.stringify(apiMessages).length
+              reqAudit.toolChars = toolsForRequest ? JSON.stringify(toolsForRequest).length : 0
+              reqAudit.msgDetail = apiMessages
+                .map((m, i) => `${i}:${m.role}:${typeof m.content === 'string' ? m.content.length : '?'}`)
+                .join(' ')
+            }
 
-          const toolsForRequest = isWrapperCall ? null : getToolsForPermission(workspace.permission, scope)
-          requestCount++
-          const reqAudit = { msgs: apiMessages.length, calls: 0, prompt: 0, completion: 0, cached: 0, reasoning: 0 }
-          if (import.meta.env.DEV) {
-            reqAudit.msgChars = JSON.stringify(apiMessages).length
-            reqAudit.toolChars = toolsForRequest ? JSON.stringify(toolsForRequest).length : 0
-            reqAudit.msgDetail = apiMessages
-              .map((m, i) => `${i}:${m.role}:${typeof m.content === 'string' ? m.content.length : '?'}`)
-              .join(' ')
-          }
-
-          const extractDisplay = makeStreamingDisplayExtractor()
-          const streamed = await streamChat({
-            provider,
-            messages: apiMessages,
-            ...(isWrapperCall ? {} : { tools: toolsForRequest, toolChoice: 'auto' }),
-            signal: controller.signal,
-            sessionId: cochiSessionId,
-            retries: 3,
-            // Reasoning AUTO: sólo en tareas complejas (plan multi-paso). Un
-            // turno single-pass (lectura/consulta) NO razona — evita sumar
-            // output innecesario en cada llamada.
-            reasoning: useReasoning,
-            onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
-            onUsage: (usage) => {
-              const u = normalizeUsage(usage)
-              stepTokens += u.totalTokens
-              totalTokensAcc += u.totalTokens
-              stepInputTokens += u.promptTokens
-              stepOutputTokens += u.completionTokens
-              stepCachedTokens += u.cachedTokens
-              reqAudit.prompt += u.promptTokens
-              reqAudit.completion += u.completionTokens
-              reqAudit.cached += u.cachedTokens
-              reqAudit.reasoning += u.reasoningTokens
-            },
-          })
-          liveRef.current?.flush()
-          liveRef.current?.clear()
-          if (streamed.reasoning) stepReasoning = streamed.reasoning
-          reqAudit.calls = streamed.toolCalls?.length || 0
-          reqAudit.finish = streamed.finishReason
-          auditLog(
-            `request #${requestCount} · msgs ${reqAudit.msgs} · chars ${reqAudit.msgChars}` +
-            ` · toolsChars ${reqAudit.toolChars} · calls ${reqAudit.calls}` +
-            ` · prompt ${reqAudit.prompt} · completion ${reqAudit.completion}` +
-            ` · cached ${reqAudit.cached} · reasoning ${reqAudit.reasoning} · finish ${reqAudit.finish}`
-          )
-          if (import.meta.env.DEV) auditLog(`  └ msgs: ${reqAudit.msgDetail}`)
-
-          if (streamed.finishReason === 'length') {
-            if (trackSteps) updateStepStatus(step.id, 'failed', 'Respuesta cortada por límite de tokens (finish_reason=length)')
-            stepResultSummary = 'FAILED: respuesta cortada por límite de tokens'
-            requestFinalText = '⚠️ La respuesta del modelo se cortó por el límite de tokens. Probá con una instrucción más acotada o un archivo más pequeño.'
-            pushMessage({
-              role: 'assistant',
-              content: '⚠️ La respuesta del modelo se cortó por el límite de tokens. Probá con una instrucción más acotada o un archivo más pequeño.'
+            const extractDisplay = makeStreamingDisplayExtractor()
+            const streamed = await streamChat({
+              provider,
+              messages: apiMessages,
+              ...(toolsForRequest ? { tools: toolsForRequest, toolChoice: 'auto' } : {}),
+              signal: controller.signal,
+              sessionId: cochiSessionId,
+              retries: 3,
+              // Reasoning AUTO: sólo en tareas complejas (plan ≥3 pasos).
+              reasoning: useReasoning,
+              onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
+              onUsage: (usage) => {
+                const u = normalizeUsage(usage)
+                stepTokens += u.totalTokens
+                totalTokensAcc += u.totalTokens
+                stepInputTokens += u.promptTokens
+                stepOutputTokens += u.completionTokens
+                stepCachedTokens += u.cachedTokens
+                reqAudit.prompt += u.promptTokens
+                reqAudit.completion += u.completionTokens
+                reqAudit.cached += u.cachedTokens
+                reqAudit.reasoning += u.reasoningTokens
+              },
             })
-            stepCompleted = true
-            break
+            liveRef.current?.flush()
+            liveRef.current?.clear()
+            reqAudit.calls = streamed.toolCalls?.length || 0
+            reqAudit.finish = streamed.finishReason
+            auditLog(
+              `request #${requestCount} · msgs ${reqAudit.msgs} · chars ${reqAudit.msgChars}` +
+              ` · toolsChars ${reqAudit.toolChars} · calls ${reqAudit.calls}` +
+              ` · prompt ${reqAudit.prompt} · completion ${reqAudit.completion}` +
+              ` · cached ${reqAudit.cached} · reasoning ${reqAudit.reasoning} · finish ${reqAudit.finish}`
+            )
+            if (import.meta.env.DEV) auditLog(`  └ msgs: ${reqAudit.msgDetail}`)
+
+            if (streamed.finishReason === 'length') {
+              if (trackSteps) updateStepStatus(step.id, 'failed', 'Respuesta cortada por límite de tokens (finish_reason=length)')
+              stepResultSummary = 'FAILED: respuesta cortada por límite de tokens'
+              pushMessage({
+                role: 'assistant',
+                content: '⚠️ La respuesta del modelo se cortó por el límite de tokens. Probá con una instrucción más acotada o un archivo más pequeño.'
+              })
+              stepCompleted = true
+              break
+            }
+            assistantMsg = {
+              role: 'assistant',
+              content: streamed.content || '',
+              ...(streamed.toolCalls?.length ? { tool_calls: streamed.toolCalls } : {}),
+            }
+            apiMessages.push(assistantMsg)
           }
-          const assistantMsg = {
-            role: 'assistant',
-            content: streamed.content || '',
-            ...(streamed.toolCalls?.length ? { tool_calls: streamed.toolCalls } : {}),
-          }
-          apiMessages.push(assistantMsg)
           if (assistantMsg.tool_calls?.length) stepHadToolCall = true
 
           if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
-            const rawContent = assistantMsg.content || ''
-
-            // Single-pass (!trackSteps): el modelo responde directo R1/R2/R3, sin
-            // swap a STEP_EXECUTION_PROMPT ni wrapper extra (ahorra una llamada
-            // completa y evita el falso "no emitió señal de control válida").
-            const useDirectParse = trackSteps ? (isLastStep && !usesTwoPhaseFinal) : true
-            if (useDirectParse) {
-              const { r1, r2, r3 } = parseR1R2R3(rawContent)
-              const displayContent = (r3 || rawContent)
-                .replace(/\[STEP_COMPLETE(?::[\s\S]*?)?\]/g, '')
-                .replace(/\[STEP_FAILED(?::[\s\S]*?)?\]/g, '')
-                .replace(/\[NEED_REPLAN(?::[\s\S]*?)?\]/g, '')
-                .trim()
-
+            // Carril tarea: NO hay R1/R2/R3. Con plan, el step cierra con una
+            // señal de control; sin plan (escape), el stop del modelo cierra la
+            // tarea. El cierre visible (R5) lo redacta aparte el finalizador.
+            if (trackSteps) {
+              const rawContent = assistantMsg.content || ''
               const completeMatch = rawContent.match(/\[STEP_COMPLETE:\s*(.*?)\]/)
               const failedMatch = rawContent.match(/\[STEP_FAILED:\s*(.*?)\]/)
               const replanMatch = rawContent.match(/\[NEED_REPLAN:\s*(.*?)\]/)
-
               if (completeMatch) {
-                const extractedResult = completeMatch[1].trim()
-                if (trackSteps) updateStepStatus(step.id, 'completed', extractedResult)
-                await appendToMemory(r1, r2)
-                sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
-                requestFinalText = displayContent
-                pushMessage({ role: 'assistant', content: displayContent, reasoning: stepReasoning || undefined })
-                stepCompleted = true
-                break
+                stepResultSummary = completeMatch[1].trim()
+                updateStepStatus(step.id, 'completed', stepResultSummary)
               } else if (failedMatch) {
                 const reason = failedMatch[1].trim()
-                if (trackSteps) updateStepStatus(step.id, 'failed', reason)
-                await appendToMemory(r1, r2)
-                sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
-                requestFinalText = displayContent
-                pushMessage({ role: 'assistant', content: displayContent, reasoning: stepReasoning || undefined })
-                stepCompleted = true
-                break
-              } else if (replanMatch) {
-                const extractedReason = replanMatch[1].trim()
-                if (trackSteps) {
-                  if (step.isReplanned) {
-                    updateStepStatus(step.id, 'failed', extractedReason)
-                  } else {
-                    await replanStep(step, extractedReason)
-                  }
-                }
-                await appendToMemory(r1, r2)
-                sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
-                requestFinalText = displayContent
-                pushMessage({ role: 'assistant', content: displayContent, reasoning: stepReasoning || undefined })
-                stepCompleted = true
-                break
-              } else {
-                // Sin señal de control. Sólo es éxito si el step ejecutó al
-                // menos una herramienta; si no, se marca fallo (evita el falso
-                // "1 de 1 pasos exitosos" del Test 2). El single-pass sin plan
-                // (!trackSteps) NO se afecta: ahí la prosa ES el resultado.
-                const silentOk = stepSilentlySucceeded({ trackSteps, stepHadToolCall })
-                if (trackSteps) {
-                  updateStepStatus(step.id, silentOk ? 'completed' : 'failed',
-                    silentOk ? 'Completado' : 'Sin señal de control ni ejecución de herramientas')
-                }
-                await appendToMemory(r1, r2)
-                sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
-                requestFinalText = displayContent
-                pushMessage({ role: 'assistant', content: displayContent, reasoning: stepReasoning || undefined })
-                if (!silentOk) {
-                  pushMessage({
-                    role: 'assistant',
-                    content: '⚠️ El paso no ejecutó ninguna herramienta ni emitió señal de control. No lo doy por completado.'
-                  })
-                }
-                stepCompleted = true
-                break
-              }
-            } else {
-              const shouldWrapperTranslate = trackSteps ? usesTwoPhaseFinal : true
-              const completeMatch = rawContent.match(/\[STEP_COMPLETE:\s*(.*?)\]/)
-              const failedMatch = rawContent.match(/\[STEP_FAILED:\s*(.*?)\]/)
-              const replanMatch = rawContent.match(/\[NEED_REPLAN:\s*(.*?)\]/)
-
-              if (completeMatch) {
-                const extractedResult = completeMatch[1].trim()
-                if (trackSteps) updateStepStatus(step.id, 'completed', extractedResult)
-                stepResultSummary = extractedResult
-
-                if (shouldWrapperTranslate) {
-                  try {
-                    const wrapperMessages = [
-                      {
-                        role: 'system',
-                        content: buildSystemContext(workspace.path, permissionLabel)
-                      },
-                      { role: 'system', content: remoteSystem },
-                      {
-                        role: 'user',
-                        content: `TASK_RESULT (factual, already executed — report this to the user in your own voice, do not re-execute anything):\n${extractedResult}`
-                      }
-                    ]
-
-                    const extractDisplay = makeStreamingDisplayExtractor()
-                    const wrapperStreamed = await streamChat({
-                      provider,
-                      messages: wrapperMessages,
-                      signal: controller.signal,
-                      sessionId: cochiSessionId,
-                      retries: 3,
-                      reasoning: useReasoning,
-                      onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
-                      onUsage: (usage) => {
-                        const u = normalizeUsage(usage)
-                        stepTokens += u.totalTokens
-                        totalTokensAcc += u.totalTokens
-                        stepInputTokens += u.promptTokens
-                        stepOutputTokens += u.completionTokens
-                        stepCachedTokens += u.cachedTokens
-                      },
-                    })
-                    liveRef.current?.flush()
-                    liveRef.current?.clear()
-                    const wrapperRaw = wrapperStreamed.content || ''
-                    const { r1, r2, r3 } = parseR1R2R3(wrapperRaw)
-                    const displayContent = (r3 || wrapperRaw)
-                      .replace(/\[STEP_COMPLETE(?::[\s\S]*?)?\]/g, '')
-                      .replace(/\[STEP_FAILED(?::[\s\S]*?)?\]/g, '')
-                      .replace(/\[NEED_REPLAN(?::[\s\S]*?)?\]/g, '')
-                      .trim()
-                    await appendToMemory(r1, r2)
-                    sessionPairsRef.current.push({ r1, r2, stepId: trackSteps ? stepIndex + 1 : null })
-                    requestFinalText = displayContent || extractedResult
-                    pushMessage({ role: 'assistant', content: displayContent || extractedResult, reasoning: (wrapperStreamed.reasoning || stepReasoning) || undefined })
-                  } catch (wrapErr) {
-                    requestFinalText = extractedResult
-                    pushMessage({ role: 'assistant', content: extractedResult, reasoning: stepReasoning || undefined })
-                  }
-                }
-
-                stepCompleted = true
-                break
-              } else if (failedMatch) {
-                const reason = failedMatch[1].trim()
-                if (trackSteps) updateStepStatus(step.id, 'failed', reason)
                 stepResultSummary = `FAILED: ${reason}`
-                if (shouldWrapperTranslate) {
-                  requestFinalText = `⚠️ ${reason}`
-                  pushMessage({ role: 'assistant', content: `⚠️ ${reason}` })
-                }
-                stepCompleted = true
-                break
+                updateStepStatus(step.id, 'failed', reason)
               } else if (replanMatch) {
                 const extractedReason = replanMatch[1].trim()
-                if (!trackSteps) {
-                  stepResultSummary = `FAILED: ${extractedReason}`
-                  requestFinalText = `⚠️ Esta tarea necesita dividirse en pasos y hoy no hay planner activo. Motivo: ${extractedReason}. Probá pedírmelo de forma más específica o en partes.`
-                  pushMessage({ role: 'assistant', content: `⚠️ Esta tarea necesita dividirse en pasos y hoy no hay planner activo. Motivo: ${extractedReason}. Probá pedírmelo de forma más específica o en partes.` })
-                } else if (step.isReplanned) {
+                if (step.isReplanned) {
                   updateStepStatus(step.id, 'failed', extractedReason)
-                  stepResultSummary = `REPLANNED: ${extractedReason}`
                 } else {
                   await replanStep(step, extractedReason)
-                  stepResultSummary = `REPLANNED: ${extractedReason}`
                 }
-                stepCompleted = true
-                break
+                stepResultSummary = `REPLANNED: ${extractedReason}`
               } else {
-                if (trackSteps) updateStepStatus(step.id, 'failed', 'No control signal emitted')
-                stepResultSummary = 'FAILED: No control signal emitted'
-                if (shouldWrapperTranslate) {
-                  requestFinalText = '⚠️ El paso final no emitió una señal de control válida.'
-                  pushMessage({ role: 'assistant', content: '⚠️ El paso final no emitió una señal de control válida.' })
-                }
-                stepCompleted = true
-                break
+                const silentOk = stepSilentlySucceeded({ trackSteps, stepHadToolCall })
+                updateStepStatus(step.id, silentOk ? 'completed' : 'failed',
+                  silentOk ? 'Completado' : 'Sin señal de control ni ejecución de herramientas')
+                if (!silentOk) stepResultSummary = 'FAILED: sin señal de control ni ejecución'
               }
             }
+            stepCompleted = true
+            break
           }
 
           const executeToolCall = async (toolCall) => {
@@ -1399,6 +1259,12 @@ function CochiDesktop({
             } catch (err) { modelResult = `ERROR: ${err.message}` }
             pushActivity(icon, name, shortLabel, diff)
             if (diff) pushMessage({ role: 'diff', diff })
+            // Bitácora real del turno para el JUEZ (R4): nombre, salida y archivo.
+            taskToolLog.push({
+              name,
+              result: String(modelResult),
+              file: args.path || args.fromPath || args.toPath || null,
+            })
             return { role: 'tool', tool_call_id: toolCall.id, content: String(modelResult) }
           }
 
@@ -1505,17 +1371,73 @@ function CochiDesktop({
         if (!trackSteps) break
       }
 
-      // Bloque L4 — consolidar la rueda UNA vez por request (no por step): se
-      // sella el turno anterior en R7 y el actual queda como turno crudo (D3).
-      const requestPairs = sessionPairsRef.current
-        .slice(pairsStartIdx)
-        .map(p => ({ r1: p.r1, r2: p.r2 }))
-      if (requestFinalText || requestPairs.length) {
-        wheelRef.current = closeWheelTurn(wheelRef.current, {
-          user: originalMessageRef.current || '',
-          assistant: requestFinalText,
-          pairs: requestPairs,
+      // ── CIERRE DEL CARRIL TAREA (28/09) ──────────────────────────────────
+      // El JUEZ es el SISTEMA: arma el R4 con el resultado REAL (ok/fallo +
+      // pasos + comandos + archivos + salidas). El modelo solo redacta el R5.
+      // La rueda NO guarda el IN de la tarea: solo el R5 (autoexplicativo).
+      if (!controller.signal.aborted) {
+        const finalPlan = planRef.current
+        const planSteps = finalPlan ? finalPlan.steps : []
+        const ok = taskSucceeded({ trackSteps, steps: planSteps, toolLog: taskToolLog })
+
+        // Box de sistema acotado (solo cuando hay fallos) — estilo JEV.
+        if (trackSteps) {
+          const failedSteps = planSteps.filter(s => s.status === 'failed')
+          if (failedSteps.length > 0) {
+            const successful = planSteps.filter(s => s.status === 'completed').length
+            pushMessage({
+              role: 'assistant',
+              content: `Tarea completada: ${successful}/${planSteps.length} pasos. Fallos: `
+                + failedSteps.map(s => `${s.description} (${s.result || 'sin motivo'})`).join('; ')
+            })
+          }
+        }
+
+        const r4 = buildTaskFinish({
+          ok,
+          task: originalMessageRef.current,
+          steps: planSteps,
+          toolLog: taskToolLog,
+          nombre: nombreAlternativo,
         })
+        try {
+          const r5Streamed = await streamChat({
+            provider,
+            messages: [
+              { role: 'system', content: buildSystemContext(workspace.path, permissionLabel) },
+              { role: 'system', content: remoteSystem },
+              { role: 'user', content: r4 },
+            ],
+            signal: controller.signal,
+            sessionId: cochiSessionId,
+            retries: 3,
+            reasoning: false,
+            onDelta: (partial) => liveRef.current?.push(cleanR5(partial)),
+            onUsage: (usage) => {
+              const u = normalizeUsage(usage)
+              totalTokensAcc += u.totalTokens
+              setTokens(prev => prev + u.totalTokens)
+              setCachedTokens(prev => prev + u.cachedTokens)
+              const c = calculateCost(selectedModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
+              setCost(prev => prev + c)
+              onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost: c })
+            },
+          })
+          liveRef.current?.flush()
+          liveRef.current?.clear()
+          const r5 = cleanR5(r5Streamed.content)
+            || (ok ? `100% ${nombreAlternativo} — tarea completada.` : `0% ${nombreAlternativo} — no se pudo completar.`)
+          pushMessage({ role: 'assistant', content: r5, reasoning: r5Streamed.reasoning || undefined })
+          wheelRef.current = closeWheelTask(wheelRef.current, r5)
+        } catch (r5Err) {
+          if (r5Err.name !== 'AbortError') {
+            const fallback = ok
+              ? `100% ${nombreAlternativo} — tarea completada.`
+              : `0% ${nombreAlternativo} — no se pudo completar.`
+            pushMessage({ role: 'assistant', content: fallback })
+            wheelRef.current = closeWheelTask(wheelRef.current, fallback)
+          }
+        }
       }
 
       setPlanStatus('completed')
@@ -1524,17 +1446,6 @@ function CochiDesktop({
       setSubagents([])
       liveRef.current?.clear()
       auditLog(`TOTAL del turno: ${requestCount} request(s) · ${totalTokensAcc} tokens`)
-      const finalPlan = planRef.current
-      if (finalPlan) {
-        const successful = finalPlan.steps.filter(s => s.status === 'completed').length
-        const total = finalPlan.steps.length
-        const failedSteps = finalPlan.steps.filter(s => s.status === 'failed')
-        let summary = `Tarea completada: ${successful} de ${total} pasos exitosos.`
-        if (failedSteps.length > 0) {
-          summary += ' Fallos: ' + failedSteps.map(s => `${s.description} (${s.result || 'sin motivo'})`).join('; ')
-        }
-        pushMessage({ role: 'assistant', content: summary })
-      }
 
     } catch (err) {
       setLoading(false)
@@ -1548,13 +1459,117 @@ function CochiDesktop({
     }
   }
 
+  // ─── Carril CONVERSACIONAL (sin comandos) ────────────────────────────────
+  // Viaja system + R7 + IN. OUT = R1 + R2 + R3 (R1/R2 internos, se sellan en la
+  // rueda). Escape: si el modelo emite tool_calls, el sistema conmuta a carril
+  // TAREA y ejecuta esos comandos; nunca al revés.
+  async function executeConversational() {
+    if (!remotePrompts) {
+      const msg = promptsError
+        ? '⛔ Sin conexión a R7Signal. Verifica tu red e intenta de nuevo.'
+        : '⏳ Configuración aún cargando. Espera un momento.'
+      pushMessage({ role: 'assistant', content: msg })
+      return
+    }
+    const usesOpenRouter = selectedModel !== 'ollama' && selectedModel !== 'lmstudio'
+    if (usesOpenRouter && !getOpenRouterKey()) {
+      pushMessage({
+        role: 'assistant',
+        content: '🔑 Todavía no cargaste tu API key de OpenRouter. Usá el botón de la llave en la barra superior y pegala para poder trabajar.'
+      })
+      return
+    }
+
+    const provider = resolveProvider(selectedModel, { preferences, ollamaModel, lmStudioModel })
+    const permissionLabel = workspace.permission === 'read' ? 'read-only' : workspace.permission === 'write' ? 'write' : 'full access'
+    const nombreAlternativo = preferences?.nombre_alternativo || 'Signor Roberto'
+    const chatLanguage = preferences?.chat_language || 'Spanish'
+    const controller = new AbortController()
+    abortRef.current = controller
+    if (!sessionIdRef.current) {
+      sessionIdRef.current = `cochi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    }
+    const cochiSessionId = sessionIdRef.current
+
+    setLoading(true)
+    setActivity([])
+    setSubagents([])
+    liveRef.current?.clear()
+
+    const messages = buildWheelMessages({
+      systemMessages: [
+        { role: 'system', content: buildSystemContext(workspace.path, permissionLabel) },
+        { role: 'system', content: interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo }) },
+      ],
+      r7: wheelRef.current.r7,
+      rawTurns: [],
+      userInput: markInput(LANE.CONVERSATIONAL, originalMessageRef.current || ''),
+    })
+
+    let totalTokensAcc = 0
+    try {
+      const extractDisplay = makeStreamingDisplayExtractor()
+      const streamed = await streamChat({
+        provider,
+        messages,
+        tools: getToolsForPermission(workspace.permission, 'read'),
+        toolChoice: 'auto',
+        signal: controller.signal,
+        sessionId: cochiSessionId,
+        retries: 3,
+        reasoning: false,
+        onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
+        onUsage: (usage) => {
+          const u = normalizeUsage(usage)
+          totalTokensAcc += u.totalTokens
+          setTokens(prev => prev + u.totalTokens)
+          setCachedTokens(prev => prev + u.cachedTokens)
+          const c = calculateCost(selectedModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
+          setCost(prev => prev + c)
+          onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost: c })
+        },
+      })
+      liveRef.current?.flush()
+      liveRef.current?.clear()
+      auditLog(`conversacional: ${totalTokensAcc} tokens · calls ${streamed.toolCalls?.length || 0} · finish ${streamed.finishReason}`)
+
+      if (streamed.toolCalls?.length) {
+        // ESCAPE → carril TAREA: se ejecutan los comandos ya emitidos y se cierra
+        // con R4 (sistema) → R5 (modelo).
+        await executeAllSteps('read', {
+          messages,
+          assistantMsg: {
+            role: 'assistant',
+            content: streamed.content || '',
+            tool_calls: streamed.toolCalls,
+          },
+        })
+        return
+      }
+
+      const { r1, r2, r3 } = parseR1R2R3(streamed.content || '')
+      const display = r3 || streamed.content || 'Respuesta sin formato reconocido.'
+      pushMessage({ role: 'assistant', content: display, reasoning: streamed.reasoning || undefined })
+      await appendToMemory(r1, r2)
+      // El sistema mantiene la rueda: R1/R2 se sellan de inmediato (D3 jubilado).
+      wheelRef.current = commitR7Turn(wheelRef.current, { pairs: [{ r1, r2 }] })
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        pushMessage({ role: 'assistant', content: `❌ Error: ${err.message}` })
+      }
+    } finally {
+      setLoading(false)
+      setActivity([])
+      setSubagents([])
+      liveRef.current?.clear()
+    }
+  }
+
   // ─── Envío principal ──────────────────────────────────────────────────────
   async function handleSendText(sent) {
     if (!sent || loading || planStatus === 'executing') return
 
     lastTurnHadCommandRef.current = false // Fase 3.1
-    // Fase 3.1: abre el snapshot del turno. Si no hay mutaciones, no se escribe
-    // nada en disco y el snapshot queda vacío (se descarta al resetear).
     if (!sessionIdRef.current) {
       sessionIdRef.current = `cochi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     }
@@ -1562,19 +1577,15 @@ function CochiDesktop({
     originalMessageRef.current = sent
     pushMessage({ role: 'user', content: sent })
 
-    // Planner revivido (Bloque J): si la intención amerita varios pasos, se
-    // genera un plan y se espera confirmación en PlanViewer antes de ejecutar;
-    // si es atómica/lectura, se ejecuta single-pass como antes.
-    if (needsPlanning(sent)) {
-      syncPlan(null)
+    // El sistema decide el carril por el IN (loop de dos carriles, 28/09).
+    syncPlan(null)
+    if (laneForMessage(sent) === LANE.TASK) {
+      // Carril TAREA con planner: genera plan → confirmación → executeAllSteps.
       await generatePlan(sent)
     } else {
-      syncPlan(null)
+      // Carril CONVERSACIONAL: system + R7 + IN. Escape a tarea si pide comandos.
       setPlanStatus('idle')
-      // Auditoría de gasto: intención de lectura => scope 'read' (9 tools, no 19).
-      // Si el mensaje tuviera intención de mutación, needsPlanning lo habría
-      // mandado al planner y este camino no se ejecuta.
-      await executeAllSteps('read')
+      await executeConversational()
     }
   }
 
@@ -1613,6 +1624,9 @@ function CochiDesktop({
   // permisos/preguntas colgadas) y borra el JSON fantasma si no queda turno.
   function applyUndo() {
     const { messages: newMsgs, undoneUser } = session.undoTurn()
+    // D3 jubilado: la rueda no tiene "turno crudo" pendiente; el undo resta el
+    // último bloque directamente. Se anula cualquier lastTurn legado.
+    wheelRef.current = { r7: wheelRef.current.r7, lastTurn: null }
     setMessages(newMsgs)
     setActivity([]); setSubagents([]); liveRef.current?.clear(); setTodos([])
     setTokenWarningDismissed(false)

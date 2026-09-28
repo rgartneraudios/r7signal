@@ -12,6 +12,9 @@ import {
   createWheelState,
   closeWheelTurn,
   flushWheel,
+  appendR7Task,
+  commitR7Turn,
+  closeWheelTask,
   buildWheelMessages,
   summarizeFromPairs,
 } from '../src/lib/r7Wheel.js'
@@ -117,6 +120,21 @@ check('NO incluye el R3 visible', sum.includes('respuesta visible larga'), false
 check('ignora markers de step y no-assistant', sum.includes('STEP 2'), false)
 check('sin pares recuperables → null', summarizeFromPairs([{ role: 'assistant', content: '[STEP 1 RESULT: x]' }]), null)
 check('lista vacía → null', summarizeFromPairs([]), null)
+
+console.log('\n— Carril TAREA en la rueda: R5 como bloque (28/09) —')
+check('appendR7Task agrega un bloque con R5', appendR7Task('', 1, '100% — hecho'), '── Turno 1 ──\nR5: 100% — hecho')
+check('appendR7Task sin r5 → no agrega', appendR7Task('x', 2, ''), 'x')
+let stTask = createWheelState('')
+stTask = commitR7Turn(stTask, { pairs: [{ r1: 'a', r2: 'b' }] })
+check('commitR7Turn sella conversacional de inmediato', countR7Turns(stTask.r7), 1)
+check('commitR7Turn deja lastTurn nulo (D3 jubilado)', stTask.lastTurn, null)
+stTask = closeWheelTask(stTask, '100% Signor Roberto — archivo creado')
+check('closeWheelTask añade el R5 como Turno 2', countR7Turns(stTask.r7), 2)
+check('el bloque R5 lleva su etiqueta', stTask.r7.includes('R5: 100% Signor Roberto'), true)
+check('closeWheelTask con r5 vacío no agrega', countR7Turns(closeWheelTask(stTask, '  ').r7), 2)
+const poppedTask = popR7Turn(stTask.r7)
+check('popR7Turn quita el bloque R5', countR7Turns(poppedTask.r7), 1)
+check('popR7Turn de un R5 devuelve pair nulo', poppedTask.pair, null)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

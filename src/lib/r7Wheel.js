@@ -49,6 +49,37 @@ export function appendR7Pair(r7, turnNumber, r1, r2) {
   return r7 ? `${r7}\n${block}` : block
 }
 
+// ─── Carril TAREA en la rueda (loop de dos carriles, 28/09) ──────────────────
+// En el carril tarea NO hay R1/R2: lo único que viaja al próximo turno
+// conversacional es el R5 (cierre autoexplicativo). Se anota como un bloque más
+// de la rueda, con la misma numeración que los turnos conversacionales.
+export function appendR7Task(r7, turnNumber, r5) {
+  if (!r5) return r7 || ''
+  const block = `── Turno ${turnNumber} ──\nR5: ${r5}`
+  return r7 ? `${r7}\n${block}` : block
+}
+
+// Cierra un turno CONVERSACIONAL sellándolo en R7 de inmediato (el sistema
+// mantiene la rueda; el modelo no la devuelve). D3 jubilado: ya no queda un
+// "último turno crudo" pendiente. Ignora cualquier lastTurn legado para no
+// duplicar anotaciones.
+export function commitR7Turn(state, turn) {
+  const r7 = state?.r7 || ''
+  const merged = mergeR7Pairs(turn?.pairs)
+  if (!merged) return { r7, lastTurn: null }
+  const n = countR7Turns(r7) + 1
+  return { r7: appendR7Pair(r7, n, merged.r1, merged.r2), lastTurn: null }
+}
+
+// Cierra un turno de TAREA añadiendo su R5 a la rueda. D3 jubilado: sin crudo.
+export function closeWheelTask(state, r5) {
+  const r7 = state?.r7 || ''
+  const text = String(r5 ?? '').trim()
+  if (!text) return { r7, lastTurn: null }
+  const n = countR7Turns(r7) + 1
+  return { r7: appendR7Task(r7, n, text), lastTurn: null }
+}
+
 // Un turno del USUARIO puede producir varias parejas R1/R2 (un plan de Cochi
 // emite una por paso), pero en la rueda un turno = UNA anotación (commit). Este
 // helper las colapsa: conserva el primer R1 no vacío (la intención original) y
