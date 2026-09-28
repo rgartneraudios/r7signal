@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "node harness/run-all.mjs",
     "harness:permissions": "node harness/cochiPermissions.harness.mjs",
     "harness:r7wheel": "node harness/cochiR7Wheel.harness.mjs",
     "harness:sessions": "node harness/cochiSessions.harness.mjs",
