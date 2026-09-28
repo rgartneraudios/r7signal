@@ -40,6 +40,8 @@ check('"borrá x" → tarea', laneForMessage('borrá el archivo viejo.txt'), LAN
 check('"cambiá el color" → tarea', laneForMessage('cambiá el color del botón'), LANE.TASK)
 check('"leé el tablero" → tarea (single-pass read)', laneForMessage('leé el tablero y ejecutá el bloque A'), LANE.TASK)
 check('"ejecutá Get-Location" → tarea', laneForMessage('ejecutá Get-Location'), LANE.TASK)
+check('"Corré node x.js" → tarea (no conversacional)', laneForMessage('Corré node _stderr_cp850.js y decime la salida'), LANE.TASK)
+check('"Corré: Get-Process" → tarea', laneForMessage('Corré: Get-Process'), LANE.TASK)
 
 console.log('\n— marca del carril en el IN —')
 check('laneTag tarea', laneTag(LANE.TASK), '[LANE: TASK]')

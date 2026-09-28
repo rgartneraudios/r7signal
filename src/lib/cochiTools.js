@@ -72,6 +72,23 @@ export function buildShellInvocation(os, command) {
   return { program: 'bash', args: ['-c', cmd] }
 }
 
+// Formatea el resultado de run_command para el modelo. Se reporta SIEMPRE el
+// exit code (incluido 0): antes solo se prefijaba en fallos, así que un pedido
+// tipo "decime el código de salida" no tenía de dónde leerlo y el modelo
+// improvisaba con `$?` de PowerShell (un booleano engañoso) → juzgaba mal el
+// resultado. Puro y testeable.
+export function formatRunCommandOutput({ stdout, stderr, code, timedOut, error, timeoutMs } = {}) {
+  const out = String(stdout ?? '').trim()
+  const err = String(stderr ?? '').trim()
+  if (timedOut) {
+    const partial = [out && `STDOUT: ${out}`, err && `STDERR: ${err}`].filter(Boolean).join('\n')
+    return `⏱️ Comando cancelado por timeout (${timeoutMs}ms).${partial ? `\n${partial}` : ''}`
+  }
+  if (error) return `ERROR: ${error}${out ? `\nSTDOUT: ${out}` : ''}`
+  const body = err && !out ? `STDERR: ${err}` : err ? `${out}\nSTDERR: ${err}` : (out || '(sin output)')
+  return code != null ? `(exit ${code})\n${body}` : body
+}
+
 // Convierte HTML a texto plano legible: quita scripts/estilos, respeta saltos
 // de bloque y decodifica las entidades más comunes.
 function htmlToText(html) {
@@ -393,7 +410,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: "Read a file's full text. For large files prefer read_file_chunk (check size first).",
+      description: "Read a file's full text. Reserve it for when you need the complete content (e.g. rewriting it): to check size use get_file_info, to locate one line use search_in_files, for a range use read_file_chunk.",
       parameters: {
         type: 'object',
         properties: { path: { type: 'string', description: 'Absolute path.' } },
@@ -480,7 +497,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'find_files',
-      description: 'Find files by glob recursively (*, **, ?, {a,b}, [abc]). Pattern with "/" matches relative path, else file name. Skips node_modules and .git.',
+      description: 'Find files by glob recursively (*, **, ?, {a,b}, [abc]). Pattern with "/" matches relative path, else file name. Skips node_modules and .git. If you already know the exact path, skip this tool.',
       parameters: {
         type: 'object',
         properties: {
@@ -496,7 +513,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'search_in_files',
-      description: 'Search text or regex inside files recursively. Returns path:line. Max 50 results.',
+      description: 'Search text or regex inside files recursively. Returns path:line. Max 50 results. Prefer an exact value (e.g. a hex code) over a generic term to cut false positives.',
       parameters: {
         type: 'object',
         properties: {
@@ -538,7 +555,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'run_command',
-      description: 'Run a shell command (PowerShell on Windows, bash on macOS/Linux). Output capped at 64KB; killed on timeout (default 120s, max 600s).',
+      description: 'Run a shell command (PowerShell on Windows, bash on macOS/Linux). Output capped at 64KB; killed on timeout (default 120s, max 600s). The exit code is ALWAYS reported as "(exit N)" — read it there, do not re-run the command to obtain it.',
       parameters: {
         type: 'object',
         properties: {
@@ -1090,19 +1107,14 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
 
       const out = truncateBytes(stdout.trim(), MAX_COMMAND_OUTPUT_BYTES)
       const err = truncateBytes(stderr.trim(), MAX_COMMAND_OUTPUT_BYTES)
-      let modelResult
-      if (result.timedOut) {
-        const partial = [out && `STDOUT: ${out}`, err && `STDERR: ${err}`].filter(Boolean).join('\n')
-        modelResult = `⏱️ Comando cancelado por timeout (${timeoutMs}ms).${partial ? `\n${partial}` : ''}`
-      } else if (result.error) {
-        modelResult = `ERROR: ${result.error}${out ? `\nSTDOUT: ${out}` : ''}`
-      } else if (err && !out) modelResult = `STDERR: ${err}`
-      else if (err)     modelResult = `${out}\nSTDERR: ${err}`
-      else              modelResult = out || '(sin output)'
-
-      if (!result.timedOut && !result.error && result.code != null && result.code !== 0) {
-        modelResult = `(exit ${result.code})\n${modelResult}`
-      }
+      const modelResult = formatRunCommandOutput({
+        stdout: out,
+        stderr: err,
+        code: result.code,
+        timedOut: result.timedOut,
+        error: result.error,
+        timeoutMs,
+      })
       return { modelResult, diff: null }
     }
 

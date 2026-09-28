@@ -104,6 +104,37 @@ const QUERY_HINTS = [
   'existe', 'hay ',
 ]
 
+// Ejecución de COMANDOS (A-bis 28/09-ter): "Corré X", "ejecutá Y", o cualquier
+// mensaje que mencione un programa/script. Sin esto, "Corré node x.js" caía en
+// carril CONVERSACIONAL (R1/R2 + R7 arrastrado) y el modelo debía emitir la tool
+// para que el sistema hiciera escape = doble llamada. A propósito NO entra en
+// WRITE_VERBS: un comando suelto es single-pass y no paga el planner (que sí se
+// activa si además hay intención de mutación de archivos).
+const RUN_VERB_RE = /\b(corre|correr|corretear|ejecut\w*|lanza\w*|invoca\w*|dispara\w*|arroja\w*|run)\b/
+const RUN_PROGRAM_RE = /\b(node|npx|npm|pnpm|yarn|bun|deno|python|python3|pip|pwsh|powershell|cmd|bash|cargo|git|docker|tsc|vite)\b/
+const RUN_SCRIPT_EXT_RE = /\.(mjs|cjs|jsx|tsx|js|ts|py|ps1|sh|cmd|bat|exe)\b/
+
+// needsCommand: clasificación de CARRIL — incluye mencionar un archivo .js/.py
+// (un "revisá smoke_test.py" es tarea). needsRunCommand: versión ESTRICTA para
+// elegir el SCOPE de tools del single-pass — solo si es probable que CORRA un
+// comando (verbo de ejecución o programa). Así "leé config.js" no sube de scope
+// 'read' a 'task' (que arrastra run_command/escritura) por tener extensión.
+export function needsCommand(message) {
+  const msg = normalizeMessage(message)
+  if (!msg) return false
+  const core = stripLeadGreetings(msg)
+  if (!core) return false
+  return RUN_VERB_RE.test(core) || RUN_PROGRAM_RE.test(core) || RUN_SCRIPT_EXT_RE.test(core)
+}
+
+export function needsRunCommand(message) {
+  const msg = normalizeMessage(message)
+  if (!msg) return false
+  const core = stripLeadGreetings(msg)
+  if (!core) return false
+  return RUN_VERB_RE.test(core) || RUN_PROGRAM_RE.test(core)
+}
+
 // Clasificador de CARRIL (loop de dos carriles, 28/09 fix): decide si un mensaje
 // necesita HERRAMIENTAS (carril tarea) o es charla pura (carril conversacional).
 // Es INDEPENDIENTE de needsPlanning: una lectura de archivos necesita tools pero
@@ -121,6 +152,8 @@ export function needsTools(message) {
   // Una acción explícita MANDA: "Gracias, crea…" o cualquier orden es tarea.
   if (WRITE_VERBS.some(k => core.includes(k))) return true
   if (hasBoardIntent(core)) return true
+  // Comandos ("Corré X", "ejecutá Y", "node script.js"): tarea.
+  if (needsCommand(core)) return true
 
   // Charla pura: no necesita tools.
   if (CONVERSATIONAL_PATTERNS.some(r => r.test(core))) return false

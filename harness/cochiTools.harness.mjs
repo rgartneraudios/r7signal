@@ -2,7 +2,7 @@
 // Ejecutar:  node harness/cochiTools.harness.mjs   (o npm run harness:tools)
 // El foco actual es resolveCommandCwd: run_command debe caer a la raíz del
 // workspace cuando el modelo no manda `cwd` (bug: corría en el cwd del proceso).
-import { resolveCommandCwd, buildShellInvocation, getToolsForPermission } from '../src/lib/cochiTools.js'
+import { resolveCommandCwd, buildShellInvocation, getToolsForPermission, formatRunCommandOutput } from '../src/lib/cochiTools.js'
 
 let pass = 0
 let fail = 0
@@ -76,6 +76,16 @@ console.log('- scope task: recorte de tools (auditoria 28/09-ter) -')
   const taskWrite = getToolsForPermission('write', 'task').map(t => t.function.name)
   check('task respeta permisos: sin run_command en write', taskWrite.includes('run_command'), false)
 }
+
+console.log('- formatRunCommandOutput: reporta SIEMPRE el exit code (28/09-ter) -')
+check('exit 0 visible', formatRunCommandOutput({ stdout: 'SMOKE OK', code: 0 }), '(exit 0)\nSMOKE OK')
+check('exit != 0 visible', formatRunCommandOutput({ stdout: 'boom', code: 3 }), '(exit 3)\nboom')
+check('stderr sin stdout', formatRunCommandOutput({ stderr: 'fallo', code: 1 }), '(exit 1)\nSTDERR: fallo')
+check('stdout + stderr', formatRunCommandOutput({ stdout: 'ok', stderr: 'warn', code: 0 }), '(exit 0)\nok\nSTDERR: warn')
+check('sin output pero con code', formatRunCommandOutput({ code: 0 }), '(exit 0)\n(sin output)')
+check('exit code ausente no prefija', formatRunCommandOutput({ stdout: 'x', code: null }), 'x')
+check('timeout no prefija exit', formatRunCommandOutput({ timedOut: true, timeoutMs: 120000, stdout: 'a' }), '⏱️ Comando cancelado por timeout (120000ms).\nSTDOUT: a')
+check('error de ejecucion', formatRunCommandOutput({ error: 'spawn falló', stdout: 'a' }), 'ERROR: spawn falló\nSTDOUT: a')
 
 console.log(`\n${pass} PASS - ${fail} FAIL`)
 if (fail) process.exit(1)

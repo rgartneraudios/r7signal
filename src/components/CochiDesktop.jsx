@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, memo } from 'react'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, needsPlanning, isMutatingTool, stepCompletionNudge, touchesBoard } from '../lib/cochiPlanningPrompts'
+import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, needsPlanning, needsRunCommand, isMutatingTool, stepCompletionNudge, touchesBoard } from '../lib/cochiPlanningPrompts'
 import PlanViewer from './PlanViewer'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
@@ -1517,7 +1517,10 @@ function CochiDesktop({
       if (needsPlanning(sent)) {
         await generatePlan(sent)
       } else {
-        await executeAllSteps('read')
+        // Single-pass. Scope 'read' (solo-lectura) salvo que el mensaje vaya a
+        // CORRER un comando: run_command no vive en scope 'read', así que un
+        // "Corré X" sin planner necesita scope 'task' para que la tool exista.
+        await executeAllSteps(needsRunCommand(sent) ? 'task' : 'read')
       }
     } else {
       // Carril CONVERSACIONAL: system + R7 + IN. Escape a tarea si pide comandos.

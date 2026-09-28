@@ -3,7 +3,7 @@
 // Ejecutar:  node harness/cochiPlanning.harness.mjs   (o npm run harness:planning)
 // Cubre la lógica PURA: needsPlanning (intención single-pass vs multi-paso) y
 // parsePlanResponse (forma del JSON del planner).
-import { needsPlanning, needsTools, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isMutatingTool, stepCompletionNudge, STEP_VERIFY_NUDGE_AT, STEP_VERIFY_FORCE_AT, PLANNING_SYSTEM_PROMPT, touchesBoard } from '../src/lib/cochiPlanningPrompts.js'
+import { needsPlanning, needsTools, needsCommand, needsRunCommand, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isMutatingTool, stepCompletionNudge, STEP_VERIFY_NUDGE_AT, STEP_VERIFY_FORCE_AT, PLANNING_SYSTEM_PROMPT, touchesBoard } from '../src/lib/cochiPlanningPrompts.js'
 
 let pass = 0
 let fail = 0
@@ -196,6 +196,20 @@ check('token tablero -> board', touchesBoard('leé el tablero y seguí'), true)
 check('token request_replan -> board', touchesBoard('usá request_replan para el bloque'), true)
 check('vacío -> no board', touchesBoard(''), false)
 check('"bloque de código" sin contexto -> no board', touchesBoard('escribí un bloque de código de ejemplo'), false)
+
+console.log('- needsCommand / needsRunCommand: comandos (A-bis 28/09-ter) -')
+check('needsCommand: "Corré node x.js" -> true', needsCommand('Corré node _stderr_cp850.js y decime la salida'), true)
+check('needsCommand: "ejecutá Get-Location" -> true', needsCommand('ejecutá Get-Location'), true)
+check('needsCommand: "revisá smoke_test.py" (ext) -> true', needsCommand('revisá _smoke_test.py'), true)
+check('needsCommand: "python script.py" -> true', needsCommand('python script.py'), true)
+check('needsCommand: charla -> false', needsCommand('hola, todo bien?'), false)
+check('needsCommand: lectura sin comando -> false', needsCommand('leé el archivo de configuracion'), false)
+check('needsRunCommand: verbo de ejecución -> true', needsRunCommand('Corré node x.js'), true)
+check('needsRunCommand: "revisá smoke_test.py" (solo ext) -> false', needsRunCommand('revisá _smoke_test.py'), false)
+check('needsRunCommand: "leé config.js" (solo ext) -> false', needsRunCommand('leé config.js'), false)
+check('needsRunCommand: "python script.py" (programa) -> true', needsRunCommand('python script.py'), true)
+check('needsTools: "Corré node x.js" -> tarea', needsTools('Corré node _stderr_cp850.js'), true)
+check('needsPlanning: comando suelto -> NO planner', needsPlanning('Corré node _stderr_cp850.js'), false)
 
 console.log(`\n${pass} PASS - ${fail} FAIL`)
 if (fail) process.exit(1)
