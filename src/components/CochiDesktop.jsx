@@ -1,23 +1,27 @@
-import { useState, useRef, useCallback, useEffect, memo, forwardRef, useImperativeHandle, lazy, Suspense } from 'react'
+import { useState, useRef, useEffect, memo, forwardRef, useImperativeHandle, lazy, Suspense } from 'react'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
 import DiffViewer from './DiffViewer'
 import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, needsPlanning, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded } from '../lib/cochiPlanningPrompts'
 import PlanViewer from './PlanViewer'
-import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
+import { interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage, resolveStoredModel } from '../lib/llmMetrics.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools } from '../lib/cochiTools.js'
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
-import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
-import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
-import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
-import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
+import { closeWheelTurn, buildWheelMessages, summarizeFromPairs } from '../lib/r7Wheel.js'
+import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots, pruneOldSnapshots } from '../lib/snapshotStore.js'
 import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider, resolveStoredSubagentModel, DEFAULT_SUBAGENT_MODEL } from '../lib/subagent.js'
 import { SubagentBubble, SubagentBrief } from './SubagentView.jsx'
+import { useLiveStream } from '../hooks/useLiveStream.js'
+import { useWheelSession } from '../hooks/useWheelSession.js'
+import { useAgentPrompts } from '../hooks/useAgentPrompts.js'
+import { useR9Selection } from '../hooks/useR9Selection.js'
+import { useStableCallback } from '../hooks/useStableCallback.js'
+import { TokenWarningBanner } from './TokenWarningBanner.jsx'
 
 
 // ─── Helpers de memoria ───────────────────────────────────────────────────────
@@ -296,17 +300,8 @@ const CochiMessageList = memo(function CochiMessageList({ messages, lastAssistan
 // repinta SÓLO esta burbuja; el panel (1900+ líneas) deja de re-renderizarse por
 // token. `push/flush/clear` se invocan por ref desde el loop de streaming.
 const CochiStreamingBubble = memo(forwardRef(function CochiStreamingBubble({ containerRef }, ref) {
-  const [text, setText] = useState('')
-  const { schedule, flush } = useFrameThrottle(30)
-  const scrollIfSticky = useStickToBottom(containerRef)
-  useImperativeHandle(ref, () => ({
-    push: (partial) => schedule(() => setText(partial)),
-    flush: () => flush(),
-    clear: () => { flush(); setText('') },
-  }), [schedule, flush])
-  useEffect(() => {
-    if (text) scrollIfSticky()
-  }, [text, scrollIfSticky])
+  const { text, push, flush, clear } = useLiveStream(containerRef)
+  useImperativeHandle(ref, () => ({ push, flush, clear }), [push, flush, clear])
   if (!text) return null
   return (
     <div className="cd-message-enter" style={{ alignSelf: 'flex-start', maxWidth: '100%', padding: '2px 0' }}>
@@ -399,27 +394,54 @@ function CochiDesktop({
 
   const [executionPlan,        setExecutionPlan]        = useState(null)
   const [planStatus,           setPlanStatus]           = useState('idle')
-  const [remotePrompts,        setRemotePrompts]        = useState(null)
-  const [promptsError,         setPromptsError]         = useState(false)
   const [tokenWarningDismissed, setTokenWarningDismissed] = useState(false)
   const planRef = useRef(null)
   const originalMessageRef = useRef('')
-  const sessionPairsRef = useRef([]) // acumula {r1,r2,stepId} de cada turno — stepId = ordinal del step (stepIndex+1) o null sin plan; se resetea en CLS y Guardar R7
-  const wheelRef = useRef(createWheelState()) // Bloque L4: rueda R7 { r7, lastTurn } — se resetea en CLS y Guardar R7
-  const cochiSessionIdRef = useRef(null) // session_id estable por conversación; se resetea en CLS y Guardar R7
-  // Bloque X1: nombre del artefacto. Se hereda al "cargar como contexto" y, si no,
-  // se sugiere del primer mensaje del usuario en el primer autosave.
-  const cochiSessionNameRef = useRef(null)
-  // Bloque K2: espejo de `messages` para el autosave y guardas de retoma.
-  const messagesRef = useRef([])
-  const skipAutosaveRef = useRef(true) // true en el montaje y al retomar una sesión
   // Fase 3.1: true si el último turno corrió run_command (efectos no revertibles).
   const lastTurnHadCommandRef = useRef(false)
   // Fase 3.1: snapshot del estado previo de los archivos tocados en el turno.
   const snapshotRef = useRef(null)
   const chatContainerRef = useRef(null)
-  const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
   const [todos, setTodos] = useState([])   // lista de tareas del tool todowrite
+
+  // Sesiones + rueda R7 + undo (denominador común de los 3 paneles). El reset
+  // propio de Cochi además limpia plan/actividad/subagentes, libera permisos y
+  // descarta los snapshots de la sesión al archivar.
+  const session = useWheelSession({
+    agent: 'cochi',
+    messages,
+    busy: loading || planStatus === 'executing',
+    pendingSession,
+    onSessionConsumed,
+    onReset: () => {
+      setMessages([]); setActivity([]); setSubagents([])
+      setTokens(0); setCost(0); setCachedTokens(0)
+      setLoading(false); setTokenWarningDismissed(false); setTodos([])
+      syncPlan(null); setPlanStatus('idle')
+      sessionAllowRef.current = new Set()
+      liveRef.current?.clear()
+    },
+    onResume: () => {
+      setMessages([]); setActivity([]); setSubagents([])
+      setTokens(0); setCost(0); setCachedTokens(0); setTokenWarningDismissed(false); setTodos([])
+      syncPlan(null); setPlanStatus('idle')
+      sessionAllowRef.current = new Set()
+      snapshotRef.current = null
+      liveRef.current?.clear()
+    },
+    onAfterArchive: async (closingSessionId) => {
+      await discardTurn(snapshotRef.current)
+      snapshotRef.current = null
+      await clearSessionSnapshots(closingSessionId)
+    },
+    onResetUsage,
+    onError: (msg) => pushMessage({ role: 'assistant', content: msg }),
+  })
+  const { wheelRef, sessionPairsRef, messagesRef, sessionIdRef } = session
+
+  // Prompts remotos + selección R9 (compartidos).
+  const { remotePrompts, promptsError } = useAgentPrompts('cochi', onPromptsReady)
+  const { r9Btn, handleSelectionMouseUp, handleConfirmR9 } = useR9Selection(chatContainerRef, 'cochi')
   const [pendingQuestion, setPendingQuestion] = useState(null) // {question,options,multiple,header} — tool ask_user
   const [askInput, setAskInput] = useState('')
   const [askChecks, setAskChecks] = useState([])
@@ -460,73 +482,6 @@ function CochiDesktop({
 
   // Reset del input de ask_user al abrir una nueva pregunta
   useEffect(() => { setAskInput(''); setAskChecks([]) }, [pendingQuestion])
-
-  useEffect(() => {
-    loadAgentPrompt('cochi').then(p => {
-      if (p) { setRemotePrompts(p); onPromptsReady?.('cochi') }
-      else setPromptsError(true)
-    })
-  }, [onPromptsReady])
-
-  // Bloque L4: al abrir la sesión, cargar la rueda R7 global desde disco.
-  useEffect(() => {
-    readLatestR7().then(r7 => { wheelRef.current = createWheelState(r7) })
-  }, [])
-
-  // ── Bloque K2: autosave + resume ──────────────────────────────────────────
-  // Espejo de messages (setState es async; el autosave necesita el estado final).
-  useEffect(() => { messagesRef.current = messages }, [messages])
-
-  const isUserMsg = (m) => m?.role === 'user' || m?.rol === 'usuario'
-
-  // Autosave tras cerrar cada turno (KD5). Se salta el montaje y las retomas,
-  // y nunca guarda mientras hay ejecución en curso (streaming infinito).
-  useEffect(() => {
-    if (skipAutosaveRef.current) { skipAutosaveRef.current = false; return }
-    if (loading) return
-    if (!messages.some(isUserMsg)) return
-    const session = makeSession('cochi', {
-      sessionId: cochiSessionIdRef.current,
-      name: cochiSessionNameRef.current,
-      wheel: wheelRef.current,
-      messages,
-    })
-    cochiSessionIdRef.current = session.id
-    saveSession(session).catch(err => console.error('autosave cochi:', err))
-  }, [messages, loading])
-
-  // Bloque X1: "Cargar como contexto" una sesión guardada. La sesión NO restaura
-  // la conversación: arranca un chat en cero y adopta su rueda (snapshot) como
-  // contexto. Id NUEVO: el artefacto original queda intacto como semilla.
-  // Fix K2: `onSessionConsumed` se llama DESPUÉS del await; si se llamaba antes,
-  // el padre ponía pendingSession=null, React corría el cleanup (alive=false) y
-  // el resume abortaba siempre.
-  useEffect(() => {
-    if (!pendingSession) return
-    const { id } = pendingSession
-    let alive = true
-    ;(async () => {
-      const s = await loadSession(id)
-      if (!alive) return
-      if (s) {
-        skipAutosaveRef.current = true
-        setMessages([])
-        wheelRef.current = { r7: s.wheel?.r7 || '', lastTurn: s.wheel?.lastTurn ?? null }
-        cochiSessionIdRef.current = null
-        cochiSessionNameRef.current = s.name || null
-        snapshotRef.current = null
-        sessionPairsRef.current = []
-        setActivity([]); setSubagents([]); setTodos([]); syncPlan(null)
-        setPlanStatus('idle'); setTokenWarningDismissed(false)
-        setTokens(0); setCost(0); setCachedTokens(0)
-        sessionAllowRef.current = new Set()
-        onResetUsage?.('cochi')
-      }
-      onSessionConsumed?.()
-    })()
-    return () => { alive = false }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingSession?.nonce])
 
   // Cerrar gear al hacer click fuera
   useEffect(() => {
@@ -640,28 +595,6 @@ function CochiDesktop({
   // undo). pushMessage evita repetir el id en los ~18 puntos de append.
   function pushMessage(msg) {
     setMessages(prev => [...prev, { ...msg, id: msg.id ?? newMessageId('cochi') }])
-  }
-
-  // Bloque K2: sella el estado actual como sesión (overwrite Sessions/<id>.json).
-  // CLS la usa para archivar el estado final antes de resetear.
-  function persistCurrentSession() {
-    const msgs = messagesRef.current
-    if (!msgs.some(isUserMsg)) return
-    const session = makeSession('cochi', {
-      sessionId: cochiSessionIdRef.current,
-      name: cochiSessionNameRef.current,
-      wheel: wheelRef.current,
-      messages: msgs,
-    })
-    cochiSessionIdRef.current = session.id
-    saveSession(session).catch(err => console.error('autosave cochi:', err))
-  }
-
-  // Bloque K2 (decisión 3): CLS/Guardar R7 promueven la rueda actual a global
-  // como chat_N nuevo, para que la sesión siguiente herede la continuidad.
-  async function promoteWheelToGlobal() {
-    const sealed = flushWheel(wheelRef.current)
-    if (sealed.r7 && sealed.r7.trim()) await writeR9File('r7', sealed.r7)
   }
 
   // ─── ask_user: pausa real del loop ────────────────────────────────────────
@@ -974,10 +907,10 @@ function CochiDesktop({
 
     const controller = new AbortController()
     abortRef.current = controller
-    if (!cochiSessionIdRef.current) {
-      cochiSessionIdRef.current = `cochi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    if (!sessionIdRef.current) {
+      sessionIdRef.current = `cochi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     }
-    const cochiSessionId = cochiSessionIdRef.current
+    const cochiSessionId = sessionIdRef.current
 
     setLoading(true)
     setActivity([])
@@ -1622,10 +1555,10 @@ function CochiDesktop({
     lastTurnHadCommandRef.current = false // Fase 3.1
     // Fase 3.1: abre el snapshot del turno. Si no hay mutaciones, no se escribe
     // nada en disco y el snapshot queda vacío (se descarta al resetear).
-    if (!cochiSessionIdRef.current) {
-      cochiSessionIdRef.current = `cochi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    if (!sessionIdRef.current) {
+      sessionIdRef.current = `cochi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     }
-    snapshotRef.current = await beginTurn(cochiSessionIdRef.current)
+    snapshotRef.current = await beginTurn(sessionIdRef.current)
     originalMessageRef.current = sent
     pushMessage({ role: 'user', content: sent })
 
@@ -1665,82 +1598,21 @@ function CochiDesktop({
       setPlanStatus('completed')
     }
   }
+  // K2: CLS/archivado (la rueda se promueve a global; la sesión nueva hereda el
+  // nombre definido al archivar). El archivado no bloquea tareas en curso.
   async function handleClear() {
-    if (window.confirm('¿Borrar toda la conversación?')) {
-      // K2: archiva la sesión (queda en la lista) y promueve su rueda a global.
-      persistCurrentSession()
-      await promoteWheelToGlobal()
-      setMessages([]); setActivity([]); setSubagents([]); setTokens(0); setCost(0); setCachedTokens(0)
-      setLoading(false); setTokenWarningDismissed(false)
-      setTodos([])
-      syncPlan(null); setPlanStatus('idle')
-      sessionPairsRef.current = []
-      wheelRef.current = createWheelState(await readLatestR7())
-      const closingSessionId = cochiSessionIdRef.current
-      cochiSessionIdRef.current = null
-      cochiSessionNameRef.current = null
-      sessionAllowRef.current = new Set()
-      await discardTurn(snapshotRef.current)
-      snapshotRef.current = null
-      await clearSessionSnapshots(closingSessionId)
-      onResetUsage?.('cochi')
-    }
+    if (!window.confirm('¿Borrar toda la conversación?')) return
+    await session.clearSession()
   }
-  async function handleSaveR7(nameOverride) {
-    // Bloque X2: el archivado nunca bloquea: si hay una tarea en curso, no hace nada.
-    if (loading || planStatus === 'executing') return
-    if (!messagesRef.current.some(isUserMsg)) return
-    const inheritedName = typeof nameOverride === 'string' && nameOverride
-      ? nameOverride
-      : cochiSessionNameRef.current
-    try {
-      // Bloque L4: la rueda se guarda entera (TODO el R7 hasta este momento), sin
-      // R3 (D1) y sin sección "── R3 final ──". flushWheel sella el turno pendiente.
-      // K2: igual que CLS, archiva la sesión y promueve la rueda (decisión 4).
-      if (inheritedName) cochiSessionNameRef.current = inheritedName
-      persistCurrentSession()
-      await promoteWheelToGlobal()
-      setMessages([]); setActivity([]); setSubagents([]); setTokens(0); setCost(0); setCachedTokens(0)
-      setLoading(false); setTokenWarningDismissed(false)
-      setTodos([])
-      syncPlan(null); setPlanStatus('idle')
-      sessionPairsRef.current = []
-      wheelRef.current = createWheelState(await readLatestR7())
-      const closingSessionId = cochiSessionIdRef.current
-      cochiSessionIdRef.current = null
-      // X2: la sesión nueva hereda el nombre definido al archivar.
-      cochiSessionNameRef.current = inheritedName || null
-      sessionAllowRef.current = new Set()
-      await discardTurn(snapshotRef.current)
-      snapshotRef.current = null
-      await clearSessionSnapshots(closingSessionId)
-      onResetUsage?.('cochi')
-    } catch (err) {
-      pushMessage({ role: 'assistant', content: `⚠️ No se pudo archivar la sesión R7: ${err.message}` })
-    }
-  }
-
-  // Bloque X2: acción manual siempre disponible — archiva la sesión actual con un
-  // nombre y define la próxima (que lo hereda). No bloquea tareas en curso.
-  async function handleArchiveWithName() {
-    if (loading || planStatus === 'executing') return
-    if (!messagesRef.current.some(isUserMsg)) return
-    const suggested = cochiSessionNameRef.current || suggestSessionName(messagesRef.current)
-    const input = window.prompt('Nombre de la sesión (artefacto R7). La próxima sesión heredará el nombre:', suggested)
-    if (input === null) return
-    const name = input.trim() || suggested
-    cochiSessionNameRef.current = name
-    await handleSaveR7(name)
-  }
+  const handleSaveR7 = (nameOverride) => session.archive(nameOverride)
+  const handleArchiveWithName = () => session.archiveWithName()
 
   // ── Bloque K3: undo / regenerate ──────────────────────────────────────────
   // Undo: quita el último turno visible y retrocede la rueda (una anotación por
   // turno, ver mergeR7Pairs). Limpia el estado colateral (plan, tareas, feed y
   // permisos/preguntas colgadas) y borra el JSON fantasma si no queda turno.
   function applyUndo() {
-    const { messages: newMsgs, wheel: newWheel, undoneUser } = undoLastTurn(messagesRef.current, wheelRef.current)
-    messagesRef.current = newMsgs
-    wheelRef.current = newWheel
+    const { messages: newMsgs, undoneUser } = session.undoTurn()
     setMessages(newMsgs)
     setActivity([]); setSubagents([]); liveRef.current?.clear(); setTodos([])
     setTokenWarningDismissed(false)
@@ -1792,43 +1664,21 @@ function CochiDesktop({
     }
   }
 
-  const handleUndoRef = useRef(() => {})
-  const handleRegenerateRef = useRef(() => {})
-  useEffect(() => {
-    handleUndoRef.current = async () => {
-      if (loading || planStatus === 'executing') return
-      await maybeRevertFiles()
-      applyUndo()
-    }
-    handleRegenerateRef.current = async () => {
-      if (loading || planStatus === 'executing') return
-      const userText = lastUserText(messagesRef.current)
-      if (!userText) return
-      await maybeRevertFiles()
-      applyUndo()
-      await handleSendText(userText)
-    }
+  // Fase 3.1: revierte en disco los archivos que tocó el último turno antes de
+  // deshacer. `maybeRevertFiles` pide confirmación mostrando las rutas.
+  const handleUndo = useStableCallback(async () => {
+    if (loading || planStatus === 'executing') return
+    await maybeRevertFiles()
+    applyUndo()
   })
-  const handleUndo = useCallback(() => handleUndoRef.current(), [])
-  const handleRegenerate = useCallback(() => handleRegenerateRef.current(), [])
-
-  function handleSelectionMouseUp() {
-    const sel = window.getSelection()
-    const text = sel?.toString().trim()
-    if (!text || !chatContainerRef.current?.contains(sel.anchorNode)) { setR9Btn(null); return }
-    const range = sel.getRangeAt(0)
-    const rect = range.getBoundingClientRect()
-    const containerRect = chatContainerRef.current.getBoundingClientRect()
-    setR9Btn({ x: rect.left - containerRect.left + rect.width / 2, y: rect.top - containerRect.top - 30, text })
-  }
-
-  async function handleConfirmR9() {
-    if (!r9Btn) return
-    try { await writeR9File('r9', r9Btn.text, { source: 'cochi' }) }
-    catch (err) { console.error('R9 write error:', err) }
-    window.getSelection()?.removeAllRanges()
-    setR9Btn(null)
-  }
+  const handleRegenerate = useStableCallback(async () => {
+    if (loading || planStatus === 'executing') return
+    const userText = lastUserText(messagesRef.current)
+    if (!userText) return
+    await maybeRevertFiles()
+    applyUndo()
+    await handleSendText(userText)
+  })
 
   const isTerminator = selectedModel === '~deepseek/deepseek-flash-latest'
   const activeModelPrice = MODEL_PRICES[selectedModel]
@@ -2143,28 +1993,17 @@ RGartner by R7Signal
       )}
 
       {/* ── Token warning banner ── */}
-      {tokens > 70000 && !tokenWarningDismissed && (
-        <div style={{
-          flexShrink: 0,
-          borderTop: '1px solid rgba(232,108,50,0.3)',
-          background: 'rgba(232,108,50,0.07)',
-          padding: '8px 14px',
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <span style={{ fontSize: '0.7rem', color: '#E8762A', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
-            ⚠ 70k tokens — El contexto es largo. Podés seguir extendiendo la sesión o archivarla en R7 para empezar un chat nuevo: no perderás nada.
-          </span>
-          <button
-            onClick={() => handleSaveR7()}
-            disabled={loading || planStatus === 'executing'}
-            style={{ background: 'rgba(232,108,50,0.15)', border: '1px solid rgba(232,108,50,0.5)', borderRadius: 4, padding: '3px 10px', color: '#E8762A', fontSize: '0.65rem', fontWeight: 700, cursor: (loading || planStatus === 'executing') ? 'not-allowed' : 'pointer', opacity: (loading || planStatus === 'executing') ? 0.45 : 1, fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
-          >Archivar sesión R7</button>
-          <button
-            onClick={() => setTokenWarningDismissed(true)}
-            style={{ background: 'transparent', border: 'none', color: '#6A7A8A', fontSize: '0.8rem', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
-          >×</button>
-        </div>
-      )}
+      <TokenWarningBanner
+        tokens={tokens}
+        dismissed={tokenWarningDismissed}
+        disabled={loading || planStatus === 'executing'}
+        onDismiss={() => setTokenWarningDismissed(true)}
+        onArchive={() => handleSaveR7()}
+        theme={{
+          border: 'rgba(232,108,50,0.3)', background: 'rgba(232,108,50,0.07)', text: '#E8762A',
+          buttonBg: 'rgba(232,108,50,0.15)', buttonBorder: 'rgba(232,108,50,0.5)', buttonText: '#E8762A',
+        }}
+      />
 
       {/* ── Permisos — aprobación en sesión y por diff (Bloque I) ── */}
       {pendingPermission && (

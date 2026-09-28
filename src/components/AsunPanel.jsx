@@ -1,17 +1,21 @@
-import { useState, useEffect, useRef, useCallback, memo } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { supabase } from '../supabaseClient'
 import { ASUN_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
-import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
+import { interpolatePrompt } from '../lib/promptLoader.js'
 import { readFile } from '@tauri-apps/plugin-fs'
 import { getAsunTools, getProjectTools, executeTool, pathExists } from '../lib/asunTools.js'
-import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
-import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
+import { parseR1R2R3, extractR3Visible, extractR3Streaming } from '../lib/parseR1R2R3.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
 import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
-import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
-import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
+import { closeWheelTurn, buildWheelMessages } from '../lib/r7Wheel.js'
+import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
+import { useWheelSession } from '../hooks/useWheelSession.js'
+import { useAgentPrompts } from '../hooks/useAgentPrompts.js'
+import { useR9Selection } from '../hooks/useR9Selection.js'
+import { useStableCallback } from '../hooks/useStableCallback.js'
+import { TokenWarningBanner } from './TokenWarningBanner.jsx'
 import { open } from '@tauri-apps/plugin-dialog'
 
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
@@ -536,8 +540,6 @@ function AsunPanel({
   const [loading,  setLoading]  = useState(false)
   const [promptMusica, setPromptMusica] = useState(null) // prompt listo para Lyria
   const [generating,  setGenerating]   = useState(false)
-  const [remotePrompts, setRemotePrompts] = useState(null)
-  const [promptsError,  setPromptsError]  = useState(false)
   const [attachedFile, setAttachedFile] = useState(null)
   const [selectedLLMModel, setSelectedLLMModel] = useState(ASUN_MODELS[0].id)
   const isIrmaMax = selectedLLMModel === 'google/gemini-3.8-flash'
@@ -545,147 +547,66 @@ function AsunPanel({
   const messagesEndRef = useRef(null)
   const chatContainerRef = useRef(null)
   const chatScrollRef = useRef(null) // Bloque P: contenedor real con overflowY (el de chatContainerRef es el contenido)
-  const sessionIdRef = useRef(null)
-  // Bloque X1: nombre del artefacto. Se hereda al "cargar como contexto" y, si no,
-  // se sugiere del primer mensaje del usuario en el primer autosave.
-  const sessionNameRef = useRef(null)
+  const [tokens, setTokens] = useState(0)
+  const [tokenWarningDismissed, setTokenWarningDismissed] = useState(false)
+  // Bloque K3: true si el último turno tocó archivos o generó música (regenerate avisa).
+  const lastTurnMutatedRef = useRef(false)
+
+  // Sesiones + rueda R7 + undo (denominador común de los 3 paneles).
+  const session = useWheelSession({
+    agent: 'asun',
+    messages,
+    busy: loading || generating,
+    pendingSession,
+    onSessionConsumed,
+    onReset: () => { setMessages([]); setTokens(0); setTokenWarningDismissed(false) },
+    onResume: () => { setMessages([]); setTokens(0); setTokenWarningDismissed(false); setPromptMusica(null); setAttachedFile(null) },
+    onResetUsage,
+    onError: (msg) => setMessages(prev => [...prev, { rol: 'asistente', contenido: msg, id: newMessageId('asun'), streaming: false }]),
+  })
+  const { wheelRef, sessionPairsRef, messagesRef, sessionIdRef } = session
+
   function getAsunSessionId() {
     if (!sessionIdRef.current) {
       sessionIdRef.current = `asun-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     }
     return sessionIdRef.current
   }
-  const [r9Btn, setR9Btn] = useState(null) // {x,y,text} — botón flotante "+R9"
-  const sessionPairsRef = useRef([])
-  const wheelRef = useRef(createWheelState()) // Bloque L4: rueda R7 { r7, lastTurn }
-  // Bloque K2: espejo de `messages` para el autosave y guardas de retoma.
-  const messagesRef = useRef([])
-  const skipAutosaveRef = useRef(true) // true en el montaje y al retomar una sesión
-  const [tokens, setTokens] = useState(0)
-  const [tokenWarningDismissed, setTokenWarningDismissed] = useState(false)
-  // Bloque K3: true si el último turno tocó archivos o generó música (regenerate avisa).
-  const lastTurnMutatedRef = useRef(false)
 
-  function handleSelectionMouseUp() {
-    const sel = window.getSelection()
-    const text = sel?.toString().trim()
-    if (!text || !chatContainerRef.current?.contains(sel.anchorNode)) { setR9Btn(null); return }
-    const range = sel.getRangeAt(0)
-    const rect = range.getBoundingClientRect()
-    const containerRect = chatContainerRef.current.getBoundingClientRect()
-    setR9Btn({ x: rect.left - containerRect.left + rect.width / 2, y: rect.top - containerRect.top - 30, text })
-  }
-
-  async function handleConfirmR9() {
-    if (!r9Btn) return
-    try { await writeR9File('r9', r9Btn.text, { source: 'asun' }) }
-    catch (err) { console.error('R9 write error:', err) }
-    window.getSelection()?.removeAllRanges()
-    setR9Btn(null)
-  }
-
-  // Bloque K2: archiva el estado actual como sesión y promueve la rueda a global.
-  function persistCurrentSession() {
-    const msgs = messagesRef.current
-    if (!msgs.some(m => m.rol === 'usuario' || m.role === 'user')) return
-    const session = makeSession('asun', {
-      sessionId: sessionIdRef.current,
-      name: sessionNameRef.current,
-      wheel: wheelRef.current,
-      messages: msgs,
-    })
-    sessionIdRef.current = session.id
-    saveSession(session).catch(err => console.error('autosave asun:', err))
-  }
-  async function promoteWheelToGlobal() {
-    const sealed = flushWheel(wheelRef.current)
-    if (sealed.r7 && sealed.r7.trim()) await writeR9File('r7', sealed.r7)
-  }
-
-  async function handleSaveR7(nameOverride) {
-    // Bloque X2: el archivado nunca bloquea: si hay una tarea en curso, no hace nada.
-    if (loading || generating) return
-    if (!messagesRef.current.some(m => m.rol === 'usuario' || m.role === 'user')) return
-    const inheritedName = typeof nameOverride === 'string' && nameOverride
-      ? nameOverride
-      : sessionNameRef.current
-    try {
-      // Bloque L4: archivo NUEVO acumulativo con TODO el R7, sin R3 (D1).
-      // K2: igual que CLS, archiva la sesión y promueve la rueda (decisión 4).
-      if (inheritedName) sessionNameRef.current = inheritedName
-      persistCurrentSession()
-      await promoteWheelToGlobal()
-      setMessages([])
-      setTokens(0); setTokenWarningDismissed(false)
-      sessionPairsRef.current = []
-      wheelRef.current = createWheelState(await readLatestR7())
-      sessionIdRef.current = null
-      // X2: la sesión nueva hereda el nombre definido al archivar.
-      sessionNameRef.current = inheritedName || null
-      onResetUsage?.('asun')
-    } catch (err) {
-      setMessages(prev => [...prev, { rol: 'asistente', contenido: `⚠️ No se pudo archivar la sesión R7: ${err.message}`, id: newMessageId('asun'), streaming: false }])
-    }
-  }
-
-  // Bloque X2: acción manual siempre disponible — archiva la sesión actual con un
-  // nombre y define la próxima (que lo hereda). No bloquea tareas en curso.
-  async function handleArchiveWithName() {
-    if (loading || generating) return
-    if (!messagesRef.current.some(m => m.rol === 'usuario' || m.role === 'user')) return
-    const suggested = sessionNameRef.current || suggestSessionName(messagesRef.current)
-    const input = window.prompt('Nombre de la sesión (artefacto R7). La próxima sesión heredará el nombre:', suggested)
-    if (input === null) return
-    const name = input.trim() || suggested
-    sessionNameRef.current = name
-    await handleSaveR7(name)
-  }
-
-  // K2: CLS archiva la sesión (queda en la lista), promueve la rueda a global y
-  // arranca una conversación nueva que hereda esa rueda.
-  async function handleClear() {
-    if (!window.confirm('¿Borrar toda la conversación?')) return
-    persistCurrentSession()
-    await promoteWheelToGlobal()
-    setMessages([]); setTokens(0); setTokenWarningDismissed(false)
-    sessionPairsRef.current = []
-    wheelRef.current = createWheelState(await readLatestR7())
-    sessionIdRef.current = null
-    onResetUsage?.('asun')
-  }
+  // Prompts remotos + selección R9 (compartidos).
+  const { remotePrompts, promptsError } = useAgentPrompts('asun', onPromptsReady)
+  const { r9Btn, handleSelectionMouseUp, handleConfirmR9 } = useR9Selection(chatContainerRef, 'asun')
 
   // ── Bloque K3: undo / regenerate ──────────────────────────────────────────
-  // Undo: quita el último turno visible y retrocede la rueda (una anotación por
-  // turno). messagesRef se sincroniza para que regenerate reenvíe sin leer un
-  // estado viejo. Si era el único turno, se borra el JSON fantasma.
+  // Undo quita el último turno visible y retrocede la rueda; el hook sincroniza
+  // messagesRef. Regenerate reenvía el texto del usuario eliminado.
   function applyUndo() {
-    const { messages: newMsgs, wheel: newWheel, undoneUser } = undoLastTurn(messagesRef.current, wheelRef.current)
-    messagesRef.current = newMsgs
-    wheelRef.current = newWheel
+    const { messages: newMsgs, undoneUser } = session.undoTurn()
     setMessages(newMsgs)
     setPromptMusica(null)
     return undoneUser
   }
-
-  // Bloque P: wrappers estables para la lista memoizada. El cuerpo se refresca
-  // por ref en cada render, así el historial no se invalida y nunca queda con
-  // closures viejos.
-  const handleUndoRef = useRef(() => {})
-  const handleRegenerateRef = useRef(() => {})
-  handleUndoRef.current = () => {
+  const handleUndo = useStableCallback(() => {
     if (loading || generating) return
     applyUndo()
-  }
-  handleRegenerateRef.current = async () => {
+  })
+  const handleRegenerate = useStableCallback(async () => {
     if (loading || generating) return
     const userText = lastUserText(messagesRef.current)
     if (!userText) return
     if (lastTurnMutatedRef.current && !window.confirm('Este turno tocó archivos o generó música. Regenerar puede repetir esa acción. ¿Continuar?')) return
     applyUndo()
     await sendMessage(userText)
+  })
+
+  // K2: CLS/archivado (la rueda se promueve a global; la sesión nueva hereda el
+  // nombre definido al archivar). No bloquea tareas en curso.
+  async function handleClear() {
+    if (!window.confirm('¿Borrar toda la conversación?')) return
+    await session.clearSession()
   }
-  const handleUndo = useCallback(() => handleUndoRef.current(), [])
-  const handleRegenerate = useCallback(() => handleRegenerateRef.current(), [])
+  const handleSaveR7 = (nameOverride) => session.archive(nameOverride)
+  const handleArchiveWithName = () => session.archiveWithName()
 
   // Notificar categoría activa al padre
   useEffect(() => {
@@ -712,68 +633,6 @@ function AsunPanel({
     sendMessage(text)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingMessage?.id])
-
-  useEffect(() => {
-    loadAgentPrompt('asun').then(p => {
-    if (p) { setRemotePrompts(p); onPromptsReady?.('asun') }
-    else setPromptsError(true)
-  })
-  }, [onPromptsReady])
-
-  // Bloque L4: al abrir la sesión, cargar la rueda R7 global desde disco.
-  useEffect(() => {
-    readLatestR7().then(r7 => { wheelRef.current = createWheelState(r7) })
-  }, [])
-
-  // ── Bloque K2: autosave + resume ──────────────────────────────────────────
-  useEffect(() => { messagesRef.current = messages }, [messages])
-
-  const isUserMsg = (m) => m?.role === 'user' || m?.rol === 'usuario'
-
-  // Autosave tras cerrar cada turno (KD5). Salta montaje y retomas, y no guarda
-  // mientras loading/generating están activos.
-  useEffect(() => {
-    if (skipAutosaveRef.current) { skipAutosaveRef.current = false; return }
-    if (loading || generating) return
-    if (!messages.some(isUserMsg)) return
-    const session = makeSession('asun', {
-      sessionId: sessionIdRef.current,
-      name: sessionNameRef.current,
-      wheel: wheelRef.current,
-      messages,
-    })
-    sessionIdRef.current = session.id
-    saveSession(session).catch(err => console.error('autosave asun:', err))
-  }, [messages, loading, generating])
-
-  // Bloque X1: "Cargar como contexto" una sesión guardada. La sesión NO restaura
-  // la conversación: arranca un chat en cero y adopta su rueda (snapshot) como
-  // contexto. Id NUEVO: el artefacto original queda intacto como semilla.
-  // Fix K2: `onSessionConsumed` se llama DESPUÉS del await (si se llamaba antes,
-  // el cleanup del efecto abortaba la carga).
-  useEffect(() => {
-    if (!pendingSession) return
-    const { id } = pendingSession
-    let alive = true
-    ;(async () => {
-      const s = await loadSession(id)
-      if (!alive) return
-      if (s) {
-        skipAutosaveRef.current = true
-        setMessages([])
-        wheelRef.current = { r7: s.wheel?.r7 || '', lastTurn: s.wheel?.lastTurn ?? null }
-        sessionIdRef.current = null
-        sessionNameRef.current = s.name || null
-        sessionPairsRef.current = []
-        setPromptMusica(null); setAttachedFile(null)
-        setTokenWarningDismissed(false); setTokens(0)
-        onResetUsage?.('asun')
-      }
-      onSessionConsumed?.()
-    })()
-    return () => { alive = false }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingSession?.nonce])
 
   // ─── Send mensaje LLM / Música ─────────────────────────────────────────────
   async function sendMessage(text) {
@@ -828,22 +687,6 @@ function AsunPanel({
           ...history,
           { role: 'user', content: text },
         ]
-        const extractR3Streaming = (t) => {
-          const i = t.indexOf('R3:')
-          return i === -1 ? '' : t.slice(i + 3).trim()
-        }
-        const extractR3 = (t) => {
-          const m = t.match(/R3:\s*([\s\S]*)$/)
-          if (m) return m[1].trim()
-          // Si no hay rastro de NING\u00daN marcador del contrato, es una respuesta directa
-          // (t\u00edpico tras tool calls) sin R1/R2 generados — nada que ocultar, se muestra tal cual.
-          if (!/R1:|R2:|HANDOFF_BRIEF:/.test(t)) return t.trim()
-          // Salvavidas: el modelo empez\u00f3 el contrato pero no emiti\u00f3 "R3:" — jam\u00e1s mostrar R1/R2 crudos.
-          // HANDOFF_BRIEF es siempre el \u00faltimo campo de R2 (ver system prompt); cortamos justo despu\u00e9s.
-          const hb = t.match(/HANDOFF_BRIEF:\s*[^\n]*?(?:\s{2,}|\n)([\s\S]*)$/)
-          if (hb && hb[1].trim()) return hb[1].trim()
-          return 'Formato de respuesta inesperado — reintenta el mensaje.'
-        }
         const fullText = await streamOR(MODELS.musica.chat, apiMessages, (partial) => {
           scheduleStream(() => setMessages(prev => prev.map(m =>
             m.id === placeholderId ? { ...m, contenido: extractR3Streaming(partial) } : m
@@ -856,7 +699,7 @@ function AsunPanel({
         flushStream()
         setMessages(prev => prev.map(m =>
           m.id === placeholderId
-            ? { ...m, contenido: extractR3(fullText).replace(MUSIC_RE, '').trim(), streaming: false }
+            ? { ...m, contenido: extractR3Visible(fullText).replace(MUSIC_RE, '').trim(), streaming: false }
             : m
         ))
         return
@@ -1023,20 +866,7 @@ function AsunPanel({
       if (r7Pair.r1 || r7Pair.r2) sessionPairsRef.current.push({ r1: r7Pair.r1, r2: r7Pair.r2 })
 
       // ── Procesar respuesta final ──────────────────────────────────────────
-      const extractR3 = (t) => {
-        const m = t.match(/R3:\s*([\s\S]*)$/)
-        if (m) return m[1].trim()
-        // Si no hay rastro de NING\u00daN marcador del contrato, es una respuesta directa
-        // (t\u00edpico tras tool calls) sin R1/R2 generados — nada que ocultar, se muestra tal cual.
-        if (!/R1:|R2:|HANDOFF_BRIEF:/.test(t)) return t.trim()
-        // Salvavidas: el modelo empez\u00f3 el contrato pero no emiti\u00f3 "R3:" — jam\u00e1s mostrar R1/R2 crudos.
-        // HANDOFF_BRIEF es siempre el \u00faltimo campo de R2 (ver system prompt); cortamos justo despu\u00e9s.
-        const hb = t.match(/HANDOFF_BRIEF:\s*[^\n]*?(?:\s{2,}|\n)([\s\S]*)$/)
-        if (hb && hb[1].trim()) return hb[1].trim()
-        return 'Formato de respuesta inesperado — reintenta el mensaje.'
-      }
-
-      let displayText  = extractR3(finalText)
+      let displayText  = extractR3Visible(finalText)
       let handoffBrief = null
 
       const cochiMatch = COCHI_RE.exec(finalText)
@@ -1411,28 +1241,17 @@ RGartner by R7Signal</>
       </div>
 
       {/* ── Token warning banner ── */}
-      {tokens > 70000 && !tokenWarningDismissed && (
-        <div style={{
-          flexShrink: 0,
-          borderTop: '1px solid rgba(200,162,216,0.3)',
-          background: 'rgba(200,162,216,0.07)',
-          padding: '8px 14px',
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <span style={{ fontSize: '0.7rem', color: '#C8A2D8', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
-            ⚠ 70k tokens — El contexto es largo. Podés seguir extendiendo la sesión o archivarla en R7 para empezar un chat nuevo: no perderás nada.
-          </span>
-          <button
-            onClick={() => handleSaveR7()}
-            disabled={loading || generating}
-            style={{ background: 'rgba(200,162,216,0.15)', border: '1px solid rgba(200,162,216,0.5)', borderRadius: 4, padding: '3px 10px', color: '#C8A2D8', fontSize: '0.65rem', fontWeight: 700, cursor: (loading || generating) ? 'not-allowed' : 'pointer', opacity: (loading || generating) ? 0.45 : 1, fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
-          >Archivar sesión R7</button>
-          <button
-            onClick={() => setTokenWarningDismissed(true)}
-            style={{ background: 'transparent', border: 'none', color: '#6A7A8A', fontSize: '0.8rem', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
-          >×</button>
-        </div>
-      )}
+      <TokenWarningBanner
+        tokens={tokens}
+        dismissed={tokenWarningDismissed}
+        disabled={loading || generating}
+        onDismiss={() => setTokenWarningDismissed(true)}
+        onArchive={() => handleSaveR7()}
+        theme={{
+          border: 'rgba(200,162,216,0.3)', background: 'rgba(200,162,216,0.07)', text: '#C8A2D8',
+          buttonBg: 'rgba(200,162,216,0.15)', buttonBorder: 'rgba(200,162,216,0.5)', buttonText: '#C8A2D8',
+        }}
+      />
 
       {/* ── Status bar ── */}
       <div style={{

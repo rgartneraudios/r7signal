@@ -29,3 +29,23 @@ export function parseR1R2R3(content) {
 
   return { r1, r2, r3 }
 }
+
+// Respuesta visible final para el usuario: sólo R3. Si no hay rastro de ningún
+// marcador del contrato, es una respuesta directa (nada que ocultar). Salvavidas:
+// si el modelo empezó el contrato pero no emitió "R3:" jamás se muestran R1/R2
+// crudos; HANDOFF_BRIEF es el último campo de R2, así que se corta justo después.
+export function extractR3Visible(text) {
+  const t = text || ''
+  const i = t.indexOf('R3:')
+  if (i !== -1) return t.slice(i + 3).trim()
+  if (!/R1:|R2:|HANDOFF_BRIEF:/.test(t)) return t.trim()
+  const hb = t.match(/HANDOFF_BRIEF:\s*[^\n]*?(?:\s{2,}|\n)([\s\S]*)$/)
+  if (hb && hb[1].trim()) return hb[1].trim()
+  return 'Formato de respuesta inesperado — reintenta el mensaje.'
+}
+
+// Versión incremental para el streaming: devuelve '' hasta que aparezca "R3:".
+export function extractR3Streaming(text) {
+  const i = (text || '').indexOf('R3:')
+  return i === -1 ? '' : text.slice(i + 3).trim()
+}

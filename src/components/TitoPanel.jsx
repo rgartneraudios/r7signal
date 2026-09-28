@@ -1,14 +1,18 @@
-import { useState, useRef, useEffect, memo, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useState, useRef, useEffect, memo, forwardRef, useImperativeHandle } from 'react';
 import { calculateCost } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
-import { loadAgentPrompt, interpolatePrompt } from '../lib/promptLoader.js'
-import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
-import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
-import { createWheelState, closeWheelTurn, flushWheel, buildWheelMessages } from '../lib/r7Wheel.js'
-import { newMessageId, makeSession, saveSession, loadSession, undoLastTurn, lastUserText, suggestSessionName } from '../lib/sessionStore.js'
+import { interpolatePrompt } from '../lib/promptLoader.js'
+import { parseR1R2R3, extractR3Visible, extractR3Streaming } from '../lib/parseR1R2R3.js'
+import { closeWheelTurn, buildWheelMessages } from '../lib/r7Wheel.js'
+import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
-import { useFrameThrottle, useStickToBottom } from '../lib/streamThrottle.js'
+import { useLiveStream } from '../hooks/useLiveStream.js'
+import { useWheelSession } from '../hooks/useWheelSession.js'
+import { useAgentPrompts } from '../hooks/useAgentPrompts.js'
+import { useR9Selection } from '../hooks/useR9Selection.js'
+import { useStableCallback } from '../hooks/useStableCallback.js'
+import { TokenWarningBanner } from './TokenWarningBanner.jsx'
 
 // ─── Lista de mensajes memoizada (Bloque P) ──────────────────────────────────
 // Mientras llega el streaming, el placeholder cambia ~30 veces/seg. Sin esto,
@@ -61,15 +65,8 @@ const TitoMessageList = memo(function TitoMessageList({ messages, lastAssistantI
 // streaming empuja por ref. Así el panel (y su lista memoizada) no se re-ejecuta
 // por frame: sólo se repinta esta burbuja.
 const TitoStreamingBubble = memo(forwardRef(function TitoStreamingBubble({ containerRef }, ref) {
-  const [text, setText] = useState('')
-  const { schedule, flush } = useFrameThrottle(30)
-  const scrollIfSticky = useStickToBottom(containerRef)
-  useImperativeHandle(ref, () => ({
-    push: (partial) => schedule(() => setText(partial)),
-    flush: () => flush(),
-    clear: () => { flush(); setText('') },
-  }), [schedule, flush])
-  useEffect(() => { if (text) scrollIfSticky() }, [text, scrollIfSticky])
+  const { text, push, flush, clear } = useLiveStream(containerRef)
+  useImperativeHandle(ref, () => ({ push, flush, clear }), [push, flush, clear])
   if (!text) return null
   return (
     <div className="tito-msg tito-msg--assistant">
@@ -83,25 +80,6 @@ const TITO_MODELS = {
   pro:    'perplexity/sonar-pro',
   deep:   'perplexity/sonar-deep-research',
 };
-
-const extractR3 = (text) => {
-  const r3Index = text.indexOf('R3:')
-  if (r3Index !== -1) return text.slice(r3Index + 3).trim()
-  // Si no hay rastro de NINGÚN marcador del contrato, es una respuesta directa
-  // (típico tras resultados de búsqueda) sin R1/R2 generados — nada que ocultar.
-  if (!/R1:|R2:|HANDOFF_BRIEF:/.test(text)) return text.trim()
-  // Salvavidas: el modelo empezó el contrato pero no emitió "R3:" — jamás mostrar R1/R2 crudos.
-  // HANDOFF_BRIEF es siempre el último campo de R2 (ver system prompt); cortamos justo después.
-  const hb = text.match(/HANDOFF_BRIEF:\s*[^\n]*?(?:\s{2,}|\n)([\s\S]*)$/)
-  if (hb && hb[1].trim()) return hb[1].trim()
-  return 'Formato de respuesta inesperado — reintenta el mensaje.'
-}
-
-const extractR3Streaming = (text) => {
-  const r3Index = text.indexOf('R3:')
-  if (r3Index === -1) return ''
-  return text.slice(r3Index + 3).trim()
-}
 
 const needsWebSearch = (message) => {
   const msg = message.toLowerCase().trim()
@@ -130,147 +108,59 @@ function TitoPanel({
   const liveRef = useRef(null)
   const [searchLevel, setSearchLevel] = useState('rapido');
   const [streaming, setStreaming] = useState(false);
-  const [remotePrompts, setRemotePrompts] = useState(null);
-  const [promptsError, setPromptsError] = useState(false);
   const abortRef = useRef(null);
   const bottomRef = useRef(null);
   const chatContainerRef = useRef(null);
-  const sessionIdRef = useRef(null);
-  // Bloque X1: nombre del artefacto. Se hereda al "cargar como contexto" y, si no,
-  // se sugiere del primer mensaje del usuario en el primer autosave.
-  const sessionNameRef = useRef(null);
+  const [tokens, setTokens] = useState(0);
+  const [tokenWarningDismissed, setTokenWarningDismissed] = useState(false);
+
+  // Sesiones + rueda R7 + undo (denominador común de los 3 paneles).
+  const session = useWheelSession({
+    agent: 'tito',
+    messages,
+    busy: streaming,
+    pendingSession,
+    onSessionConsumed,
+    onReset: () => { setMessages([]); setTokens(0); setTokenWarningDismissed(false) },
+    onResetUsage,
+    onError: (msg) => setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: msg }]),
+  })
+  const { wheelRef, sessionPairsRef, messagesRef, sessionIdRef } = session
+
   function getTitoSessionId() {
     if (!sessionIdRef.current) {
       sessionIdRef.current = `tito-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
     return sessionIdRef.current;
   }
-  const [r9Btn, setR9Btn] = useState(null); // {x,y,text} — botón flotante "+R9"
-  const sessionPairsRef = useRef([]);
-  const wheelRef = useRef(createWheelState()); // Bloque L4: rueda R7 { r7, lastTurn }
-  // Bloque K2: espejo de `messages` para el autosave y guardas de retoma.
-  const messagesRef = useRef([]);
-  const skipAutosaveRef = useRef(true); // true en el montaje y al retomar una sesión
-  const [tokens, setTokens] = useState(0);
-  const [tokenWarningDismissed, setTokenWarningDismissed] = useState(false);
 
-  function handleSelectionMouseUp() {
-    const sel = window.getSelection();
-    const text = sel?.toString().trim();
-    if (!text || !chatContainerRef.current?.contains(sel.anchorNode)) { setR9Btn(null); return; }
-    const range = sel.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    const containerRect = chatContainerRef.current.getBoundingClientRect();
-    setR9Btn({ x: rect.left - containerRect.left + rect.width / 2, y: rect.top - containerRect.top - 30, text });
-  }
+  // Prompts remotos + selección R9 (compartidos).
+  const { remotePrompts, promptsError } = useAgentPrompts('tito', onPromptsReady)
+  const { r9Btn, handleSelectionMouseUp, handleConfirmR9 } = useR9Selection(chatContainerRef, 'tito')
 
-  async function handleConfirmR9() {
-    if (!r9Btn) return;
-    try { await writeR9File('r9', r9Btn.text, { source: 'tito' }); }
-    catch (err) { console.error('R9 write error:', err); }
-    window.getSelection()?.removeAllRanges();
-    setR9Btn(null);
-  }
-
-  // Bloque K2: archiva el estado actual como sesión y promueve la rueda a global.
-  function persistCurrentSession() {
-    const msgs = messagesRef.current
-    if (!msgs.some(m => m.rol === 'usuario' || m.role === 'user')) return
-    const session = makeSession('tito', {
-      sessionId: sessionIdRef.current,
-      name: sessionNameRef.current,
-      wheel: wheelRef.current,
-      messages: msgs,
-    })
-    sessionIdRef.current = session.id
-    saveSession(session).catch(err => console.error('autosave tito:', err))
-  }
-  async function promoteWheelToGlobal() {
-    const sealed = flushWheel(wheelRef.current)
-    if (sealed.r7 && sealed.r7.trim()) await writeR9File('r7', sealed.r7)
-  }
-
-  async function handleSaveR7(nameOverride) {
-    // Bloque X2: el archivado nunca bloquea: si hay un stream en curso, no hace nada.
+  // Bloque K3 + P: undo/regenerate con identidad estable (no invalidan el memo).
+  const handleUndo = useStableCallback(() => {
     if (streaming) return
-    if (!messagesRef.current.some(m => m.rol === 'usuario' || m.role === 'user')) return
-    const inheritedName = typeof nameOverride === 'string' && nameOverride
-      ? nameOverride
-      : sessionNameRef.current
-    try {
-      // Bloque L4: archivo NUEVO acumulativo con TODO el R7, sin R3 (D1).
-      // K2: igual que CLS, archiva la sesión y promueve la rueda (decisión 4).
-      if (inheritedName) sessionNameRef.current = inheritedName
-      persistCurrentSession()
-      await promoteWheelToGlobal()
-      setMessages([])
-      setTokens(0); setTokenWarningDismissed(false)
-      sessionPairsRef.current = []
-      wheelRef.current = createWheelState(await readLatestR7())
-      sessionIdRef.current = null
-      // X2: la sesión nueva hereda el nombre definido al archivar.
-      sessionNameRef.current = inheritedName || null
-      onResetUsage?.('tito')
-    } catch (err) {
-      setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: `⚠️ No se pudo archivar la sesión R7: ${err.message}` }])
-    }
-  }
-
-  // Bloque X2: acción manual siempre disponible — archiva la sesión actual con un
-  // nombre y define la próxima (que lo hereda). No bloquea tareas en curso.
-  async function handleArchiveWithName() {
-    if (streaming) return
-    if (!messagesRef.current.some(m => m.rol === 'usuario' || m.role === 'user')) return
-    const suggested = sessionNameRef.current || suggestSessionName(messagesRef.current)
-    const input = window.prompt('Nombre de la sesión (artefacto R7). La próxima sesión heredará el nombre:', suggested)
-    if (input === null) return
-    const name = input.trim() || suggested
-    sessionNameRef.current = name
-    await handleSaveR7(name)
-  }
-
-  // K2: CLS archiva la sesión y arranca una conversación nueva con la rueda global.
-  async function handleClear() {
-    if (!window.confirm('¿Borrar toda la conversación?')) return
-    persistCurrentSession()
-    await promoteWheelToGlobal()
-    setMessages([]); setTokens(0); setTokenWarningDismissed(false)
-    sessionPairsRef.current = []
-    wheelRef.current = createWheelState(await readLatestR7())
-    sessionIdRef.current = null
-    onResetUsage?.('tito')
-  }
-
-  // ── Bloque K3: undo / regenerate ──────────────────────────────────────────
-  // Undo: quita el último turno visible y retrocede la rueda (una anotación por
-  // turno). messagesRef se sincroniza para que regenerate pueda reenviar sin
-  // leer un estado viejo. Si era el único turno, se borra el JSON fantasma.
-  function applyUndo() {
-    const { messages: newMsgs, wheel: newWheel, undoneUser } = undoLastTurn(messagesRef.current, wheelRef.current)
-    messagesRef.current = newMsgs
-    wheelRef.current = newWheel
+    const { messages: newMsgs } = session.undoTurn()
     setMessages(newMsgs)
-    return undoneUser
-  }
-
-  // Bloque P: wrappers estables para la lista memoizada. El cuerpo se refresca
-  // por ref en cada render, así el historial no se invalida y nunca queda con
-  // closures viejos (p.ej. un searchLevel anterior).
-  const handleUndoRef = useRef(() => {})
-  const handleRegenerateRef = useRef(() => {})
-  handleUndoRef.current = () => {
-    if (streaming) return
-    applyUndo()
-  }
-  handleRegenerateRef.current = async () => {
+  })
+  const handleRegenerate = useStableCallback(async () => {
     if (streaming) return
     const userText = lastUserText(messagesRef.current)
     if (!userText) return
-    applyUndo()
+    const { messages: newMsgs } = session.undoTurn()
+    setMessages(newMsgs)
     await sendMessage(userText)
+  })
+
+  // K2: CLS/archivado con nombre (la rueda se promueve a global y la sesión nueva
+  // hereda el nombre definido). El archivado no bloquea tareas en curso.
+  async function handleClear() {
+    if (!window.confirm('¿Borrar toda la conversación?')) return
+    await session.clearSession()
   }
-  const handleUndo = useCallback(() => handleUndoRef.current(), [])
-  const handleRegenerate = useCallback(() => handleRegenerateRef.current(), [])
+  const handleSaveR7 = (nameOverride) => session.archive(nameOverride)
+  const handleArchiveWithName = () => session.archiveWithName()
 
   useEffect(() => {
     if (pendingMessage?.text) {
@@ -288,67 +178,6 @@ function TitoPanel({
     if (streaming) el.scrollTop = el.scrollHeight;
     else el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages.length, streaming]);
-
-  useEffect(() => {
-    loadAgentPrompt('tito').then(p => {
-      if (p) { setRemotePrompts(p); onPromptsReady?.('tito') }
-      else setPromptsError(true)
-    })
-  }, [onPromptsReady])
-
-  // Bloque L4: al abrir la sesión, cargar la rueda R7 global desde disco.
-  useEffect(() => {
-    readLatestR7().then(r7 => { wheelRef.current = createWheelState(r7) })
-  }, [])
-
-  // ── Bloque K2: autosave + resume ──────────────────────────────────────────
-  useEffect(() => { messagesRef.current = messages }, [messages]);
-
-  const isUserMsg = (m) => m?.role === 'user' || m?.rol === 'usuario';
-
-  // Autosave tras cerrar cada turno (KD5). Salta montaje y retomas; no guarda
-  // mientras `streaming` está activo.
-  useEffect(() => {
-    if (skipAutosaveRef.current) { skipAutosaveRef.current = false; return }
-    if (streaming) return
-    if (!messages.some(isUserMsg)) return
-    const session = makeSession('tito', {
-      sessionId: sessionIdRef.current,
-      name: sessionNameRef.current,
-      wheel: wheelRef.current,
-      messages,
-    })
-    sessionIdRef.current = session.id
-    saveSession(session).catch(err => console.error('autosave tito:', err))
-  }, [messages, streaming]);
-
-  // Bloque X1: "Cargar como contexto" una sesión guardada. La sesión NO restaura
-  // la conversación: arranca un chat en cero y adopta su rueda (snapshot) como
-  // contexto. Id NUEVO: el artefacto original queda intacto como semilla.
-  // Fix K2: `onSessionConsumed` se llama DESPUÉS del await (si se llamaba antes,
-  // el cleanup del efecto abortaba la carga).
-  useEffect(() => {
-    if (!pendingSession) return
-    const { id } = pendingSession
-    let alive = true
-    ;(async () => {
-      const s = await loadSession(id)
-      if (!alive) return
-      if (s) {
-        skipAutosaveRef.current = true
-        setMessages([])
-        wheelRef.current = { r7: s.wheel?.r7 || '', lastTurn: s.wheel?.lastTurn ?? null }
-        sessionIdRef.current = null
-        sessionNameRef.current = s.name || null
-        sessionPairsRef.current = []
-        setTokenWarningDismissed(false); setTokens(0)
-        onResetUsage?.('tito')
-      }
-      onSessionConsumed?.()
-    })()
-    return () => { alive = false }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingSession?.nonce]);
 
   const sendMessage = async (text) => {
     if (streaming) return;
@@ -422,7 +251,7 @@ function TitoPanel({
         const fullText = result.content
          const r7Pair = parseR1R2R3(fullText)
          if (r7Pair.r1 || r7Pair.r2) sessionPairsRef.current.push({ r1: r7Pair.r1, r2: r7Pair.r2 })
-         const finalDisplay = extractR3(fullText)
+         const finalDisplay = extractR3Visible(fullText)
          const hasHandoff = fullText.includes('[→ COCHI:')
          // Bloque L4 — cerrar el turno de la rueda.
          wheelRef.current = closeWheelTurn(wheelRef.current, {
@@ -462,7 +291,7 @@ function TitoPanel({
       const fullText = result.content;
       const r7Pair = parseR1R2R3(fullText);
       if (r7Pair.r1 || r7Pair.r2) sessionPairsRef.current.push({ r1: r7Pair.r1, r2: r7Pair.r2 });
-      const finalDisplay = extractR3(fullText);
+      const finalDisplay = extractR3Visible(fullText);
       const hasHandoff = fullText.includes('[→ COCHI:');
       // Bloque L4 — cerrar el turno de la rueda.
       wheelRef.current = closeWheelTurn(wheelRef.current, {
@@ -572,28 +401,17 @@ RGartner by R7Signal
       </div>
 
       {/* ── Token warning banner ── */}
-      {tokens > 70000 && !tokenWarningDismissed && (
-        <div style={{
-          flexShrink: 0,
-          borderTop: '1px solid rgba(232,200,74,0.3)',
-          background: 'rgba(232,200,74,0.07)',
-          padding: '8px 14px',
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <span style={{ fontSize: '0.7rem', color: '#D1C490', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', flex: 1 }}>
-            ⚠ 70k tokens — El contexto es largo. Podés seguir extendiendo la sesión o archivarla en R7 para empezar un chat nuevo: no perderás nada.
-          </span>
-          <button
-            onClick={() => handleSaveR7()}
-            disabled={streaming}
-            style={{ background: 'rgba(232,200,74,0.15)', border: '1px solid rgba(232,200,74,0.5)', borderRadius: 4, padding: '3px 10px', color: '#D1C490', fontSize: '0.65rem', fontWeight: 700, cursor: streaming ? 'not-allowed' : 'pointer', opacity: streaming ? 0.45 : 1, fontFamily: "'Space Grotesk', sans-serif", whiteSpace: 'nowrap' }}
-          >Archivar sesión R7</button>
-          <button
-            onClick={() => setTokenWarningDismissed(true)}
-            style={{ background: 'transparent', border: 'none', color: '#6A7A8A', fontSize: '0.8rem', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
-          >×</button>
-        </div>
-      )}
+      <TokenWarningBanner
+        tokens={tokens}
+        dismissed={tokenWarningDismissed}
+        disabled={streaming}
+        onDismiss={() => setTokenWarningDismissed(true)}
+        onArchive={() => handleSaveR7()}
+        theme={{
+          border: 'rgba(232,200,74,0.3)', background: 'rgba(232,200,74,0.07)', text: '#D1C490',
+          buttonBg: 'rgba(232,200,74,0.15)', buttonBorder: 'rgba(232,200,74,0.5)', buttonText: '#D1C490',
+        }}
+      />
 
       {/* Status bar */}
       <div className="tito-status">
