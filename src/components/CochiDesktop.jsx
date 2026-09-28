@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, memo } from 'react'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, needsPlanning, isMutatingTool, stepCompletionNudge } from '../lib/cochiPlanningPrompts'
+import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, needsPlanning, isMutatingTool, stepCompletionNudge, touchesBoard } from '../lib/cochiPlanningPrompts'
 import PlanViewer from './PlanViewer'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
@@ -282,6 +282,10 @@ function CochiDesktop({
   const lastTurnHadCommandRef = useRef(false)
   // Fase 3.1: snapshot del estado previo de los archivos tocados en el turno.
   const snapshotRef = useRef(null)
+  // Auditoría de gasto: scope de tools con el que se ejecuta el plan. 'task'
+  // (sin tools del tablero/subagente/R9) para tareas de archivo; 'full' si el
+  // mensaje toca el tablero de planes de IrmaMax.
+  const planScopeRef = useRef('full')
   const chatContainerRef = useRef(null)
   const [todos, setTodos] = useState([])   // lista de tareas del tool todowrite
 
@@ -1447,10 +1451,12 @@ function CochiDesktop({
 
       if (streamed.toolCalls?.length) {
         // ESCAPE → carril TAREA: se ejecutan los comandos ya emitidos y se cierra
-        // con R4 (sistema) → R5 (modelo). Scope 'full' (el permiso del workspace
-        // manda): antes forzaba 'read' y un escape de escritura quedaba sin tools
-        // de escritura aunque el workspace tuviera acceso full.
-        await executeAllSteps('full', {
+        // con R4 (sistema) → R5 (modelo). Scope: 'task' (recorta el schema de
+        // tools) salvo que el mensaje toque el tablero, que necesita el board.
+        // Antes forzaba 'read' y un escape de escritura quedaba sin tools de
+        // escritura aunque el workspace tuviera acceso full; ahora 'task' conserva
+        // escritura/run_command pero recorta lo inútil (spawn_agent, tablero, R9).
+        await executeAllSteps(touchesBoard(originalMessageRef.current) ? 'full' : 'task', {
           messages,
           priorTokens: totalTokensAcc,
           assistantMsg: {
@@ -1488,6 +1494,11 @@ function CochiDesktop({
     if (!sessionIdRef.current) {
       sessionIdRef.current = `cochi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     }
+    // MENOR 7: al abrir un turno nuevo, el snapshot del turno anterior queda
+    // obsoleto (ya no es "el último", no se puede deshacer). Se descarta para no
+    // dejarlo huérfano en disco. En regenerate/undo ya lo consumió maybeRevertFiles
+    // (ref a null), así que aquí no hay doble descarte.
+    if (snapshotRef.current?.id) await discardTurn(snapshotRef.current)
     snapshotRef.current = await beginTurn(sessionIdRef.current)
     originalMessageRef.current = sent
     pushMessage({ role: 'user', content: sent })
@@ -1500,6 +1511,9 @@ function CochiDesktop({
       // planner, sin R1/R2, sin R7. Antes estas consultas arrancaban en
       // conversacional y pagaban un escape (doble llamada + R7 arrastrado).
       setPlanStatus('idle')
+      // Scope del plan: 'task' (recorta el schema de tools) salvo que toque el
+      // tablero de IrmaMax, que necesita las tools del board.
+      planScopeRef.current = touchesBoard(sent) ? 'full' : 'task'
       if (needsPlanning(sent)) {
         await generatePlan(sent)
       } else {
@@ -1514,7 +1528,7 @@ function CochiDesktop({
 
   function confirmPlan() {
     if (!planRef.current || planStatus !== 'awaiting_confirmation') return
-    executeAllSteps()
+    executeAllSteps(planScopeRef.current)
   }
 
   function cancelPlan() {
@@ -1563,57 +1577,67 @@ function CochiDesktop({
   // invalide en cada render. El cuerpo real se refresca por ref tras cada render.
   // Fase 3.1: revierte en disco los archivos que tocó el último turno. Pide
   // confirmación mostrando las rutas; si el usuario rechaza, no toca el disco.
+  // Devuelve los AVISOS (no los pinta): el caller debe emitirlos DESPUÉS de
+  // applyUndo, porque undoLastTurn recorta desde el último mensaje del usuario y
+  // borraría cualquier aviso empujado antes (bug A-ter(c): el aviso de
+  // run_command nunca se veía en un turno de sólo comando).
   async function maybeRevertFiles() {
+    const notes = []
     const snap = snapshotRef.current
     snapshotRef.current = null
     // El aviso de run_command debe salir SIEMPRE que el turno haya ejecutado un
     // comando, incluso si no tocó archivos (turno de sólo comando): antes el
     // early-return de count===0 lo dejaba inalcanzable (bug T3e).
     const ranCommand = lastTurnHadCommandRef.current
-    const commandWarning = () => pushMessage({
+    const commandWarning = () => notes.push({
       role: 'assistant',
       content: '⚠️ Este turno ejecutó run_command: sus efectos NO se pueden revertir.',
     })
     if (!snap) {
       if (ranCommand) commandWarning()
-      return
+      return notes
     }
     const info = summarizeSnapshot(snap)
     if (info.count === 0) {
       await discardTurn(snap)
       if (ranCommand) commandWarning()
-      return
+      return notes
     }
     const list = info.paths.slice(0, 12).map(p => `• ${p}`).join('\n')
     const more = info.paths.length > 12 ? `\n… y ${info.paths.length - 12} más` : ''
     const warn = info.unrevertible.length ? `\n\n⚠️ ${info.unrevertible.length} archivo(s) eran demasiado grandes y NO se podrán restaurar.` : ''
     const cmdWarn = ranCommand ? '\n\n⚠️ Este turno ejecutó run_command: sus efectos NO se pueden revertir.' : ''
     const ok = window.confirm(`Este turno modificó ${info.count} archivo(s):\n${list}${more}${warn}${cmdWarn}\n\n¿Revertir los archivos a su estado anterior?`)
-    if (!ok) { await discardTurn(snap); return }
+    if (!ok) { await discardTurn(snap); return notes }
     try {
       const res = await revertSnapshot(snap.id)
       const failed = (res.results || []).filter(r => r.action === 'error' || r.action === 'skip')
       if (failed.length) {
-        pushMessage({ role: 'assistant', content: `⚠️ No se pudieron restaurar ${failed.length} archivo(s): ${failed.map(f => f.path).join(', ')}` })
+        notes.push({ role: 'assistant', content: `⚠️ No se pudieron restaurar ${failed.length} archivo(s): ${failed.map(f => f.path).join(', ')}` })
       }
     } catch (err) {
-      pushMessage({ role: 'assistant', content: `⚠️ Error al revertir archivos: ${err.message}` })
+      notes.push({ role: 'assistant', content: `⚠️ Error al revertir archivos: ${err.message}` })
     }
+    return notes
   }
 
   // Fase 3.1: revierte en disco los archivos que tocó el último turno antes de
-  // deshacer. `maybeRevertFiles` pide confirmación mostrando las rutas.
+  // deshacer. `maybeRevertFiles` pide confirmación mostrando las rutas y devuelve
+  // los avisos a pintar: se emiten DESPUÉS de applyUndo para que el undo no los
+  // borre (bug A-ter(c)).
   const handleUndo = useStableCallback(async () => {
     if (loading || planStatus === 'executing') return
-    await maybeRevertFiles()
+    const notes = await maybeRevertFiles()
     applyUndo()
+    for (const n of notes) pushMessage(n)
   })
   const handleRegenerate = useStableCallback(async () => {
     if (loading || planStatus === 'executing') return
     const userText = lastUserText(messagesRef.current)
     if (!userText) return
-    await maybeRevertFiles()
+    const notes = await maybeRevertFiles()
     applyUndo()
+    for (const n of notes) pushMessage(n)
     await handleSendText(userText)
   })
 

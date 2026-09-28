@@ -70,6 +70,16 @@ function hasBoardIntent(msg) {
   return hasBoardToken || hasBoardBlock
 }
 
+// Expuesta para que la UI elija el SCOPE de tools de un plan: si el mensaje NO
+// toca el tablero, la ejecución va con scope 'task' (recorta el schema de tools
+// ~40% por request). Si toca el board, se usa 'full' para no perder
+// list/read/update_plan_block/request_replan.
+export function touchesBoard(message) {
+  const msg = normalizeMessage(message)
+  if (!msg) return false
+  return hasBoardIntent(msg)
+}
+
 // Nombres de objeto que implican tocar el filesystem o el sistema operativo.
 // Sirven para el clasificador de CARRIL (needsTools), no para el de planning.
 const FS_NOUNS = [

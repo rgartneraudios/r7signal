@@ -3,7 +3,7 @@
 // Ejecutar:  node harness/cochiPlanning.harness.mjs   (o npm run harness:planning)
 // Cubre la lógica PURA: needsPlanning (intención single-pass vs multi-paso) y
 // parsePlanResponse (forma del JSON del planner).
-import { needsPlanning, needsTools, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isMutatingTool, stepCompletionNudge, STEP_VERIFY_NUDGE_AT, STEP_VERIFY_FORCE_AT, PLANNING_SYSTEM_PROMPT } from '../src/lib/cochiPlanningPrompts.js'
+import { needsPlanning, needsTools, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isMutatingTool, stepCompletionNudge, STEP_VERIFY_NUDGE_AT, STEP_VERIFY_FORCE_AT, PLANNING_SYSTEM_PROMPT, touchesBoard } from '../src/lib/cochiPlanningPrompts.js'
 
 let pass = 0
 let fail = 0
@@ -187,6 +187,15 @@ check('exige JSON solo', PLANNING_SYSTEM_PROMPT.includes('ONLY a JSON object'), 
 check('cadena lineal read->write = un paso', PLANNING_SYSTEM_PROMPT.includes('ONE SINGLE STEP'), true)
 check('write->verify = un paso', PLANNING_SYSTEM_PROMPT.includes('verify X') && PLANNING_SYSTEM_PROMPT.includes('ONE step'), true)
 check('destructivas en su propio paso', PLANNING_SYSTEM_PROMPT.includes('their own separate step'), true)
+
+console.log('- touchesBoard: elige scope de tools del plan (auditoria 28/09-ter) -')
+check('tarea de archivo -> no toca board', touchesBoard('cambiá USUARIO_VALIDO en config.py'), false)
+check('correr comando -> no toca board', touchesBoard('ejecutá npm install'), false)
+check('handoff de bloque -> board', touchesBoard('[INSTRUCCIÓN] Ejecutá el bloque B del plan "Login"'), true)
+check('token tablero -> board', touchesBoard('leé el tablero y seguí'), true)
+check('token request_replan -> board', touchesBoard('usá request_replan para el bloque'), true)
+check('vacío -> no board', touchesBoard(''), false)
+check('"bloque de código" sin contexto -> no board', touchesBoard('escribí un bloque de código de ejemplo'), false)
 
 console.log(`\n${pass} PASS - ${fail} FAIL`)
 if (fail) process.exit(1)

@@ -49,10 +49,25 @@ const POWERSHELL_OUTPUT_PROLOGUE = [
 
 // Arma el programa + args del shell según plataforma, con el prologue de UTF-8
 // en Windows. Separado de la ejecución para poder testearlo headless.
+//
+// En Windows el comando se ENVUELVE para que TODO su output (stdout+stderr) salga
+// por stdout como texto UTF-8 VÁLIDO. Motivo (A-bis b, 28/09-ter): un proceso
+// nativo que escribe en stderr en la code page OEM (cp850) emitía bytes no-UTF-8
+// (`F3`=ó) y el plugin de shell de Tauri hace una decodificación NO lossy
+// (String::from_utf8) → error "invalid utf-8 sequence of 1 bytes": el modelo
+// NUNCA veía el mensaje real y se ponía a "adivinar" (11 reintentos, 78k tokens).
+// Capturar el ErrorRecord como texto y re-emitirlo lo arregla; el exit code se
+// conserva con $LASTEXITCODE.
+export function wrapPowershellCommand(command) {
+  return '& {\n' + String(command ?? '') +
+    '\n} 2>&1 | ForEach-Object { if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { [string]$_ } }\n' +
+    'exit $LASTEXITCODE'
+}
+
 export function buildShellInvocation(os, command) {
   const cmd = String(command ?? '')
   if (os === 'windows') {
-    return { program: 'powershell', args: ['-Command', `${POWERSHELL_OUTPUT_PROLOGUE}${cmd}`] }
+    return { program: 'powershell', args: ['-Command', `${POWERSHELL_OUTPUT_PROLOGUE}${wrapPowershellCommand(cmd)}`] }
   }
   return { program: 'bash', args: ['-c', cmd] }
 }
@@ -756,12 +771,27 @@ const READ_SCOPE_TOOLS = new Set([
   'request_replan',
 ])
 
+// `scope='task'` (auditoría de gasto 28/09-ter): ejecución de un plan de
+// ARCHIVOS (no tablero). El prefijo cacheable de `full` arrastraba 24 tools
+// (~12k chars) y el schema se reenvía en CADA request del step: era ~60% del
+// gasto de tokens del turno. Se quitan las que no aplican a una tarea de
+// archivo: subagente, tablero de planes (list/read/update/request_replan), el
+// archivo a R9 y el todowrite (los pasos ya se trackean en el plan). El tablero
+// sigue disponible cuando el mensaje SÍ toca el board (scope 'full').
+export const TASK_SCOPE_EXCLUDED = new Set([
+  'spawn_agent',
+  'list_project_plans', 'read_project_plan', 'update_plan_block', 'request_replan',
+  'save_to_r9',
+  'todowrite',
+])
+
 export function getToolsForPermission(permission, scope = 'full') {
   const canWrite = permission === 'write' || permission === 'readwrite' || permission === 'full'
   const canRun   = permission === 'full'
   return COCHI_TOOLS.filter(t => {
     const name = t.function.name
     if (scope === 'read' && !READ_SCOPE_TOOLS.has(name)) return false
+    if (scope === 'task' && TASK_SCOPE_EXCLUDED.has(name)) return false
     if (['write_file', 'replace_in_file', 'append_to_file', 'create_dir', 'move_file', 'copy_file'].includes(name)) return canWrite
     if (['run_command', 'delete_file'].includes(name)) return canRun
     return true
