@@ -3,7 +3,7 @@
 // Ejecutar:  node harness/cochiPlanning.harness.mjs   (o npm run harness:planning)
 // Cubre la lógica PURA: needsPlanning (intención single-pass vs multi-paso) y
 // parsePlanResponse (forma del JSON del planner).
-import { needsPlanning, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded } from '../src/lib/cochiPlanningPrompts.js'
+import { needsPlanning, needsTools, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded } from '../src/lib/cochiPlanningPrompts.js'
 
 let pass = 0
 let fail = 0
@@ -48,6 +48,29 @@ check('que hace X', needsPlanning('que hace este archivo?'), false)
 check('leeme el readme', needsPlanning('leeme el readme'), false)
 check('busca en el proyecto', needsPlanning('busca en el proyecto los TODO'), false)
 check('dime cuantos archivos', needsPlanning('dime cuantos archivos hay'), false)
+
+console.log('- needsTools: carril tarea (fix captacion Conversacional/Tarea) -')
+check('hola -> sin tools', needsTools('hola'), false)
+check('gracias -> sin tools', needsTools('gracias'), false)
+check('que es R7 -> sin tools', needsTools('¿qué es R7?'), false)
+check('que es un archivo .env -> sin tools', needsTools('¿qué es un archivo .env?'), false)
+check('cuantos archivos hay -> tools', needsTools('¿cuántos archivos hay?'), true)
+check('dime cuantos archivos en la carpeta -> tools', needsTools('Dime ¿cuántos archivos hay en la carpeta?'), true)
+check('lee el archivo -> tools', needsTools('leé el archivo config.js'), true)
+check('mostrame los procesos -> tools', needsTools('mostrame los procesos activos'), true)
+check('busca en el proyecto -> tools', needsTools('buscá en el proyecto la función login'), true)
+check('crea un archivo -> tools', needsTools('creá un archivo prueba.txt'), true)
+check('leé el tablero -> tools', needsTools('leé el tablero y ejecutá el bloque A'), true)
+check('vacio -> sin tools', needsTools(''), false)
+check('gracias solo -> sin tools', needsTools('gracias'), false)
+check('Gracias, crea un archivo -> tools (saludo no secuestra)', needsTools('Gracias, crea un archivo'), true)
+check('gracias, lee el tablero -> tools', needsTools('gracias, lee el tablero'), true)
+check('Gracias, busca el archivo -> tools (saludo + lectura)', needsTools('Gracias, busca ahora el archivo perdidos.txt y dime que hay dentro'), true)
+check('Gracias, dime cuantos archivos -> tools', needsTools('Gracias, dime cuántos archivos hay'), true)
+check('revisa el JSON -> tools (extension)', needsTools('Revisa el JSON de la sesión'), true)
+check('gracias + crea -> planner', needsPlanning('Gracias, crea un archivo'), true)
+check('gracias solo -> single-pass', needsPlanning('gracias'), false)
+check('Gracias, busca el archivo -> single-pass (lectura)', needsPlanning('Gracias, busca ahora el archivo perdidos.txt y dime que hay dentro'), false)
 
 console.log('- TABLERO: tokens directos -> single-pass (hardening) -')
 check('lee el tablero y ejecuta el bloque B', needsPlanning('Leé el tablero y ejecutá el bloque B'), false)

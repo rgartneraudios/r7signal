@@ -10,18 +10,26 @@
 //
 // Este módulo se mantiene puro (sin Tauri) para poder ejercitarlo headless con
 // harness/cochiLanes.harness.mjs.
-import { needsPlanning } from './cochiPlanningPrompts.js'
+// El sistema decide el carril por el IN. needsTools=true → carril TAREA
+// (lecturas y mutaciones: cualquier mensaje que necesite herramientas).
+// needsTools=false → carril CONVERSACIONAL (con escape a tarea si el modelo,
+// igual, pide comandos).
+//
+// FIX 28/09: el carril se decidía con needsPlanning, que confunde "necesita
+// plan" con "necesita tools". Una lectura de archivos necesita tools pero no
+// planner → arrancaba en conversacional, el modelo pedía la tool y el sistema
+// hacía escape (doble llamada + R7 arrastrado). Ahora se separan los dos
+// conceptos: needsTools decide el CARRIL; needsPlanning decide, dentro del
+// carril tarea, si hace falta el planner multi-paso.
+import { needsTools } from './cochiPlanningPrompts.js'
 
 export const LANE = Object.freeze({
   CONVERSATIONAL: 'CONVERSATIONAL',
   TASK: 'TASK',
 })
 
-// El sistema decide el carril por el IN. needsPlanning=true → tarea (planner);
-// needsPlanning=false → conversacional (con escape a tarea si el modelo pide
-// comandos).
 export function laneForMessage(message) {
-  return needsPlanning(message) ? LANE.TASK : LANE.CONVERSATIONAL
+  return needsTools(message) ? LANE.TASK : LANE.CONVERSATIONAL
 }
 
 export function laneTag(lane) {
@@ -45,6 +53,13 @@ export const LANE_SWITCH_HINT =
   'Do NOT emit R1/R2/R3. Continue ONLY with tool calls. When you are done, the ' +
   'system will send you the real result (R4) and you will write a single short ' +
   'closing message (R5).'
+
+// Prompt local de TAREA (fallback si Supabase no expone la clave `task`). El
+// carril tarea NO usa el prompt conversacional: no hay R1/R2/R3 ni R7, y el
+// modelo debe parar en seco al terminar (el sistema manda R4 → R5). Sin esto el
+// modelo arrastraba el COCHI SYSTEM (~1.4k tokens por request) y emitía prosa
+// antes del cierre ("ráfaga" + gasto extra).
+export const TASK_SYSTEM_PROMPT = `[REDACTED PROMPT]`
 
 // Un resultado de herramienta se considera error si arranca con un marcador de
 // fallo (los tools devuelven 'ERROR: …' o '⛔ …').
@@ -100,20 +115,22 @@ export function buildTaskFinish({
   if (files.length) lines.push(`FILES TOUCHED: ${files.join('; ')}`)
 
   const outputs = toolLog
-    .filter(t => t.name === 'run_command' || isToolError(t.result))
-    .map(t => `[${t.name}] ${String(t.result ?? '').replace(/\s+/g, ' ').trim()}`)
+    .map(t => `[${t.name}] ${String(t.result ?? '').replace(/\s+/g, ' ').trim().slice(0, 500)}`)
+    .filter(Boolean)
   if (outputs.length) {
     let joined = outputs.join('\n')
-    if (joined.length > maxChars) joined = joined.slice(-maxChars)
-    lines.push('OUTPUT / ERRORS (truncated):', joined)
+    if (joined.length > maxChars) joined = joined.slice(0, maxChars)
+    lines.push('TOOL RESULTS (truncated):', joined)
   }
 
   lines.push(
-    `Now write ONLY the closing message${nombre ? ` addressing ${nombre}` : ''}: ` +
-    (ok
-      ? `"100% ${nombre || '<user>'} — <what was done>"`
-      : `"0% ${nombre || '<user>'} — <why it failed>"`) +
-    '. One or two short sentences. No R1/R2/R3, no tool calls.'
+    `TOOLS EXECUTION: ${ok ? 'ran without errors' : 'some tools errored'}.`,
+    `(The RESULT line above reports ONLY whether the tools errored — it is NOT the task outcome.)`,
+    `Now JUDGE THE OUTCOME yourself from the evidence above and write ONLY the closing message${nombre ? ` addressing ${nombre}` : ''}:`,
+    `- "100% ${nombre || '<user>'} — <what was done>" ONLY if what the user asked for was actually achieved.`,
+    `- "0% ${nombre || '<user>'} — <why it failed>" if the requested item/result was not found, a path did not exist, a read returned nothing, or the goal was otherwise not met.`,
+    'Tools finishing without a system error does NOT mean success: a file or target that was not found is a 0%. Never claim success you cannot back with the evidence.',
+    'One or two short sentences. No R1/R2/R3, no tool calls.'
   )
   return lines.join('\n')
 }

@@ -3,59 +3,140 @@
 // formato de salida debe ser idéntico al que consume generatePlan().
 export const PLANNING_SYSTEM_PROMPT = `[REDACTED PROMPT]`
 
-// Clasificador ligero de intención (Bloque J): decide si un mensaje amerita
+// Normaliza acentos (NFD + strip de marcas diacríticas) para que el voseo
+// argentino ("creá", "ejecutá", "borrá") calce con los verbos base de las
+// listas de abajo sin que haya que enumerar cada conjugación por separado.
+function normalizeMessage(message) {
+  return String(message ?? '').toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
+// Saludos y charla pura: no necesitan tools ni plan.
+const CONVERSATIONAL_PATTERNS = [
+  /^hola/, /^hi/, /^hey/, /^buenos/, /^buenas/, /^qué tal/,
+  /^como est/, /^cómo est/, /^todo bien/, /^gracias/, /^ok$/, /^okay/,
+  /^perfecto/, /^entendido/, /^de acuerdo/, /^sí$/, /^no$/, /^claro/,
+  /^qué (eres|puedes|haces|sabes)/, /^who are/, /^what (are|can)/,
+]
+
+// Apertura de cortesía que puede preceder a una orden real ("Gracias, busca el
+// archivo…", "Hola, crea un archivo…"). Se descarta ANTES de clasificar para que
+// el saludo no secuestre el carril. Sólo cubre aperturas, nunca verbos de acción.
+const LEAD_GREETING_RE = /^(?:hola|hi|hey|buenos|buenas|que tal|gracias|thanks|ok|okay|perfecto|entendido|de acuerdo|claro|listo|dale)[\s,.!¡¿?;:—-]*/
+function stripLeadGreetings(msg) {
+  let out = msg
+  for (let i = 0; i < 4; i++) {
+    const next = out.replace(LEAD_GREETING_RE, '')
+    if (next === out) break
+    out = next
+  }
+  return out.trim()
+}
+
+// Verbos de mutación/ejecución — lo que justifica el tracking de pasos.
+const WRITE_VERBS = [
+  'crea', 'crear', 'cre ', 'escribe', 'escrib', 'modifica', 'modif', 'edita',
+  'elimina', 'elimin', 'borra', 'mueve', 'copia', 'renombra', 'guarda', 'guard',
+  'salva', 'salv', 'exporta', 'export', 'delet', 'remove', 'write',
+  'ejecuta', 'instala', 'instalar', 'añade', 'agrega', 'genera',
+  'refactori', 'implement', 'migra', 'actualiza', 'patch', 'mkdir',
+  'npm', 'yarn', 'pip', 'cargo', '/cochi',
+  // PRUEBA T3 (27/09): verbos de mutación que FALTABAN. Sin ellos el mensaje
+  // caía en single-pass 'read' (sin tools de escritura) y el modelo alucinaba
+  // "hecho" mientras el disco no cambiaba. "cambiá"→"cambia", etc.
+  'cambia', 'reemplaz', 'sobrescrib', 'update', 'subi', 'setea',
+  'insert', 'correg', 'corrig', 'arregl', 'convert',
+]
+
+// Tablero de proyecto (Proyecto IrmaMax): las tools del tablero
+// (list_project_plans/read_project_plan/update_plan_block/request_replan)
+// viven en scope 'read' y funcionan bien en single-pass (E3/E4 verificados).
+// Un mensaje sobre el tablero NO debe caer en el planner multi-paso: ahí el
+// planId elegido por ask_user no se propaga y el loop técnico agota las
+// iteraciones. El token "bloque" sólo cuenta como board si hay contexto de
+// plan/proyecto, para no secuestrar pedidos genéricos ("creá un bloque de…").
+const BOARD_TOKENS = [
+  'tablero', 're-plan', 'replan', 'request_replan', 'update_plan_block',
+  'read_project_plan', 'list_project_plans', 'save_project_plan',
+  'project_plan', 'plan de proyecto', 'planificacion',
+]
+const BOARD_BLOCK_TOKENS = ['bloque', 'block']
+const BOARD_CONTEXT_TOKENS = ['plan', 'tablero', 'proyecto', 'planificacion']
+
+function hasBoardIntent(msg) {
+  const hasBoardToken = BOARD_TOKENS.some(k => msg.includes(k))
+  const hasBoardBlock = BOARD_BLOCK_TOKENS.some(k => msg.includes(k)) &&
+    BOARD_CONTEXT_TOKENS.some(k => msg.includes(k))
+  return hasBoardToken || hasBoardBlock
+}
+
+// Nombres de objeto que implican tocar el filesystem o el sistema operativo.
+// Sirven para el clasificador de CARRIL (needsTools), no para el de planning.
+const FS_NOUNS = [
+  'archivo', 'archivos', 'carpeta', 'carpetas', 'directorio', 'directorios',
+  'fichero', 'ficheros', 'folder', 'file', 'files', 'disco', 'workspace',
+  'proyecto', 'proyectos', 'repo', 'repositorio', 'codigo', 'log', 'logs',
+  'config', 'configuracion', 'script', 'scripts', 'ruta', 'rutas', 'path',
+  // Extensiones comunes: "revisá data.json", "qué hay en notas.txt" son tareas.
+  'json', 'txt', 'csv', 'xml', 'yml', 'yaml', 'md',
+]
+const SYSTEM_NOUNS = [
+  'proceso', 'procesos', 'servicio', 'servicios', 'puerto', 'puertos',
+  'sistema', 'memoria', 'cpu', 'ram', 'red', 'ip', 'terminal', 'consola',
+]
+const READ_VERBS = [
+  'lee', 'leer', 'busc', 'list', 'mostr', 'muestr', 'cont', 'cuent',
+  'abre', 'abri', 'abrir', 'analiz', 'revis', 'encontr', 'localiz',
+  'inspeccion', 'escane', 'muestra', 'ver ',
+]
+const QUERY_HINTS = [
+  'cuant', 'que hay', 'que archivos', 'que contiene', 'cual', 'donde',
+  'existe', 'hay ',
+]
+
+// Clasificador de CARRIL (loop de dos carriles, 28/09 fix): decide si un mensaje
+// necesita HERRAMIENTAS (carril tarea) o es charla pura (carril conversacional).
+// Es INDEPENDIENTE de needsPlanning: una lectura de archivos necesita tools pero
+// NO planner. Antes el carril se decidía con needsPlanning y por eso
+// "¿cuántos archivos hay?" arrancaba en conversacional, pedía la tool y el
+// sistema tenía que hacer escape (doble llamada + R7 arrastrado = ~2-3× tokens).
+export function needsTools(message) {
+  const msg = normalizeMessage(message)
+  if (!msg) return false
+
+  // Se descarta la apertura de cortesía ("Gracias, …") antes de clasificar.
+  const core = stripLeadGreetings(msg)
+  if (!core) return false // era sólo un saludo
+
+  // Una acción explícita MANDA: "Gracias, crea…" o cualquier orden es tarea.
+  if (WRITE_VERBS.some(k => core.includes(k))) return true
+  if (hasBoardIntent(core)) return true
+
+  // Charla pura: no necesita tools.
+  if (CONVERSATIONAL_PATTERNS.some(r => r.test(core))) return false
+
+  // Lecturas/consultas sobre archivos o sistema: necesitan tools.
+  const hasObject = FS_NOUNS.some(k => core.includes(k)) ||
+    SYSTEM_NOUNS.some(k => core.includes(k))
+  if (!hasObject) return false
+  const hasReadVerb = READ_VERBS.some(k => core.includes(k))
+  const hasQueryHint = QUERY_HINTS.some(k => core.includes(k))
+  return hasReadVerb || hasQueryHint
+}
+
+// Clasificador de PLANNER (Bloque J): decide si un mensaje amerita
 // planificación multi-paso o si alcanza con un single-pass. Puro y sin estado,
 // por eso vive acá y no dentro del componente.
 export function needsPlanning(message) {
-  // Normaliza acentos (NFD + strip de marcas diacríticas) para que el voseo
-  // argentino ("creá", "ejecutá", "borrá") calce con los verbos base de las
-  // listas de abajo sin tener que enumerar cada conjugación por separado.
-  const msg = String(message ?? '').toLowerCase().trim()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const msg = normalizeMessage(message)
+  if (!msg) return false
 
-  // Conversational — no planning needed
-  const conversational = [
-    /^hola/, /^hi/, /^hey/, /^buenos/, /^buenas/, /^qué tal/,
-    /^como est/, /^cómo est/, /^todo bien/, /^gracias/, /^ok$/, /^okay/,
-    /^perfecto/, /^entendido/, /^de acuerdo/, /^sí$/, /^no$/, /^claro/,
-    /^qué (eres|puedes|haces|sabes)/, /^who are/, /^what (are|can)/,
-  ]
-  if (conversational.some(r => r.test(msg))) return false
-
-  // Tablero de proyecto (Proyecto IrmaMax): las tools del tablero
-  // (list_project_plans/read_project_plan/update_plan_block/request_replan)
-  // viven en scope 'read' y funcionan bien en single-pass (E3/E4 verificados).
-  // Un mensaje sobre el tablero NO debe caer en el planner multi-paso: ahí el
-  // planId elegido por ask_user no se propaga y el loop técnico agota las
-  // iteraciones. El token "bloque" sólo cuenta como board si hay contexto de
-  // plan/proyecto, para no secuestrar pedidos genéricos ("creá un bloque de…").
-  const boardTokens = [
-    'tablero', 're-plan', 'replan', 'request_replan', 'update_plan_block',
-    'read_project_plan', 'list_project_plans', 'save_project_plan',
-    'project_plan', 'plan de proyecto', 'planificacion',
-  ]
-  const boardBlockTokens = ['bloque', 'block']
-  const boardContextTokens = ['plan', 'tablero', 'proyecto', 'planificacion']
-  const hasBoardToken = boardTokens.some(k => msg.includes(k))
-  const hasBoardBlock = boardBlockTokens.some(k => msg.includes(k)) &&
-    boardContextTokens.some(k => msg.includes(k))
-  if (hasBoardToken || hasBoardBlock) return false
-
-  // Write/execute verbs — these are what actually justify step tracking
-  const writeVerbs = [
-    'crea', 'crear', 'cre ', 'escribe', 'escrib', 'modifica', 'modif', 'edita',
-    'elimina', 'elimin', 'borra', 'mueve', 'copia', 'renombra', 'guarda', 'guard',
-    'salva', 'salv', 'exporta', 'export', 'delet', 'remove', 'write',
-    'ejecuta', 'instala', 'instalar', 'añade', 'agrega', 'genera',
-    'refactori', 'implement', 'migra', 'actualiza', 'patch', 'mkdir',
-    'npm', 'yarn', 'pip', 'cargo', '/cochi',
-    // PRUEBA T3 (27/09): verbos de mutación que FALTABAN. Sin ellos el mensaje
-    // caía en single-pass 'read' (sin tools de escritura) y el modelo alucinaba
-    // "hecho" mientras el disco no cambiaba. "cambiá"→"cambia", etc.
-    'cambia', 'reemplaz', 'sobrescrib', 'update', 'subi', 'setea',
-    'insert', 'correg', 'corrig', 'arregl', 'convert',
-  ]
-  const hasWriteVerb = writeVerbs.some(k => msg.includes(k))
+  const core = stripLeadGreetings(msg) || msg
+  const hasWriteVerb = WRITE_VERBS.some(k => core.includes(k))
+  if (hasBoardIntent(core)) return false
+  // Conversacional sólo si NO hay verbo de acción: un saludo no debe tapar una
+  // orden ("Gracias, crea…" planifica).
+  if (CONVERSATIONAL_PATTERNS.some(r => r.test(core)) && !hasWriteVerb) return false
 
   // Read-only queries — even if they mention files, a single pass covers it
   const queryPatterns = [
@@ -63,7 +144,7 @@ export function needsPlanning(message) {
     /^dime/, /^decime/, /^muestra/, /^muéstrame/, /^cuánt/, /^cuant/,
     /^lee el/, /^lee la/, /^leer/, /^busca en/, /^analiza/, /^revisa/,
   ]
-  if (queryPatterns.some(r => r.test(msg)) && !hasWriteVerb) return false
+  if (queryPatterns.some(r => r.test(core)) && !hasWriteVerb) return false
 
   // Mismo criterio que arriba pero sin anclar al inicio — cubre mensajes con
   // preámbulo ("Cochi, vete a X y dime...") donde la intención de lectura
@@ -73,7 +154,7 @@ export function needsPlanning(message) {
     'cuál es', 'cual es', 'qué es', 'que es', 'cuánto', 'cuanto', 'cuántos', 'cuantos',
     'lee el', 'lee la', 'busca en', 'analiza', 'revisa', 'dónde está', 'donde esta',
   ]
-  if (!hasWriteVerb && queryVerbsAnywhere.some(k => msg.includes(k))) return false
+  if (!hasWriteVerb && queryVerbsAnywhere.some(k => core.includes(k))) return false
 
   // Planificación SOLO cuando hay intención real de mutación/ejecución
   // (writeVerbs). Un mensaje largo de lectura/análisis NO debe pagar una llamada

@@ -11,6 +11,7 @@ import {
   buildTaskFinish,
   cleanR5,
   LANE_SWITCH_HINT,
+  TASK_SYSTEM_PROMPT,
 } from '../src/lib/cochiLanes.js'
 
 let pass = 0
@@ -22,15 +23,22 @@ function check(label, actual, expected) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}  → ${JSON.stringify(actual)} (esperado ${JSON.stringify(expected)})`)
 }
 
-console.log('— laneForMessage: el sistema decide el carril por el IN —')
+console.log('— laneForMessage: el sistema decide el carril por intención de TOOLS —')
 check('"hola" → conversacional', laneForMessage('hola'), LANE.CONVERSATIONAL)
 check('"gracias" → conversacional', laneForMessage('gracias'), LANE.CONVERSATIONAL)
-check('"leé el archivo" → conversacional (puede escapar)', laneForMessage('leé el archivo config.js'), LANE.CONVERSATIONAL)
-check('"¿cuántos archivos hay?" → conversacional', laneForMessage('¿cuántos archivos hay?'), LANE.CONVERSATIONAL)
+check('"Gracias, crea un archivo" → tarea (saludo no secuestra)', laneForMessage('Gracias, crea un archivo prueba.txt'), LANE.TASK)
+check('"Gracias, busca el archivo" → tarea (saludo + lectura)', laneForMessage('Gracias, busca ahora el archivo perdidos.txt y dime que hay dentro'), LANE.TASK)
+check('"¿qué es R7?" → conversacional', laneForMessage('¿qué es R7?'), LANE.CONVERSATIONAL)
+check('"¿qué es un archivo .env?" → conversacional', laneForMessage('¿qué es un archivo .env?'), LANE.CONVERSATIONAL)
+check('"leé el archivo config.js" → tarea', laneForMessage('leé el archivo config.js'), LANE.TASK)
+check('"¿cuántos archivos hay?" → tarea', laneForMessage('¿cuántos archivos hay?'), LANE.TASK)
+check('"Dime cuántos archivos hay en la carpeta" → tarea', laneForMessage('Dime ¿cuántos archivos hay en la carpeta?'), LANE.TASK)
+check('"mostrame los procesos" → tarea', laneForMessage('mostrame los procesos activos'), LANE.TASK)
+check('"buscá en el proyecto la función login" → tarea', laneForMessage('buscá en el proyecto la función login'), LANE.TASK)
 check('"creá un archivo" → tarea', laneForMessage('creá un archivo prueba.txt'), LANE.TASK)
 check('"borrá x" → tarea', laneForMessage('borrá el archivo viejo.txt'), LANE.TASK)
 check('"cambiá el color" → tarea', laneForMessage('cambiá el color del botón'), LANE.TASK)
-check('"leé el tablero" → conversacional (single-pass)', laneForMessage('leé el tablero y ejecutá el bloque A'), LANE.CONVERSATIONAL)
+check('"leé el tablero" → tarea (single-pass read)', laneForMessage('leé el tablero y ejecutá el bloque A'), LANE.TASK)
 check('"ejecutá Get-Location" → tarea', laneForMessage('ejecutá Get-Location'), LANE.TASK)
 
 console.log('\n— marca del carril en el IN —')
@@ -73,6 +81,8 @@ check('cuenta comandos', r4ok.includes('COMMANDS RUN: 1'), true)
 check('lista archivos tocados', r4ok.includes('FILES TOUCHED: C:\\ws\\prueba.txt'), true)
 check('incluye salida del comando', r4ok.includes('hola mundo'), true)
 check('pide 100% con el nombre', r4ok.includes('100% Signor Roberto'), true)
+check('manda juzgar el RESULTADO, no solo el estado de tools', r4ok.includes('JUDGE THE OUTCOME'), true)
+check('aclarar que RESULT no es el outcome', r4ok.includes('NOT the task outcome'), true)
 
 const r4fail = buildTaskFinish({
   ok: false,
@@ -86,7 +96,9 @@ check('incluye paso [failed]', r4fail.includes('[failed] Paso'), true)
 check('pide 0% en fallo', r4fail.includes('0% Roberto'), true)
 
 const big = buildTaskFinish({ ok: true, toolLog: [{ name: 'run_command', result: 'x'.repeat(5000) }], maxChars: 100 })
-check('trunca la salida a maxChars', big.includes('OUTPUT / ERRORS (truncated):'), true)
+check('trunca la salida a maxChars', big.includes('TOOL RESULTS (truncated):'), true)
+check('R4 incluye resultados de LECTURA (no solo comandos)',
+  buildTaskFinish({ ok: true, toolLog: [{ name: 'list_dir', result: '8 archivos' }] }).includes('[list_dir] 8 archivos'), true)
 
 console.log('\n— cleanR5: normaliza el cierre visible —')
 check('quita prefijo R5:', cleanR5('R5: 100% Roberto — hecho'), '100% Roberto — hecho')
@@ -96,6 +108,12 @@ check('quita comillas envolventes', cleanR5('"100% Roberto — hecho"'), '100% R
 check('texto plano intacto', cleanR5('100% Roberto — hecho'), '100% Roberto — hecho')
 
 check('LANE_SWITCH_HINT prohíbe R1/R2/R3', LANE_SWITCH_HINT.includes('Do NOT emit R1/R2/R3'), true)
+
+console.log('\n— TASK_SYSTEM_PROMPT: carril tarea lean, cierra en R5 —')
+check('menciona R5', TASK_SYSTEM_PROMPT.includes('R5'), true)
+check('NO pide R3 visible', TASK_SYSTEM_PROMPT.includes('R3:'), false)
+check('ordena parar sin prosa', TASK_SYSTEM_PROMPT.includes('EMPTY response'), true)
+check('incluye nombre interpolable', TASK_SYSTEM_PROMPT.includes('{{nombreAlternativo}}'), true)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

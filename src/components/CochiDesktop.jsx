@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, memo, forwardRef, useImperativeHandle, lazy, Suspense } from 'react'
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
 import DiffViewer from './DiffViewer'
-import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded } from '../lib/cochiPlanningPrompts'
+import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, needsPlanning } from '../lib/cochiPlanningPrompts'
 import PlanViewer from './PlanViewer'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { COCHI_MODELS, MODEL_PRICES, calculateCost } from '../lib/modelPrices.js'
@@ -12,7 +12,7 @@ import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools } from
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { buildWheelMessages, summarizeFromPairs, commitR7Turn, closeWheelTask } from '../lib/r7Wheel.js'
-import { LANE, laneForMessage, markInput, LANE_SWITCH_HINT, buildTaskFinish, cleanR5, taskSucceeded } from '../lib/cochiLanes.js'
+import { LANE, laneForMessage, markInput, LANE_SWITCH_HINT, buildTaskFinish, cleanR5, taskSucceeded, TASK_SYSTEM_PROMPT } from '../lib/cochiLanes.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots, pruneOldSnapshots } from '../lib/snapshotStore.js'
 import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider, resolveStoredSubagentModel, DEFAULT_SUBAGENT_MODEL } from '../lib/subagent.js'
@@ -71,7 +71,14 @@ function makeStreamingDisplayExtractor() {
     }
     seen = text.length
     if (r3At !== -1) return text.slice(r3At + 3).trim()
-    if (!hasMarkers) return text.trim()
+    if (!hasMarkers) {
+      const t = text.trim()
+      // Evita el flash del contrato a medio emitir ("R", "R1", "R1:", …): se
+      // mantiene oculto mientras el texto acumulado sea sólo un prefijo de
+      // marcador. En cuanto llega texto real (o el marcador completo), se pinta.
+      if (/^R\d?\s*:?\s*$/.test(t)) return ''
+      return t
+    }
     return ''
   }
 }
@@ -895,7 +902,9 @@ function CochiDesktop({
       return
     }
     let remainingIter = 25
-    let totalTokensAcc = 0
+    // Escape: se arrastra lo gastado en la llamada conversacional previa para
+    // que el TOTAL del turno sea real (antes el audit mostraba sólo la mitad).
+    let totalTokensAcc = opts.priorTokens || 0
     let requestCount = 0
 
     const provider = resolveProvider(selectedModel, { preferences, ollamaModel, lmStudioModel })
@@ -918,7 +927,9 @@ function CochiDesktop({
     setSubagents([])
     liveRef.current?.clear()
 
-    const remoteSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
+    const taskSystem = remotePrompts.task
+      ? interpolatePrompt(remotePrompts.task, { chatLanguage, nombreAlternativo })
+      : interpolatePrompt(TASK_SYSTEM_PROMPT, { chatLanguage, nombreAlternativo })
     const trackSteps = planRef.current !== null
     const planStepCount = trackSteps ? planRef.current.steps.length : 0
 
@@ -926,17 +937,17 @@ function CochiDesktop({
       // CARRIL TAREA (28/09): viaja SOLO el IN del usuario. NADA de R7 (la rueda
       // queda congelada durante la tarea). Cada paso es un ping-pong de comandos
       // y resultados; al cerrar, el SISTEMA manda R4 con el resultado REAL y el
-      // modelo redacta el R5. El escape desde conversacional reusa sus mensajes.
+      // modelo redacta el R5.
       let apiMessages
       if (opts.messages) {
-        // Escape: se reusan los mensajes conversacionales y se inserta la
-        // corrección de carril DESPUÉS de los system y ANTES del IN.
-        const firstNonSystem = opts.messages.findIndex(m => m.role !== 'system')
-        const at = firstNonSystem === -1 ? opts.messages.length : firstNonSystem
+        // Escape desde conversacional: el modelo ya emitió tool_calls. Se
+        // RECONSTRUYE el contexto de tarea desde cero (sin R7, con el prompt de
+        // tarea) y se ejecutan esos comandos; pendingAssistant los aporta.
         apiMessages = [
-          ...opts.messages.slice(0, at),
+          { role: 'system', content: buildSystemContext(workspace.path, permissionLabel) },
+          { role: 'system', content: taskSystem },
           { role: 'system', content: LANE_SWITCH_HINT },
-          ...opts.messages.slice(at),
+          { role: 'user', content: markInput(LANE.TASK, originalMessageRef.current || '') },
         ]
       } else if (trackSteps) {
         apiMessages = [
@@ -947,7 +958,7 @@ function CochiDesktop({
       } else {
         apiMessages = [
           { role: 'system', content: buildSystemContext(workspace.path, permissionLabel) },
-          { role: 'system', content: remoteSystem },
+          { role: 'system', content: taskSystem },
           { role: 'user', content: markInput(LANE.TASK, originalMessageRef.current || '') },
         ]
       }
@@ -1031,7 +1042,6 @@ function CochiDesktop({
                 .join(' ')
             }
 
-            const extractDisplay = makeStreamingDisplayExtractor()
             const streamed = await streamChat({
               provider,
               messages: apiMessages,
@@ -1041,7 +1051,9 @@ function CochiDesktop({
               retries: 3,
               // Reasoning AUTO: sólo en tareas complejas (plan ≥3 pasos).
               reasoning: useReasoning,
-              onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
+              // Carril tarea: la ÚNICA salida de texto visible es el R5. La prosa
+              // del modelo durante el ping-pong se descarta (no se pinta) para
+              // evitar ráfagas; el feed de actividad ya muestra las tools.
               onUsage: (usage) => {
                 const u = normalizeUsage(usage)
                 stepTokens += u.totalTokens
@@ -1405,7 +1417,7 @@ function CochiDesktop({
             provider,
             messages: [
               { role: 'system', content: buildSystemContext(workspace.path, permissionLabel) },
-              { role: 'system', content: remoteSystem },
+              { role: 'system', content: taskSystem },
               { role: 'user', content: r4 },
             ],
             signal: controller.signal,
@@ -1535,9 +1547,12 @@ function CochiDesktop({
 
       if (streamed.toolCalls?.length) {
         // ESCAPE → carril TAREA: se ejecutan los comandos ya emitidos y se cierra
-        // con R4 (sistema) → R5 (modelo).
-        await executeAllSteps('read', {
+        // con R4 (sistema) → R5 (modelo). Scope 'full' (el permiso del workspace
+        // manda): antes forzaba 'read' y un escape de escritura quedaba sin tools
+        // de escritura aunque el workspace tuviera acceso full.
+        await executeAllSteps('full', {
           messages,
+          priorTokens: totalTokensAcc,
           assistantMsg: {
             role: 'assistant',
             content: streamed.content || '',
@@ -1580,8 +1595,16 @@ function CochiDesktop({
     // El sistema decide el carril por el IN (loop de dos carriles, 28/09).
     syncPlan(null)
     if (laneForMessage(sent) === LANE.TASK) {
-      // Carril TAREA con planner: genera plan → confirmación → executeAllSteps.
-      await generatePlan(sent)
+      // Carril TAREA. Con intención de mutación → planner + confirmación
+      // (multi-paso). Sin mutación (lectura/sistema) → single-pass directo: sin
+      // planner, sin R1/R2, sin R7. Antes estas consultas arrancaban en
+      // conversacional y pagaban un escape (doble llamada + R7 arrastrado).
+      setPlanStatus('idle')
+      if (needsPlanning(sent)) {
+        await generatePlan(sent)
+      } else {
+        await executeAllSteps('read')
+      }
     } else {
       // Carril CONVERSACIONAL: system + R7 + IN. Escape a tarea si pide comandos.
       setPlanStatus('idle')
