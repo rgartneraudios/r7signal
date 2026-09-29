@@ -66,7 +66,8 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
 - `src/components/` — UI. `CochiDesktop.jsx` es el orquestador del carril; los paneles
   Asun/Tito espejan la estructura. Subcomponentes por panel (Header/MessageList/StatusBar…).
 - `src/hooks/` — `useWheelSession`, `useStableCallback`, `useAgentPrompts`, `useR9Selection`,
-  `useLiveStream`.
+  `useLiveStream`, `useCochiTaskLoop` (carril tarea), `useCochiConversational` (carril
+  conversacional + `handleSendText`).
 - `supabase/functions/get-agent-prompts/` — mapea `agent_prompts(prompt_key→content)` por
   agente. Claves de Cochi: `system`, `planning`, `task`.
 - `harness/` — un `.mjs` por lib; patrón `check(label, actual, expected)` con `pass/fail`.
@@ -114,10 +115,17 @@ el orquestador. Se resuelve extrayendo hooks + lógica pura (regla del repo).
   30 checks): `estimateTokens`, `pruneApiMessages` (parte pura, `planSteps` inyectado),
   `makeStreamingDisplayExtractor`, `extractCompleteSteps`, `buildSystemContext`,
   `BATCHING_RULE`, `READ_ONLY_TOOLS`. CochiDesktop ya consume el módulo (~140 líneas fuera).
-- **Fase 2**: `src/hooks/useCochiTaskLoop.js` — carril tarea (`executeAllSteps`,
-  `executeToolCall`, permisos, plan, subagentes).
-- **Fase 3**: `src/hooks/useCochiConversational.js` — carril conversacional + `handleSendText`.
-- **Resultado**: CochiDesktop queda orquestador + render (~400-500 líneas, sano).
+- **Fase 2 (COMPLETA 29/09-d)**: `src/hooks/useCochiTaskLoop.js` — carril tarea
+  (`executeAllSteps`, `executeToolCall`, planner, permisos, `ask_user`, subagentes, todos,
+  snapshots) + `openTurn`/`maybeRevertFiles`/`resetTurn`. El hook es dueño del estado del
+  carril (plan, actividad, subagentes, permisos, pregunta, todos); el orquestador le inyecta
+  el estado compartido del turno (messages/loading/tokens/refs). `planStatus` queda en el
+  orquestador porque `useWheelSession.busy` lo lee antes de que exista el hook.
+- **Fase 3 (COMPLETA 29/09-d)**: `src/hooks/useCochiConversational.js` — carril
+  conversacional (`executeConversational`) + `handleSendText` (enrutador de carril). El
+  helper de memoria (`cochi_memory.txt`) se movió con él. `src/lib/cochiAudit.js` centraliza
+  `auditLog` (lo usan ambos carriles).
+- **Resultado**: CochiDesktop queda orquestador + render (1625 → 521 líneas).
 
 ## Gotchas conocidos
 
@@ -162,7 +170,9 @@ el orquestador. Se resuelve extrayendo hooks + lógica pura (regla del repo).
 - **Código muerto**: ELIMINADO (29/09-c) `supabase/functions/procesar-input/`,
   `src/components/Chat00Music.jsx` y `src/components/Chat00ImgVid.jsx` (sin importadores).
   No tocar `Chat00.jsx`, que sí vive.
-- **Refactor CochiDesktop**: ver “plan por fases” arriba. Fase 1 COMPLETA (29/09-c);
-  Fases 2-3 pendientes.
+- **Refactor CochiDesktop**: ver “plan por fases” arriba. Fases 1-3 COMPLETAS (29/09-c/d);
+  CochiDesktop 1625 → 521 líneas (orquestador + render). Gates 0/0 + build + 11/11 harness.
+  Pendiente de verificación E2E en app (misma batería de la sección anterior) antes de dar
+  el comportamiento por cerrado.
 - Modelos: Centinela = DeepSeek V4 Flash 0731 · Terminator = DeepSeek V4.1 Flash
   (rotación manual). El subagente usa Centinela.
