@@ -11,6 +11,7 @@
 // cochiLanes.js. Se devuelven funciones creadas por render (no useCallback) para
 // que capturen siempre las últimas props, igual que hacía el componente.
 import { useState, useRef, useEffect } from 'react'
+import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
 import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isEmptyStepResponse, EMPTY_STEP_NUDGE, NO_ACTION_COMPLETE_NUDGE, isMutatingTool, stepCompletionNudge } from '../lib/cochiPlanningPrompts.js'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { calculateCost } from '../lib/modelPrices.js'
@@ -29,6 +30,13 @@ import { auditLog } from '../lib/cochiAudit.js'
 
 // Respuesta que recibe el modelo cuando el usuario cancela una pregunta de ask_user.
 const ASK_CANCELLED = 'Cancelado por el usuario.'
+
+// Diálogo de confirmación nativo (Tauri plugin-dialog). En dev web (sin Tauri)
+// cae a window.confirm. Antes window.confirm mostraba el origen ("localhost:5173").
+async function nativeConfirm(message) {
+  try { return await confirmDialog(message, { title: 'R7SIGNAL', kind: 'warning' }) }
+  catch { return window.confirm(message) }
+}
 
 export function useCochiTaskLoop({
   // Estado compartido del turno (vive en CochiDesktop).
@@ -908,7 +916,7 @@ export function useCochiTaskLoop({
     const more = info.paths.length > 12 ? `\n… y ${info.paths.length - 12} más` : ''
     const warn = info.unrevertible.length ? `\n\n⚠️ ${info.unrevertible.length} archivo(s) eran demasiado grandes y NO se podrán restaurar.` : ''
     const cmdWarn = ranCommand ? '\n\n⚠️ Este turno ejecutó run_command: sus efectos NO se pueden revertir.' : ''
-    const ok = window.confirm(`Este turno modificó ${info.count} archivo(s):\n${list}${more}${warn}${cmdWarn}\n\n¿Revertir los archivos a su estado anterior?`)
+    const ok = await nativeConfirm(`Este turno modificó ${info.count} archivo(s):\n${list}${more}${warn}${cmdWarn}\n\n¿Revertir los archivos a su estado anterior?`)
     if (!ok) { await discardTurn(snap); return notes }
     try {
       const res = await revertSnapshot(snap.id)

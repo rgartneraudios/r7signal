@@ -103,29 +103,15 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
   NADIE la importa: sólo la llamaba `Chat00Music.jsx`, que ya no se monta. En la web sólo hay
   `Chat00.jsx`. No replicar su patrón de R7 (acumula tokens).
 
-## Refactor de CochiDesktop (plan por fases — aprobado 29/09)
+## Refactor de CochiDesktop (COMPLETO 29/09)
 
-`CochiDesktop.jsx` concentra los dos carriles (conversacional ~105 líneas + tarea ~650, más
-planner/tools/permisos/subagentes) y el render. NO se parte en dos componentes React: ambos
-carriles comparten la máquina de estado del turno (messages/activity/subagents/snapshots/
-permisos/ask_user/cierre R5), así que separarlos forzaría prop-drilling o un store y agrandaría
-el orquestador. Se resuelve extrayendo hooks + lógica pura (regla del repo).
-
-- **Fase 1 (COMPLETA 29/09-c)**: `src/lib/cochiContext.js` (puro + harness `cochiContext`
-  30 checks): `estimateTokens`, `pruneApiMessages` (parte pura, `planSteps` inyectado),
-  `makeStreamingDisplayExtractor`, `extractCompleteSteps`, `buildSystemContext`,
-  `BATCHING_RULE`, `READ_ONLY_TOOLS`. CochiDesktop ya consume el módulo (~140 líneas fuera).
-- **Fase 2 (COMPLETA 29/09-d)**: `src/hooks/useCochiTaskLoop.js` — carril tarea
-  (`executeAllSteps`, `executeToolCall`, planner, permisos, `ask_user`, subagentes, todos,
-  snapshots) + `openTurn`/`maybeRevertFiles`/`resetTurn`. El hook es dueño del estado del
-  carril (plan, actividad, subagentes, permisos, pregunta, todos); el orquestador le inyecta
-  el estado compartido del turno (messages/loading/tokens/refs). `planStatus` queda en el
-  orquestador porque `useWheelSession.busy` lo lee antes de que exista el hook.
-- **Fase 3 (COMPLETA 29/09-d)**: `src/hooks/useCochiConversational.js` — carril
-  conversacional (`executeConversational`) + `handleSendText` (enrutador de carril). El
-  helper de memoria (`cochi_memory.txt`) se movió con él. `src/lib/cochiAudit.js` centraliza
-  `auditLog` (lo usan ambos carriles).
-- **Resultado**: CochiDesktop queda orquestador + render (1625 → 521 líneas).
+`CochiDesktop.jsx` quedó como orquestador + render (**482 líneas**, era 1625). La lógica se
+extrajo a: `src/lib/cochiContext.js` (contexto puro), `src/hooks/useCochiTaskLoop.js` (carril
+tarea) y `src/hooks/useCochiConversational.js` (carril conversacional + `handleSendText`).
+NO se parte en dos componentes React: ambos carriles comparten la máquina de estado del turno
+(messages/activity/subagents/snapshots/permisos/ask_user/cierre R5); separarlos forzaría
+prop-drilling o un store y agrandaría el orquestador. `planStatus` queda en el orquestador
+porque `useWheelSession.busy` lo lee antes de que exista el hook.
 
 ## Gotchas conocidos
 
@@ -157,47 +143,23 @@ el orquestador. Se resuelve extrayendo hooks + lógica pura (regla del repo).
   chats** en `rgba(15,14,17,0.45)` (CochiDesktop, AsunPanel, `.tito-chat`). Headers/footers
   conservan su `rgba(9,8,10,0.5)`. Sólo Windows (Linux no soporta el efecto).
 
-## Deuda / pendientes (ver histórico completo en `output/Analisis-Cochi.txt`)
+## Pendientes (histórico completo en `output/Analisis-Cochi.txt`)
 
-- Bloque C + A-ter + X1/X2/K3/L4/W: ✅ VERIFICADOS en app (29/09). Incluye: permisos por paso,
-  single-pass sin falso error, bloque 🧠 Razonamiento + cached_tokens, Undo/Regenerate con
-  reversión de disco, drawer/nombre editable, rueda entre sesiones, typo y `parallel_tool_calls`.
-- Agujeros cerrados en el E2E (29/09): falso completado sin tool, evidencia R4 truncada a 500
-  chars, falta de tool para borrar carpetas (`delete_dir`), respuesta vacía del modelo.
-- Subagentes que escriben (hoy sólo lectura, `MAX_SUBAGENT_DEPTH=1`).
-- Shell revertible (run_command en snapshots).
-- Menor: el brief del subagente filtraba narración inicial en la misma línea
-  (`stripLeadingNarration` era por línea completa) → **FIX 29/09-b**: pela por oración
-  (`I have … now. Let me compile …` ya se descarta; si la línea mezcla narración + contenido,
-  conserva el contenido). Cambio de sesión con un turno en vuelo no abortaba → **FIX 29/09-b**:
-  `onResume` de Cochi/Tito hace `abortRef.current?.abort()` y el carril conversacional no sella
-  la rueda si fue abortado. `run_command` bloqueado por permiso ya NO marca "no revertible"
-  (`commandRan`).
-- **Código muerto**: ELIMINADO (29/09-c) `supabase/functions/procesar-input/`,
-  `src/components/Chat00Music.jsx` y `src/components/Chat00ImgVid.jsx` (sin importadores).
-  No tocar `Chat00.jsx`, que sí vive.
-- **Refactor CochiDesktop**: ver “plan por fases” arriba. Fases 1-3 COMPLETAS (29/09-c/d);
-  CochiDesktop 1625 → 482 líneas (orquestador + render). Gates 0/0 + build + 11/11 harness.
-  ✅ **E2E en app CERRADO (29/09-e)**: batería T1-T12 sobre `Cochi-Pruebas` — run_command +
-  exit code, lectura, plan de 3 pasos con bloque 🧠, permisos por paso (destructivas SÍ piden),
-  Undo/Regenerate con reversión de disco, sesiones, subagente, cambio de sesión en vuelo
-  (aborta y no contamina el R7) y transparencia Mica/Acrylic. Falta pulir los hallazgos de abajo.
-- **E2E 29/09-e — hallazgos menores pendientes de decisión/arreglo**:
-  · **T11 (typo)**: ✅ **FIX (29/09-f)**. Era el R4, no el `ask_user`: el fallback devolvía
-    `⚠️ No existe: <ruta>` y `buildTaskFinish` instruía “a path did not exist = 0%”, así que el
-    modelo a veces clavaba 0% aunque ya había leído. Ahora el fallback marca `TYPO RESUELTO` y
-    tanto el R4 como el `TASK_SYSTEM_PROMPT` local tienen la excepción (typo auto-resuelto =
-    100%, no 0%). Verificado en app: mismo prompt da 100% consistente; lectura de un archivo
-    realmente inexistente sigue 0%. ⚠ Pendiente menor: pegar la misma excepción en el prompt
-    `task` remoto de Supabase (el R4 ya lo cubre igual).
-  · **Guard Full Access**: ✅ **FIX (29/09-f)**. Preguntas explicativas (“¿para qué sirve npm?”,
-    “¿qué es Node.js?”) caían en tarea/planner porque `WRITE_VERBS` tenía `npm/yarn/pip/cargo`
-    y `needsRunCommand` matcheaba `node`. Se agregó `EXPLANATORY_RE` y `needsFullAccess()`: si el
-    pedido ejecuta un comando y el workspace no está en Full Access, `handleSendText` corta
-    ANTES de llamar al modelo y avisa ⚡ (0 requests en vez de 4/12k). Harness planning 142→157.
-  · **Cartel de Undo**: usa `window.confirm` (`useCochiTaskLoop.js:911`) y muestra el origen
-    (`localhost:5173` en dev); migrar al `plugin-dialog` de Tauri para que sea nativo.
-  · **T5**: un plan de 3 pasos costó 9 requests / 34k tokens (lecturas de verificación extra
-    por step). Funciona, pero es optimizable.
-- Modelos: Centinela = DeepSeek V4 Flash 0731 · Terminator = DeepSeek V4.1 Flash
+- **T5**: un plan de 3 pasos costó 9 requests / 34k tokens (lecturas de verificación extra por
+  step). Funciona, pero es optimizable.
+- **Subagentes que escriben** (hoy sólo lectura, `MAX_SUBAGENT_DEPTH=1`).
+- **Shell revertible** (`run_command` está FUERA de los snapshots; hoy sólo aviso).
+- **SSRF**: `isBlockedUrl` es corte por globs; falta validar la IP resuelta en Rust.
+- **`cached_tokens`**: tarifas ESTIMADAS (~20%), pendiente verificar contra OpenRouter.
+- **Prompt `task` remoto (Supabase)**: pegarle la excepción de `TYPO RESUELTO` (opcional; el
+  R4 del sistema ya la aplica).
+- **Cartel de Undo**: ✅ migrado a `plugin-dialog` nativo (`dialog:allow-confirm` en la
+  capability). Falta verificar en `npx tauri dev` (requiere rebuild).
+- **Modelos**: Centinela = DeepSeek V4 Flash 0731 · Terminator = DeepSeek V4.1 Flash
   (rotación manual). El subagente usa Centinela.
+
+### Cerrado recientemente (29/09)
+Bloque C + A-ter + X1/X2/K3/L4/W · E2E T1-T12 (`Cochi-Pruebas`) · transparencia Mica/Acrylic
+(lienzo 3 chats `0.45`) · Guard Full Access (corta comando sin permiso full + falsos positivos
+`npm`/`node`) · T11 typo (fallback `TYPO RESUELTO` → cierre 100%) · refactor CochiDesktop
+(1625 → 482 líneas).
