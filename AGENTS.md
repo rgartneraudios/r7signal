@@ -183,12 +183,13 @@ el orquestador. Se resuelve extrayendo hooks + lógica pura (regla del repo).
   Undo/Regenerate con reversión de disco, sesiones, subagente, cambio de sesión en vuelo
   (aborta y no contamina el R7) y transparencia Mica/Acrylic. Falta pulir los hallazgos de abajo.
 - **E2E 29/09-e — hallazgos menores pendientes de decisión/arreglo**:
-  · **T11 (typo)**: `read_file` resuelve “el más parecido”, pero el cierre es **inconsistente**
-    (mismo prompt: a veces 100%, a veces 0%). No es el `ask_user` (no llegó a preguntar):
-    el R4 (`buildTaskFinish`) instruye “a path did not exist = 0%” y el fallback devuelve
-    `⚠️ No existe: <ruta>`, así que el modelo a veces obedece y clava 0% aunque ya leyó.
-    FIX candidato: reformular el `modelResult` del fallback + excepción en R4 (typo resuelto =
-    SUCCESS). INVESTIGAR.
+  · **T11 (typo)**: ✅ **FIX (29/09-f)**. Era el R4, no el `ask_user`: el fallback devolvía
+    `⚠️ No existe: <ruta>` y `buildTaskFinish` instruía “a path did not exist = 0%”, así que el
+    modelo a veces clavaba 0% aunque ya había leído. Ahora el fallback marca `TYPO RESUELTO` y
+    tanto el R4 como el `TASK_SYSTEM_PROMPT` local tienen la excepción (typo auto-resuelto =
+    100%, no 0%). Verificado en app: mismo prompt da 100% consistente; lectura de un archivo
+    realmente inexistente sigue 0%. ⚠ Pendiente menor: pegar la misma excepción en el prompt
+    `task` remoto de Supabase (el R4 ya lo cubre igual).
   · **Guard Full Access**: ✅ **FIX (29/09-f)**. Preguntas explicativas (“¿para qué sirve npm?”,
     “¿qué es Node.js?”) caían en tarea/planner porque `WRITE_VERBS` tenía `npm/yarn/pip/cargo`
     y `needsRunCommand` matcheaba `node`. Se agregó `EXPLANATORY_RE` y `needsFullAccess()`: si el

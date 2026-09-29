@@ -139,6 +139,7 @@ export function buildTaskFinish({
     `Now JUDGE THE OUTCOME yourself from the evidence above and write ONLY the closing message${nombre ? ` addressing ${nombre}` : ''}:`,
     `- "100% ${nombre || '<user>'} — <what was done>" ONLY if what the user asked for was actually achieved.`,
     `- "0% ${nombre || '<user>'} — <why it failed>" if the requested item/result was not found, a path did not exist, a read returned nothing, or the goal was otherwise not met.`,
+    '- EXCEPTION — typo auto-resolved: if a TOOL RESULT says "TYPO RESUELTO", the system already read the closest matching file because the requested path did not exist. The requested content WAS delivered, so that is a 100%, NOT a 0%: do not fail on the misspelled path.',
     'Tools finishing without a system error does NOT mean success: a file or target that was not found is a 0%. Never claim success you cannot back with the evidence.',
     'One or two short sentences. No R1/R2/R3, no tool calls.'
   )

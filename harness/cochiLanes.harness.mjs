@@ -117,6 +117,14 @@ check('result de lectura largo NO se corta a 500 (bug 29/09)', r4read.includes('
 check('sin truncar NO rotula (truncated)', r4read.includes('TOOL RESULTS (truncated):'), false)
 check('sin truncar usa el rotulo limpio', r4read.includes('TOOL RESULTS:'), true)
 
+const r4typo = buildTaskFinish({
+  ok: true,
+  task: 'leé notas.tx',
+  toolLog: [{ name: 'read_file', result: '⚠️ La ruta "notas.tx" no existe. TYPO RESUELTO: el sistema leyó automáticamente el archivo más parecido → "notas.txt"\n\ncontenido' }],
+})
+check('R4: excepcion typo resuelto presente', r4typo.includes('TYPO RESUELTO'), true)
+check('R4: typo resuelto es 100%, no 0%', r4typo.includes('100%, NOT a 0%'), true)
+
 console.log('\n— cleanR5: normaliza el cierre visible —')
 check('quita prefijo R5:', cleanR5('R5: 100% Roberto — hecho'), '100% Roberto — hecho')
 check('quita prefijo en negrita', cleanR5('**R5:** 100% Roberto — hecho'), '100% Roberto — hecho')
@@ -131,6 +139,7 @@ check('menciona R5', TASK_SYSTEM_PROMPT.includes('R5'), true)
 check('NO pide R3 visible', TASK_SYSTEM_PROMPT.includes('R3:'), false)
 check('ordena parar sin prosa', TASK_SYSTEM_PROMPT.includes('EMPTY response'), true)
 check('incluye nombre interpolable', TASK_SYSTEM_PROMPT.includes('{{nombreAlternativo}}'), true)
+check('TASK prompt: excepcion typo resuelto', TASK_SYSTEM_PROMPT.includes('TYPO RESUELTO'), true)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

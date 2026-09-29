@@ -924,7 +924,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         if (best) {
           try {
             const content = await readTextFile(best)
-            return { modelResult: `⚠️ No existe: ${args.path}\nLeído el archivo más parecido: ${best}\n\n${content}`, diff: null }
+            return { modelResult: `⚠️ La ruta "${args.path}" no existe. TYPO RESUELTO: el sistema leyó automáticamente el archivo más parecido → "${best}"\n\n${content}`, diff: null }
           } catch {}
         }
         return { modelResult: `ERROR: ${err.message}${await notFoundSuffix(args.path)}`, diff: null }
