@@ -3,7 +3,7 @@
 // Ejecutar:  node harness/cochiPlanning.harness.mjs   (o npm run harness:planning)
 // Cubre la lógica PURA: needsPlanning (intención single-pass vs multi-paso) y
 // parsePlanResponse (forma del JSON del planner).
-import { needsPlanning, needsTools, needsCommand, needsRunCommand, needsFullAccess, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isEmptyStepResponse, EMPTY_STEP_NUDGE, NO_ACTION_COMPLETE_NUDGE, isMutatingTool, stepCompletionNudge, STEP_VERIFY_NUDGE_AT, STEP_VERIFY_FORCE_AT, PLANNING_SYSTEM_PROMPT, touchesBoard } from '../src/lib/cochiPlanningPrompts.js'
+import { needsPlanning, needsTools, needsCommand, needsRunCommand, needsFullAccess, needsWrite, isAtomicMutation, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isEmptyStepResponse, EMPTY_STEP_NUDGE, NO_ACTION_COMPLETE_NUDGE, isMutatingTool, stepCompletionNudge, STEP_VERIFY_NUDGE_AT, STEP_VERIFY_FORCE_AT, PLANNING_SYSTEM_PROMPT, touchesBoard } from '../src/lib/cochiPlanningPrompts.js'
 
 let pass = 0
 let fail = 0
@@ -22,25 +22,35 @@ check('que eres?', needsPlanning('que eres?'), false)
 check('vacio', needsPlanning(''), false)
 check('null', needsPlanning(null), false)
 
-console.log('- escritura/ejecucion -> planner -')
-check('crea un archivo', needsPlanning('crea un archivo llamado hola.txt'), true)
+console.log('- escritura/ejecucion -> planner (mutacion NO atomica) -')
 check('ejecuta npm install', needsPlanning('ejecuta npm install'), true)
-check('borra la carpeta build', needsPlanning('borra la carpeta build'), true)
 check('voseo: ejecuta', needsPlanning('ejecuta el script'), true)
 check('voseo con acento: ejecuta', needsPlanning('ejecutá el script'), true)
 check('refactoriza el modulo', needsPlanning('refactoriza el modulo auth'), true)
 
-console.log('- mutacion: verbos que faltaban -> planner (Prueba T3) -')
-check('cambia el contenido', needsPlanning('cambiá el contenido de undo_test.txt a v2'), true)
-check('cambia objeto', needsPlanning('cambia el contenido del archivo'), true)
-check('reemplazar', needsPlanning('reemplazá el texto del archivo'), true)
-check('sobrescribir', needsPlanning('sobrescribí el archivo'), true)
-check('update', needsPlanning('updateá el archivo de config'), true)
+console.log('- T5: mutacion ATOMICA -> single-pass (sin planner) -')
+check('crea un archivo', needsPlanning('crea un archivo llamado hola.txt'), false)
+check('borra la carpeta build', needsPlanning('borra la carpeta build'), false)
+check('cambia el contenido', needsPlanning('cambiá el contenido de undo_test.txt a v2'), false)
+check('cambia objeto', needsPlanning('cambia el contenido del archivo'), false)
+check('reemplazar', needsPlanning('reemplazá el texto del archivo'), false)
+check('sobrescribir', needsPlanning('sobrescribí el archivo'), false)
+check('update', needsPlanning('updateá el archivo de config'), false)
+check('setear', needsPlanning('seteá el valor en config'), false)
+check('insertar', needsPlanning('insertá la linea al inicio'), false)
+check('corregir', needsPlanning('corregí el bug en login.py'), false)
+check('arreglar', needsPlanning('arreglá el login'), false)
+check('agrega al final (caso undo)', needsPlanning('agregá esto al final del archivo'), false)
+check('borra ultima linea (caso undo)', needsPlanning('andá al archivo notas.txt y borra la ultima linea'), false)
+check('isAtomicMutation true', isAtomicMutation('borrá la última línea de notas.txt'), true)
+check('isAtomicMutation false (secuencia)', isAtomicMutation('borra A luego crea B'), false)
+check('isAtomicMutation false (complejo)', isAtomicMutation('refactoriza el modulo auth'), false)
+check('isAtomicMutation false (2 verbos)', isAtomicMutation('crea el archivo y escribe hola'), false)
+check('needsWrite true (mutacion)', needsWrite('borrá la última línea de notas.txt'), true)
+check('needsWrite false (lectura)', needsWrite('leé el archivo config.js'), false)
+
+console.log('- mutacion NO atomica -> planner -')
 check('subir al servidor', needsPlanning('subí el proyecto al servidor'), true)
-check('setear', needsPlanning('seteá el valor en config'), true)
-check('insertar', needsPlanning('insertá la linea al inicio'), true)
-check('corregir', needsPlanning('corregí el bug en login.py'), true)
-check('arreglar', needsPlanning('arreglá el login'), true)
 check('convertir', needsPlanning('convertí el archivo a utf8'), true)
 
 console.log('- lectura/consulta -> single-pass -')
@@ -68,7 +78,7 @@ check('gracias, lee el tablero -> tools', needsTools('gracias, lee el tablero'),
 check('Gracias, busca el archivo -> tools (saludo + lectura)', needsTools('Gracias, busca ahora el archivo perdidos.txt y dime que hay dentro'), true)
 check('Gracias, dime cuantos archivos -> tools', needsTools('Gracias, dime cuántos archivos hay'), true)
 check('revisa el JSON -> tools (extension)', needsTools('Revisa el JSON de la sesión'), true)
-check('gracias + crea -> planner', needsPlanning('Gracias, crea un archivo'), true)
+check('gracias + crea -> single-pass (saludo + atómica)', needsPlanning('Gracias, crea un archivo'), false)
 check('gracias solo -> single-pass', needsPlanning('gracias'), false)
 check('Gracias, busca el archivo -> single-pass (lectura)', needsPlanning('Gracias, busca ahora el archivo perdidos.txt y dime que hay dentro'), false)
 
@@ -92,7 +102,7 @@ check('bloque + proyecto', needsPlanning('marca el bloque A del proyecto como he
 check('bloque + tablero', needsPlanning('edita el bloque C del tablero'), false)
 
 console.log('- "bloque" generico sin contexto de plan -> NO lo secuestra -')
-check('bloque de codigo con write verb', needsPlanning('crea un bloque de codigo para el login'), true)
+check('bloque de codigo con write verb -> single-pass (atómica)', needsPlanning('crea un bloque de codigo para el login'), false)
 
 console.log('- parsePlanResponse -')
 const parsed = parsePlanResponse(JSON.stringify({

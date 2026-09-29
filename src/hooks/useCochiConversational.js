@@ -5,9 +5,9 @@
 // (messages/loading/tokens/refs) entra inyectado; `taskLoop` se inyecta para el
 // escape a tarea y para abrir/cerrar el turno.
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { needsPlanning, needsRunCommand, needsFullAccess, touchesBoard } from '../lib/cochiPlanningPrompts.js'
+import { needsPlanning, needsRunCommand, needsFullAccess, needsWrite, touchesBoard } from '../lib/cochiPlanningPrompts.js'
 import { interpolatePrompt } from '../lib/promptLoader.js'
-import { calculateCost } from '../lib/modelPrices.js'
+import { calculateCost, billableTokens } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
@@ -124,17 +124,18 @@ export function useCochiConversational({
         onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
         onUsage: (usage) => {
           const u = normalizeUsage(usage)
-          totalTokensAcc += u.totalTokens
-          setTokens(prev => prev + u.totalTokens)
+          const billable = billableTokens(selectedModel, u)
+          totalTokensAcc += billable
+          setTokens(prev => prev + billable)
           setCachedTokens(prev => prev + u.cachedTokens)
           const c = calculateCost(selectedModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
           setCost(prev => prev + c)
-          onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost: c })
+          onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost: c })
         },
       })
       liveRef.current?.flush()
       liveRef.current?.clear()
-      auditLog(`conversacional: ${totalTokensAcc} tokens · calls ${streamed.toolCalls?.length || 0} · finish ${streamed.finishReason}`)
+      auditLog(`conversacional: ${totalTokensAcc} tokens facturables · calls ${streamed.toolCalls?.length || 0} · finish ${streamed.finishReason}`)
 
       // Si el turno fue abortado (p.ej. se cargó otra sesión), no se sella nada:
       // la rueda ya pertenece a la sesión entrante.
@@ -217,9 +218,9 @@ export function useCochiConversational({
         await taskLoop.generatePlan(sent)
       } else {
         // Single-pass. Scope 'read' (solo-lectura) salvo que el mensaje vaya a
-        // CORRER un comando: run_command no vive en scope 'read', así que un
-        // "Corré X" sin planner necesita scope 'task' para que la tool exista.
-        await taskLoop.executeAllSteps(needsRunCommand(sent) ? 'task' : 'read')
+        // CORRER un comando o a MUTAR (T5: mutación atómica sin planner):
+        // run_command/escritura no viven en scope 'read', así que necesitan 'task'.
+        await taskLoop.executeAllSteps((needsRunCommand(sent) || needsWrite(sent)) ? 'task' : 'read')
       }
     } else {
       // Carril CONVERSACIONAL: system + R7 + IN. Escape a tarea si pide comandos.

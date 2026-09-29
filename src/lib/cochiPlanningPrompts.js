@@ -47,6 +47,42 @@ const WRITE_VERBS = [
   'insert', 'correg', 'corrig', 'arregl', 'convert',
 ]
 
+// ── T5: planner para mutaciones atómicas ─────────────────────────────────────
+// El planner cuesta una request completa (prompt + tools + system) y una pantalla
+// de confirmación. Para una mutación ATÓMICA (un único efecto sobre un objetivo:
+// "borrá la última línea", "agregá esto al final", "corregí X") no aporta nada: el
+// single-pass con scope 'task' la resuelve y la red anti-verificación la cierra.
+// Se exige que exista EXACTAMENTE un verbo atómico reconocido, que no haya verbo
+// complejo (refactor/implementar/migrar/instalar/ejecutar/convertir), ni
+// secuenciación explícita, ni tablero, y que el mensaje sea corto. Cualquier duda
+// cae al planner (comportamiento previo, conservador). Puro y testeable.
+const COMPLEX_WRITE_RE = /\b(refactor\w*|implement\w*|migr\w*|convert\w*|instal\w*|ejecut\w*|export\w*|patch\w*)\b/
+const ATOMIC_WRITE_RE = /\b(crea\w*|escrib\w*|borr\w*|elimin\w*|agreg\w*|anad\w*|reemplaz\w*|sobrescrib\w*|insert\w*|correg\w*|corrig\w*|arregl\w*|cambi\w*|sete\w*|renombr\w*|muev\w*|mover|copi\w*|guard\w*|salv\w*|actualiz\w*|update\w*)\b/g
+const SEQUENCE_RE = /\b(luego|despues|entonces|primero|finalmente|seguidamente|and then)\b|;\s*/
+const ATOMIC_MAX_CHARS = 160
+
+export function isAtomicMutation(message) {
+  const msg = normalizeMessage(message)
+  if (!msg) return false
+  const core = stripLeadGreetings(msg) || msg
+  if (core.length > ATOMIC_MAX_CHARS) return false
+  if (hasBoardIntent(core)) return false
+  if (SEQUENCE_RE.test(core)) return false
+  if (COMPLEX_WRITE_RE.test(core)) return false
+  const atomic = core.match(ATOMIC_WRITE_RE) || []
+  return atomic.length === 1
+}
+
+// ¿El mensaje pide una mutación? Lo usa el enrutador para darle al single-pass el
+// scope 'task' (con tools de escritura) en vez de 'read' cuando NO pasa por el
+// planner (mutación atómica).
+export function needsWrite(message) {
+  const msg = normalizeMessage(message)
+  if (!msg) return false
+  const core = stripLeadGreetings(msg) || msg
+  return WRITE_VERBS.some(k => core.includes(k))
+}
+
 // Tablero de proyecto (Proyecto IrmaMax): las tools del tablero
 // (list_project_plans/read_project_plan/update_plan_block/request_replan)
 // viven en scope 'read' y funcionan bien en single-pass (E3/E4 verificados).
@@ -220,7 +256,10 @@ export function needsPlanning(message) {
   // (writeVerbs). Un mensaje largo de lectura/análisis NO debe pagar una llamada
   // de planner: antes el fallback por longitud (`msg.length >= 60 → true`)
   // disparaba el planner en consultas simples y sumaba tokens + fricción.
-  return hasWriteVerb
+  // T5: una mutación ATÓMICA tampoco paga planner (single-pass + scope 'task').
+  if (!hasWriteVerb) return false
+  if (isAtomicMutation(core)) return false
+  return true
 }
 
 // Prefijo con el que ask_user devuelve la respuesta del usuario como tool result.

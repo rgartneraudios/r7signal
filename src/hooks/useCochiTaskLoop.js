@@ -14,7 +14,7 @@ import { useState, useRef, useEffect } from 'react'
 import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
 import { STEP_EXECUTION_PROMPT, buildPlanContext, PLANNING_SYSTEM_PROMPT, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isEmptyStepResponse, EMPTY_STEP_NUDGE, NO_ACTION_COMPLETE_NUDGE, isMutatingTool, stepCompletionNudge } from '../lib/cochiPlanningPrompts.js'
 import { interpolatePrompt } from '../lib/promptLoader.js'
-import { calculateCost } from '../lib/modelPrices.js'
+import { calculateCost, billableTokens } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
@@ -205,12 +205,13 @@ export function useCochiTaskLoop({
         maxTokens: 1400,
         onUsage: (usage) => {
           const u = normalizeUsage(usage)
-          setTokens(prev => prev + u.totalTokens)
+          const billable = billableTokens(selectedModel, u)
+          setTokens(prev => prev + billable)
           setCachedTokens(prev => prev + u.cachedTokens)
           const cost = calculateCost(selectedModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
           setCost(prev => prev + cost)
-          onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost })
-          auditLog(`planner: prompt ${u.promptTokens} · completion ${u.completionTokens} · cached ${u.cachedTokens}`)
+          onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost })
+          auditLog(`planner: prompt ${u.promptTokens} · completion ${u.completionTokens} · cached ${u.cachedTokens} · billable ${billable}`)
         },
       })
 
@@ -252,12 +253,13 @@ export function useCochiTaskLoop({
         maxTokens: 600,
         onUsage: (usage) => {
           const u = normalizeUsage(usage)
-          setTokens(prev => prev + u.totalTokens)
+          const billable = billableTokens(selectedModel, u)
+          setTokens(prev => prev + billable)
           setCachedTokens(prev => prev + u.cachedTokens)
           const cost = calculateCost(selectedModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
           setCost(prev => prev + cost)
-          onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost })
-          auditLog(`replan: prompt ${u.promptTokens} · completion ${u.completionTokens} · cached ${u.cachedTokens}`)
+          onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost })
+          auditLog(`replan: prompt ${u.promptTokens} · completion ${u.completionTokens} · cached ${u.cachedTokens} · billable ${billable}`)
         },
       })
 
@@ -428,7 +430,7 @@ export function useCochiTaskLoop({
           } else {
             const toolsForRequest = getToolsForPermission(workspace.permission, scope)
             requestCount++
-            const reqAudit = { msgs: apiMessages.length, calls: 0, prompt: 0, completion: 0, cached: 0, reasoning: 0 }
+            const reqAudit = { msgs: apiMessages.length, calls: 0, prompt: 0, completion: 0, cached: 0, reasoning: 0, billable: 0 }
             if (import.meta.env.DEV) {
               reqAudit.msgChars = JSON.stringify(apiMessages).length
               reqAudit.toolChars = toolsForRequest ? JSON.stringify(toolsForRequest).length : 0
@@ -447,8 +449,9 @@ export function useCochiTaskLoop({
               reasoning: useReasoning,
               onUsage: (usage) => {
                 const u = normalizeUsage(usage)
-                stepTokens += u.totalTokens
-                totalTokensAcc += u.totalTokens
+                const billable = billableTokens(selectedModel, u)
+                stepTokens += billable
+                totalTokensAcc += billable
                 stepInputTokens += u.promptTokens
                 stepOutputTokens += u.completionTokens
                 stepCachedTokens += u.cachedTokens
@@ -456,6 +459,7 @@ export function useCochiTaskLoop({
                 reqAudit.completion += u.completionTokens
                 reqAudit.cached += u.cachedTokens
                 reqAudit.reasoning += u.reasoningTokens
+                reqAudit.billable += billable
               },
             })
             liveRef.current?.flush()
@@ -469,7 +473,7 @@ export function useCochiTaskLoop({
               `request #${requestCount} · msgs ${reqAudit.msgs} · chars ${reqAudit.msgChars}` +
               ` · toolsChars ${reqAudit.toolChars} · calls ${reqAudit.calls}` +
               ` · prompt ${reqAudit.prompt} · completion ${reqAudit.completion}` +
-              ` · cached ${reqAudit.cached} · reasoning ${reqAudit.reasoning} · finish ${reqAudit.finish}`
+              ` · cached ${reqAudit.cached} · billable ${reqAudit.billable} · reasoning ${reqAudit.reasoning} · finish ${reqAudit.finish}`
             )
             if (import.meta.env.DEV) auditLog(`  └ msgs: ${reqAudit.msgDetail}`)
 
@@ -563,7 +567,7 @@ export function useCochiTaskLoop({
               }
               const subId = newMessageId('sub')
               addSubagent({ id: subId, label: subLabel, task, status: 'running', tools: [], model: subagentProvider.model })
-              const subUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cached_tokens: 0, calls: 0 }
+              const subUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cached_tokens: 0, billable: 0, calls: 0 }
               const sub = await runSubagent({
                 provider: subagentProvider,
                 task,
@@ -584,8 +588,9 @@ export function useCochiTaskLoop({
                 },
                 onUsage: (usage) => {
                   const u = normalizeUsage(usage)
-                  stepTokens += u.totalTokens
-                  totalTokensAcc += u.totalTokens
+                  const billable = billableTokens(subagentProvider.model, u)
+                  stepTokens += billable
+                  totalTokensAcc += billable
                   stepInputTokens += u.promptTokens
                   stepOutputTokens += u.completionTokens
                   stepCachedTokens += u.cachedTokens
@@ -596,9 +601,10 @@ export function useCochiTaskLoop({
                   subUsage.completion_tokens += u.completionTokens
                   subUsage.total_tokens += u.totalTokens
                   subUsage.cached_tokens += u.cachedTokens
+                  subUsage.billable += billable
                   subUsage.calls += 1
                   patchSubagent(subId, { usageTotal: { ...subUsage } })
-                  auditLog(`subagent: prompt ${u.promptTokens} · completion ${u.completionTokens} · cached ${u.cachedTokens}`)
+                  auditLog(`subagent: prompt ${u.promptTokens} · completion ${u.completionTokens} · cached ${u.cachedTokens} · billable ${billable}`)
                 },
               })
               const done = {
@@ -718,13 +724,18 @@ export function useCochiTaskLoop({
             })
           }
 
-          if (trackSteps && stepMutated) {
+          // Red anti-verificación (A-bis) — vale también en single-pass: tras
+          // aplicar una mutación, releer/verificar es redundante. Antes sólo
+          // corría con plan (trackSteps); una mutación atómica sin planner podía
+          // gastar requests extra "confirmando". En single-pass forzamos el cierre
+          // y el loop sale a R4/R5.
+          if (stepMutated) {
             const mutatedThisIter = assistantMsg.tool_calls.some(c => isMutatingTool(c.function.name))
             verifyOnlyIters = mutatedThisIter ? 0 : verifyOnlyIters + 1
             const nudge = stepCompletionNudge({ stepMutated, verifyOnlyIters })
             if (nudge?.force) {
               stepResultSummary = 'Mutación aplicada'
-              updateStepStatus(step.id, 'completed', stepResultSummary)
+              if (trackSteps) updateStepStatus(step.id, 'completed', stepResultSummary)
               stepCompleted = true
               break
             }
@@ -810,12 +821,13 @@ export function useCochiTaskLoop({
             onDelta: (partial) => liveRef.current?.push(cleanR5(partial)),
             onUsage: (usage) => {
               const u = normalizeUsage(usage)
-              totalTokensAcc += u.totalTokens
-              setTokens(prev => prev + u.totalTokens)
+              const billable = billableTokens(selectedModel, u)
+              totalTokensAcc += billable
+              setTokens(prev => prev + billable)
               setCachedTokens(prev => prev + u.cachedTokens)
               const c = calculateCost(selectedModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
               setCost(prev => prev + c)
-              onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost: c })
+              onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost: c })
             },
           })
           liveRef.current?.flush()
@@ -840,7 +852,7 @@ export function useCochiTaskLoop({
       setActivity([])
       setSubagents([])
       liveRef.current?.clear()
-      auditLog(`TOTAL del turno: ${requestCount} request(s) · ${totalTokensAcc} tokens`)
+      auditLog(`TOTAL del turno: ${requestCount} request(s) · ${totalTokensAcc} tokens facturables`)
 
     } catch (err) {
       setLoading(false)

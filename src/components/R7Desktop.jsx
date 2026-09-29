@@ -20,7 +20,11 @@ function usageReducer(state, action) {
   const source = action.source
   const isAgent = source === 'asun' || source === 'tito' || source === 'cochi'
   if (action.type === 'add') {
-    const total = (action.inputTokens || 0) + (action.outputTokens || 0)
+    // `billable` = tokens facturables (cache descontada); los paneles lo envían.
+    // Fallback a input+output crudos para proveedores que no lo reporten.
+    const total = action.billable != null
+      ? (action.billable || 0)
+      : (action.inputTokens || 0) + (action.outputTokens || 0)
     if (!total) return state
     return isAgent
       ? { ...state, total: state.total + total, [source]: state[source] + total }
@@ -110,8 +114,8 @@ export default function R7Desktop() {
     if (agent === 'asun' || agent === 'tito') setActiveLeftPanel(agent)
     setPendingSession({ agent, id, nonce: Date.now() })
   }, [])
-const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0 }) => {
-      dispatchUsage({ type: 'add', source, inputTokens, outputTokens })
+const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, billable }) => {
+      dispatchUsage({ type: 'add', source, inputTokens, outputTokens, billable })
     }, [])
 
   // Reset del contador por agente cuando ese panel hace CLS (o Guardar R7 en Cochi).

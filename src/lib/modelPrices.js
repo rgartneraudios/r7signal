@@ -50,6 +50,25 @@ export function calculateCost(modelId, inputTokens = 0, outputTokens = 0, type =
        + (outputTokens / 1_000_000) * (price.outputPerM ?? 0)
 }
 
+// ─── Tokens facturables ──────────────────────────────────────────────────────
+// Lo que el usuario ve en el header/banner debe ser lo que OpenRouter FACTURA,
+// no el total crudo. OpenRouter cobra el input cacheado a `cachedInputPerM`
+// (fracción del input): contarlo a valor pleno infla el número y asusta (un
+// turno de 47k crudos puede facturar una fracción). Este helper devuelve el
+// "volumen facturable en tokens": input NO cacheado 1:1 + input cacheado
+// ponderado por su tarifa + completion 1:1 (los tokens de salida son tokens).
+// Coherente con calculateCost cuando el modelo no tiene tarifa cacheada
+// (factor 1 → equivale al total crudo). Puro y testeable.
+export function billableTokens(modelId, { promptTokens = 0, completionTokens = 0, cachedTokens = 0 } = {}) {
+  const price = MODEL_PRICES[modelId]
+  const inputRate = price?.inputPerM ?? 0
+  const cachedRate = price?.cachedInputPerM ?? inputRate
+  const factor = inputRate > 0 ? cachedRate / inputRate : 1
+  const cached = Math.max(0, Math.min(cachedTokens, promptTokens))
+  const uncached = Math.max(0, promptTokens - cached)
+  return Math.round(uncached + cached * factor + completionTokens)
+}
+
 // Asun LLM tier names
 export const ASUN_MODELS = [
   { id: 'deepseek/deepseek-v4-flash-vision-exp', label: 'MaríaBase',  vision: true  },

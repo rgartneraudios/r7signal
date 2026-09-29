@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, memo } from 'react';
-import { calculateCost } from '../lib/modelPrices.js'
+import { calculateCost, billableTokens } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
 import { interpolatePrompt } from '../lib/promptLoader.js'
@@ -186,10 +186,11 @@ function TitoPanel({
           onDelta: (partial) => liveRef.current?.push(extractR3Streaming(partial)),
           onUsage: (usage) => {
             const u = normalizeUsage(usage)
+            const billable = billableTokens(chatModel, u)
             const cost = calculateCost(chatModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
-            setTokens(prev => prev + u.totalTokens)
+            setTokens(prev => prev + billable)
             if (typeof onUsage === 'function') {
-              onUsage({ source: 'tito', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost })
+              onUsage({ source: 'tito', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost })
             }
           },
         })
@@ -225,10 +226,11 @@ function TitoPanel({
         onDelta: (partial) => liveRef.current?.push(extractR3Streaming(partial)),
         onUsage: (usage) => {
           const u = normalizeUsage(usage)
+          const billable = billableTokens(searchModel, u)
           const cost = calculateCost(searchModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
-          setTokens(prev => prev + u.totalTokens)
+          setTokens(prev => prev + billable)
           if (typeof onUsage === 'function') {
-            onUsage({ source: 'tito', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost })
+            onUsage({ source: 'tito', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost })
           }
         },
       })

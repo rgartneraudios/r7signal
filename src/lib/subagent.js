@@ -211,7 +211,7 @@ export function describeSubagent(sub = {}) {
     tools,
     toolCount: tools.length,
     iterations: sub.iterations || 0,
-    totalTokens: usage.total_tokens || 0,
+    totalTokens: usage.billable ?? usage.total_tokens ?? 0,
     calls: usage.calls || 0,
     brief: sub.brief || '',
     error: sub.error || '',

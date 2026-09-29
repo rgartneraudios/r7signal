@@ -1,6 +1,7 @@
-// ─── Aviso de contexto largo (70k tokens) ─────────────────────────────────────
+// ─── Aviso de contexto largo (70k tokens facturables) ─────────────────────────
 // Banner compartido por Cochi/Asun/Tito. El texto es idéntico; el color se pasa
-// por `theme` para respetar el acento de cada agente.
+// por `theme` para respetar el acento de cada agente. `tokens` llega YA como
+// tokens facturables (cache descontada) — el tope de 70k va por esa vía.
 export function TokenWarningBanner({ tokens, dismissed, disabled, onDismiss, onArchive, theme }) {
   if (!(tokens > 70000) || dismissed) return null
   return (

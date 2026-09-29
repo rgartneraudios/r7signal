@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, memo } from 'react'
 import { supabase } from '../supabaseClient'
-import { ASUN_MODELS, calculateCost } from '../lib/modelPrices.js'
+import { ASUN_MODELS, calculateCost, billableTokens } from '../lib/modelPrices.js'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { readFile } from '@tauri-apps/plugin-fs'
 import { getAsunTools, getProjectTools, executeTool, pathExists } from '../lib/asunTools.js'
@@ -55,9 +55,10 @@ async function streamOR(model, messages, onChunk, onUsage, sessionId, signal) {
     onDelta: (partial) => onChunk?.(partial),
     onUsage: (usage) => {
       const u = normalizeUsage(usage)
+      const billable = billableTokens(model, u)
       const cost = calculateCost(model, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
       if (typeof onUsage === 'function') {
-        onUsage({ source: 'asun', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost })
+        onUsage({ source: 'asun', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost })
       }
     },
   })
@@ -241,7 +242,7 @@ function AsunPanel({
           scheduleStream(() => setMessages(prev => prev.map(m =>
             m.id === placeholderId ? { ...m, contenido: extractR3Streaming(partial) } : m
           )))
-        }, (u) => { onUsage?.(u); setTokens(prev => prev + (u.inputTokens || 0) + (u.outputTokens || 0)) }, getAsunSessionId())
+        }, (u) => { onUsage?.(u); setTokens(prev => prev + (u.billable ?? ((u.inputTokens || 0) + (u.outputTokens || 0)))) }, getAsunSessionId())
         const musicMatch = MUSIC_RE.exec(fullText)
         if (musicMatch) {
           setPromptMusica(musicMatch[1].trim())
@@ -324,9 +325,10 @@ function AsunPanel({
         // Acumular coste (input cacheado con descuento, Fase 3.2)
         if (result.usage) {
           const u = normalizeUsage(result.usage)
+          const billable = billableTokens(model, u)
           const cost = calculateCost(model, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
-          onUsage?.({ source: 'asun', inputTokens: u.promptTokens, outputTokens: u.completionTokens, cost })
-          setTokens(prev => prev + u.totalTokens)
+          onUsage?.({ source: 'asun', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost })
+          setTokens(prev => prev + billable)
         }
 
         const message = {

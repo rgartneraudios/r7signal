@@ -1,8 +1,8 @@
 # AGENTS.md — R7SIGNAL / Cochi
 
-Guía de trabajo para agentes de código en este repo. El histórico largo de decisiones
-vive en `output/Analisis-Cochi.txt` (NO versionado, sólo local); este archivo es la
-fuente que SÍ viaja en git. Si una decisión de diseño cambia, actualizá este archivo.
+Guía de trabajo para agentes de código en este repo. Este archivo es la **única** fuente
+de decisiones: el viejo `output/Analisis-Cochi.txt` fue **jubilado/eliminado (29/09)** para
+no leer dos documentos. Si una decisión de diseño cambia, actualizá este archivo.
 
 ## Qué es esto
 
@@ -50,7 +50,9 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
   - `cochiLanes.js` — loop de dos carriles, `taskSucceeded` (juez), `buildTaskFinish` (R4),
     `cleanR5`, `commandRan` (sólo marca "no revertible" si el comando CORRIÓ).
   - `cochiPlanningPrompts.js` — `needsTools` (carril), `needsRunCommand` (comando suelto),
-    `needsPlanning` (planner), parseo de planes, `stripLeadGreetings`, `stepSilentlySucceeded`
+    `needsPlanning` (planner), `needsWrite`/`isAtomicMutation` (T5: una mutación atómica
+    —"borrá X", "agregá Y"— NO paga planner: single-pass con scope `task`),
+    parseo de planes, `stripLeadGreetings`, `stepSilentlySucceeded`
     (un step solo cierra si ejecutó ≥1 tool) + `isEmptyStepResponse`/nudges de reintento.
   - `cochiTools.js` — tools (incl. `delete_dir`, destructiva con snapshot), permisos por scope,
     tablero, `buildShellInvocation`, `formatRunCommandOutput` (exit code SIEMPRE). La coaching
@@ -93,6 +95,20 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
   (archivo no encontrado = 0%), no el estado de tools.
 - R3 NUNCA viaja en el prompt. R7 SÓLO viaja en el carril conversacional.
 
+## Tokens facturables (contadores + tope de 70k) — 29/09
+
+El header, el banner de 70k y los contadores por panel muestran **tokens facturables**, no el
+total crudo. `billableTokens(modelId, usage)` (`src/lib/modelPrices.js`) =
+`input NO cacheado 1:1 + input cacheado × (cachedInputPerM / inputPerM) + completion 1:1`.
+Motivo: OpenRouter cobra el input cacheado a una fracción; mostrar 47k crudos asusta y no
+coincide con el consumo real (el usuario controla OR Activity desde el header). Coherente con
+`calculateCost`: un modelo sin tarifa cacheada usa factor 1 → equivale al total crudo. Los 3
+paneles reportan `billable` en `onUsage`; `R7Desktop` lo acumula (reducer, fallback a
+input+output) y `TokenWarningBanner` corta a >70k sobre ese mismo número. `usage.cost` real ya
+llega de OpenRouter (`body.usage = {include:true}` en `llmClient.js`) pero **no** se muestra:
+importe neto sin IVA confunde (criterio del usuario). Los `<agente> tok` del `R7TopBar` son
+facturables.
+
 ## R7: dos implementaciones (no confundir)
 
 - **Desktop (VIVA)**: `src/lib/r7Wheel.js` arma `[R7 MEMORY]` y viaja SÓLO en el carril
@@ -133,7 +149,8 @@ porque `useWheelSession.busy` lo lee antes de que exista el hook.
 - **R4 (evidencia)**: cada tool result viaja hasta 3000 chars (total 6000); el rótulo dice
   `(truncated)` sólo si de verdad cortó. Antes 500 chars rompían tareas de lectura.
 - **SSRF**: `isBlockedUrl` es corte por globs; falta validar la IP resuelta en Rust.
-- **Tarifas de `cached_tokens`**: ESTIMADAS (~20%), pendiente verificar contra OpenRouter.
+- **Tarifas de `cached_tokens`**: ESTIMADAS (~20%); afectan el descuento de `billableTokens` y
+  el costo estimado. Futuro: derivar el factor del `usage.cost` real que ya devuelve OpenRouter.
 - **Snapshots**: `run_command` está FUERA de alcance (sólo aviso). Undo/Regenerate
   conversación; Regenerate avisa si el turno tocó archivos/música.
 - **Transparencia (Mica/Acrylic)**: la ventana Tauri es `transparent: true` con
@@ -143,18 +160,18 @@ porque `useWheelSession.busy` lo lee antes de que exista el hook.
   chats** en `rgba(15,14,17,0.45)` (CochiDesktop, AsunPanel, `.tito-chat`). Headers/footers
   conservan su `rgba(9,8,10,0.5)`. Sólo Windows (Linux no soporta el efecto).
 
-## Pendientes (histórico completo en `output/Analisis-Cochi.txt`)
+## Pendientes (histórico completo jubilado: era `output/Analisis-Cochi.txt`)
 
-- **T5**: un plan de 3 pasos costó 9 requests / 34k tokens (lecturas de verificación extra por
-  step). Funciona, pero es optimizable.
+- **T5 (contadores + planner/verificación)**: ya implementado el bypass de planner para
+  mutaciones atómicas (`isAtomicMutation`/`needsWrite`) y la red anti-verificación en
+  single-pass. Falta **re-medir en app** (`npx tauri dev`, traza F12) el turno
+  "borrá/agregá" para confirmar menos requests, ahora leyendo tokens facturables.
 - **Subagentes que escriben** (hoy sólo lectura, `MAX_SUBAGENT_DEPTH=1`).
 - **Shell revertible** (`run_command` está FUERA de los snapshots; hoy sólo aviso).
 - **SSRF**: `isBlockedUrl` es corte por globs; falta validar la IP resuelta en Rust.
 - **`cached_tokens`**: tarifas ESTIMADAS (~20%), pendiente verificar contra OpenRouter.
 - **Prompt `task` remoto (Supabase)**: pegarle la excepción de `TYPO RESUELTO` (opcional; el
   R4 del sistema ya la aplica).
-- **Cartel de Undo**: ✅ migrado a `plugin-dialog` nativo (`dialog:allow-confirm` en la
-  capability). Falta verificar en `npx tauri dev` (requiere rebuild).
 - **Modelos**: Centinela = DeepSeek V4 Flash 0731 · Terminator = DeepSeek V4.1 Flash
   (rotación manual). El subagente usa Centinela.
 
@@ -162,4 +179,6 @@ porque `useWheelSession.busy` lo lee antes de que exista el hook.
 Bloque C + A-ter + X1/X2/K3/L4/W · E2E T1-T12 (`Cochi-Pruebas`) · transparencia Mica/Acrylic
 (lienzo 3 chats `0.45`) · Guard Full Access (corta comando sin permiso full + falsos positivos
 `npm`/`node`) · T11 typo (fallback `TYPO RESUELTO` → cierre 100%) · refactor CochiDesktop
-(1625 → 482 líneas).
+(1625 → 482 líneas) · **tokens facturables** (`billableTokens`, header/banner 70k, 3 agentes) ·
+**T5 planner atómico + anti-verificación single-pass** · cartel de Undo nativo (`plugin-dialog`,
+verificado: sale la ventana de Tauri, no la de Windows).

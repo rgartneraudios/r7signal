@@ -13,7 +13,7 @@ import {
   costBreakdown,
   resolveStoredModel,
 } from '../src/lib/llmMetrics.js'
-import { calculateCost } from '../src/lib/modelPrices.js'
+import { calculateCost, billableTokens } from '../src/lib/modelPrices.js'
 
 let pass = 0
 let fail = 0
@@ -94,6 +94,18 @@ checkClose('savedByCache 0 sin tarifa cacheada', costBreakdown(GEMINI, {
   prompt_tokens: 1_000_000, completion_tokens: 0,
   prompt_tokens_details: { cached_tokens: 500_000 },
 }).savedByCache, 0)
+
+console.log('— tokens facturables (billableTokens) —')
+// Terminator: input 0.04/M, cached 0.008/M → factor 0.2.
+check('sin cache: input + output 1:1', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 200, cachedTokens: 0 }), 1200)
+check('con cache: 300 + 700*0.2 + 200', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 200, cachedTokens: 700 }), 640)
+check('cached > input se capa al input', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 0, cachedTokens: 5000 }), 200)
+check('modelo sin tarifa cacheada: factor 1', billableTokens(GEMINI, { promptTokens: 1000, completionTokens: 100, cachedTokens: 500 }), 1100)
+check('modelo desconocido: factor 1', billableTokens('x/y', { promptTokens: 1000, completionTokens: 100, cachedTokens: 500 }), 1100)
+check('sin args → 0', billableTokens(TERMINATOR), 0)
+checkClose('coherente con costo (sin output): billable/1M*inputPerM = cost',
+  (billableTokens(TERMINATOR, { promptTokens: 1_000_000, completionTokens: 0, cachedTokens: 400_000 }) / 1_000_000) * 0.04,
+  0.0272)
 
 console.log('— resolveStoredModel (persistencia del modelo, 3.4f) —')
 const parentIds = [CENTINELA, TERMINATOR, 'ollama', 'lmstudio']
