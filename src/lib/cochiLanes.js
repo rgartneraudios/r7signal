@@ -67,6 +67,14 @@ export function isToolError(result) {
   return /^(ERROR:|⛔|❌)/i.test(String(result ?? '').trim())
 }
 
+// Fase 3.1 — ¿el turno ejecuó REALMENTE un run_command? Sólo cuenta si el
+// resultado NO fue un bloqueo/error (permiso Solo Lectura, deny-list, etc.). Un
+// comando bloqueado por nivel de permiso no tuvo efectos de borde, así que no
+// debe disparar el aviso de "no revertible".
+export function commandRan(name, result) {
+  return name === 'run_command' && !isToolError(result)
+}
+
 // JUEZ (el sistema, no el modelo): decide si la tarea salió bien.
 //   · Con plan: todos los pasos completados y al menos uno.
 //   · Sin plan (escape): ejecutó ≥1 tool y no TODAS fallaron.

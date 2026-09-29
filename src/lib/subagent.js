@@ -113,22 +113,48 @@ export function buildSubagentMessages({ task, context = '', language = 'Spanish'
 }
 
 // 3.4c: red de seguridad del BRIEF STYLE. El modelo a veces arranca el brief con
-// una línea de narración del proceso ("The file exists.", "Let me compute…").
-// Se descartan SÓLO las líneas INICIALES completas que son claramente preámbulo,
-// de forma conservadora: si no queda contenido, se devuelve el original. No toca
-// el cuerpo del brief ni las secciones de advertencia legítimas.
-const LEADING_NARRATION = /^\s*(?:[-*•]\s*)?(?:let me|let us|let's|i will|i'll|i am going to|i'm going to|i am reading|i'm reading|i am checking|i'm checking|now i|next,? i|first,? i|the file (?:exists|is|contains|has)|looking at|reading|checking|i need to|i should|i can now|here is|here's)\b/i
+// narración del proceso ("The file exists.", "Let me compute…"). Se descarta el
+// preámbulo INICIAL de forma conservadora: si no queda contenido, se devuelve el
+// original. No toca el cuerpo del brief ni las secciones de advertencia legítimas.
+//
+// E2E 29/09: el guard anterior era por LÍNEA COMPLETA, así que una línea con
+// varias oraciones de narración ("I have the full picture now. Let me compile the
+// brief.") no se detectaba y la narración se filtraba. Ahora se pela por ORACIÓN:
+// las oraciones iniciales que son preámbulo se quitan una a una; si una línea
+// mezcla narración + contenido ("I have read the file. Total lines: 114") se
+// conserva sólo el contenido, sin perder el cuerpo.
+const LEADING_NARRATION = /^\s*(?:[-*•]\s*)?(?:let me|let us|let's|i will|i'll|i am going to|i'm going to|i am reading|i'm reading|i am checking|i'm checking|i have|i've|now i|next,? i|first,? i|the file (?:exists|is|contains|has)|looking at|reading|checking|i need to|i should|i can now|here is|here's)\b/i
+
+// Corte por oración. Sólo separa cuando hay puntuación terminal seguida de
+// espacio, para no partir nombres/versiones ("Node 18.2").
+const SENTENCE_SPLIT = /(?<=[.!?])\s+/
 
 export function stripLeadingNarration(raw) {
   const text = String(raw ?? '')
+  if (!text.trim()) return text
   const lines = text.split('\n')
   let start = 0
   while (start < lines.length && lines[start].trim() === '') start++
-  let i = start
-  while (i < lines.length && LEADING_NARRATION.test(lines[i])) i++
-  if (i === start) return text
-  const rest = lines.slice(i).join('\n').trim()
-  return rest || text
+
+  const body = []
+  let stripped = false
+  let reachedContent = false
+  for (let i = start; i < lines.length; i++) {
+    const line = lines[i]
+    if (reachedContent || line.trim() === '') { body.push(line); continue }
+
+    const sentences = line.split(SENTENCE_SPLIT)
+    let j = 0
+    while (j < sentences.length && LEADING_NARRATION.test(sentences[j])) j++
+    if (j === 0) { body.push(line); reachedContent = true; continue }
+
+    stripped = true
+    const remainder = sentences.slice(j).join(' ').trim()
+    if (remainder) { body.push(remainder); reachedContent = true }
+    // Si no queda contenido, toda la línea era narración: se descarta.
+  }
+  if (!stripped) return text
+  return body.join('\n').trim() || text
 }
 
 // Limpia el brief: quita señales de control que el modelo pudiera filtrar por

@@ -64,6 +64,9 @@ function TitoPanel({
     pendingSession,
     onSessionConsumed,
     onReset: () => { setMessages([]); setTokens(0); setTokenWarningDismissed(false) },
+    // E2E 29/09: al cargar otra sesión como contexto, se aborta el turno en vuelo
+    // para que no selle su R1/R2 en la rueda de la sesión entrante.
+    onResume: () => { abortRef.current?.abort(); setMessages([]); setTokens(0); setTokenWarningDismissed(false) },
     onResetUsage,
     onError: (msg) => setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: msg }]),
   })

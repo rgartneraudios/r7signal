@@ -47,7 +47,8 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
 ## Arquitectura (dónde tocar)
 
 - `src/lib/` — lógica pura, testeable con harness. Es donde vive el grueso.
-  - `cochiLanes.js` — loop de dos carriles, `taskSucceeded` (juez), `buildTaskFinish` (R4), `cleanR5`.
+  - `cochiLanes.js` — loop de dos carriles, `taskSucceeded` (juez), `buildTaskFinish` (R4),
+    `cleanR5`, `commandRan` (sólo marca "no revertible" si el comando CORRIÓ).
   - `cochiPlanningPrompts.js` — `needsTools` (carril), `needsRunCommand` (comando suelto),
     `needsPlanning` (planner), parseo de planes, `stripLeadGreetings`, `stepSilentlySucceeded`
     (un step solo cierra si ejecutó ≥1 tool) + `isEmptyStepResponse`/nudges de reintento.
@@ -91,6 +92,32 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
   (archivo no encontrado = 0%), no el estado de tools.
 - R3 NUNCA viaja en el prompt. R7 SÓLO viaja en el carril conversacional.
 
+## R7: dos implementaciones (no confundir)
+
+- **Desktop (VIVA)**: `src/lib/r7Wheel.js` arma `[R7 MEMORY]` y viaja SÓLO en el carril
+  conversacional; se compacta (`pruneApiMessages`, token-aware). Persiste en
+  `AppLocalData\com.r7signal.cochi\{R7,R9}` (D5). Tito/Asun locales usan la misma rueda.
+- **Web (LEGACY, no usar)**: la edge function `supabase/functions/procesar-input/` guarda
+  `sesiones.r7_acumulado` y lo inyecta en TODOS los turnos, sin tope (crece sin límite). Hoy
+  NADIE la importa: sólo la llamaba `Chat00Music.jsx`, que ya no se monta. En la web sólo hay
+  `Chat00.jsx`. No replicar su patrón de R7 (acumula tokens).
+
+## Refactor de CochiDesktop (plan por fases — aprobado 29/09)
+
+`CochiDesktop.jsx` concentra los dos carriles (conversacional ~105 líneas + tarea ~650, más
+planner/tools/permisos/subagentes) y el render. NO se parte en dos componentes React: ambos
+carriles comparten la máquina de estado del turno (messages/activity/subagents/snapshots/
+permisos/ask_user/cierre R5), así que separarlos forzaría prop-drilling o un store y agrandaría
+el orquestador. Se resuelve extrayendo hooks + lógica pura (regla del repo).
+
+- **Fase 1 (bajo riesgo)**: `src/lib/cochiContext.js` (puro + harness): `estimateTokens`,
+  `pruneApiMessages` (parte pura), `makeStreamingDisplayExtractor`, `extractCompleteSteps`,
+  `buildSystemContext`, `BATCHING_RULE`, `READ_ONLY_TOOLS`. ~200 líneas fuera y testeables.
+- **Fase 2**: `src/hooks/useCochiTaskLoop.js` — carril tarea (`executeAllSteps`,
+  `executeToolCall`, permisos, plan, subagentes).
+- **Fase 3**: `src/hooks/useCochiConversational.js` — carril conversacional + `handleSendText`.
+- **Resultado**: CochiDesktop queda orquestador + render (~400-500 líneas, sano).
+
 ## Gotchas conocidos
 
 - **`output/` está gitignored**: la memoria del proyecto no viaja en git. Si algo importante
@@ -124,8 +151,16 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
   chars, falta de tool para borrar carpetas (`delete_dir`), respuesta vacía del modelo.
 - Subagentes que escriben (hoy sólo lectura, `MAX_SUBAGENT_DEPTH=1`).
 - Shell revertible (run_command en snapshots).
-- Menor: el brief del subagente a veces filtra narración inicial en la misma línea (el
-  `stripLeadingNarration` es por línea completa). Cambiar de sesión con un turno en vuelo no
-  aborta (puede contaminar el R7 de la entrante).
+- Menor: el brief del subagente filtraba narración inicial en la misma línea
+  (`stripLeadingNarration` era por línea completa) → **FIX 29/09-b**: pela por oración
+  (`I have … now. Let me compile …` ya se descarta; si la línea mezcla narración + contenido,
+  conserva el contenido). Cambio de sesión con un turno en vuelo no abortaba → **FIX 29/09-b**:
+  `onResume` de Cochi/Tito hace `abortRef.current?.abort()` y el carril conversacional no sella
+  la rueda si fue abortado. `run_command` bloqueado por permiso ya NO marca "no revertible"
+  (`commandRan`).
+- **Código muerto a revisar/borrar**: `supabase/functions/procesar-input/` (~531 líneas, sin
+  importadores), `src/components/Chat00Music.jsx` (388) y `src/components/Chat00ImgVid.jsx`
+  (687) — no se montan en ningún lado. Confirmar y eliminar (no tocar `Chat00.jsx`, que sí vive).
+- **Refactor CochiDesktop**: ver “plan por fases” arriba. Fase 1 pendiente.
 - Modelos: Centinela = DeepSeek V4 Flash 0731 · Terminator = DeepSeek V4.1 Flash
   (rotación manual). El subagente usa Centinela.

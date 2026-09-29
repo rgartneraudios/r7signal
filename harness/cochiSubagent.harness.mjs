@@ -70,6 +70,11 @@ check('sólo narración → devuelve original', stripLeadingNarration('Let me th
 check('robusto null', stripLeadingNarration(null), '')
 check('robusto sin args', stripLeadingNarration(), '')
 check('no toca narración en medio', stripLeadingNarration('Total: 42\nLet me explain'), 'Total: 42\nLet me explain')
+// E2E 29/09: narración por ORACIÓN (varias oraciones de preámbulo en una línea).
+check('quita 2 oraciones de narración en la misma línea', stripLeadingNarration('I have the full picture now. Let me compile the brief.\nFindings: a=1'), 'Findings: a=1')
+check('conserva contenido tras narración en la misma línea', stripLeadingNarration('I have read the file. Total lines: 114'), 'Total lines: 114')
+check('no pierde cuerpo si el contenido es otra oración', stripLeadingNarration("I've checked the repo. The config uses Vite and React."), 'The config uses Vite and React.')
+check('narración multi-oración con cuerpo debajo', stripLeadingNarration('I have enough context now. Let me write the brief.\n\n- a: 1\n- b: 2'), '- a: 1\n- b: 2')
 
 console.log('— normalizeBrief —')
 check('trim', normalizeBrief('  hola  '), 'hola')

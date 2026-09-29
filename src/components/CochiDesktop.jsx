@@ -11,7 +11,7 @@ import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools } from
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { buildWheelMessages, summarizeFromPairs, commitR7Turn, closeWheelTask } from '../lib/r7Wheel.js'
-import { LANE, laneForMessage, markInput, LANE_SWITCH_HINT, buildTaskFinish, cleanR5, taskSucceeded, TASK_SYSTEM_PROMPT, isToolError } from '../lib/cochiLanes.js'
+import { LANE, laneForMessage, markInput, LANE_SWITCH_HINT, buildTaskFinish, cleanR5, taskSucceeded, TASK_SYSTEM_PROMPT, isToolError, commandRan } from '../lib/cochiLanes.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots, pruneOldSnapshots } from '../lib/snapshotStore.js'
 import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider, resolveStoredSubagentModel, DEFAULT_SUBAGENT_MODEL } from '../lib/subagent.js'
@@ -307,6 +307,10 @@ function CochiDesktop({
       liveRef.current?.clear()
     },
     onResume: () => {
+      // E2E 29/09: al cargar otra sesión como contexto puede haber un turno en
+      // vuelo. Se ABORTA para que su cierre no escriba en la rueda recién
+      // adoptada (contaminaba el R7 de la sesión entrante).
+      abortRef.current?.abort()
       setMessages([]); setActivity([]); setSubagents([])
       setTokens(0); setCost(0); setCachedTokens(0); setTokenWarningDismissed(false); setTodos([])
       syncPlan(null); setPlanStatus('idle')
@@ -1162,7 +1166,6 @@ function CochiDesktop({
             }
 
             const icon = TOOL_ICONS[name] || '🔧'
-            if (name === 'run_command') lastTurnHadCommandRef.current = true // Fase 3.1: no revertible
             let shortLabel = name === 'run_command'
               ? (args.command?.slice(0, 60) + (args.command?.length > 60 ? '…' : ''))
               : ((args.path || args.fromPath)?.split('\\').pop() || args.path || args.fromPath || name)
@@ -1177,6 +1180,10 @@ function CochiDesktop({
                 shortLabel = `${execResult.todos.length} tarea(s)`
               }
             } catch (err) { modelResult = `ERROR: ${err.message}` }
+            // Fase 3.1: sólo marca el turno como "no revertible" si el comando
+            // CORRIÓ de verdad. Un run_command bloqueado por nivel de permiso
+            // (Solo Lectura) o por deny-list devuelve un error y no tuvo efectos.
+            if (commandRan(name, modelResult)) lastTurnHadCommandRef.current = true
             // RED ANTI-AUTO-VERIFICACIÓN: una mutación APLICADA (sin error) marca
             // el step como "ya mutó" para forzar el cierre si el modelo se pone a
             // verificar en bucle.
@@ -1473,6 +1480,10 @@ function CochiDesktop({
       liveRef.current?.flush()
       liveRef.current?.clear()
       auditLog(`conversacional: ${totalTokensAcc} tokens · calls ${streamed.toolCalls?.length || 0} · finish ${streamed.finishReason}`)
+
+      // Si el turno fue abortado (p.ej. se cargó otra sesión), no se sella nada:
+      // la rueda ya pertenece a la sesión entrante.
+      if (controller.signal.aborted) return
 
       if (streamed.toolCalls?.length) {
         // ESCAPE → carril TAREA: se ejecutan los comandos ya emitidos y se cierra

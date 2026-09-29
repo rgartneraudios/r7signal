@@ -7,6 +7,7 @@ import {
   markInput,
   stripLaneTag,
   isToolError,
+  commandRan,
   taskSucceeded,
   buildTaskFinish,
   cleanR5,
@@ -64,6 +65,12 @@ check('sin plan sin tools → NO ok', taskSucceeded({ trackSteps: false, toolLog
 check('isToolError reconoce ERROR:', isToolError('ERROR: boom'), true)
 check('isToolError reconoce ⛔', isToolError('⛔ bloqueado'), true)
 check('isToolError ignora salida normal', isToolError('hola'), false)
+console.log('\n— commandRan: sólo cuenta si el comando CORRIÓ (Fase 3.1) —')
+check('comando con salida normal → corrió', commandRan('run_command', 'exit 0 · stdout…'), true)
+check('comando bloqueado por permiso → NO corrió', commandRan('run_command', '⛔ Bloqueado: activa Full Access para operaciones destructivas (run_command, delete_file, delete_dir).'), false)
+check('comando denegado por deny-list → NO corrió', commandRan('run_command', '⛔ Bloqueado: comando referencia ruta prohibida por deny-list: C:\\x'), false)
+check('comando con error de ejecución → NO corrió', commandRan('run_command', 'ERROR: spawn failed'), false)
+check('otra tool (read_file) → NO cuenta', commandRan('read_file', 'contenido'), false)
 
 console.log('\n— R4 (buildTaskFinish): resultado REAL para que el modelo no alucine —')
 const r4ok = buildTaskFinish({
