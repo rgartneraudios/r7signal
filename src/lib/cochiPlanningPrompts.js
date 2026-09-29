@@ -39,8 +39,7 @@ const WRITE_VERBS = [
   'elimina', 'elimin', 'borra', 'mueve', 'copia', 'renombra', 'guarda', 'guard',
   'salva', 'salv', 'exporta', 'export', 'delet', 'remove', 'write',
   'ejecuta', 'instala', 'instalar', 'añade', 'agrega', 'genera',
-  'refactori', 'implement', 'migra', 'actualiza', 'patch', 'mkdir',
-  'npm', 'yarn', 'pip', 'cargo', '/cochi',
+  'refactori', 'implement', 'migra', 'actualiza', 'patch', 'mkdir', '/cochi',
   // PRUEBA T3 (27/09): verbos de mutación que FALTABAN. Sin ellos el mensaje
   // caía en single-pass 'read' (sin tools de escritura) y el modelo alucinaba
   // "hecho" mientras el disco no cambiaba. "cambiá"→"cambia", etc.
@@ -114,6 +113,12 @@ const RUN_VERB_RE = /\b(corre|correr|corretear|ejecut\w*|lanza\w*|invoca\w*|disp
 const RUN_PROGRAM_RE = /\b(node|npx|npm|pnpm|yarn|bun|deno|python|python3|pip|pwsh|powershell|cmd|bash|cargo|git|docker|tsc|vite)\b/
 const RUN_SCRIPT_EXT_RE = /\.(mjs|cjs|jsx|tsx|js|ts|py|ps1|sh|cmd|bat|exe)\b/
 
+// Preguntas explicativas ("¿qué es node?", "¿para qué sirve npm?"): mencionan un
+// programa pero NO piden ejecutarlo. Sin este corte, la palabra suelta (node/npm)
+// disparaba carril tarea/planner y el cierre marcaba 0% una pregunta conceptual.
+const LEAD_PUNCT_RE = /^[¿¡\s"'«»]+/
+const EXPLANATORY_RE = /\b(que es|que son|que significa|para que sirve|para que sirven|como funciona|como funcionan|de que se trata|what is|what are|how does|how do)\b/
+
 // needsCommand: clasificación de CARRIL — incluye mencionar un archivo .js/.py
 // (un "revisá smoke_test.py" es tarea). needsRunCommand: versión ESTRICTA para
 // elegir el SCOPE de tools del single-pass — solo si es probable que CORRA un
@@ -124,7 +129,9 @@ export function needsCommand(message) {
   if (!msg) return false
   const core = stripLeadGreetings(msg)
   if (!core) return false
-  return RUN_VERB_RE.test(core) || RUN_PROGRAM_RE.test(core) || RUN_SCRIPT_EXT_RE.test(core)
+  if (RUN_VERB_RE.test(core)) return true
+  if (EXPLANATORY_RE.test(core.replace(LEAD_PUNCT_RE, ''))) return false
+  return RUN_PROGRAM_RE.test(core) || RUN_SCRIPT_EXT_RE.test(core)
 }
 
 export function needsRunCommand(message) {
@@ -132,7 +139,17 @@ export function needsRunCommand(message) {
   if (!msg) return false
   const core = stripLeadGreetings(msg)
   if (!core) return false
-  return RUN_VERB_RE.test(core) || RUN_PROGRAM_RE.test(core)
+  if (RUN_VERB_RE.test(core)) return true
+  if (EXPLANATORY_RE.test(core.replace(LEAD_PUNCT_RE, ''))) return false
+  return RUN_PROGRAM_RE.test(core)
+}
+
+// Guard Full Access: un pedido que ejecuta un comando (run_command) en un
+// workspace sin permiso 'full' NO puede cumplirse — la tool no se expone y el
+// modelo improvisa (tira requests). El llamador corta ANTES de llamar al modelo
+// y avisa. Las preguntas explicativas no entran (needsRunCommand ya las filtra).
+export function needsFullAccess(message, permission) {
+  return needsRunCommand(message) && permission !== 'full'
 }
 
 // Clasificador de CARRIL (loop de dos carriles, 28/09 fix): decide si un mensaje

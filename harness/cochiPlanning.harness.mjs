@@ -3,7 +3,7 @@
 // Ejecutar:  node harness/cochiPlanning.harness.mjs   (o npm run harness:planning)
 // Cubre la lógica PURA: needsPlanning (intención single-pass vs multi-paso) y
 // parsePlanResponse (forma del JSON del planner).
-import { needsPlanning, needsTools, needsCommand, needsRunCommand, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isEmptyStepResponse, EMPTY_STEP_NUDGE, NO_ACTION_COMPLETE_NUDGE, isMutatingTool, stepCompletionNudge, STEP_VERIFY_NUDGE_AT, STEP_VERIFY_FORCE_AT, PLANNING_SYSTEM_PROMPT, touchesBoard } from '../src/lib/cochiPlanningPrompts.js'
+import { needsPlanning, needsTools, needsCommand, needsRunCommand, needsFullAccess, parsePlanResponse, USER_ANSWER_PREFIX, collapseStepMessages, stepSilentlySucceeded, isEmptyStepResponse, EMPTY_STEP_NUDGE, NO_ACTION_COMPLETE_NUDGE, isMutatingTool, stepCompletionNudge, STEP_VERIFY_NUDGE_AT, STEP_VERIFY_FORCE_AT, PLANNING_SYSTEM_PROMPT, touchesBoard } from '../src/lib/cochiPlanningPrompts.js'
 
 let pass = 0
 let fail = 0
@@ -225,6 +225,25 @@ check('needsRunCommand: "leé config.js" (solo ext) -> false', needsRunCommand('
 check('needsRunCommand: "python script.py" (programa) -> true', needsRunCommand('python script.py'), true)
 check('needsTools: "Corré node x.js" -> tarea', needsTools('Corré node _stderr_cp850.js'), true)
 check('needsPlanning: comando suelto -> NO planner', needsPlanning('Corré node _stderr_cp850.js'), false)
+
+console.log('- falsos positivos de programa en preguntas explicativas (Guard Full Access) -')
+check('needsCommand: "¿Para qué sirve npm?" -> false', needsCommand('¿Para qué sirve npm?'), false)
+check('needsCommand: "¿Qué es Node.js?" -> false', needsCommand('¿Qué es Node.js?'), false)
+check('needsRunCommand: "¿Para qué sirve npm?" -> false', needsRunCommand('¿Para qué sirve npm?'), false)
+check('needsRunCommand: "¿Qué es Node.js?" -> false', needsRunCommand('¿Qué es Node.js?'), false)
+check('needsRunCommand: "¿Cómo funciona git?" -> false', needsRunCommand('¿Cómo funciona git?'), false)
+check('needsPlanning: "¿Para qué sirve npm?" -> NO planner', needsPlanning('¿Para qué sirve npm?'), false)
+check('needsTools: "¿Para qué sirve npm?" -> conversacional', needsTools('¿Para qué sirve npm?'), false)
+check('needsTools: "¿Qué es Node.js?" -> conversacional', needsTools('¿Qué es Node.js?'), false)
+check('needsRunCommand: comando real sigue true', needsRunCommand('corré npm install'), true)
+check('needsRunCommand: explicativa pero con verbo -> true', needsRunCommand('explicame y corré npm install'), true)
+
+console.log('- needsFullAccess: guard de comando en modo Lectura -')
+check('comando sin full -> bloquea', needsFullAccess('corré node -v', 'read'), true)
+check('comando con write -> bloquea (solo full corre)', needsFullAccess('corré node -v', 'write'), true)
+check('comando con full -> no bloquea', needsFullAccess('corré node -v', 'full'), false)
+check('lectura sin full -> no bloquea', needsFullAccess('leé config.js', 'read'), false)
+check('pregunta explicativa sin full -> no bloquea', needsFullAccess('¿Qué es Node.js?', 'read'), false)
 
 console.log(`\n${pass} PASS - ${fail} FAIL`)
 if (fail) process.exit(1)

@@ -5,7 +5,7 @@
 // (messages/loading/tokens/refs) entra inyectado; `taskLoop` se inyecta para el
 // escape a tarea y para abrir/cerrar el turno.
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { needsPlanning, needsRunCommand, touchesBoard } from '../lib/cochiPlanningPrompts.js'
+import { needsPlanning, needsRunCommand, needsFullAccess, touchesBoard } from '../lib/cochiPlanningPrompts.js'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { calculateCost } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
@@ -189,6 +189,18 @@ export function useCochiConversational({
     // maybeRevertFiles (ref a null), así que aquí no hay doble descarte.
     await taskLoop.openTurn(sent)
     pushMessage({ role: 'user', content: sent })
+
+    // Guard Full Access: si el pedido ejecuta un comando pero el workspace no
+    // tiene permiso 'full', run_command no se expone y el modelo improvisa
+    // (ask_user / web_fetch → requests tiradas). Se corta ANTES de llamar al
+    // modelo y se le dice al usuario qué activar.
+    if (needsFullAccess(sent, workspace.permission)) {
+      pushMessage({
+        role: 'assistant',
+        content: '⚡ Este pedido ejecuta un comando (`run_command`), que requiere **Full Access**. Cambiá el permiso del workspace (arriba a la derecha) a ⚡ Full Access y volvé a pedírmelo.',
+      })
+      return
+    }
 
     // El sistema decide el carril por el IN (loop de dos carriles, 28/09).
     taskLoop.syncPlan(null)

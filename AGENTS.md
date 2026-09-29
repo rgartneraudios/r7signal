@@ -154,7 +154,7 @@ el orquestador. Se resuelve extrayendo hooks + lógica pura (regla del repo).
   `windowEffects: micaDark` (Win11). En `src-tauri/src/lib.rs` hay fallback a **Acrylic**
   tintado (`Color(15,14,17,180)`) para Win10 build 17763-21999. Requiere que el webview no
   pinte opaco: `body` transparente, raíz de `R7Desktop` transparente y el **lienzo de los 3
-  chats** en `rgba(15,14,17,0.6)` (CochiDesktop, AsunPanel, `.tito-chat`). Headers/footers
+  chats** en `rgba(15,14,17,0.45)` (CochiDesktop, AsunPanel, `.tito-chat`). Headers/footers
   conservan su `rgba(9,8,10,0.5)`. Sólo Windows (Linux no soporta el efecto).
 
 ## Deuda / pendientes (ver histórico completo en `output/Analisis-Cochi.txt`)
@@ -177,19 +177,23 @@ el orquestador. Se resuelve extrayendo hooks + lógica pura (regla del repo).
   `src/components/Chat00Music.jsx` y `src/components/Chat00ImgVid.jsx` (sin importadores).
   No tocar `Chat00.jsx`, que sí vive.
 - **Refactor CochiDesktop**: ver “plan por fases” arriba. Fases 1-3 COMPLETAS (29/09-c/d);
-  CochiDesktop 1625 → 521 líneas (orquestador + render). Gates 0/0 + build + 11/11 harness.
+  CochiDesktop 1625 → 482 líneas (orquestador + render). Gates 0/0 + build + 11/11 harness.
   ✅ **E2E en app CERRADO (29/09-e)**: batería T1-T12 sobre `Cochi-Pruebas` — run_command +
   exit code, lectura, plan de 3 pasos con bloque 🧠, permisos por paso (destructivas SÍ piden),
   Undo/Regenerate con reversión de disco, sesiones, subagente, cambio de sesión en vuelo
   (aborta y no contamina el R7) y transparencia Mica/Acrylic. Falta pulir los hallazgos de abajo.
 - **E2E 29/09-e — hallazgos menores pendientes de decisión/arreglo**:
-  · **T11 (typo)**: `read_file` resuelve “el más parecido”, pero el modelo después llama
-    `ask_user`; tras el “Sí” del usuario el cierre marca **0%** en vez de 100% (el juez/cierre
-    no incorpora la autorización del `ask_user`). Además el typo entró por planner. INVESTIGAR.
-  · **Guard Full Access**: pedir un comando en modo Lectura hace que el modelo intente
-    `web_fetch` y falle (2 requests tiradas; `toolsChars 4282` = task+read). Candidato: cortar
-    antes de llamar al modelo y avisar “activá Full Access”. Ojo con el falso positivo en
-    frases explicativas (“¿qué es Node.js?” → `needsRunCommand` da true). Opciones A/B/C.
+  · **T11 (typo)**: `read_file` resuelve “el más parecido”, pero el cierre es **inconsistente**
+    (mismo prompt: a veces 100%, a veces 0%). No es el `ask_user` (no llegó a preguntar):
+    el R4 (`buildTaskFinish`) instruye “a path did not exist = 0%” y el fallback devuelve
+    `⚠️ No existe: <ruta>`, así que el modelo a veces obedece y clava 0% aunque ya leyó.
+    FIX candidato: reformular el `modelResult` del fallback + excepción en R4 (typo resuelto =
+    SUCCESS). INVESTIGAR.
+  · **Guard Full Access**: ✅ **FIX (29/09-f)**. Preguntas explicativas (“¿para qué sirve npm?”,
+    “¿qué es Node.js?”) caían en tarea/planner porque `WRITE_VERBS` tenía `npm/yarn/pip/cargo`
+    y `needsRunCommand` matcheaba `node`. Se agregó `EXPLANATORY_RE` y `needsFullAccess()`: si el
+    pedido ejecuta un comando y el workspace no está en Full Access, `handleSendText` corta
+    ANTES de llamar al modelo y avisa ⚡ (0 requests en vez de 4/12k). Harness planning 142→157.
   · **Cartel de Undo**: usa `window.confirm` (`useCochiTaskLoop.js:911`) y muestra el origen
     (`localhost:5173` en dev); migrar al `plugin-dialog` de Tauri para que sea nativo.
   · **T5**: un plan de 3 pasos costó 9 requests / 34k tokens (lecturas de verificación extra
