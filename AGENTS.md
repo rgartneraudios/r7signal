@@ -110,9 +110,10 @@ carriles comparten la máquina de estado del turno (messages/activity/subagents/
 permisos/ask_user/cierre R5), así que separarlos forzaría prop-drilling o un store y agrandaría
 el orquestador. Se resuelve extrayendo hooks + lógica pura (regla del repo).
 
-- **Fase 1 (bajo riesgo)**: `src/lib/cochiContext.js` (puro + harness): `estimateTokens`,
-  `pruneApiMessages` (parte pura), `makeStreamingDisplayExtractor`, `extractCompleteSteps`,
-  `buildSystemContext`, `BATCHING_RULE`, `READ_ONLY_TOOLS`. ~200 líneas fuera y testeables.
+- **Fase 1 (COMPLETA 29/09-c)**: `src/lib/cochiContext.js` (puro + harness `cochiContext`
+  30 checks): `estimateTokens`, `pruneApiMessages` (parte pura, `planSteps` inyectado),
+  `makeStreamingDisplayExtractor`, `extractCompleteSteps`, `buildSystemContext`,
+  `BATCHING_RULE`, `READ_ONLY_TOOLS`. CochiDesktop ya consume el módulo (~140 líneas fuera).
 - **Fase 2**: `src/hooks/useCochiTaskLoop.js` — carril tarea (`executeAllSteps`,
   `executeToolCall`, permisos, plan, subagentes).
 - **Fase 3**: `src/hooks/useCochiConversational.js` — carril conversacional + `handleSendText`.
@@ -158,9 +159,10 @@ el orquestador. Se resuelve extrayendo hooks + lógica pura (regla del repo).
   `onResume` de Cochi/Tito hace `abortRef.current?.abort()` y el carril conversacional no sella
   la rueda si fue abortado. `run_command` bloqueado por permiso ya NO marca "no revertible"
   (`commandRan`).
-- **Código muerto a revisar/borrar**: `supabase/functions/procesar-input/` (~531 líneas, sin
-  importadores), `src/components/Chat00Music.jsx` (388) y `src/components/Chat00ImgVid.jsx`
-  (687) — no se montan en ningún lado. Confirmar y eliminar (no tocar `Chat00.jsx`, que sí vive).
-- **Refactor CochiDesktop**: ver “plan por fases” arriba. Fase 1 pendiente.
+- **Código muerto**: ELIMINADO (29/09-c) `supabase/functions/procesar-input/`,
+  `src/components/Chat00Music.jsx` y `src/components/Chat00ImgVid.jsx` (sin importadores).
+  No tocar `Chat00.jsx`, que sí vive.
+- **Refactor CochiDesktop**: ver “plan por fases” arriba. Fase 1 COMPLETA (29/09-c);
+  Fases 2-3 pendientes.
 - Modelos: Centinela = DeepSeek V4 Flash 0731 · Terminator = DeepSeek V4.1 Flash
   (rotación manual). El subagente usa Centinela.

@@ -10,7 +10,8 @@ import { getOpenRouterKey } from '../lib/localConfig.js'
 import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools } from '../lib/cochiTools.js'
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
-import { buildWheelMessages, summarizeFromPairs, commitR7Turn, closeWheelTask } from '../lib/r7Wheel.js'
+import { makeStreamingDisplayExtractor, READ_ONLY_TOOLS, buildSystemContext, pruneApiMessages } from '../lib/cochiContext.js'
+import { buildWheelMessages, commitR7Turn, closeWheelTask } from '../lib/r7Wheel.js'
 import { LANE, laneForMessage, markInput, LANE_SWITCH_HINT, buildTaskFinish, cleanR5, taskSucceeded, TASK_SYSTEM_PROMPT, isToolError, commandRan } from '../lib/cochiLanes.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot, clearSessionSnapshots, pruneOldSnapshots } from '../lib/snapshotStore.js'
@@ -53,86 +54,8 @@ const appendToMemory = async (r1, r2) => {
   } catch (err) { console.error('Memory write error:', err) }
 }
 
-// ─── Extracción de texto mostrable durante el streaming ───────────────────────
-// Solo pinta R3 (respuesta al usuario) o respuestas directas. Oculta R1/R2,
-// señales de control técnico y el contrato a medio emitir.
-// Bloque S (performance): `onDelta` entrega el texto COMPLETO acumulado en cada
-// token, así que re-escanear todo el texto (indexOf + regex + slice) por delta
-// era O(n²) y competía con el pintado en el hilo principal. Este extractor
-// incremental sólo mira el tramo nuevo y recuerda si ya apareció "R3:" o algún
-// marcador del contrato. Se crea uno por llamada a streamChat.
-function makeStreamingDisplayExtractor() {
-  let r3At = -1
-  let hasMarkers = false
-  let seen = 0
-  return (text) => {
-    if (r3At === -1) {
-      const from = Math.max(0, seen - 3) // "R3:" puede quedar partido entre deltas
-      const idx = text.indexOf('R3:', from)
-      if (idx !== -1) {
-        r3At = idx
-      } else if (!hasMarkers) {
-        if (/R1:|R2:|STEP_COMPLETE|STEP_FAILED|NEED_REPLAN/.test(text.slice(seen))) hasMarkers = true
-      }
-    }
-    seen = text.length
-    if (r3At !== -1) return text.slice(r3At + 3).trim()
-    if (!hasMarkers) {
-      const t = text.trim()
-      // Evita el flash del contrato a medio emitir ("R", "R1", "R1:", …): se
-      // mantiene oculto mientras el texto acumulado sea sólo un prefijo de
-      // marcador. En cuanto llega texto real (o el marcador completo), se pinta.
-      if (/^R\d?\s*:?\s*$/.test(t)) return ''
-      return t
-    }
-    return ''
-  }
-}
-
 // Respuesta que recibe el modelo cuando el usuario cancela una pregunta de ask_user.
 const ASK_CANCELLED = 'Cancelado por el usuario.'
-
-// ─── Compactación de contexto token-aware (Bloque H + L4) ─────────────────────
-// Distinto del pairing guard de pruneApiMessages (Bloque A), que se mantiene
-// intacto como red de seguridad estructural. Cuando la conversación supera el
-// presupuesto de tokens, la porción vieja se colapsa usando los R1/R2 que el
-// modelo YA emitió (D9: se jubiló summarizeDropped → cero llamadas extra). El
-// camino L1.2 (markers de steps completos) se conserva tal cual.
-const CONTEXT_TOKEN_BUDGET   = 60000 // tokens estimados que disparan la compactación
-const CONTEXT_KEEP_RECENT_MSGS = 14  // tope de mensajes recientes conservados (red de seguridad)
-const CONTEXT_RECENT_TOKEN_CAP = CONTEXT_TOKEN_BUDGET / 2 // tramo reciente a preservar sin resumir
-
-// Estimación heurística de tokens (~4 chars/token) para decidir la compactación
-// antes de que el proveedor rechace por contexto excedido.
-function estimateTokens(messages) {
-  let chars = 0
-  for (const m of messages) {
-    if (typeof m.content === 'string') chars += m.content.length
-    else if (m.content != null) { try { chars += JSON.stringify(m.content).length } catch {} }
-    if (Array.isArray(m.tool_calls)) {
-      for (const tc of m.tool_calls) {
-        chars += (tc.function?.name?.length || 0) + (tc.function?.arguments?.length || 0)
-      }
-    }
-    chars += 16 // overhead por mensaje
-  }
-  return Math.ceil(chars / 4)
-}
-
-// Herramientas de solo lectura que pueden ejecutarse en paralelo sin efectos
-// de borde ni confirmaciones (ver paralelización en el loop de tools).
-const READ_ONLY_TOOLS = new Set([
-  'read_file', 'read_file_chunk', 'list_dir', 'find_files',
-  'search_in_files', 'get_file_info', 'file_exists', 'web_fetch',
-  'list_project_plans', 'read_project_plan',
-])
-
-// Contexto base local del sistema (compartido por arranque y wrapper). El
-// SESSION_TOKENS se retiró (auditoría de gasto): cambiaba en cada turno e
-// invalidaba la caché de prefijo entre turnos. La instrucción de batching (P0)
-// evita que cada tool independiente cueste un round-trip completo.
-const BATCHING_RULE =
-  'When you need several independent read-only tool calls (existence, size, listing, lookup), emit them ALL in ONE assistant turn as parallel tool calls; never one per turn. Only sequence calls that depend on a previous result. If the user names a file, read it directly — do not add get_file_info/file_exists probes unless you actually need the size.'
 
 // Auditoría de gasto (Sesión H): traza por request sólo en dev (F12 → consola).
 // Permite ver dónde se va el gasto: nº de requests, tamaño del prefijo, tools y
@@ -140,61 +63,6 @@ const BATCHING_RULE =
 const auditLog = import.meta.env.DEV
   ? (...args) => console.debug('[cochi:audit]', ...args)
   : () => {}
-
-function buildSystemContext(workspacePath, permissionLabel, { technical = false } = {}) {
-  const lines = [
-    'SYSTEM CONTEXT',
-    'You are operating on a Windows system. Use absolute paths only.',
-    `Active workspace: ${workspacePath || 'not set'} (access level: ${permissionLabel}).`,
-  ]
-  if (!technical) {
-    lines.push(
-      'Memory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.',
-      'Read memory files only when the user explicitly asks about past operations.',
-    )
-  }
-  lines.push(BATCHING_RULE)
-  return lines.join('\n')
-}
-
-// Genera un resumen de los mensajes descartados por la compactación a partir de
-// los R1/R2 YA emitidos (D9: cero llamadas extra al modelo). Si no hay pares
-// recuperables devuelve null y el llamador usa el placeholder estático.
-// (La heurística pura vive en r7Wheel.summarizeFromPairs, testeable headless.)
-
-// L1.2: en apiMessages, un step completado se colapsa a un único mensaje
-// "[STEP N RESULT: …]" (ver collapse en el loop). Una ventana descartada es "de
-// steps completos" si empieza y termina en un marker (o empieza en el bloque
-// compactado de una poda previa) y no mezcla ningún mensaje crudo. En ese caso
-// el tramo se resume concatenando los markers, sin llamar al modelo.
-const STEP_RESULT_RE = /^\s*\[STEP (\d+) RESULT:([\s\S]*?)\]\s*$/
-const COMPACT_BLOCK_RE = /^\[(?:CONTEXT SUMMARY|MEMORY)\]/
-
-const matchStepResult = (m) =>
-  m.role === 'assistant' && typeof m.content === 'string'
-    ? m.content.match(STEP_RESULT_RE)
-    : null
-const isCompactBlock = (m) =>
-  m.role === 'user' && typeof m.content === 'string' && COMPACT_BLOCK_RE.test(m.content)
-
-// Devuelve { markers: [{ stepId, result }], prefix } si la ventana son steps
-// completos; null si hay un step cortado a mitad (mensaje crudo mezclado).
-function extractCompleteSteps(dropped) {
-  let firstMarker = -1
-  for (let i = 0; i < dropped.length; i++) {
-    if (matchStepResult(dropped[i])) { firstMarker = i; break }
-  }
-  if (firstMarker === -1 || firstMarker > 1) return null
-  if (firstMarker === 1 && !isCompactBlock(dropped[0])) return null
-
-  const markers = []
-  for (let i = firstMarker; i < dropped.length; i++) {
-    const match = matchStepResult(dropped[i])
-    if (!match) return null // mensaje crudo en medio → tramo parcial
-    markers.push({ stepId: Number(match[1]), result: match[2].trim() })
-  }
-  return { markers, prefix: firstMarker === 1 ? dropped[0].content : null }
-}
 
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 const css = `
@@ -556,81 +424,6 @@ function CochiDesktop({
       ...(preferences || {}),
       permissions: { ...current, allow: [...current.allow, rule] },
     })
-  }
-
-  // Compactación de contexto (Bloque H): el disparador es token-aware y la
-  // porción descartada se resume de verdad. El pairing guard del Bloque A se
-  // conserva textualmente intacto.
-  async function pruneApiMessages(messages) {
-    const systemMsgs = messages.filter(m => m.role === 'system')
-    const nonSystem  = messages.filter(m => m.role !== 'system')
-
-    const tooManyMessages = nonSystem.length > CONTEXT_KEEP_RECENT_MSGS + 1
-    const tooManyTokens   = estimateTokens(messages) > CONTEXT_TOKEN_BUDGET
-    if (!tooManyMessages && !tooManyTokens) return messages
-
-    const firstUser = nonSystem[0]
-    const rest      = nonSystem.slice(1)
-
-    // Punto de corte por cantidad de mensajes (red de seguridad) y por tokens
-    // (token-aware): se conserva lo más reciente hasta cubrir el presupuesto.
-    const byMessages = Math.max(0, rest.length - CONTEXT_KEEP_RECENT_MSGS)
-    let byTokens = rest.length
-    let acc = 0
-    while (byTokens > 0) {
-      const nextAcc = acc + estimateTokens([rest[byTokens - 1]])
-      // Consumimos siempre al menos el último mensaje, aunque él solo supere el
-      // cap, para no quedarnos sin estado reciente.
-      if (byTokens < rest.length && nextAcc > CONTEXT_RECENT_TOKEN_CAP) break
-      acc = nextAcc
-      byTokens--
-    }
-    let start = tooManyTokens
-      ? (tooManyMessages ? Math.min(byMessages, byTokens) : byTokens)
-      : byMessages
-
-    // Pairing guard: la poda NUNCA debe cortar entre un assistant.tool_calls y sus
-    // tool results. Si el corte cae sobre un mensaje 'tool', retrocedemos hasta
-    // incluír el assistant que lo originó (y el resto de sus tool results).
-    while (start > 0 && rest[start].role === 'tool') start--
-    if (start <= 0) return messages
-
-    const recent  = rest.slice(start)
-    const dropped = rest.slice(0, start)
-
-    // L1.2: si la ventana descartada son steps ya completos, se resume
-    // concatenando el texto de sus markers "[STEP N RESULT: …]" (cero llamadas
-    // al modelo). Si algún step queda cortado a mitad, se cae a la rueda.
-    const complete = extractCompleteSteps(dropped)
-    let summary = null
-    let carried = null
-    if (complete) {
-      const planSteps = planRef.current?.steps
-      // Con replan los ordinales se corren respecto de las descripciones: se
-      // omiten y queda solo el resultado del marker (siempre correcto).
-      const hasReplanned = Array.isArray(planSteps) && planSteps.some(s => s.isReplanned)
-      carried = complete.prefix
-      summary = complete.markers
-        .map(({ stepId, result }) => {
-          const desc = hasReplanned ? null : planSteps?.[stepId - 1]?.description
-          return desc ? `- ${desc}: ${result}` : `- ${result}`
-        })
-        .join('\n')
-    }
-    // D9: jubilado summarizeDropped. Se usan los R1/R2 ya emitidos en los
-    // assistant descartados (cero llamadas al modelo). Último recurso: placeholder.
-    if (summary === null) {
-      summary = summarizeFromPairs(dropped)
-    }
-    const compressed = {
-      role: 'user',
-      content: carried
-        ? (summary ? `${carried}\n\n${summary}` : carried)
-        : summary
-          ? `[R7 COMPACTED] Older turns collapsed to their R1/R2 summaries (no extra model call):\n${summary}`
-          : '[MEMORY] Previous tool results compressed to save context. Continue task from current state.'
-    }
-    return [...systemMsgs, firstUser, compressed, ...recent]
   }
 
   // ─── Plan helpers ─────────────────────────────────────────────────────────
@@ -1271,7 +1064,7 @@ function CochiDesktop({
             if (nudge?.message) apiMessages.push({ role: 'system', content: nudge.message })
           }
 
-          apiMessages = await pruneApiMessages(apiMessages)
+            apiMessages = pruneApiMessages(apiMessages, { planSteps: planRef.current?.steps })
         }
 
         if (trackSteps && stepCompleted) {

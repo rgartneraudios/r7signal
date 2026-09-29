@@ -164,7 +164,7 @@ export function buildWheelMessages({ systemMessages = [], r7 = '', rawTurns = []
 // Resume una ventana de mensajes descartados usando los R1/R2 YA emitidos en los
 // assistant crudos: CERO llamadas extra al modelo. Devuelve null si no hay pares
 // (el llamador cae al placeholder estático). Los markers de step L1.2 se manejan
-// aparte en el componente (extractCompleteSteps), como hasta ahora.
+// aparte en cochiContext.extractCompleteSteps.
 export function summarizeFromPairs(dropped) {
   if (!Array.isArray(dropped) || !dropped.length) return null
   const pairs = []
