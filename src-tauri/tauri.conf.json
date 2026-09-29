@@ -16,7 +16,11 @@
         "width": 1200,
         "height": 800,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "transparent": true,
+        "windowEffects": {
+          "effects": ["micaDark"]
+        }
       }
     ],
     "security": {

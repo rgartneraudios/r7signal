@@ -150,6 +150,12 @@ el orquestador. Se resuelve extrayendo hooks + lógica pura (regla del repo).
 - **Tarifas de `cached_tokens`**: ESTIMADAS (~20%), pendiente verificar contra OpenRouter.
 - **Snapshots**: `run_command` está FUERA de alcance (sólo aviso). Undo/Regenerate
   conversación; Regenerate avisa si el turno tocó archivos/música.
+- **Transparencia (Mica/Acrylic)**: la ventana Tauri es `transparent: true` con
+  `windowEffects: micaDark` (Win11). En `src-tauri/src/lib.rs` hay fallback a **Acrylic**
+  tintado (`Color(15,14,17,180)`) para Win10 build 17763-21999. Requiere que el webview no
+  pinte opaco: `body` transparente, raíz de `R7Desktop` transparente y el **lienzo de los 3
+  chats** en `rgba(15,14,17,0.6)` (CochiDesktop, AsunPanel, `.tito-chat`). Headers/footers
+  conservan su `rgba(9,8,10,0.5)`. Sólo Windows (Linux no soporta el efecto).
 
 ## Deuda / pendientes (ver histórico completo en `output/Analisis-Cochi.txt`)
 

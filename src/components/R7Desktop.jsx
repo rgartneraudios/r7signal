@@ -130,7 +130,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0 }) 
     <div style={{
       width: '100vw', height: '100vh',
       display: 'flex', flexDirection: 'column',
-      background: '#0F0E11', overflow: 'hidden',
+      background: 'transparent', overflow: 'hidden',
       position: 'relative',
       fontFamily: "'Space Grotesk', sans-serif",
     }}>
@@ -341,6 +341,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0 }) 
           display: flex;
           flex-direction: column;
           gap: 14px;
+          background: rgba(15,14,17,0.6);
         }
         .tito-watermark {
           display: flex;
