@@ -15,6 +15,7 @@ import {
   appendR7Task,
   commitR7Turn,
   closeWheelTask,
+  splitR7Turns,
   buildWheelMessages,
   summarizeFromPairs,
 } from '../src/lib/r7Wheel.js'
@@ -92,7 +93,16 @@ st2 = closeWheelTurn(st2, { user: 'u2', assistant: 'a2', pairs: [{ r1: 'n3', r2:
 check('disco(2) + 2 cierres → R7 con 3 turnos', countR7Turns(st2.r7), 3)
 check('numeración continúa (Turno 3 al final)', st2.r7.includes('── Turno 3 ──'), true)
 
-console.log('\n— buildWheelMessages: [system] [R7] [turno crudo] [input] —')
+console.log('\n— splitR7Turns: un mensaje inmutable por turno (Capa 2) —')
+const turnA = '── Turno 1 ──\nR1: a\nR2: b'
+const turnB = '── Turno 2 ──\nR1: c\nR2: d'
+check('2 turnos → 2 bloques', splitR7Turns(`${turnA}\n${turnB}`), [turnA, turnB])
+check('vacío → []', splitR7Turns(''), [])
+check('header-only → []', splitR7Turns(buildR7Header('x')), [])
+check('ignora el header del archivo', splitR7Turns(buildR7Header('x') + '── Turno 1 ──\nR5: 100% — ok')[0].startsWith('── Turno 1'), true)
+check('turnos viejos byte-idénticos al crecer', splitR7Turns(`${turnA}\n${turnB}`)[0], splitR7Turns(turnA)[0])
+
+console.log('\n— buildWheelMessages: [system] [R1/R2 por turno] [turno crudo] [input] —')
 const msgs = buildWheelMessages({
   systemMessages: [{ role: 'system', content: 'S' }],
   r7: '── Turno 1 ──\nR1: x\nR2: y',
@@ -100,9 +110,17 @@ const msgs = buildWheelMessages({
   userInput: 'input_actual',
 })
 check('orden de roles', msgs.map(m => m.role), ['system', 'system', 'user', 'assistant', 'user'])
-check('el bloque R7 lleva prefijo [R7 MEMORY]', msgs[1].content.startsWith('[R7 MEMORY]'), true)
+check('el turno viaja como mensaje de memoria propio', msgs[1].content, '[MEMORY]\n── Turno 1 ──\nR1: x\nR2: y')
+check('NO queda ningún bloque [R7 MEMORY]', msgs.some(m => m.content.startsWith('[R7 MEMORY]')), false)
 check('último mensaje = input actual', msgs[msgs.length - 1].content, 'input_actual')
-check('R7 va ANTES del turno crudo', msgs[1].role === 'system' && msgs[2].role === 'user', true)
+check('memoria va ANTES del turno crudo', msgs[1].role === 'system' && msgs[2].role === 'user', true)
+const msgsTwo = buildWheelMessages({
+  systemMessages: [{ role: 'system', content: 'S' }],
+  r7: '── Turno 1 ──\nR1: a\nR2: b\n── Turno 2 ──\nR1: c\nR2: d',
+  rawTurns: [],
+  userInput: 'q',
+})
+check('2 turnos → 2 mensajes de memoria', msgsTwo.map(m => m.role), ['system', 'system', 'system', 'user'])
 const msgsNoR7 = buildWheelMessages({ systemMessages: [{ role: 'system', content: 'S' }], r7: '', rawTurns: [], userInput: 'q' })
 check('sin R7 ni crudo → sólo system + input', msgsNoR7.map(m => m.role), ['system', 'user'])
 

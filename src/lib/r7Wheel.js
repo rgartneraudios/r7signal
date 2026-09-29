@@ -7,9 +7,11 @@
 //   D2. R7 RODANTE: cada turno añade su pareja y la rueda avanza.
 //   D3. HÍBRIDO: prompt = R7 (turnos viejos) + el ÚLTIMO turno CRUDO.
 //   D4. Al guardar: archivo nuevo acumulativo con TODO el R7.
-//   D8. Caché: system estable -> bloque R7 -> último turno crudo -> input actual.
-//       Cada turno AÑADE al final del bloque R7 (nunca reescribe el medio), así
-//       el prefijo [system + R7 v(n-1)] sigue siendo cacheable por el proveedor.
+//   D8. Caché: system estable -> R1/R2 por turno (mensajes inmutables) -> último
+//       turno crudo -> input actual. Un turno NUNCA se reescribe: los mensajes de
+//       los turnos 1..N-1 son byte-idénticos entre requests, así el proveedor los
+//       cachea enteros (antes iban en UN bloque R7 que crecía y se pagaba full).
+//       R7 queda como almacén en disco, NO como transporte del prompt.
 //
 // Este módulo se mantiene puro a propósito para poder ejercitarlo headless con
 // el harness Node (harness/cochiR7Wheel.harness.mjs), que mockea el disco.
@@ -147,10 +149,26 @@ export function flushWheel(state) {
 }
 
 // ─── Construcción del prompt híbrido (D3/D8) ─────────────────────────────────
-// [ system estable ... ] [ bloque R7 ] [ último turno crudo ] [ input actual ]
+// [ system estable ... ] [ R1/R2 de cada turno (inmutable) ] [ último turno crudo ]
+// [ input actual ]. Los pares NO viajan en un bloque R7 reescrito: cada turno es
+// un mensaje propio, para que 1..N-1 queden byte-idénticos y el proveedor los
+// cachee. El marcador [MEMORY] permite a la auditoría excluirlos del `sysStable`.
+export const R7_MEMORY_TAG = '[MEMORY]'
+
+const TURN_SPLIT_RE = /(?=──\s*Turno\s+\d+\s*──)/
+
+// Parte el cuerpo de R7 (o el archivo completo) en un bloque por turno, en orden.
+export function splitR7Turns(r7) {
+  const body = stripR7Header(r7)
+  if (!body) return []
+  return body.split(TURN_SPLIT_RE).map(s => s.trim()).filter(Boolean)
+}
+
 export function buildWheelMessages({ systemMessages = [], r7 = '', rawTurns = [], userInput }) {
   const out = [...systemMessages]
-  if (r7) out.push({ role: 'system', content: `[R7 MEMORY]\n${r7}` })
+  for (const turn of splitR7Turns(r7)) {
+    out.push({ role: 'system', content: `${R7_MEMORY_TAG}\n${turn}` })
+  }
   for (const t of rawTurns.slice(-R7_KEEP_RAW_TURNS)) {
     if (!t) continue
     if (t.user != null) out.push({ role: 'user', content: t.user })

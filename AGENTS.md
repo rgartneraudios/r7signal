@@ -120,13 +120,37 @@ facturables.
 
 ## R7: dos implementaciones (no confundir)
 
-- **Desktop (VIVA)**: `src/lib/r7Wheel.js` arma `[R7 MEMORY]` y viaja SÓLO en el carril
+- **Desktop (VIVA)**: `src/lib/r7Wheel.js` arma el contexto y viaja SÓLO en el carril
   conversacional; se compacta (`pruneApiMessages`, token-aware). Persiste en
   `AppLocalData\com.r7signal.cochi\{R7,R9}` (D5). Tito/Asun locales usan la misma rueda.
 - **Web (LEGACY, no usar)**: la edge function `supabase/functions/procesar-input/` guarda
   `sesiones.r7_acumulado` y lo inyecta en TODOS los turnos, sin tope (crece sin límite). Hoy
   NADIE la importa: sólo la llamaba `Chat00Music.jsx`, que ya no se monta. En la web sólo hay
   `Chat00.jsx`. No replicar su patrón de R7 (acumula tokens).
+
+## Caché conversacional: R1/R2 por turno, R7 sólo almacén (30/09)
+
+Decisión (Signor Roberto). El carril conversacional DEBE cachear el contexto. Hoy el prompt
+manda **UN** bloque `[R7 MEMORY]\n<todos los pares R1/R2>` que **se reescribe/crece** cada
+turno: si el proveedor cachea por mensaje (no por prefijo de tokens dentro del mensaje),
+sólo pega el prefijo estático (`sys1+sys2`) y **todo el R7 se paga full** cada turno. Cambio:
+
+- El prompt lleva **un mensaje inmutable por turno** (`[MEMORY]\n── Turno N ──\nR1: …\nR2: …`),
+  emitido por `splitR7Turns` (`r7Wheel.js`). Así los turnos `1..N-1` quedan byte-idénticos
+  entre turnos y el proveedor los cachea enteros; sólo el par nuevo + el input se pagan.
+- **Sin bloque R7 en el prompt** y **sin R3** (R3 nunca viajó; se mantiene la regla).
+- **R7 queda SÓLO como almacén**: el archivo acumulativo `R7/chat_N.txt` (D4) sirve para
+  persistir/undo/CLI; **no** es el transporte del prompt. El prompt reconstruye los R1/R2
+  desde ese almacén. (A confirmar con Signor Roberto el punto "no los 70.000": interpretación
+  = R7 no alimenta el presupuesto de contexto rodante, sólo archiva.)
+- **Prompts de Supabase**: hay que hacer los R1/R2 **más ricos** (que expliquen el contexto
+  por sí solos, ya que el R3 no viaja). Es un paso APARTE: se edita/pega en Supabase y/o en
+  `output/Prompts-Final.txt`; cambiar el repo NO actualiza producción.
+- Aplica a los **3 paneles** porque comparten `buildWheelMessages` (Cochi, Tito, Asun).
+
+Capas independientes y complementarias: **Capa 1** = ruteo (`providerRouting`, pin DeepSeek);
+**Capa 2** = esta colocación append-only. Pendiente: re-medir `[cache:audit]` (3 turnos)
+para confirmar `cached` creciente y `sysStable/appendOnly=true`.
 
 ## Refactor de CochiDesktop (COMPLETO 29/09)
 
@@ -285,7 +309,11 @@ Medido con la traza F12 (`[cochi:audit]`) de un E2E de 2 turnos conversacionales
   (planner DENTRO del carril tarea). Harness `cochiPlanning`/`cochiLanes` podados y +checks de escape.
 
 ### Cerrado recientemente (30/09)
-**Carril = toggle only**: `resolveLane` sin heurística; `needsTools`/`laneForMessage`/`needsCommand`/
+**Caché (3 capas): Capa 1 · ruteo** — `providerRouting(modelId)` en `cacheAudit.js` (pin
+`order:['deepseek']` para modelos DeepSeek: Cochi y Asun/MaríaBase; `null` para IrmaMax/Gemini
+y Tito/Perplexity), wireado en `buildBody`. **Capa 2 · colocación** — R1/R2 por turno como
+mensajes inmutables, R7 fuera del prompt (sólo almacén), ver sección propia. Falta re-medir
+`[cache:audit]`. **Carril = toggle only**: `resolveLane` sin heurística; `needsTools`/`laneForMessage`/`needsCommand`/
 `needsWrite` + `FS_NOUNS`/`SYSTEM_NOUNS`/`READ_VERBS`/`QUERY_HINTS`/`RUN_SCRIPT_EXT_RE` eliminados;
 `executeConversational` expone scope `'task'`; single-pass de tarea siempre `'task'`. Disparador:
 turno 2 de la prueba conversacional ("…es para guardar algo?") secuestrado a TASK por el verbo
@@ -341,17 +369,27 @@ colocación (bloque `system` mutable antes del user). Gates al cerrar: **lint 0/
 `cache_write` = 1x, no es sobrecosto. Ver qué provider sirvió cada request (OpenRouter Activity →
 Sessions, agrupado por `session_id`).
 
-### 1) Capa 1 · Pinear provider (si el diagnóstico da ruteo)
-En `buildBody` (`llmClient.js`) agregar `provider: { order: ['deepseek'] }` (con fallback) para que
-el sticky caiga siempre en el endpoint DeepSeek first-party (el de caché automática). `session_id`
-ya es estable (`useWheelSession`; `makeSession` reusa el id). OJO: sticky de OpenRouter **expira a
-los 10 min**; sin `session_id` la clave es hash del primer `system` + primer no-system, y nuestro
-primer no-system es el user (cambia cada turno) → por eso `session_id` es imprescindible.
+### 1) HECHO (30/09) · Capa 1 · Pinear provider
+Evidencia del test conversacional de 3 turnos (`[cochi:audit]`): 6.828 / **963** / 7.144
+facturables → el turno 2 pegó caché y el 3 la perdió, con el MISMO prefijo (`sys` estable +
+R7 append-only) ⇒ **ruteo**. Implementado `providerRouting(modelId)` en `cacheAudit.js`:
+devuelve `{ order: ['deepseek'], allow_fallbacks: true }` para modelos DeepSeek (Cochi y
+Asun/MaríaBase); `null` para el resto (Asun/IrmaMax = Gemini y Tito = Perplexity), para no
+romper su ruteo. Wireado en `buildBody` (`llmClient.js`).
+Harness `cochiCacheAudit` +5 checks (27 total). Gates 30/09: lint 0/0 · `npm test` 12/12 ·
+`npm run build` OK. **Falta re-medir** los 3 turnos (las 3 requests deberían cachear).
+⚠ El test solo trajo líneas `[cochi:audit]`; no se vieron `[cache:audit]` en consola → si
+al re-medir tampoco aparecen (sin filtro de consola), revisar por qué `auditCache` no loguea.
 
-### 2) Capa 2 · Colocación append-only
-- Emitir cada turno de R7 como **mensaje inmutable propio** (no un único `[R7 MEMORY]\n<todo>` que
-  se reescribe), con la volatilidad (input nuevo) al FINAL.
-- Regla: *nada antes del user nuevo se toca*; `[sysA][sysB]` 100% estáticos.
+### 2) HECHO (30/09) · Capa 2 · Colocación append-only
+Implementado en `r7Wheel.js`: `splitR7Turns(r7)` parte el cuerpo de la rueda en un bloque por
+turno y `buildWheelMessages` emite **un mensaje `system` inmutable por turno** (`[MEMORY]\n──
+Turno N ──\nR1/R2`), en lugar del único bloque `[R7 MEMORY]` reescrito. La volatilidad (input
+nuevo) queda al FINAL; `[sysA][sysB]` siguen 100% estáticos. `cacheAudit.systemFingerprint`
+excluye los mensajes de memoria (tag `[MEMORY]` y legacy `[R7 MEMORY]`) para que `sysStable`
+siga midiendo el prompt base. Aplica a los 3 paneles (comparten `buildWheelMessages`). R7
+queda SÓLO como almacén en disco (D4). Harness `cochiR7Wheel`/`cochiCacheAudit` actualizados.
+Gates 30/09: lint 0/0 · `npm test` 12/12 · build OK. **Falta re-medir** `[cache:audit]`.
 
 ### 3) Capa 3 · Reabrir D3 (historial crudo + R7 sólo para overflow)
 Historial crudo cacheado (0.1x) le gana a R7 a pelo (1x). Mandar turnos crudos append-only y

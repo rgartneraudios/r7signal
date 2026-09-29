@@ -8,7 +8,9 @@ import {
   prefixFingerprint,
   systemFingerprint,
   buildCacheReport,
+  providerRouting,
 } from '../src/lib/cacheAudit.js'
+import { splitR7Turns, R7_MEMORY_TAG } from '../src/lib/r7Wheel.js'
 
 let pass = 0
 let fail = 0
@@ -21,7 +23,7 @@ function check(label, actual, expected) {
 
 const base = (r7, user) => [
   { role: 'system', content: 'SYS' },
-  { role: 'system', content: `[R7 MEMORY]\n${r7}` },
+  ...splitR7Turns(r7).map(t => ({ role: 'system', content: `${R7_MEMORY_TAG}\n${t}` })),
   { role: 'user', content: `[LANE: CONVERSATIONAL]\n${user}` },
 ]
 
@@ -71,6 +73,14 @@ check('prompt base cambiado → sysStable false', changedSys.sysStable, false)
 
 check('sin prompt no divide por cero', buildCacheReport({ messages: base(R7_T1, 'x') }).hit, 0)
 check('reporte saneado sin args', (() => { const r = buildCacheReport(); return [r.msgs, r.prompt, r.session] })(), [0, 0, 'nosession'])
+
+console.log('— providerRouting (Capa 1) —')
+check('deepseek se pinea', providerRouting('~deepseek/deepseek-v4-flash-latest'), { order: ['deepseek'], allow_fallbacks: true })
+check('deepseek lowercase', providerRouting('deepseek/deepseek-chat'), { order: ['deepseek'], allow_fallbacks: true })
+check('gemini (Asun/IrmaMax) no se pinea', providerRouting('google/gemini-3.8-flash'), null)
+check('deepseek vision (Asun/MaríaBase) SÍ se pinea', providerRouting('deepseek/deepseek-v4-flash-vision-exp'), { order: ['deepseek'], allow_fallbacks: true })
+check('perplexity (Tito) no se pinea', providerRouting('perplexity/sonar'), null)
+check('vacío/undefined no se pinea', [providerRouting(''), providerRouting(undefined)], [null, null])
 
 console.log(`\n${pass} PASS · ${fail} FAIL`)
 if (fail) process.exit(1)

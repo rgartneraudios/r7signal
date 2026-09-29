@@ -9,8 +9,22 @@
 // Es PURO salvo el log DEV. `import.meta.env?.DEV` es seguro en Node (harness):
 // en Node `import.meta.env` es undefined y el optional chaining no lanza.
 import { normalizeUsage } from './llmMetrics.js'
+import { R7_MEMORY_TAG } from './r7Wheel.js'
 
 const IS_DEV = !!import.meta.env?.DEV
+
+// ─── Capa 1 · Ruteo del proveedor para la caché de prefijo (30/09) ───────────
+// DeepSeek cachea el prefijo de forma automática, pero SOLO en su endpoint
+// first-party. El `session_id` de OpenRouter mantiene la sesión sticky, pero no
+// garantiza que caiga en DeepSeek: puede servirla un host que no cachea. Fijar
+// `order:['deepseek']` (con fallback) asegura el endpoint que sí cachea.
+// Puro y selectivo: pinnea cualquier modelo DeepSeek (Cochi y Asun/MaríaBase);
+// devuelve null para el resto (Asun/IrmaMax = Gemini, Tito = Perplexity), donde
+// forzar el proveedor rompería su ruteo; el llamador omite `provider`.
+export function providerRouting(modelId) {
+  if (!/deepseek/i.test(String(modelId ?? ''))) return null
+  return { order: ['deepseek'], allow_fallbacks: true }
+}
 
 // Hash FNV-1a (32 bits) → huella corta y estable sin dependencias.
 export function fnv1a(str) {
@@ -45,12 +59,17 @@ export function prefixFingerprint(messages) {
   return fnv1a(stableHead(messages))
 }
 
-// Huella SOLO de los mensajes `system` que no son la rueda R7. La rueda viaja
-// como `[R7 MEMORY]…`; la excluimos para que `sysStable` mida el prompt base.
+// Huella SOLO de los mensajes `system` que no son memoria de turnos (R1/R2). La
+// memoria viaja como `[MEMORY]…` (o el legacy `[R7 MEMORY]…`); la excluimos para
+// que `sysStable` mida el prompt base, no el crecimiento de los pares.
 export function systemFingerprint(messages, { excludeR7 = true } = {}) {
   const arr = Array.isArray(messages) ? messages : []
   const sys = arr.filter(m => m.role === 'system')
-    .filter(m => !(excludeR7 && contentOf(m).startsWith('[R7 MEMORY]')))
+    .filter(m => {
+      if (!excludeR7) return true
+      const c = contentOf(m)
+      return !c.startsWith(R7_MEMORY_TAG) && !c.startsWith('[R7 MEMORY]')
+    })
   return fnv1a(sys.map(m => contentOf(m)).join('\u0001'))
 }
 
