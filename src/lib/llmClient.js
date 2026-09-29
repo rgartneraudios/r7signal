@@ -5,7 +5,7 @@
 
 import { getOpenRouterKey } from './localConfig.js'
 import { buildReasoningConfig, extractReasoningDelta } from './llmMetrics.js'
-import { auditCache } from './cacheAudit.js'
+import { auditCache, providerRouting } from './cacheAudit.js'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const OPENROUTER_HEADERS = {
@@ -70,7 +70,7 @@ export function resolveProvider(selectedModel, ctx = {}) {
   }
 }
 
-function buildBody({ provider, messages, tools, toolChoice = 'auto', stream, sessionId, maxTokens, temperature, reasoning }) {
+export function buildBody({ provider, messages, tools, toolChoice = 'auto', stream, sessionId, maxTokens, temperature, reasoning }) {
   const body = { model: provider.model, messages, stream }
   if (provider.supportsUsage) {
     // Fase 3.2: reasoning por modelo (whitelist en llmMetrics.MODEL_CAPS).
@@ -79,6 +79,11 @@ function buildBody({ provider, messages, tools, toolChoice = 'auto', stream, ses
     if (stream) body.stream_options = { include_usage: true }
   }
   if (sessionId && !provider.isLocal) body.session_id = sessionId
+  // Capa 1 (30/09-ter): prefiere proveedores que SÍ cachean el prefijo. Sin esto,
+  // OpenRouter balancea entre endpoints y la caché se pierde turno por turno (ver
+  // cacheAudit.providerRouting). Sólo modelos DeepSeek no-visión.
+  const routing = providerRouting(provider.model)
+  if (routing) body.provider = routing
   if (maxTokens) body.max_tokens = maxTokens
   if (temperature != null) body.temperature = temperature
   if (tools && tools.length) {

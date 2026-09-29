@@ -13,19 +13,32 @@ import { R7_MEMORY_TAG } from './r7Wheel.js'
 
 const IS_DEV = !!import.meta.env?.DEV
 
-// ─── Capa 1 · Ruteo del proveedor — REVERTIDA (30/09-bis) ───────────────────
-// Aprendizaje: OpenRouter documenta que **el sticky routing NO se usa cuando se
-// manda `provider.order`** — el orden manual tiene prioridad y desactiva el
-// pegado a la misma instancia. La caché de prefijo de DeepSeek (automática)
-// depende de caer SIEMPRE en el mismo endpoint; el sticky routing la mantiene
-// caliente, y se activa con `session_id` (ya viaja en el body) incluso antes de
-// observar el primer cache hit. Pinnear `order:['deepseek']` (Capa 1, 30/09)
-// apagó ese mecanismo: los 3 turnos pasaron a cached=0 (5996/6138/6662) cuando
-// antes el turno 2 SÍ cacheaba (6828/963/7144). Decisión: NO mandar `provider`
-// y dejar que el sticky routing + `session_id` hagan el trabajo. Se conserva
-// esta nota para no volver a pinnear creyendo que ayuda.
-export function providerRouting() {
-  return null
+// ─── Capa 1 · Ruteo del proveedor — RESTAURADA (30/09-ter) ───────────────────
+// Historial: 30/09 se pineó `order:['deepseek']` y se revirtió ("mataba el
+// sticky"). El diagnóstico REAL contra OpenRouter (experimento con la API key,
+// 30/09-ter) mostró:
+//   1) `deepseek` NO es proveedor de este modelo: `~deepseek/deepseek-v4-flash-latest`
+//      se sirve por Relace, StreamLake, Parasail, Alibaba, Cohere, DeepInfra,
+//      Together, etc. `order:['deepseek']` era inválido → ruteo arbitrario → cached=0.
+//   2) La caché NO es pareja: StreamLake / Parasail / Alibaba cachean (cached>0
+//      desde el turno 2, costo ~5x menor), mientras Relace / Cohere / DeepInfra /
+//      Together reportan cached=0. Sin pin, OpenRouter balancea entre TODOS y la
+//      caché se pierde turno por turno (medido: cached 3840/0/4096).
+// Fix: preferir los proveedores que SÍ cachean, con `allow_fallbacks:true` (si el
+// primario cae, se sigue sirviendo; esa request pierde caché y el fallback la
+// vuelve a calentar). `order` desactiva el sticky de OpenRouter, pero no hace
+// falta: caer SIEMPRE en el mismo proveedor (StreamLake) mantiene su caché de
+// prefijo caliente. Medición (prompt ~4k tokens, 4 turnos):
+//   sin pin (Relace) $0.000340 · con pin $0.000069 (cached 4/4).
+const CACHE_PROVIDER_ORDER = ['streamlake', 'parasail', 'alibaba']
+
+export function providerRouting(modelId) {
+  const id = String(modelId || '').toLowerCase()
+  if (!id.includes('deepseek')) return null
+  // MaríaBase (visión) no tiene un proveedor con caché útil (DeepInfra cached=256);
+  // pinnearla no ayuda. Se deja sin pin.
+  if (id.includes('vision')) return null
+  return { order: [...CACHE_PROVIDER_ORDER], allow_fallbacks: true }
 }
 
 // Hash FNV-1a (32 bits) → huella corta y estable sin dependencias.

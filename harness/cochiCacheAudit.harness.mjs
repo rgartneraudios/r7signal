@@ -11,6 +11,7 @@ import {
   providerRouting,
 } from '../src/lib/cacheAudit.js'
 import { splitR7Turns, R7_MEMORY_TAG } from '../src/lib/r7Wheel.js'
+import { buildBody } from '../src/lib/llmClient.js'
 
 let pass = 0
 let fail = 0
@@ -74,20 +75,33 @@ check('prompt base cambiado → sysStable false', changedSys.sysStable, false)
 check('sin prompt no divide por cero', buildCacheReport({ messages: base(R7_T1, 'x') }).hit, 0)
 check('reporte saneado sin args', (() => { const r = buildCacheReport(); return [r.msgs, r.prompt, r.session] })(), [0, 0, 'nosession'])
 
-console.log('— providerRouting (Capa 1 REVERTIDA 30/09-bis: no pinnear `order`) —')
-// Evidencia: mandar `provider.order` desactiva el sticky routing de OpenRouter
-// (docs "Prompt Caching") → cached=0 en todos los turnos. Ahora devuelve null
-// SIEMPRE: el body no lleva `provider` y el sticky routing + `session_id` pegan.
-check('deepseek NO se pinea (antes sí)', providerRouting('~deepseek/deepseek-v4-flash-latest'), null)
-check('deepseek lowercase NO se pinea', providerRouting('deepseek/deepseek-chat'), null)
+console.log('— providerRouting (Capa 1 RESTAURADA 30/09-ter: pin a proveedores que cachean) —')
+// Diagnóstico real vs OpenRouter: el modelo lo sirven terceros y sólo StreamLake/
+// Parasail/Alibaba reportan cached>0. Sin pin, Relace/Cohere/DeepInfra dan cached=0.
+// Se prefiere el orden con fallback; visión (MaríaBase) queda sin pin.
+const PIN = { order: ['streamlake', 'parasail', 'alibaba'], allow_fallbacks: true }
+check('centinela se pinea a proveedores con caché', providerRouting('~deepseek/deepseek-v4-flash-latest'), PIN)
+check('terminator se pinea', providerRouting('~deepseek/deepseek-flash-latest'), PIN)
+check('deepseek v4.1 flash se pinea', providerRouting('deepseek/deepseek-v4.1-flash'), PIN)
+check('deepseek genérico se pinea', providerRouting('deepseek/deepseek-chat'), PIN)
+check('deepseek visión (MaríaBase) NO se pinea', providerRouting('deepseek/deepseek-v4-flash-vision-exp'), null)
 check('gemini (Asun/IrmaMax) no se pinea', providerRouting('google/gemini-3.8-flash'), null)
-check('deepseek vision (Asun/MaríaBase) NO se pinea', providerRouting('deepseek/deepseek-v4-flash-vision-exp'), null)
 check('perplexity (Tito) no se pinea', providerRouting('perplexity/sonar'), null)
 check('vacío/undefined no se pinea', [providerRouting(''), providerRouting(undefined)], [null, null])
 check('el reporte incluye cost real de OpenRouter', first.cost, 0)
 check('el reporte expone sysChars', typeof first.sysChars, 'number')
 check('el reporte expone toolsChars (gasto fijo del schema)', buildCacheReport({ messages: base(R7_T1, 'x'), toolsChars: 8345 }).toolsChars, 8345)
 check('toolsChars sin dato → 0', buildCacheReport({ messages: base(R7_T1, 'x') }).toolsChars, 0)
+
+console.log('— buildBody: wireado del provider + session_id —')
+const orProvider = (model) => ({ id: 'openrouter', isLocal: false, supportsUsage: true, url: 'x', model, headers: {} })
+const bodyDeep = buildBody({ provider: orProvider('~deepseek/deepseek-v4-flash-latest'), messages: base(R7_T1, 'x'), stream: true, sessionId: 'sess-abc' })
+check('body DeepSeek lleva provider.order+fallback', bodyDeep.provider, PIN)
+check('body DeepSeek lleva session_id (sticky/agrupación)', bodyDeep.session_id, 'sess-abc')
+check('body Gemini NO lleva provider', buildBody({ provider: orProvider('google/gemini-3.8-flash'), messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }).provider, undefined)
+check('body Perplexity NO lleva provider', buildBody({ provider: orProvider('perplexity/sonar'), messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }).provider, undefined)
+check('body visión NO lleva provider', buildBody({ provider: orProvider('deepseek/deepseek-v4-flash-vision-exp'), messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }).provider, undefined)
+check('provider local (ollama) NO lleva provider ni session_id', (() => { const b = buildBody({ provider: { id: 'ollama', isLocal: true, supportsUsage: false, model: 'llama3.2', headers: {} }, messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }); return [b.provider, b.session_id] })(), [undefined, undefined])
 
 console.log(`\n${pass} PASS · ${fail} FAIL`)
 if (fail) process.exit(1)

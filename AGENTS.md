@@ -148,10 +148,10 @@ sólo pega el prefijo estático (`sys1+sys2`) y **todo el R7 se paga full** cada
   `output/Prompts-Final.txt`; cambiar el repo NO actualiza producción.
 - Aplica a los **3 paneles** porque comparten `buildWheelMessages` (Cochi, Tito, Asun).
 
-Capas independientes y complementarias: **Capa 1** = ruteo (REVERTIDA: NO enviar `provider.order`; el
-sticky routing de OpenRouter + `session_id` mantienen la caché caliente); **Capa 2** = esta colocación
-append-only. Pendiente: re-medir `[cache:audit]` (3 turnos) para confirmar `cached` creciente y
-`sysStable/appendOnly=true`.
+Capas independientes y complementarias: **Capa 1** = ruteo (RESTAURADA 30/09-ter: SÍ enviar
+`body.provider` = `{order:['streamlake','parasail','alibaba'], allow_fallbacks:true}` para DeepSeek
+no-visión; el modelo lo sirven terceros y sólo esos cachean — ver sección propia); **Capa 2** = esta
+colocación append-only. Re-medir `[cache:audit]` (3 turnos): esperar `cached` creciente desde el turno 2.
 
 ## Refactor de CochiDesktop (COMPLETO 29/09)
 
@@ -284,7 +284,8 @@ glow azul, Ctrl+T) · `CochiWatermark.jsx`. Doc de diseño: `output/Diseno-Carri
 - **Subagentes que escriben** (hoy sólo lectura, `MAX_SUBAGENT_DEPTH=1`).
 - **Shell revertible** (`run_command` está FUERA de los snapshots; hoy sólo aviso).
 - **SSRF**: `isBlockedUrl` es corte por globs; falta validar la IP resuelta en Rust.
-- **`cached_tokens`**: tarifas ESTIMADAS (~20%), pendiente verificar contra OpenRouter.
+- **`cached_tokens`**: tarifas verificadas 29/09 (DeepSeek cache-read 0.1x); ver "Tarifas de
+  `cached_tokens`" arriba para el detalle por proveedor.
 - **Prompt `task` remoto (Supabase)**: pegarle la excepción de `TYPO RESUELTO` (opcional; el
   R4 del sistema ya la aplica).
 - **Modelos**: Centinela = DeepSeek V4 Flash 0731 · Terminator = DeepSeek V4.1 Flash
@@ -310,13 +311,15 @@ Medido con la traza F12 (`[cochi:audit]`) de un E2E de 2 turnos conversacionales
   (planner DENTRO del carril tarea). Harness `cochiPlanning`/`cochiLanes` podados y +checks de escape.
 
 ### Cerrado recientemente (30/09)
-**Caché (3 capas): Capa 1 · ruteo — REVERTIDA 30/09-bis** — `providerRouting()` devuelve `null` y NO se
-manda `body.provider`: el `provider.order` manual desactiva el sticky routing de OpenRouter (docs), que
-es lo que mantiene la caché caliente vía `session_id`. Pinnear `order:['deepseek']` apagó la caché
-(3 turnos a cached=0). **Capa 2 · colocación** — R1/R2 por turno como
+**Caché (3 capas): Capa 1 · ruteo — RESTAURADA 30/09-ter** — `providerRouting()` vuelve a devolver
+`{order:['streamlake','parasail','alibaba'], allow_fallbacks:true}` para DeepSeek no-visión y `buildBody`
+lo manda en `body.provider`. Motivo (experimento real contra OpenRouter, ver sección): `deepseek` NO es
+proveedor de `~deepseek/deepseek-v4-flash-latest` (lo sirven Relace/StreamLake/Parasail/Alibaba/Cohere/
+DeepInfra/Together…); `order:['deepseek']` era inválido → ruteo arbitrario → cached=0. Sólo StreamLake/
+Parasail/Alibaba reportan cached>0; sin pin la caché se pierde turno por turno. Medición 4 turnos: sin pin
+$0.000340 · con pin $0.000069 (cached 4/4). **Capa 2 · colocación** — R1/R2 por turno como
 mensajes inmutables, R7 fuera del prompt (sólo almacén), ver sección propia. `[cache:audit]` ahora
-`console.log` + `cost`. Falta re-medir
-`[cache:audit]`. **Carril = toggle only**: `resolveLane` sin heurística; `needsTools`/`laneForMessage`/`needsCommand`/
+`console.log` + `cost`. **Carril = toggle only**: `resolveLane` sin heurística; `needsTools`/`laneForMessage`/`needsCommand`/
 `needsWrite` + `FS_NOUNS`/`SYSTEM_NOUNS`/`READ_VERBS`/`QUERY_HINTS`/`RUN_SCRIPT_EXT_RE` eliminados;
 `executeConversational` expone scope `'task'`; single-pass de tarea siempre `'task'`. Disparador:
 turno 2 de la prueba conversacional ("…es para guardar algo?") secuestrado a TASK por el verbo
@@ -341,15 +344,25 @@ implementado y verificado E2E** (un solo input, botón ⚡ Tarea/Task junto a CL
 Ctrl+T, `resolveLane`; ver sección propia arriba).
 
 ================================================================================
-## PRÓXIMA SESIÓN — PRIORIDADES (handoff 29/09-bis, foco CACHÉ)
+## PRÓXIMA SESIÓN — PRIORIDADES (handoff 30/09-ter)
 ================================================================================
 
-Contexto: el eje de la sesión pasó a ser la **caché de contexto**. Hallazgo: el sistema estándar
-gana en tokens porque su historial es un prefijo **append-only** que el proveedor cachea (DeepSeek
-cache-read = **0.1x** del input), mientras R7 viaja **a pelo** (1x) y además crece. R7 SÍ es
-append-only, así que debería cachear; la caché no pega por causas operativas (ruteo) y/o de
-colocación (bloque `system` mutable antes del user). Gates al cerrar: **lint 0/0 + `npm test`
-(12/12) + `npm run build`**.
+Estado: **la caché YA FUNCIONA y está verificada E2E.** El pin de la Capa 1 (preferir proveedores
+que cachean, ver sección 1) resolvió el `cached=0`. Medido en la app (`npx tauri dev` + F12):
+turno 1 frío (`prompt 7550 · cached 0 · $0.0003406`) → turnos 2-3 `prompt 7608 · cached 7424 ·
+hit 98% · sysStable=true · appendOnly=true · $0.0000508` (~**6.7x más barato** por turno). El pin
+cubre Cochi (Centinela y Terminator) y el subagente; MaríaBase (visión) queda sin pin.
+Gates al cerrar: **lint 0/0 · `npm test` 13/13 · `npm run build` OK**.
+
+**Tareas restantes (en orden sugerido):**
+1. **Capa 3 · poda/compactación de R7 en conversacional** (ver abajo). Límite real observado:
+   la rueda global arrastra ~53 turnos (`msgs 53`, `sysChars 17160`) y **crece sin tope**. Hoy es
+   barata (98% cacheada) pero es el próximo techo.
+2. **T5-bis · MEDIR el ahorro** de R5/R4/coaching (implementado 29/09, nunca re-medido).
+3. **Secundarios post-caché**: P2-bis anti-verificación 2→1 · P1 scope `edit` mínimo · P3 recortar
+   descripciones de tools (~990 tok/request; ahora de bajo impacto, el input cacheado pesa 0.03x).
+4. **Deuda técnica**: subagentes que escriban · shell revertible · SSRF en Rust · pegar `TYPO
+   RESUELTO` al prompt `task` de Supabase (paso APARTE).
 
 ### HECHO esta sesión (capa 0 + instrumentación)
 - **Tarifas verificadas 29/09**: `modelPrices.js` → DeepSeek `cachedInputPerM` = **0.1x** (antes
@@ -364,25 +377,32 @@ colocación (bloque `system` mutable antes del user). Gates al cerrar: **lint 0/
   (el único `pruneApiMessages` vive en el carril tarea, `useCochiTaskLoop:755`). R7 del
   conversacional crece sin tope. La web legacy (acumulaba sin tope) NO se arrastra.
 
-### 0) MEDIR ANTES DE TOCAR — `[cache:audit]`
-`npx tauri dev` + F12, 3 turnos conversacionales seguidos. Leer por request:
-- `sysStable=false` → cambió el prompt base (bug nuestro; hoy debería ser `true`).
-- `appendOnly=false` → el prefijo se REESCRIBIÓ (R7 mutado / colapso de steps).
-- `sysStable=true · appendOnly=true · cached=0` → **problema de RUTEO** (sticky no pincha).
-`cache_write` = 1x, no es sobrecosto. Ver qué provider sirvió cada request (OpenRouter Activity →
-Sessions, agrupado por `session_id`).
+### 0) CONFIRMADO (30/09-ter) — `[cache:audit]` en la app
+`npx tauri dev` + F12, 3 turnos conversacionales: turno 1 `cached 0`; turnos 2-3 `cached 7424 ·
+hit 98% · sysStable=true · appendOnly=true · sysHash db560023`. Diagnóstico original:
+- `sysStable=false` → cambió el prompt base (bug nuestro; hoy `true`).
+- `appendOnly=false` → el prefijo se REESCRIBIÓ (R7 mutado / colapso de steps; hoy `true`).
+- `sysStable=true · appendOnly=true · cached=0` → **problema de RUTEO** (era el caso; resuelto abajo).
+Ver qué provider sirvió cada request (OpenRouter Activity → Sessions, agrupado por `session_id`).
 
-### 1) HECHO (30/09) · Capa 1 · Pinear provider
-Evidencia del test conversacional de 3 turnos (`[cochi:audit]`): 6.828 / **963** / 7.144
-facturables → el turno 2 pegó caché y el 3 la perdió, con el MISMO prefijo (`sys` estable +
-R7 append-only) ⇒ **ruteo**. Implementado `providerRouting(modelId)` en `cacheAudit.js`:
-devuelve `{ order: ['deepseek'], allow_fallbacks: true }` para modelos DeepSeek (Cochi y
-Asun/MaríaBase); `null` para el resto (Asun/IrmaMax = Gemini y Tito = Perplexity), para no
-romper su ruteo. Wireado en `buildBody` (`llmClient.js`).
-Harness `cochiCacheAudit` +5 checks (27 total). Gates 30/09: lint 0/0 · `npm test` 12/12 ·
-`npm run build` OK. **Falta re-medir** los 3 turnos (las 3 requests deberían cachear).
-⚠ El test solo trajo líneas `[cochi:audit]`; no se vieron `[cache:audit]` en consola → si
-al re-medir tampoco aparecen (sin filtro de consola), revisar por qué `auditCache` no loguea.
+### 1) HECHO (30/09-ter) · Capa 1 · Pinear provider — CORREGIDA
+El pin original (`order:['deepseek']`) falló porque `deepseek` **no es proveedor** de
+`~deepseek/deepseek-v4-flash-latest`. Experimento real contra OpenRouter (API key, script Node fuera del
+repo): el modelo resuelve a `deepseek/deepseek-v4-flash-0731` y lo sirven terceros (Relace, StreamLake,
+Parasail, Alibaba, Cohere, DeepInfra, Together, Novita…). Endpoints API → sólo algunos declaran
+`input_cache_read` con descuento real: **StreamLake 0.032x**, Alibaba 0.1x, Parasail 0.36x; Relace/Cohere/
+DeepInfra/OpenInference = igual o peor que el input (no cachean de hecho).
+Medición (prompt ~4k tokens, 4 turnos, mismo `session_id`):
+- **sin pin** → provider Relace: cached `0/3840/0/4096`, total **$0.000340**.
+- **`order:['streamlake','parasail','alibaba']`, `allow_fallbacks:true`** → StreamLake: cached
+  `0/3840/4096/4352` (t1 frío), total **$0.000265**; con caché tibia de un run previo, **$0.000069**.
+- Terminator (`~deepseek/deepseek-flash-latest`) y `deepseek/deepseek-v4.1-flash`: same pin, cached ✓.
+- MaríaBase (visión) NO se pinea: sus proveedores (DeepInfra/GMICloud/SiliconFlow/Novita) casi no cachean.
+`providerRouting(modelId)` → pin para todo DeepSeek **no-visión**, `null` al resto. `buildBody` lo manda.
+Harness `cochiCacheAudit` +12 checks (40). Gates 30/09-ter: lint 0/0 · `npm test` 13/13 · `npm run build`
+OK. **CONFIRMADO en la app** (`npx tauri dev` + F12): turnos 2-3 `cached 7424 · hit 98% ·
+sysStable/appendOnly=true · $0.00005` vs turno 1 frío `$0.00034` (~6.7x). ⚠ El sticky de OpenRouter
+queda desactivado por `order` (no importa: el pin fijo a StreamLake mantiene su caché de prefijo caliente).
 
 ### 2) HECHO (30/09) · Capa 2 · Colocación append-only
 Implementado en `r7Wheel.js`: `splitR7Turns(r7)` parte el cuerpo de la rueda en un bloque por
@@ -392,10 +412,14 @@ nuevo) queda al FINAL; `[sysA][sysB]` siguen 100% estáticos. `cacheAudit.system
 excluye los mensajes de memoria (tag `[MEMORY]` y legacy `[R7 MEMORY]`) para que `sysStable`
 siga midiendo el prompt base. Aplica a los 3 paneles (comparten `buildWheelMessages`). R7
 queda SÓLO como almacén en disco (D4). Harness `cochiR7Wheel`/`cochiCacheAudit` actualizados.
-Gates 30/09: lint 0/0 · `npm test` 12/12 · build OK. **Falta re-medir** `[cache:audit]`.
+Gates 30/09: lint 0/0 · `npm test` 12/12 · build OK. **CONFIRMADO** junto con la Capa 1:
+`appendOnly=true` en la app.
 
-### 2-bis) HECHO (30/09-bis) · Capa 1 REVERTIDA (`provider.order` mataba el sticky)
-Evidencia: el test de 3 turnos post-pin dio 5996 / 6138 / 6662 facturables (**cero caché**), cuando el
+### 2-bis) SUPERSEDIDO (30/09-ter) · Capa 1 REVERTIDA (`provider.order` mataba el sticky)
+⚠ Esta conclusión quedó **invalidada** por el experimento de la sección 1): el pin fallaba porque
+`deepseek` no era un proveedor válido del modelo, no porque `order` matara la caché. Con los slugs
+correctos, `order`+`allow_fallbacks` SÍ cachea (Capa 1 restaurada). Se conserva por historial.
+Evidencia en su momento: el test de 3 turnos post-pin dio 5996 / 6138 / 6662 facturables (**cero caché**), cuando el
 test previo al pin daba 6828 / **963** / 7144 (el turno 2 cacheaba). Docs de OpenRouter "Prompt
 Caching": **"Sticky routing is not used when you specify a manual `provider.order`"** — el pin de la
 Capa 1 (`order:['deepseek']`) apagaba justo el mecanismo que mantiene la caché caliente. El sticky se
@@ -416,17 +440,21 @@ caía a `r3 || streamed.content`, pintando `R1: … R2: …` en la UI. Tito/Asun
 `[R7 MEMORY]`). **Es paso APARTE: pegar en Supabase.** Gates 30/09-bis: lint 0/0 · `npm test` 13/13 ·
 build OK.
 
-### 3) Capa 3 · Reabrir D3 (historial crudo + R7 sólo para overflow)
-Historial crudo cacheado (0.1x) le gana a R7 a pelo (1x). Mandar turnos crudos append-only y
-compactar a R7 FIJO sólo al pasar el budget (patrón `pruneApiMessages`, ya usado en tarea).
-**Ojo**: `collapseStepMessages`/`pruneApiMessages` REESCRIBEN el medio del hilo y rompen la caché
-intra-turno → desacoplar el rol conductual del carril tarea (suprimir R1/R2/R3, juez R5, planner)
-de sus tácticas de tokens: medir si bajo caching conviene NO colapsar.
+### 3) PENDIENTE #1 · Capa 3 · Poda/compactación de R7 en conversacional (reabrir D3)
+Motivo medido (30/09-ter): la rueda global arrastra ~53 turnos (`msgs 53`, `sysChars 17160`) y
+**crece sin tope** en el carril conversacional (`appendR7Pair`, sin `pruneApiMessages`). Hoy es
+barata porque está 98% cacheada, pero es el próximo techo de contexto/costo. Opciones: (a) mandar
+turnos crudos append-only cacheados y compactar a R7 FIJO sólo al pasar el budget; (b) podar los
+mensajes `[MEMORY]` más viejos a un resumen consolidado. **Ojo**: `collapseStepMessages`/
+`pruneApiMessages` REESCRIBEN el medio del hilo y rompen la caché intra-turno → desacoplar el rol
+conductual del carril tarea (suprimir R1/R2/R3, juez R5, planner) de sus tácticas de tokens:
+medir si bajo caching conviene NO colapsar.
 
-### Pendientes secundarios (bajan de prioridad si la caché pega)
+### Pendientes secundarios (post-caché)
 - **P2-bis** anti-verificación 2→1 (`STEP_VERIFY_NUDGE_AT`, harness `cochiPlanning`).
 - **P1** scope `edit` mínimo para mutación atómica (allowlist en `cochiTools`).
-- **P3** recortar descripciones de tools (~990 tok/request). Evaluar recién después de cachear.
+- **P3** recortar descripciones de tools (~990 tok/request). Ahora de bajo impacto: el input
+  cacheado pesa 0.03x; evaluar igual porque el primer request de cada turno paga full.
 - **Subagentes que escriban** · **Shell revertible** · **SSRF en Rust** · **prompt `task` remoto
   (pegarle la excepción `TYPO RESUELTO`)**.
 
