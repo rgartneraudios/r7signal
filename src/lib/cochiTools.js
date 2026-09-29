@@ -410,7 +410,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: "Read a file's full text. Reserve it for when you need the complete content (e.g. rewriting it): to check size use get_file_info, to locate one line use search_in_files, for a range use read_file_chunk.",
+      description: "Read a file's full text. Reserve it for when you need the complete content (e.g. rewriting it): to check size use get_file_info, to locate one line use search_in_files, for a range use read_file_chunk. For an edit, ONE read is enough — do not re-read the same file or add existence/size probes before editing.",
       parameters: {
         type: 'object',
         properties: { path: { type: 'string', description: 'Absolute path.' } },
@@ -453,7 +453,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'replace_in_file',
-      description: 'Replace oldText with newText inside a file. oldText must match exactly once unless replaceAll: true.',
+      description: 'Replace oldText with newText inside a file. oldText must match exactly once unless replaceAll: true. If you already know the file: ONE read, then this edit — never chain list_dir / get_file_info / file_exists probes first, and do not re-read to verify.',
       parameters: {
         type: 'object',
         properties: {

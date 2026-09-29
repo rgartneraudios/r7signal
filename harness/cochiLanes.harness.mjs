@@ -2,7 +2,7 @@
 // Ejecutar:  node harness/cochiLanes.harness.mjs   (o npm run harness:lanes)
 import {
   LANE,
-  laneForMessage,
+  resolveLane,
   laneTag,
   markInput,
   stripLaneTag,
@@ -10,6 +10,7 @@ import {
   commandRan,
   taskSucceeded,
   buildTaskFinish,
+  buildFinishMessages,
   cleanR5,
   LANE_SWITCH_HINT,
   TASK_SYSTEM_PROMPT,
@@ -24,25 +25,15 @@ function check(label, actual, expected) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}  → ${JSON.stringify(actual)} (esperado ${JSON.stringify(expected)})`)
 }
 
-console.log('— laneForMessage: el sistema decide el carril por intención de TOOLS —')
-check('"hola" → conversacional', laneForMessage('hola'), LANE.CONVERSATIONAL)
-check('"gracias" → conversacional', laneForMessage('gracias'), LANE.CONVERSATIONAL)
-check('"Gracias, crea un archivo" → tarea (saludo no secuestra)', laneForMessage('Gracias, crea un archivo prueba.txt'), LANE.TASK)
-check('"Gracias, busca el archivo" → tarea (saludo + lectura)', laneForMessage('Gracias, busca ahora el archivo perdidos.txt y dime que hay dentro'), LANE.TASK)
-check('"¿qué es R7?" → conversacional', laneForMessage('¿qué es R7?'), LANE.CONVERSATIONAL)
-check('"¿qué es un archivo .env?" → conversacional', laneForMessage('¿qué es un archivo .env?'), LANE.CONVERSATIONAL)
-check('"leé el archivo config.js" → tarea', laneForMessage('leé el archivo config.js'), LANE.TASK)
-check('"¿cuántos archivos hay?" → tarea', laneForMessage('¿cuántos archivos hay?'), LANE.TASK)
-check('"Dime cuántos archivos hay en la carpeta" → tarea', laneForMessage('Dime ¿cuántos archivos hay en la carpeta?'), LANE.TASK)
-check('"mostrame los procesos" → tarea', laneForMessage('mostrame los procesos activos'), LANE.TASK)
-check('"buscá en el proyecto la función login" → tarea', laneForMessage('buscá en el proyecto la función login'), LANE.TASK)
-check('"creá un archivo" → tarea', laneForMessage('creá un archivo prueba.txt'), LANE.TASK)
-check('"borrá x" → tarea', laneForMessage('borrá el archivo viejo.txt'), LANE.TASK)
-check('"cambiá el color" → tarea', laneForMessage('cambiá el color del botón'), LANE.TASK)
-check('"leé el tablero" → tarea (single-pass read)', laneForMessage('leé el tablero y ejecutá el bloque A'), LANE.TASK)
-check('"ejecutá Get-Location" → tarea', laneForMessage('ejecutá Get-Location'), LANE.TASK)
-check('"Corré node x.js" → tarea (no conversacional)', laneForMessage('Corré node _stderr_cp850.js y decime la salida'), LANE.TASK)
-check('"Corré: Get-Process" → tarea', laneForMessage('Corré: Get-Process'), LANE.TASK)
+console.log('— resolveLane: el carril lo declara el toggle (sin heurística de verbos) —')
+check('mode TASK fuerza tarea aunque sea charla', resolveLane('hola', LANE.TASK), LANE.TASK)
+check('mode TASK + texto de tools → tarea', resolveLane('creá un archivo', LANE.TASK), LANE.TASK)
+check('mode CONVERSATIONAL + charla → conversacional', resolveLane('hola', LANE.CONVERSATIONAL), LANE.CONVERSATIONAL)
+check('mode CONVERSATIONAL + texto de tools → conversacional (ya NO rescata)', resolveLane('leé config.js', LANE.CONVERSATIONAL), LANE.CONVERSATIONAL)
+check('sin mode (undefined) + tools → conversacional', resolveLane('leé config.js', undefined), LANE.CONVERSATIONAL)
+check('sin mode + mutación → conversacional (escape lo cubre)', resolveLane('borrá el archivo viejo.txt', undefined), LANE.CONVERSATIONAL)
+check('sin mode (undefined) + charla → conversacional', resolveLane('gracias', undefined), LANE.CONVERSATIONAL)
+check('falso positivo del verbo "guardar" en pregunta → conversacional', resolveLane('me dices que es eso de los 70.000 tokens? es para guardar algo?', undefined), LANE.CONVERSATIONAL)
 
 console.log('\n— marca del carril en el IN —')
 check('laneTag tarea', laneTag(LANE.TASK), '[LANE: TASK]')
@@ -92,6 +83,7 @@ check('incluye salida del comando', r4ok.includes('hola mundo'), true)
 check('pide 100% con el nombre', r4ok.includes('100% Signor Roberto'), true)
 check('manda juzgar el RESULTADO, no solo el estado de tools', r4ok.includes('JUDGE THE OUTCOME'), true)
 check('aclarar que RESULT no es el outcome', r4ok.includes('NOT the task outcome'), true)
+check('R4 prohíbe señales de control en el cierre', r4ok.includes('do NOT emit any [STEP_COMPLETE]'), true)
 
 const r4fail = buildTaskFinish({
   ok: false,
@@ -124,6 +116,24 @@ const r4typo = buildTaskFinish({
 })
 check('R4: excepcion typo resuelto presente', r4typo.includes('TYPO RESUELTO'), true)
 check('R4: typo resuelto es 100%, no 0%', r4typo.includes('100%, NOT a 0%'), true)
+
+const r4cap = buildTaskFinish({ ok: true, toolLog: [{ name: 'read_file', result: 'y'.repeat(5000) }] })
+check('R4 recorta el volcado por tool a 1500 chars', r4cap.includes('y'.repeat(1500)) && !r4cap.includes('y'.repeat(1501)), true)
+
+console.log('\n— R5 (buildFinishMessages): anexa R4 al hilo cacheado —')
+{
+  const apiMessages = [
+    { role: 'system', content: 'SYS' },
+    { role: 'user', content: '[LANE: TASK]\nhola' },
+    { role: 'assistant', content: '', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'c1', content: 'ok' },
+  ]
+  const out = buildFinishMessages(apiMessages, 'R4: FINISH …')
+  check('conserva el prefijo byte a byte (índices 0..n-1)', out.slice(0, apiMessages.length), apiMessages)
+  check('anexa R4 como último user', out[out.length - 1], { role: 'user', content: 'R4: FINISH …' })
+  check('no muta el array original', apiMessages.length, 4)
+  check('array vacío/nulo tolerado', buildFinishMessages(null, 'x').length, 1)
+}
 
 console.log('\n— cleanR5: normaliza el cierre visible —')
 check('quita prefijo R5:', cleanR5('R5: 100% Roberto — hecho'), '100% Roberto — hecho')

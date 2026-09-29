@@ -5,7 +5,7 @@
 // (messages/loading/tokens/refs) entra inyectado; `taskLoop` se inyecta para el
 // escape a tarea y para abrir/cerrar el turno.
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { needsPlanning, needsRunCommand, needsFullAccess, needsWrite, touchesBoard } from '../lib/cochiPlanningPrompts.js'
+import { needsPlanning, needsFullAccess, touchesBoard } from '../lib/cochiPlanningPrompts.js'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { calculateCost, billableTokens } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
@@ -15,7 +15,7 @@ import { getToolsForPermission } from '../lib/cochiTools.js'
 import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
 import { makeStreamingDisplayExtractor, buildSystemContext } from '../lib/cochiContext.js'
 import { buildWheelMessages, commitR7Turn } from '../lib/r7Wheel.js'
-import { LANE, laneForMessage, markInput } from '../lib/cochiLanes.js'
+import { LANE, resolveLane, markInput } from '../lib/cochiLanes.js'
 import { auditLog } from '../lib/cochiAudit.js'
 
 // ─── Helpers de memoria (cochi_memory.txt) ───────────────────────────────────
@@ -115,12 +115,19 @@ export function useCochiConversational({
       const streamed = await streamChat({
         provider,
         messages,
-        tools: getToolsForPermission(workspace.permission, 'read'),
+        // Scope 'task' (escritura/run_command) para que el escape a tarea sea
+        // posible sin toggle; 'full' si el mensaje toca el tablero (IrmaMax),
+        // igual que el scope que usará el escape.
+        tools: getToolsForPermission(
+          workspace.permission,
+          touchesBoard(taskLoop.originalMessageRef.current) ? 'full' : 'task'
+        ),
         toolChoice: 'auto',
         signal: controller.signal,
         sessionId: cochiSessionId,
         retries: 3,
         reasoning: false,
+        auditLabel: 'conv',
         onDelta: (partial) => liveRef.current?.push(extractDisplay(partial)),
         onUsage: (usage) => {
           const u = normalizeUsage(usage)
@@ -178,7 +185,7 @@ export function useCochiConversational({
   }
 
   // ─── Envío principal: enruta el turno por carril ─────────────────────────
-  async function handleSendText(sent) {
+  async function handleSendText(sent, mode) {
     if (!sent || loading || planStatus === 'executing') return
 
     if (!sessionIdRef.current) {
@@ -203,13 +210,12 @@ export function useCochiConversational({
       return
     }
 
-    // El sistema decide el carril por el IN (loop de dos carriles, 28/09).
+    // El carril es explícito: el toggle manda. Sin heurística de verbos (30/09).
     taskLoop.syncPlan(null)
-    if (laneForMessage(sent) === LANE.TASK) {
+    if (resolveLane(sent, mode) === LANE.TASK) {
       // Carril TAREA. Con intención de mutación → planner + confirmación
       // (multi-paso). Sin mutación (lectura/sistema) → single-pass directo: sin
-      // planner, sin R1/R2, sin R7. Antes estas consultas arrancaban en
-      // conversacional y pagaban un escape (doble llamada + R7 arrastrado).
+      // planner, sin R1/R2, sin R7.
       setPlanStatus('idle')
       // Scope del plan: 'task' (recorta el schema de tools) salvo que toque el
       // tablero de IrmaMax, que necesita las tools del board.
@@ -217,13 +223,13 @@ export function useCochiConversational({
       if (needsPlanning(sent)) {
         await taskLoop.generatePlan(sent)
       } else {
-        // Single-pass. Scope 'read' (solo-lectura) salvo que el mensaje vaya a
-        // CORRER un comando o a MUTAR (T5: mutación atómica sin planner):
-        // run_command/escritura no viven en scope 'read', así que necesitan 'task'.
-        await taskLoop.executeAllSteps((needsRunCommand(sent) || needsWrite(sent)) ? 'task' : 'read')
+        // Single-pass con scope 'task' (escritura/run_command): el carril es
+        // explícito, así que un envío de tarea SIEMPRE trae tools de acción.
+        await taskLoop.executeAllSteps('task')
       }
     } else {
-      // Carril CONVERSACIONAL: system + R7 + IN. Escape a tarea si pide comandos.
+      // Carril CONVERSACIONAL: system + R7 + IN. El escape a tarea lo cubre si el
+      // modelo emite tool_calls (el carril ya expone scope 'task').
       setPlanStatus('idle')
       await executeConversational()
     }

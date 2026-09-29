@@ -69,15 +69,18 @@ export function extractReasoningDelta(delta) {
 
 // ─── Métricas de uso ─────────────────────────────────────────────────────────
 // Normaliza el `usage` de OpenRouter. `cached_tokens` es el input servido desde
-// la caché de prefijo; `reasoning_tokens` va dentro de completion_tokens.
+// la caché de prefijo; `cache_write_tokens` es el input con el que se ESCRIBIÓ la
+// caché en el primer request (lo usan la auditoría de caché y el diagnóstico del
+// "cached 0"); `reasoning_tokens` va dentro de completion_tokens.
 export function normalizeUsage(usage) {
   const u = usage || {}
   const promptTokens = u.prompt_tokens ?? 0
   const completionTokens = u.completion_tokens ?? 0
   const totalTokens = u.total_tokens ?? (promptTokens + completionTokens)
   const cachedTokens = u.prompt_tokens_details?.cached_tokens ?? 0
+  const cacheWriteTokens = u.prompt_tokens_details?.cache_write_tokens ?? 0
   const reasoningTokens = u.completion_tokens_details?.reasoning_tokens ?? 0
-  return { promptTokens, completionTokens, totalTokens, cachedTokens, reasoningTokens }
+  return { promptTokens, completionTokens, totalTokens, cachedTokens, cacheWriteTokens, reasoningTokens }
 }
 
 // Costo con descuento de caché + cuánto se ahorró respecto de la tarifa plena.

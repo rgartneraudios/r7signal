@@ -22,7 +22,7 @@ import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools } from
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
 import { buildSystemContext, pruneApiMessages, READ_ONLY_TOOLS } from '../lib/cochiContext.js'
 import { closeWheelTask } from '../lib/r7Wheel.js'
-import { LANE, markInput, LANE_SWITCH_HINT, buildTaskFinish, cleanR5, taskSucceeded, TASK_SYSTEM_PROMPT, isToolError, commandRan } from '../lib/cochiLanes.js'
+import { LANE, markInput, LANE_SWITCH_HINT, buildTaskFinish, buildFinishMessages, cleanR5, taskSucceeded, TASK_SYSTEM_PROMPT, isToolError, commandRan } from '../lib/cochiLanes.js'
 import { newMessageId } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot } from '../lib/snapshotStore.js'
 import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider } from '../lib/subagent.js'
@@ -371,6 +371,13 @@ export function useCochiTaskLoop({
       let pendingAssistant = opts.assistantMsg || null
       const taskToolLog = []
       let taskReasoning = ''
+      // P2 (29/09): snapshot EXACTO de los mensajes enviados en el último request,
+      // ANTES de que pruneApiMessages/collapseStepMessages reescriban apiMessages
+      // al cerrar un step. El R5 se ancla a este hilo (no al colapsado) para que
+      // el prefijo coincida byte a byte con el último request y pegue en caché.
+      // Antes el R5 reconstruía sobre el historial colapsado → cached ~512 y
+      // billable ~3.1k (35% del turno con plan).
+      let r5BaseMessages = null
       while (remainingIter > 0 && !controller.signal.aborted) {
         const currentPlan = planRef.current
 
@@ -439,6 +446,9 @@ export function useCochiTaskLoop({
                 .join(' ')
             }
 
+            // Snapshot del prefijo que se está por enviar (P2): el R5 lo reutiliza.
+            r5BaseMessages = apiMessages.slice()
+
             const streamed = await streamChat({
               provider,
               messages: apiMessages,
@@ -447,6 +457,7 @@ export function useCochiTaskLoop({
               sessionId: cochiSessionId,
               retries: 3,
               reasoning: useReasoning,
+              auditLabel: 'task',
               onUsage: (usage) => {
                 const u = normalizeUsage(usage)
                 const billable = billableTokens(selectedModel, u)
@@ -777,7 +788,7 @@ export function useCochiTaskLoop({
         setTokens(prev => prev + stepTokens)
         setCost(prev => prev + stepCost)
         setCachedTokens(prev => prev + stepCachedTokens)
-        onUsage?.({ source: 'cochi', inputTokens: stepInputTokens, outputTokens: stepOutputTokens, cost: stepCost })
+        onUsage?.({ source: 'cochi', inputTokens: stepInputTokens, outputTokens: stepOutputTokens, billable: stepTokens, cost: stepCost })
 
         if (!trackSteps) break
       }
@@ -807,31 +818,65 @@ export function useCochiTaskLoop({
           nombre: nombreAlternativo,
         })
         try {
-          const r5Streamed = await streamChat({
+          const r5Tools = getToolsForPermission(workspace.permission, scope)
+          // Ancla el cierre al hilo EXACTO del último request (pre-collapse) para
+          // que el prefijo pegue en caché (P2). Si no hubo request (p.ej. plan sin
+          // pasos), cae al apiMessages actual.
+          const r5Base = r5BaseMessages || apiMessages
+          const r5Audit = { msgs: r5Base.length + 1, toolsChars: r5Tools ? JSON.stringify(r5Tools).length : 0, prompt: 0, completion: 0, cached: 0, billable: 0 }
+          const r5Messages = buildFinishMessages(r5Base, r4)
+          const r5OnUsage = (usage) => {
+            const u = normalizeUsage(usage)
+            const billable = billableTokens(selectedModel, u)
+            totalTokensAcc += billable
+            setTokens(prev => prev + billable)
+            setCachedTokens(prev => prev + u.cachedTokens)
+            const c = calculateCost(selectedModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
+            setCost(prev => prev + c)
+            r5Audit.prompt += u.promptTokens
+            r5Audit.completion += u.completionTokens
+            r5Audit.cached += u.cachedTokens
+            r5Audit.billable += billable
+            onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost: c })
+          }
+          let r5Streamed = await streamChat({
             provider,
-            messages: [
-              { role: 'system', content: buildSystemContext(workspace.path, permissionLabel) },
-              { role: 'system', content: taskSystem },
-              { role: 'user', content: r4 },
-            ],
+            messages: r5Messages,
+            ...(r5Tools ? { tools: r5Tools, toolChoice: 'auto' } : {}),
             signal: controller.signal,
             sessionId: cochiSessionId,
             retries: 3,
             reasoning: false,
+            auditLabel: 'task-r5',
             onDelta: (partial) => liveRef.current?.push(cleanR5(partial)),
-            onUsage: (usage) => {
-              const u = normalizeUsage(usage)
-              const billable = billableTokens(selectedModel, u)
-              totalTokensAcc += billable
-              setTokens(prev => prev + billable)
-              setCachedTokens(prev => prev + u.cachedTokens)
-              const c = calculateCost(selectedModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
-              setCost(prev => prev + c)
-              onUsage?.({ source: 'cochi', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost: c })
-            },
+            onUsage: r5OnUsage,
           })
+          // El cierre viaja con las MISMAS tools + tool_choice para que el prefijo
+          // pegue en caché (con tool_choice 'none' el proveedor NO manda las tools
+          // y el prefijo deja de coincidir). Contrapartida: el modelo podría
+          // intentar llamar una tool en vez de cerrar; si no dejó texto, se
+          // reintenta sin tools para forzar el R5.
+          if (r5Streamed.toolCalls?.length && !String(r5Streamed.content || '').trim()) {
+            auditLog('R5 (cierre): el modelo intentó llamar una tool — reintento sin tools')
+            r5Audit.toolsChars = 0
+            r5Streamed = await streamChat({
+              provider,
+              messages: r5Messages,
+              signal: controller.signal,
+              sessionId: cochiSessionId,
+              retries: 3,
+              reasoning: false,
+              auditLabel: 'task-r5-notools',
+              onDelta: (partial) => liveRef.current?.push(cleanR5(partial)),
+              onUsage: r5OnUsage,
+            })
+          }
           liveRef.current?.flush()
           liveRef.current?.clear()
+          auditLog(
+            `R5 (cierre) · msgs ${r5Audit.msgs} · toolsChars ${r5Audit.toolsChars}` +
+            ` · prompt ${r5Audit.prompt} · completion ${r5Audit.completion} · cached ${r5Audit.cached} · billable ${r5Audit.billable}`
+          )
           const r5 = cleanR5(r5Streamed.content)
             || (ok ? `100% ${nombreAlternativo} — tarea completada.` : `0% ${nombreAlternativo} — no se pudo completar.`)
           pushMessage({ role: 'assistant', content: r5, reasoning: (r5Streamed.reasoning || taskReasoning || '').slice(0, 8000) || undefined })

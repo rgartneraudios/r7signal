@@ -4,12 +4,14 @@
 // Fase 3.2 — `cachedInputPerM` es la tarifa del input que el proveedor sirve
 // desde su caché de prefijo (DeepSeek lo hace automático). Si el modelo no la
 // declara, calculateCost cobra el input cacheado a tarifa plena (sin descuento).
-// ⚠ Verificar estos valores contra la tabla de OpenRouter: son estimaciones
-// (~20% del input) y no hay fuente en el repo.
+// FUENTE (29/09): OpenRouter docs "Prompt Caching" → DeepSeek cache-read = 0.1x
+// del input (`DEEPSEEK_CACHE_READ_MULTIPLIER = 0.1`); cache-write = 1x (igual
+// que input normal, o sea escribir caché no cuesta extra). Antes se estimaba
+// ~0.2x → se contaba el input cacheado al doble de su tarifa real.
 
 export const MODEL_PRICES = {
   // Asun — LLM
-  'deepseek/deepseek-v4-flash-vision-exp': { inputPerM: 0.2156,  outputPerM: 0.6468, cachedInputPerM: 0.0431 },
+  'deepseek/deepseek-v4-flash-vision-exp': { inputPerM: 0.2156,  outputPerM: 0.6468, cachedInputPerM: 0.02156 },
   'google/gemini-3.8-flash':                  { inputPerM: 0.75,   outputPerM: 3.75 },
   // Asun — Imagen
   'x-ai/grok-imagine-image-quality':       { perImage: 0.05  },
@@ -21,8 +23,8 @@ export const MODEL_PRICES = {
   'perplexity/sonar-deep-research':        { inputPerM: 2, outputPerM: 8  },
   'perplexity/sonar-pro':                  { inputPerM: 3, outputPerM: 15 },
   // Cochi
-  '~deepseek/deepseek-v4-flash-latest':       { inputPerM: 0.05, outputPerM: 0.32, cachedInputPerM: 0.01 },
-  '~deepseek/deepseek-flash-latest':            { inputPerM: 0.04, outputPerM: 0.49, cachedInputPerM: 0.008 },
+  '~deepseek/deepseek-v4-flash-latest':       { inputPerM: 0.05, outputPerM: 0.32, cachedInputPerM: 0.005 },
+  '~deepseek/deepseek-flash-latest':            { inputPerM: 0.04, outputPerM: 0.49, cachedInputPerM: 0.004 },
   // Local (free)
   'ollama':    { inputPerM: 0, outputPerM: 0 },
   'lmstudio':  { inputPerM: 0, outputPerM: 0 },

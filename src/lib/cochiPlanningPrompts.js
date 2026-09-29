@@ -34,17 +34,25 @@ function stripLeadGreetings(msg) {
 }
 
 // Verbos de mutación/ejecución — lo que justifica el tracking de pasos.
+// 30/09: el CARRIL ya no se decide con estos verbos (lo declara el toggle); esta
+// lista sólo alimenta needsPlanning, que DENTRO del carril tarea decide planner
+// multi-paso vs single-pass. Igual se mantiene podada: en un envío de tarea un
+// verbo de más sólo puede empujar al planner, no secuestrar charla.
 const WRITE_VERBS = [
   'crea', 'crear', 'cre ', 'escribe', 'escrib', 'modifica', 'modif', 'edita',
   'elimina', 'elimin', 'borra', 'mueve', 'copia', 'renombra', 'guarda', 'guard',
-  'salva', 'salv', 'exporta', 'export', 'delet', 'remove', 'write',
-  'ejecuta', 'instala', 'instalar', 'añade', 'agrega', 'genera',
+  'delet', 'remove', 'write',
+  'ejecuta', 'añade', 'agrega',
   'refactori', 'implement', 'migra', 'actualiza', 'patch', 'mkdir', '/cochi',
   // PRUEBA T3 (27/09): verbos de mutación que FALTABAN. Sin ellos el mensaje
   // caía en single-pass 'read' (sin tools de escritura) y el modelo alucinaba
   // "hecho" mientras el disco no cambiaba. "cambiá"→"cambia", etc.
   'cambia', 'reemplaz', 'sobrescrib', 'update', 'subi', 'setea',
   'insert', 'correg', 'corrig', 'arregl', 'convert',
+  // T5 (29/09): verbos de BORRADO/INSERCIÓN que faltaban. Sin ellos "quita el
+  // último párrafo" caía en carril conversacional y pagaba el escape (R1/R2 + R7
+  // + reenvío) antes de llegar a la tool. "quitá/quitar"→"quita", "meté"→"mete".
+  'quita', 'saca', 'remov', 'remuev', 'mete',
 ]
 
 // ── T5: planner para mutaciones atómicas ─────────────────────────────────────
@@ -57,9 +65,17 @@ const WRITE_VERBS = [
 // secuenciación explícita, ni tablero, y que el mensaje sea corto. Cualquier duda
 // cae al planner (comportamiento previo, conservador). Puro y testeable.
 const COMPLEX_WRITE_RE = /\b(refactor\w*|implement\w*|migr\w*|convert\w*|instal\w*|ejecut\w*|export\w*|patch\w*)\b/
-const ATOMIC_WRITE_RE = /\b(crea\w*|escrib\w*|borr\w*|elimin\w*|agreg\w*|anad\w*|reemplaz\w*|sobrescrib\w*|insert\w*|correg\w*|corrig\w*|arregl\w*|cambi\w*|sete\w*|renombr\w*|muev\w*|mover|copi\w*|guard\w*|salv\w*|actualiz\w*|update\w*)\b/g
+const ATOMIC_WRITE_RE = /\b(crea\w*|escrib\w*|borr\w*|elimin\w*|agreg\w*|anad\w*|reemplaz\w*|sobrescrib\w*|insert\w*|correg\w*|corrig\w*|arregl\w*|cambi\w*|sete\w*|renombr\w*|muev\w*|mover|copi\w*|guard\w*|salv\w*|actualiz\w*|update\w*|quit\w*|sac\w*|remov\w*|remuev\w*|mete\w*)\b/g
 const SEQUENCE_RE = /\b(luego|despues|entonces|primero|finalmente|seguidamente|and then)\b|;\s*/
 const ATOMIC_MAX_CHARS = 160
+
+// El CONTENIDO que el usuario quiere insertar/mutar suele venir entre comillas
+// ("Parrafo agregado"). Si no se descarta, una palabra del propio payload
+// ("agregado") se cuenta como un segundo verbo y la mutación atómica cae al
+// planner sin necesidad. Se ignora el texto citado para el conteo.
+function stripQuoted(text) {
+  return String(text ?? '').replace(/"[^"]*"|'[^']*'|«[^»]*»|“[^”]*”/g, ' ')
+}
 
 export function isAtomicMutation(message) {
   const msg = normalizeMessage(message)
@@ -67,20 +83,11 @@ export function isAtomicMutation(message) {
   const core = stripLeadGreetings(msg) || msg
   if (core.length > ATOMIC_MAX_CHARS) return false
   if (hasBoardIntent(core)) return false
-  if (SEQUENCE_RE.test(core)) return false
-  if (COMPLEX_WRITE_RE.test(core)) return false
-  const atomic = core.match(ATOMIC_WRITE_RE) || []
+  const bare = stripQuoted(core)
+  if (SEQUENCE_RE.test(bare)) return false
+  if (COMPLEX_WRITE_RE.test(bare)) return false
+  const atomic = bare.match(ATOMIC_WRITE_RE) || []
   return atomic.length === 1
-}
-
-// ¿El mensaje pide una mutación? Lo usa el enrutador para darle al single-pass el
-// scope 'task' (con tools de escritura) en vez de 'read' cuando NO pasa por el
-// planner (mutación atómica).
-export function needsWrite(message) {
-  const msg = normalizeMessage(message)
-  if (!msg) return false
-  const core = stripLeadGreetings(msg) || msg
-  return WRITE_VERBS.some(k => core.includes(k))
 }
 
 // Tablero de proyecto (Proyecto IrmaMax): las tools del tablero
@@ -115,61 +122,23 @@ export function touchesBoard(message) {
   return hasBoardIntent(msg)
 }
 
-// Nombres de objeto que implican tocar el filesystem o el sistema operativo.
-// Sirven para el clasificador de CARRIL (needsTools), no para el de planning.
-const FS_NOUNS = [
-  'archivo', 'archivos', 'carpeta', 'carpetas', 'directorio', 'directorios',
-  'fichero', 'ficheros', 'folder', 'file', 'files', 'disco', 'workspace',
-  'proyecto', 'proyectos', 'repo', 'repositorio', 'codigo', 'log', 'logs',
-  'config', 'configuracion', 'script', 'scripts', 'ruta', 'rutas', 'path',
-  // Extensiones comunes: "revisá data.json", "qué hay en notas.txt" son tareas.
-  'json', 'txt', 'csv', 'xml', 'yml', 'yaml', 'md',
-]
-const SYSTEM_NOUNS = [
-  'proceso', 'procesos', 'servicio', 'servicios', 'puerto', 'puertos',
-  'sistema', 'memoria', 'cpu', 'ram', 'red', 'ip', 'terminal', 'consola',
-]
-const READ_VERBS = [
-  'lee', 'leer', 'busc', 'list', 'mostr', 'muestr', 'cont', 'cuent',
-  'abre', 'abri', 'abrir', 'analiz', 'revis', 'encontr', 'localiz',
-  'inspeccion', 'escane', 'muestra', 'ver ',
-]
-const QUERY_HINTS = [
-  'cuant', 'que hay', 'que archivos', 'que contiene', 'cual', 'donde',
-  'existe', 'hay ',
-]
-
 // Ejecución de COMANDOS (A-bis 28/09-ter): "Corré X", "ejecutá Y", o cualquier
-// mensaje que mencione un programa/script. Sin esto, "Corré node x.js" caía en
-// carril CONVERSACIONAL (R1/R2 + R7 arrastrado) y el modelo debía emitir la tool
-// para que el sistema hiciera escape = doble llamada. A propósito NO entra en
-// WRITE_VERBS: un comando suelto es single-pass y no paga el planner (que sí se
-// activa si además hay intención de mutación de archivos).
+// mensaje que mencione un programa/script. Sólo needsRunCommand sobrevive (lo usa
+// el Guard Full Access): ya no hay clasificador de CARRIL por heurística.
+// A propósito NO entra en WRITE_VERBS: un comando suelto es single-pass y no paga
+// el planner (que sí se activa si además hay intención de mutación de archivos).
 const RUN_VERB_RE = /\b(corre|correr|corretear|ejecut\w*|lanza\w*|invoca\w*|dispara\w*|arroja\w*|run)\b/
 const RUN_PROGRAM_RE = /\b(node|npx|npm|pnpm|yarn|bun|deno|python|python3|pip|pwsh|powershell|cmd|bash|cargo|git|docker|tsc|vite)\b/
-const RUN_SCRIPT_EXT_RE = /\.(mjs|cjs|jsx|tsx|js|ts|py|ps1|sh|cmd|bat|exe)\b/
 
 // Preguntas explicativas ("¿qué es node?", "¿para qué sirve npm?"): mencionan un
 // programa pero NO piden ejecutarlo. Sin este corte, la palabra suelta (node/npm)
-// disparaba carril tarea/planner y el cierre marcaba 0% una pregunta conceptual.
+// disparaba el Guard Full Access sobre una pregunta conceptual.
 const LEAD_PUNCT_RE = /^[¿¡\s"'«»]+/
 const EXPLANATORY_RE = /\b(que es|que son|que significa|para que sirve|para que sirven|como funciona|como funcionan|de que se trata|what is|what are|how does|how do)\b/
 
-// needsCommand: clasificación de CARRIL — incluye mencionar un archivo .js/.py
-// (un "revisá smoke_test.py" es tarea). needsRunCommand: versión ESTRICTA para
-// elegir el SCOPE de tools del single-pass — solo si es probable que CORRA un
-// comando (verbo de ejecución o programa). Así "leé config.js" no sube de scope
-// 'read' a 'task' (que arrastra run_command/escritura) por tener extensión.
-export function needsCommand(message) {
-  const msg = normalizeMessage(message)
-  if (!msg) return false
-  const core = stripLeadGreetings(msg)
-  if (!core) return false
-  if (RUN_VERB_RE.test(core)) return true
-  if (EXPLANATORY_RE.test(core.replace(LEAD_PUNCT_RE, ''))) return false
-  return RUN_PROGRAM_RE.test(core) || RUN_SCRIPT_EXT_RE.test(core)
-}
-
+// needsRunCommand: sólo si es probable que CORRA un comando (verbo de ejecución o
+// programa). Lo usa el Guard Full Access (`needsFullAccess`) para cortar antes de
+// llamar al modelo cuando el workspace no tiene permiso 'full'.
 export function needsRunCommand(message) {
   const msg = normalizeMessage(message)
   if (!msg) return false
@@ -186,38 +155,6 @@ export function needsRunCommand(message) {
 // y avisa. Las preguntas explicativas no entran (needsRunCommand ya las filtra).
 export function needsFullAccess(message, permission) {
   return needsRunCommand(message) && permission !== 'full'
-}
-
-// Clasificador de CARRIL (loop de dos carriles, 28/09 fix): decide si un mensaje
-// necesita HERRAMIENTAS (carril tarea) o es charla pura (carril conversacional).
-// Es INDEPENDIENTE de needsPlanning: una lectura de archivos necesita tools pero
-// NO planner. Antes el carril se decidía con needsPlanning y por eso
-// "¿cuántos archivos hay?" arrancaba en conversacional, pedía la tool y el
-// sistema tenía que hacer escape (doble llamada + R7 arrastrado = ~2-3× tokens).
-export function needsTools(message) {
-  const msg = normalizeMessage(message)
-  if (!msg) return false
-
-  // Se descarta la apertura de cortesía ("Gracias, …") antes de clasificar.
-  const core = stripLeadGreetings(msg)
-  if (!core) return false // era sólo un saludo
-
-  // Una acción explícita MANDA: "Gracias, crea…" o cualquier orden es tarea.
-  if (WRITE_VERBS.some(k => core.includes(k))) return true
-  if (hasBoardIntent(core)) return true
-  // Comandos ("Corré X", "ejecutá Y", "node script.js"): tarea.
-  if (needsCommand(core)) return true
-
-  // Charla pura: no necesita tools.
-  if (CONVERSATIONAL_PATTERNS.some(r => r.test(core))) return false
-
-  // Lecturas/consultas sobre archivos o sistema: necesitan tools.
-  const hasObject = FS_NOUNS.some(k => core.includes(k)) ||
-    SYSTEM_NOUNS.some(k => core.includes(k))
-  if (!hasObject) return false
-  const hasReadVerb = READ_VERBS.some(k => core.includes(k))
-  const hasQueryHint = QUERY_HINTS.some(k => core.includes(k))
-  return hasReadVerb || hasQueryHint
 }
 
 // Clasificador de PLANNER (Bloque J): decide si un mensaje amerita

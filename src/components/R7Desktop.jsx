@@ -9,6 +9,7 @@ import R7TopBar from './R7TopBar'
 import R7FooterInputs from './R7FooterInputs'
 import { supabase } from '../supabaseClient'
 import { loadLocalConfig, hasOpenRouterKey } from '../lib/localConfig.js'
+import { LANE } from '../lib/cochiLanes.js'
 
 const DEFAULT_WORKSPACE = { path: '', permission: 'read' }
 
@@ -47,6 +48,10 @@ export default function R7Desktop() {
   // tipear. Aquí sólo quedan los mensajes pendientes de cada panel.
   const [pendingAsun,  setPendingAsun]  = useState(null)
   const [pendingCochi, setPendingCochi] = useState(null)
+  // Carril explícito de Cochi: el toggle (botón junto a CLS / Ctrl+T) "envuelve"
+  // el próximo envío y lo desvía al carril TASK. Default conversacional y se
+  // resetea tras cada envío.
+  const [cochiMode, setCochiMode] = useState(LANE.CONVERSATIONAL)
   const [asunCategory, setAsunCategory] = useState('llm')
   const footerRef = useRef(null)
 
@@ -100,7 +105,14 @@ export default function R7Desktop() {
 
   // Bloque R: envíos desde el footer aislado (callbacks estables).
   const handleSubmitLeft  = useCallback((msg) => setPendingAsun(msg), [])
-  const handleSubmitCochi = useCallback((msg) => setPendingCochi(msg), [])
+  const handleSubmitCochi = useCallback((msg) => {
+    setPendingCochi(msg)
+    // El toggle aplica a UN envío: vuelve a conversacional tras mandar.
+    setCochiMode(LANE.CONVERSATIONAL)
+  }, [])
+  const handleToggleCochiMode = useCallback(() => {
+    setCochiMode(m => (m === LANE.TASK ? LANE.CONVERSATIONAL : LANE.TASK))
+  }, [])
 
   // Bloque R: abridores de modales del TopBar (estables para no invalidar el memo).
   const openApiKey = useCallback(() => setShowApiKey(true), [])
@@ -564,6 +576,8 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, bi
             onPreferencesLoaded={handlePreferencesLoaded}
             onSavePreferences={handleRegisterSavePrefs}
             onPromptsReady={handlePromptsReady}
+            cochiMode={cochiMode}
+            onToggleCochiMode={handleToggleCochiMode}
           />
         </div>
       </div>
@@ -576,6 +590,8 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, bi
           promptsReady={promptsReady}
           onSubmitLeft={handleSubmitLeft}
           onSubmitCochi={handleSubmitCochi}
+          cochiMode={cochiMode}
+          onToggleCochiMode={handleToggleCochiMode}
         />
       </div>
     </div>

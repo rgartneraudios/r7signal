@@ -5,6 +5,7 @@
 
 import { getOpenRouterKey } from './localConfig.js'
 import { buildReasoningConfig, extractReasoningDelta } from './llmMetrics.js'
+import { auditCache } from './cacheAudit.js'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const OPENROUTER_HEADERS = {
@@ -132,7 +133,7 @@ function normalizeToolCalls(toolAcc) {
 }
 
 // ─── Streaming SSE ────────────────────────────────────────────────────────────
-async function streamOnce({ provider, messages, tools, toolChoice, signal, sessionId, maxTokens, temperature, reasoning, onDelta, onUsage, onReasoning }) {
+async function streamOnce({ provider, messages, tools, toolChoice, signal, sessionId, maxTokens, temperature, reasoning, onDelta, onUsage, onReasoning, auditLabel }) {
   const res = await doFetch(provider, buildBody({ provider, messages, tools, toolChoice, stream: true, sessionId, maxTokens, temperature, reasoning }), signal)
 
   const contentType = res.headers?.get?.('content-type') || ''
@@ -150,6 +151,7 @@ async function streamOnce({ provider, messages, tools, toolChoice, signal, sessi
     if (content && onDelta) onDelta(content)
     if (reasoningText && onReasoning) onReasoning(reasoningText)
     if (data.usage && onUsage) onUsage(data.usage)
+    auditCache({ sessionId, model: provider.model, label: auditLabel, messages, usage: data.usage })
     return {
       content,
       reasoning: reasoningText,
@@ -235,11 +237,12 @@ async function streamOnce({ provider, messages, tools, toolChoice, signal, sessi
     try { reader.releaseLock?.() } catch {}
   }
 
+  auditCache({ sessionId, model: provider.model, label: auditLabel, messages, usage })
   return { content, reasoning: reasoningText, toolCalls: normalizeToolCalls(toolAcc), usage, finishReason, model: provider.model }
 }
 
 // ─── Respuesta completa (sin streaming) ───────────────────────────────────────
-async function completeOnce({ provider, messages, tools, toolChoice, signal, sessionId, maxTokens, temperature, reasoning, onUsage }) {
+async function completeOnce({ provider, messages, tools, toolChoice, signal, sessionId, maxTokens, temperature, reasoning, onUsage, auditLabel }) {
   const res = await doFetch(provider, buildBody({ provider, messages, tools, toolChoice, stream: false, sessionId, maxTokens, temperature, reasoning }), signal)
 
   let data
@@ -256,6 +259,7 @@ async function completeOnce({ provider, messages, tools, toolChoice, signal, ses
     throw e
   }
   if (data.usage && onUsage) onUsage(data.usage)
+  auditCache({ sessionId, model: provider.model, label: auditLabel, messages, usage: data.usage })
 
   const message = choice.message || {}
   return {

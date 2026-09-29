@@ -1,8 +1,10 @@
 // ─── LOOP DE DOS CARRILES (28/09) — lógica PURA ──────────────────────────────
-// Diseño cerrado con Signor Roberto. El sistema decide el carril por el IN
-// (needsPlanning) y lo marca en el IN. Escape: en carril conversacional el
-// modelo puede emitir tool_calls; el sistema conmuta a carril tarea. Nunca al
-// revés.
+// Diseño cerrado con Signor Roberto. El carril lo declara el USUARIO con el
+// toggle (carril explícito, 29/09): TASK si el toggle está marcado, CONVERSACIONAL
+// si no. El sistema YA NO adivina el carril con heurísticas de verbos.
+// Escape: en carril conversacional el modelo puede emitir tool_calls (el carril
+// expone scope 'task', con escritura/run_command); el sistema conmuta a carril
+// tarea y ejecuta. Nunca al revés.
 //
 //   · CARRIL CONVERSACIONAL: viaja system + R7 + IN. OUT = R1 + R2 + R3.
 //   · CARRIL TAREA: viaja SOLO el IN. OUT = comandos. Cierre: el SISTEMA (juez)
@@ -10,26 +12,23 @@
 //
 // Este módulo se mantiene puro (sin Tauri) para poder ejercitarlo headless con
 // harness/cochiLanes.harness.mjs.
-// El sistema decide el carril por el IN. needsTools=true → carril TAREA
-// (lecturas y mutaciones: cualquier mensaje que necesite herramientas).
-// needsTools=false → carril CONVERSACIONAL (con escape a tarea si el modelo,
-// igual, pide comandos).
 //
-// FIX 28/09: el carril se decidía con needsPlanning, que confunde "necesita
-// plan" con "necesita tools". Una lectura de archivos necesita tools pero no
-// planner → arrancaba en conversacional, el modelo pedía la tool y el sistema
-// hacía escape (doble llamada + R7 arrastrado). Ahora se separan los dos
-// conceptos: needsTools decide el CARRIL; needsPlanning decide, dentro del
-// carril tarea, si hace falta el planner multi-paso.
-import { needsTools } from './cochiPlanningPrompts.js'
-
+// HISTORIA: 28/09 el carril se decidía con needsPlanning (confundía "necesita
+// plan" con "necesita tools"); luego con needsTools (heurística de verbos/nouns).
+// 30/09: se quitó TODA la heurística de carril — con R1/R2 cacheados el escape
+// deja de ser una sangría de tokens, así que el toggle es la única autoridad y
+// se evitan los falsos positivos ("es para guardar algo?" secuestraba la charla).
+// needsPlanning sigue decidiendo, DENTRO del carril tarea, planner vs single-pass.
 export const LANE = Object.freeze({
   CONVERSATIONAL: 'CONVERSATIONAL',
   TASK: 'TASK',
 })
 
-export function laneForMessage(message) {
-  return needsTools(message) ? LANE.TASK : LANE.CONVERSATIONAL
+// Carril explícito (29/09, refinado 30/09): el toggle del input manda. TASK sólo
+// si el usuario lo activó; sin toggle, CONVERSACIONAL. `message` se mantiene en la
+// firma por compatibilidad y para futuras señales, pero ya no decide el carril.
+export function resolveLane(message, mode) {
+  return mode === LANE.TASK ? LANE.TASK : LANE.CONVERSATIONAL
 }
 
 export function laneTag(lane) {
@@ -97,9 +96,9 @@ export function buildTaskFinish({
   steps = [],
   toolLog = [],
   nombre = '',
-  maxChars = 6000,
+  maxChars = 4000,
 } = {}) {
-  const PER_TOOL_CHARS = 3000
+  const PER_TOOL_CHARS = 1500
   const lines = [
     'R4: FINISH (internal system report — do NOT re-execute anything, do NOT emit commands or tool calls).',
     `RESULT: ${ok ? 'SUCCESS' : 'FAILURE'}`,
@@ -141,9 +140,20 @@ export function buildTaskFinish({
     `- "0% ${nombre || '<user>'} — <why it failed>" if the requested item/result was not found, a path did not exist, a read returned nothing, or the goal was otherwise not met.`,
     '- EXCEPTION — typo auto-resolved: if a TOOL RESULT says "TYPO RESUELTO", the system already read the closest matching file because the requested path did not exist. The requested content WAS delivered, so that is a 100%, NOT a 0%: do not fail on the misspelled path.',
     'Tools finishing without a system error does NOT mean success: a file or target that was not found is a 0%. Never claim success you cannot back with the evidence.',
+    'This is the FINAL closing message, not a step: do NOT emit any [STEP_COMPLETE], [STEP_FAILED] or [NEED_REPLAN] control signal, and do not continue the plan.',
     'One or two short sentences. No R1/R2/R3, no tool calls.'
   )
   return lines.join('\n')
+}
+
+// R5 (cierre): arma el request de cierre ANEXANDO R4 al final del MISMO hilo
+// `apiMessages` que usó el carril tarea, en vez de reconstruir un prompt nuevo.
+// Así el prefijo completo (system + tools + historial de tool calls) coincide
+// byte a byte con el último request del loop y pega en la caché de contexto de
+// DeepSeek: sólo el assistant/tool final + R4 se facturan. Reconstruir el prompt
+// pagaba el prefijo entero (~21% del turno).
+export function buildFinishMessages(apiMessages, r4) {
+  return [...(Array.isArray(apiMessages) ? apiMessages : []), { role: 'user', content: String(r4 ?? '') }]
 }
 
 // Normaliza el R5 crudo del modelo a texto visible (quita el prefijo "R5:",

@@ -1,4 +1,6 @@
 // ─── Status bar (sustituye al input propio) ──────────────────────────────────
+import { LANE } from '../lib/cochiLanes.js'
+
 export default function CochiStatusBar({
   loading,
   selectedModel,
@@ -11,8 +13,11 @@ export default function CochiStatusBar({
   onClear,
   onArchiveWithName,
   onCancel,
+  cochiMode,
+  onToggleCochiMode,
 }) {
   const busy = loading || planStatus === 'executing'
+  const taskMode = cochiMode === LANE.TASK
   return (
     <div style={{
       flexShrink: 0,
@@ -39,6 +44,32 @@ export default function CochiStatusBar({
       </div>
 
       <div style={{ flex: 1 }} />
+
+      {/* Toggle de carril explícito: Tarea / Task. Al activarse, el input de Cochi
+          se ilumina en azul reina (ver R7FooterInputs). */}
+      <button
+        onClick={onToggleCochiMode}
+        title={taskMode
+          ? 'Modo Tarea activado · este mensaje irá al carril TASK (Ctrl+T para volver)'
+          : 'Pasar a modo Tarea · el mensaje irá al carril TASK (Ctrl+T)'}
+        style={{
+          background: taskMode ? 'rgba(65,105,225,0.22)' : 'transparent',
+          border: `1px solid ${taskMode ? '#4169E1' : '#24304F'}`,
+          borderRadius: 6,
+          padding: '5px 14px',
+          color: taskMode ? '#AFC3FF' : '#7C8AB0',
+          fontSize: '0.78rem',
+          fontWeight: 700,
+          letterSpacing: '0.06em',
+          cursor: 'pointer',
+          fontFamily: "'Space Grotesk', sans-serif",
+          transition: 'all 0.2s',
+          boxShadow: taskMode ? '0 0 14px rgba(65,105,225,0.9)' : 'none',
+          textShadow: taskMode ? '0 0 8px rgba(65,105,225,0.8)' : 'none',
+        }}
+        onMouseEnter={e => { if (!taskMode) { e.currentTarget.style.borderColor = '#4169E1'; e.currentTarget.style.color = '#AFC3FF' } }}
+        onMouseLeave={e => { if (!taskMode) { e.currentTarget.style.borderColor = '#24304F'; e.currentTarget.style.color = '#7C8AB0' } }}
+      >⚡ Tarea/Task</button>
 
       {/* CLS */}
       <button

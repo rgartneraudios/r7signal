@@ -75,6 +75,8 @@ function CochiDesktop({
   onSavePreferences,
   onPreferencesLoaded,
   onPromptsReady,
+  cochiMode,
+  onToggleCochiMode,
 }) {
   const [messages,        setMessages]        = useState([])
   const [tokens,          setTokens]          = useState(0)
@@ -295,7 +297,7 @@ function CochiDesktop({
     if (planStatus === 'executing') { onMessageConsumed?.(); return }
     onMessageConsumed?.()
     const text = pendingMessage.text.trim()
-    if (text) conv.handleSendText(text)
+    if (text) conv.handleSendText(text, pendingMessage.mode)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingMessage?.id])
 
@@ -513,6 +515,8 @@ function CochiDesktop({
         onClear={handleClear}
         onArchiveWithName={handleArchiveWithName}
         onCancel={taskLoop.handleEsc}
+        cochiMode={cochiMode}
+        onToggleCochiMode={onToggleCochiMode}
       />
     </div>
   )

@@ -67,19 +67,19 @@ check('usage completo', normalizeUsage({
   prompt_tokens: 1000,
   completion_tokens: 200,
   total_tokens: 1200,
-  prompt_tokens_details: { cached_tokens: 700 },
+  prompt_tokens_details: { cached_tokens: 700, cache_write_tokens: 300 },
   completion_tokens_details: { reasoning_tokens: 50 },
-}), { promptTokens: 1000, completionTokens: 200, totalTokens: 1200, cachedTokens: 700, reasoningTokens: 50 })
-check('usage vacío → ceros', normalizeUsage(), { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, reasoningTokens: 0 })
-check('total derivado si falta', normalizeUsage({ prompt_tokens: 3, completion_tokens: 4 }), { promptTokens: 3, completionTokens: 4, totalTokens: 7, cachedTokens: 0, reasoningTokens: 0 })
+}), { promptTokens: 1000, completionTokens: 200, totalTokens: 1200, cachedTokens: 700, cacheWriteTokens: 300, reasoningTokens: 50 })
+check('usage vacío → ceros', normalizeUsage(), { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 })
+check('total derivado si falta', normalizeUsage({ prompt_tokens: 3, completion_tokens: 4 }), { promptTokens: 3, completionTokens: 4, totalTokens: 7, cachedTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 })
 
-console.log('— costo con descuento de caché —')
-// ~deepseek/deepseek-flash-latest: input 0.04/M, cached 0.008/M.
+console.log('— costo con descuento de caché (DeepSeek cache-read 0.1x) —')
+// ~deepseek/deepseek-flash-latest: input 0.04/M, cached 0.004/M (factor 0.1).
 const cachedCost = calculateCost(TERMINATOR, 1_000_000, 0, 'token', 400_000)
-checkClose('400k de 1M cacheado → 0.0272', cachedCost, 0.0272)
+checkClose('400k de 1M cacheado → 0.0256', cachedCost, 0.0256)
 checkClose('sin cachear → 0.04', calculateCost(TERMINATOR, 1_000_000, 0), 0.04)
 checkClose('cacheado = 0 no descuenta', calculateCost(TERMINATOR, 1_000_000, 0, 'token', 0), 0.04)
-checkClose('cacheado > input se capa al input', calculateCost(TERMINATOR, 1_000_000, 0, 'token', 5_000_000), 0.008)
+checkClose('cacheado > input se capa al input', calculateCost(TERMINATOR, 1_000_000, 0, 'token', 5_000_000), 0.004)
 checkClose('modelo sin tarifa cacheada NO descuenta', calculateCost(GEMINI, 1_000_000, 0, 'token', 500_000), 0.75)
 
 const bd = costBreakdown(TERMINATOR, {
@@ -87,25 +87,25 @@ const bd = costBreakdown(TERMINATOR, {
   completion_tokens: 0,
   prompt_tokens_details: { cached_tokens: 400_000 },
 })
-checkClose('costBreakdown.cost', bd.cost, 0.0272)
+checkClose('costBreakdown.cost', bd.cost, 0.0256)
 checkClose('costBreakdown.fullCost', bd.fullCost, 0.04)
-checkClose('costBreakdown.savedByCache', bd.savedByCache, 0.0128)
+checkClose('costBreakdown.savedByCache', bd.savedByCache, 0.0144)
 checkClose('savedByCache 0 sin tarifa cacheada', costBreakdown(GEMINI, {
   prompt_tokens: 1_000_000, completion_tokens: 0,
   prompt_tokens_details: { cached_tokens: 500_000 },
 }).savedByCache, 0)
 
 console.log('— tokens facturables (billableTokens) —')
-// Terminator: input 0.04/M, cached 0.008/M → factor 0.2.
+// Terminator: input 0.04/M, cached 0.004/M → factor 0.1.
 check('sin cache: input + output 1:1', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 200, cachedTokens: 0 }), 1200)
-check('con cache: 300 + 700*0.2 + 200', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 200, cachedTokens: 700 }), 640)
-check('cached > input se capa al input', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 0, cachedTokens: 5000 }), 200)
+check('con cache: 300 + 700*0.1 + 200', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 200, cachedTokens: 700 }), 570)
+check('cached > input se capa al input', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 0, cachedTokens: 5000 }), 100)
 check('modelo sin tarifa cacheada: factor 1', billableTokens(GEMINI, { promptTokens: 1000, completionTokens: 100, cachedTokens: 500 }), 1100)
 check('modelo desconocido: factor 1', billableTokens('x/y', { promptTokens: 1000, completionTokens: 100, cachedTokens: 500 }), 1100)
 check('sin args → 0', billableTokens(TERMINATOR), 0)
 checkClose('coherente con costo (sin output): billable/1M*inputPerM = cost',
   (billableTokens(TERMINATOR, { promptTokens: 1_000_000, completionTokens: 0, cachedTokens: 400_000 }) / 1_000_000) * 0.04,
-  0.0272)
+  0.0256)
 
 console.log('— resolveStoredModel (persistencia del modelo, 3.4f) —')
 const parentIds = [CENTINELA, TERMINATOR, 'ollama', 'lmstudio']

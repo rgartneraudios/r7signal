@@ -22,8 +22,11 @@ Con tu autorización, Cochi administra archivos y código <br />
 desde la ventana Workspace en la cabecera.<br />
 Las operaciones sensibles —borrado, sobreescritura—<br />
 requieren siempre tu confirmación explícita. Ninguna se ejecuta sin ella.<br />
-El botón CLS, en la base del Panel, <br />
-purga el chat y reinicia la operación desde cero.<br />
+      El botón CLS, en la base del Panel, <br />
+      purga el chat y reinicia la operación desde cero.<br />
+      El botón Tarea/Task, junto a CLS, enciende el modo Tarea: <br />
+      el input de Cochi se ilumina en azul y ese mensaje viaja al carril de tareas <br />
+      (o pulsa Ctrl+T). Tras enviar, vuelve solo a modo Conversar.<br />
 A los 70.000 tokens, R7 guarda un resumen de la tarea junto al último mensaje.<br />
 R9 permite seleccionar puntualmente párrafos o fragmentos de código <br />
 para extraer datos específicos.<br />
