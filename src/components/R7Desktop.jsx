@@ -341,7 +341,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0 }) 
           display: flex;
           flex-direction: column;
           gap: 14px;
-          background: rgba(15,14,17,0.6);
+          background: rgba(15,14,17,0.45);
         }
         .tito-watermark {
           display: flex;
