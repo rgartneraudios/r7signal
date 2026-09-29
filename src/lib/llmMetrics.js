@@ -77,8 +77,13 @@ export function normalizeUsage(usage) {
   const promptTokens = u.prompt_tokens ?? 0
   const completionTokens = u.completion_tokens ?? 0
   const totalTokens = u.total_tokens ?? (promptTokens + completionTokens)
-  const cachedTokens = u.prompt_tokens_details?.cached_tokens ?? 0
-  const cacheWriteTokens = u.prompt_tokens_details?.cache_write_tokens ?? 0
+  // OpenRouter normaliza la caché a `prompt_tokens_details`, pero por robustez
+  // también leemos los campos nativos de DeepSeek (`prompt_cache_hit/miss_tokens`)
+  // y un `cached_tokens` top-level: si el proveedor reporta la caché en otro lado,
+  // el header NO debe contar el input cacheado a tarifa plena (inflaría ~2x).
+  const details = u.prompt_tokens_details || {}
+  const cachedTokens = details.cached_tokens ?? u.cached_tokens ?? u.prompt_cache_hit_tokens ?? 0
+  const cacheWriteTokens = details.cache_write_tokens ?? u.prompt_cache_miss_tokens ?? 0
   const reasoningTokens = u.completion_tokens_details?.reasoning_tokens ?? 0
   return { promptTokens, completionTokens, totalTokens, cachedTokens, cacheWriteTokens, reasoningTokens }
 }

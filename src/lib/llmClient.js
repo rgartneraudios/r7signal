@@ -5,7 +5,7 @@
 
 import { getOpenRouterKey } from './localConfig.js'
 import { buildReasoningConfig, extractReasoningDelta } from './llmMetrics.js'
-import { auditCache, providerRouting } from './cacheAudit.js'
+import { auditCache } from './cacheAudit.js'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const OPENROUTER_HEADERS = {
@@ -79,8 +79,6 @@ function buildBody({ provider, messages, tools, toolChoice = 'auto', stream, ses
     if (stream) body.stream_options = { include_usage: true }
   }
   if (sessionId && !provider.isLocal) body.session_id = sessionId
-  const routing = provider.supportsUsage ? providerRouting(provider.model) : null
-  if (routing) body.provider = routing
   if (maxTokens) body.max_tokens = maxTokens
   if (temperature != null) body.temperature = temperature
   if (tools && tools.length) {
@@ -153,7 +151,7 @@ async function streamOnce({ provider, messages, tools, toolChoice, signal, sessi
     if (content && onDelta) onDelta(content)
     if (reasoningText && onReasoning) onReasoning(reasoningText)
     if (data.usage && onUsage) onUsage(data.usage)
-    auditCache({ sessionId, model: provider.model, label: auditLabel, messages, usage: data.usage })
+    auditCache({ sessionId, model: provider.model, label: auditLabel, messages, usage: data.usage, toolsChars: tools ? JSON.stringify(tools).length : 0 })
     return {
       content,
       reasoning: reasoningText,
@@ -239,7 +237,7 @@ async function streamOnce({ provider, messages, tools, toolChoice, signal, sessi
     try { reader.releaseLock?.() } catch {}
   }
 
-  auditCache({ sessionId, model: provider.model, label: auditLabel, messages, usage })
+  auditCache({ sessionId, model: provider.model, label: auditLabel, messages, usage, toolsChars: tools ? JSON.stringify(tools).length : 0 })
   return { content, reasoning: reasoningText, toolCalls: normalizeToolCalls(toolAcc), usage, finishReason, model: provider.model }
 }
 
@@ -261,7 +259,7 @@ async function completeOnce({ provider, messages, tools, toolChoice, signal, ses
     throw e
   }
   if (data.usage && onUsage) onUsage(data.usage)
-  auditCache({ sessionId, model: provider.model, label: auditLabel, messages, usage: data.usage })
+  auditCache({ sessionId, model: provider.model, label: auditLabel, messages, usage: data.usage, toolsChars: tools ? JSON.stringify(tools).length : 0 })
 
   const message = choice.message || {}
   return {

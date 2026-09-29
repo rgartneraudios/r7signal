@@ -12,7 +12,7 @@ import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { getToolsForPermission } from '../lib/cochiTools.js'
-import { parseR1R2R3 } from '../lib/parseR1R2R3.js'
+import { parseR1R2R3, extractR3Visible } from '../lib/parseR1R2R3.js'
 import { makeStreamingDisplayExtractor, buildSystemContext } from '../lib/cochiContext.js'
 import { buildWheelMessages, commitR7Turn } from '../lib/r7Wheel.js'
 import { LANE, resolveLane, markInput } from '../lib/cochiLanes.js'
@@ -167,8 +167,12 @@ export function useCochiConversational({
         return
       }
 
-      const { r1, r2, r3 } = parseR1R2R3(streamed.content || '')
-      const display = r3 || streamed.content || 'Respuesta sin formato reconocido.'
+      // Sólo R3 se pinta. `extractR3Visible` es el MISMO salvavidas que usan
+      // Tito/Asun: si el modelo empezó el contrato (emitió R1/R2) pero nunca
+      // soltó "R3:", NUNCA se muestran R1/R2 crudos. Antes Cochi caía a
+      // `streamed.content` y filtraba las etiquetas internas a la UI.
+      const { r1, r2 } = parseR1R2R3(streamed.content || '')
+      const display = extractR3Visible(streamed.content || '') || 'Respuesta sin formato reconocido.'
       pushMessage({ role: 'assistant', content: display, reasoning: streamed.reasoning || undefined })
       await appendToMemory(r1, r2)
       // El sistema mantiene la rueda: R1/R2 se sellan de inmediato (D3 jubilado).

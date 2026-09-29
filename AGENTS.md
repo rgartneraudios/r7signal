@@ -148,9 +148,10 @@ sólo pega el prefijo estático (`sys1+sys2`) y **todo el R7 se paga full** cada
   `output/Prompts-Final.txt`; cambiar el repo NO actualiza producción.
 - Aplica a los **3 paneles** porque comparten `buildWheelMessages` (Cochi, Tito, Asun).
 
-Capas independientes y complementarias: **Capa 1** = ruteo (`providerRouting`, pin DeepSeek);
-**Capa 2** = esta colocación append-only. Pendiente: re-medir `[cache:audit]` (3 turnos)
-para confirmar `cached` creciente y `sysStable/appendOnly=true`.
+Capas independientes y complementarias: **Capa 1** = ruteo (REVERTIDA: NO enviar `provider.order`; el
+sticky routing de OpenRouter + `session_id` mantienen la caché caliente); **Capa 2** = esta colocación
+append-only. Pendiente: re-medir `[cache:audit]` (3 turnos) para confirmar `cached` creciente y
+`sysStable/appendOnly=true`.
 
 ## Refactor de CochiDesktop (COMPLETO 29/09)
 
@@ -309,10 +310,12 @@ Medido con la traza F12 (`[cochi:audit]`) de un E2E de 2 turnos conversacionales
   (planner DENTRO del carril tarea). Harness `cochiPlanning`/`cochiLanes` podados y +checks de escape.
 
 ### Cerrado recientemente (30/09)
-**Caché (3 capas): Capa 1 · ruteo** — `providerRouting(modelId)` en `cacheAudit.js` (pin
-`order:['deepseek']` para modelos DeepSeek: Cochi y Asun/MaríaBase; `null` para IrmaMax/Gemini
-y Tito/Perplexity), wireado en `buildBody`. **Capa 2 · colocación** — R1/R2 por turno como
-mensajes inmutables, R7 fuera del prompt (sólo almacén), ver sección propia. Falta re-medir
+**Caché (3 capas): Capa 1 · ruteo — REVERTIDA 30/09-bis** — `providerRouting()` devuelve `null` y NO se
+manda `body.provider`: el `provider.order` manual desactiva el sticky routing de OpenRouter (docs), que
+es lo que mantiene la caché caliente vía `session_id`. Pinnear `order:['deepseek']` apagó la caché
+(3 turnos a cached=0). **Capa 2 · colocación** — R1/R2 por turno como
+mensajes inmutables, R7 fuera del prompt (sólo almacén), ver sección propia. `[cache:audit]` ahora
+`console.log` + `cost`. Falta re-medir
 `[cache:audit]`. **Carril = toggle only**: `resolveLane` sin heurística; `needsTools`/`laneForMessage`/`needsCommand`/
 `needsWrite` + `FS_NOUNS`/`SYSTEM_NOUNS`/`READ_VERBS`/`QUERY_HINTS`/`RUN_SCRIPT_EXT_RE` eliminados;
 `executeConversational` expone scope `'task'`; single-pass de tarea siempre `'task'`. Disparador:
@@ -390,6 +393,28 @@ excluye los mensajes de memoria (tag `[MEMORY]` y legacy `[R7 MEMORY]`) para que
 siga midiendo el prompt base. Aplica a los 3 paneles (comparten `buildWheelMessages`). R7
 queda SÓLO como almacén en disco (D4). Harness `cochiR7Wheel`/`cochiCacheAudit` actualizados.
 Gates 30/09: lint 0/0 · `npm test` 12/12 · build OK. **Falta re-medir** `[cache:audit]`.
+
+### 2-bis) HECHO (30/09-bis) · Capa 1 REVERTIDA (`provider.order` mataba el sticky)
+Evidencia: el test de 3 turnos post-pin dio 5996 / 6138 / 6662 facturables (**cero caché**), cuando el
+test previo al pin daba 6828 / **963** / 7144 (el turno 2 cacheaba). Docs de OpenRouter "Prompt
+Caching": **"Sticky routing is not used when you specify a manual `provider.order`"** — el pin de la
+Capa 1 (`order:['deepseek']`) apagaba justo el mecanismo que mantiene la caché caliente. El sticky se
+activa con `session_id` (ya viaja en el body) incluso antes del primer hit, y solo se usa cuando el
+cache-read del proveedor es más barato. Decisión: **NO mandar `body.provider`**; `providerRouting()`
+ahora devuelve `null` siempre (se conserva la función + comentario para no volver a pinnear). Además
+`[cache:audit]` pasó de `console.debug` a `console.log` (el nivel Verbose del DevTools lo ocultaba —
+por eso no se veía en las pruebas) y ahora loguea `cost` real de OpenRouter. Harness `cochiCacheAudit`
+actualizado (30 checks). **Falta re-medir** los 3 turnos: el turno 2+ debería cachear (billable bajo).
+
+### 2-ter) HECHO (30/09-bis) · Contrato R1/R2/R3 — Cochi filtraba R1/R2 crudos
+Bug: el modelo, en un saludo, emitió R1+R2 **sin R3** y `useCochiConversational.executeConversational`
+caía a `r3 || streamed.content`, pintando `R1: … R2: …` en la UI. Tito/Asun ya usaban
+`extractR3Visible` (salvavidas: nunca muestra R1/R2). Fix: Cochi usa el mismo extractor. Harness nuevo
+`cochiParseR1R2R3.harness.mjs` (16 checks). Prompt `system` de Cochi actualizado en
+`output/Cochi-Prompt.txt` (blindaje "SIEMPRE R3, jamás la respuesta dentro de R1/R2", R1/R2 más ricos
+—al no viajar R3—, y MEMORY ahora describe los mensajes `[MEMORY]` por turno, ya no el viejo bloque
+`[R7 MEMORY]`). **Es paso APARTE: pegar en Supabase.** Gates 30/09-bis: lint 0/0 · `npm test` 13/13 ·
+build OK.
 
 ### 3) Capa 3 · Reabrir D3 (historial crudo + R7 sólo para overflow)
 Historial crudo cacheado (0.1x) le gana a R7 a pelo (1x). Mandar turnos crudos append-only y

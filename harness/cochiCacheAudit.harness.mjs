@@ -74,13 +74,20 @@ check('prompt base cambiado → sysStable false', changedSys.sysStable, false)
 check('sin prompt no divide por cero', buildCacheReport({ messages: base(R7_T1, 'x') }).hit, 0)
 check('reporte saneado sin args', (() => { const r = buildCacheReport(); return [r.msgs, r.prompt, r.session] })(), [0, 0, 'nosession'])
 
-console.log('— providerRouting (Capa 1) —')
-check('deepseek se pinea', providerRouting('~deepseek/deepseek-v4-flash-latest'), { order: ['deepseek'], allow_fallbacks: true })
-check('deepseek lowercase', providerRouting('deepseek/deepseek-chat'), { order: ['deepseek'], allow_fallbacks: true })
+console.log('— providerRouting (Capa 1 REVERTIDA 30/09-bis: no pinnear `order`) —')
+// Evidencia: mandar `provider.order` desactiva el sticky routing de OpenRouter
+// (docs "Prompt Caching") → cached=0 en todos los turnos. Ahora devuelve null
+// SIEMPRE: el body no lleva `provider` y el sticky routing + `session_id` pegan.
+check('deepseek NO se pinea (antes sí)', providerRouting('~deepseek/deepseek-v4-flash-latest'), null)
+check('deepseek lowercase NO se pinea', providerRouting('deepseek/deepseek-chat'), null)
 check('gemini (Asun/IrmaMax) no se pinea', providerRouting('google/gemini-3.8-flash'), null)
-check('deepseek vision (Asun/MaríaBase) SÍ se pinea', providerRouting('deepseek/deepseek-v4-flash-vision-exp'), { order: ['deepseek'], allow_fallbacks: true })
+check('deepseek vision (Asun/MaríaBase) NO se pinea', providerRouting('deepseek/deepseek-v4-flash-vision-exp'), null)
 check('perplexity (Tito) no se pinea', providerRouting('perplexity/sonar'), null)
 check('vacío/undefined no se pinea', [providerRouting(''), providerRouting(undefined)], [null, null])
+check('el reporte incluye cost real de OpenRouter', first.cost, 0)
+check('el reporte expone sysChars', typeof first.sysChars, 'number')
+check('el reporte expone toolsChars (gasto fijo del schema)', buildCacheReport({ messages: base(R7_T1, 'x'), toolsChars: 8345 }).toolsChars, 8345)
+check('toolsChars sin dato → 0', buildCacheReport({ messages: base(R7_T1, 'x') }).toolsChars, 0)
 
 console.log(`\n${pass} PASS · ${fail} FAIL`)
 if (fail) process.exit(1)

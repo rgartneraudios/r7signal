@@ -72,6 +72,14 @@ check('usage completo', normalizeUsage({
 }), { promptTokens: 1000, completionTokens: 200, totalTokens: 1200, cachedTokens: 700, cacheWriteTokens: 300, reasoningTokens: 50 })
 check('usage vacío → ceros', normalizeUsage(), { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 })
 check('total derivado si falta', normalizeUsage({ prompt_tokens: 3, completion_tokens: 4 }), { promptTokens: 3, completionTokens: 4, totalTokens: 7, cachedTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 })
+check('fallback campo nativo DeepSeek (prompt_cache_hit/miss)',
+  normalizeUsage({ prompt_tokens: 5000, prompt_cache_hit_tokens: 4800, prompt_cache_miss_tokens: 200 }),
+  { promptTokens: 5000, completionTokens: 0, totalTokens: 5000, cachedTokens: 4800, cacheWriteTokens: 200, reasoningTokens: 0 })
+check('fallback cached_tokens top-level',
+  normalizeUsage({ prompt_tokens: 1000, cached_tokens: 640 }),
+  { promptTokens: 1000, completionTokens: 0, totalTokens: 1000, cachedTokens: 640, cacheWriteTokens: 0, reasoningTokens: 0 })
+check('prompt_tokens_details gana sobre top-level',
+  normalizeUsage({ prompt_tokens: 1000, cached_tokens: 1, prompt_tokens_details: { cached_tokens: 900 } }).cachedTokens, 900)
 
 console.log('— costo con descuento de caché (DeepSeek cache-read 0.1x) —')
 // ~deepseek/deepseek-flash-latest: input 0.04/M, cached 0.004/M (factor 0.1).

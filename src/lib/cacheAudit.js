@@ -13,17 +13,19 @@ import { R7_MEMORY_TAG } from './r7Wheel.js'
 
 const IS_DEV = !!import.meta.env?.DEV
 
-// ─── Capa 1 · Ruteo del proveedor para la caché de prefijo (30/09) ───────────
-// DeepSeek cachea el prefijo de forma automática, pero SOLO en su endpoint
-// first-party. El `session_id` de OpenRouter mantiene la sesión sticky, pero no
-// garantiza que caiga en DeepSeek: puede servirla un host que no cachea. Fijar
-// `order:['deepseek']` (con fallback) asegura el endpoint que sí cachea.
-// Puro y selectivo: pinnea cualquier modelo DeepSeek (Cochi y Asun/MaríaBase);
-// devuelve null para el resto (Asun/IrmaMax = Gemini, Tito = Perplexity), donde
-// forzar el proveedor rompería su ruteo; el llamador omite `provider`.
-export function providerRouting(modelId) {
-  if (!/deepseek/i.test(String(modelId ?? ''))) return null
-  return { order: ['deepseek'], allow_fallbacks: true }
+// ─── Capa 1 · Ruteo del proveedor — REVERTIDA (30/09-bis) ───────────────────
+// Aprendizaje: OpenRouter documenta que **el sticky routing NO se usa cuando se
+// manda `provider.order`** — el orden manual tiene prioridad y desactiva el
+// pegado a la misma instancia. La caché de prefijo de DeepSeek (automática)
+// depende de caer SIEMPRE en el mismo endpoint; el sticky routing la mantiene
+// caliente, y se activa con `session_id` (ya viaja en el body) incluso antes de
+// observar el primer cache hit. Pinnear `order:['deepseek']` (Capa 1, 30/09)
+// apagó ese mecanismo: los 3 turnos pasaron a cached=0 (5996/6138/6662) cuando
+// antes el turno 2 SÍ cacheaba (6828/963/7144). Decisión: NO mandar `provider`
+// y dejar que el sticky routing + `session_id` hagan el trabajo. Se conserva
+// esta nota para no volver a pinnear creyendo que ayuda.
+export function providerRouting() {
+  return null
 }
 
 // Hash FNV-1a (32 bits) → huella corta y estable sin dependencias.
@@ -75,7 +77,7 @@ export function systemFingerprint(messages, { excludeR7 = true } = {}) {
 
 // Reporte puro de una request. `prev` = { sysHash, head } de la request anterior
 // de la MISMA sesión (null en la primera).
-export function buildCacheReport({ sessionId, model, label = '', messages = [], usage, prev = null } = {}) {
+export function buildCacheReport({ sessionId, model, label = '', messages = [], usage, toolsChars = 0, prev = null } = {}) {
   const u = normalizeUsage(usage)
   const sysHash = systemFingerprint(messages)
   const head = stableHead(messages)
@@ -88,10 +90,15 @@ export function buildCacheReport({ sessionId, model, label = '', messages = [], 
     model,
     msgs: messages.length,
     sysChars: messages.filter(m => m.role === 'system').reduce((n, m) => n + contentOf(m).length, 0),
+    // toolsChars separa el gasto FIJO (esquema de tools, reenviado en cada request)
+    // del resto. En Cochi el schema pesa más que system+mensajes: sin este dato no
+    // se sabe si el costo es caché que no pega o un esquema demasiado grande.
+    toolsChars: Number(toolsChars) || 0,
     prompt: u.promptTokens,
     cached: u.cachedTokens,
     write: u.cacheWriteTokens,
     hit,
+    cost: Number(usage?.cost ?? 0),
     sysStable,
     appendOnly,
     sysHash,
@@ -109,7 +116,9 @@ export function auditCache(opts = {}) {
   const report = buildCacheReport({ ...opts, prev })
   lastBySession.set(key, { sysHash: report.sysHash, head: report.head })
   const { head, ...log } = report
-  console.debug('[cache:audit]', JSON.stringify(log))
+  // console.log (no debug): Evitar que el nivel "Verbose" del DevTools lo oculte
+  // — era la razón de que no se vieran las líneas [cache:audit] en las pruebas.
+  console.log('[cache:audit]', JSON.stringify(log))
   return report
 }
 
