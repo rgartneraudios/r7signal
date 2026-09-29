@@ -178,7 +178,21 @@ el orquestador. Se resuelve extrayendo hooks + lógica pura (regla del repo).
   No tocar `Chat00.jsx`, que sí vive.
 - **Refactor CochiDesktop**: ver “plan por fases” arriba. Fases 1-3 COMPLETAS (29/09-c/d);
   CochiDesktop 1625 → 521 líneas (orquestador + render). Gates 0/0 + build + 11/11 harness.
-  Pendiente de verificación E2E en app (misma batería de la sección anterior) antes de dar
-  el comportamiento por cerrado.
+  ✅ **E2E en app CERRADO (29/09-e)**: batería T1-T12 sobre `Cochi-Pruebas` — run_command +
+  exit code, lectura, plan de 3 pasos con bloque 🧠, permisos por paso (destructivas SÍ piden),
+  Undo/Regenerate con reversión de disco, sesiones, subagente, cambio de sesión en vuelo
+  (aborta y no contamina el R7) y transparencia Mica/Acrylic. Falta pulir los hallazgos de abajo.
+- **E2E 29/09-e — hallazgos menores pendientes de decisión/arreglo**:
+  · **T11 (typo)**: `read_file` resuelve “el más parecido”, pero el modelo después llama
+    `ask_user`; tras el “Sí” del usuario el cierre marca **0%** en vez de 100% (el juez/cierre
+    no incorpora la autorización del `ask_user`). Además el typo entró por planner. INVESTIGAR.
+  · **Guard Full Access**: pedir un comando en modo Lectura hace que el modelo intente
+    `web_fetch` y falle (2 requests tiradas; `toolsChars 4282` = task+read). Candidato: cortar
+    antes de llamar al modelo y avisar “activá Full Access”. Ojo con el falso positivo en
+    frases explicativas (“¿qué es Node.js?” → `needsRunCommand` da true). Opciones A/B/C.
+  · **Cartel de Undo**: usa `window.confirm` (`useCochiTaskLoop.js:911`) y muestra el origen
+    (`localhost:5173` en dev); migrar al `plugin-dialog` de Tauri para que sea nativo.
+  · **T5**: un plan de 3 pasos costó 9 requests / 34k tokens (lecturas de verificación extra
+    por step). Funciona, pero es optimizable.
 - Modelos: Centinela = DeepSeek V4 Flash 0731 · Terminator = DeepSeek V4.1 Flash
   (rotación manual). El subagente usa Centinela.
