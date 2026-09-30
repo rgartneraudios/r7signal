@@ -12,12 +12,9 @@ import {
   createWheelState,
   closeWheelTurn,
   flushWheel,
-  appendR7Task,
   commitR7Turn,
-  closeWheelTask,
   splitR7Turns,
   buildWheelMessages,
-  summarizeFromPairs,
   compactWheel,
   isMemoryMessage,
   COMPACT_MARKER,
@@ -131,21 +128,6 @@ check('2 turnos → 2 mensajes de memoria', msgsTwo.map(m => m.role), ['system',
 const msgsNoR7 = buildWheelMessages({ systemMessages: [{ role: 'system', content: 'S' }], r7: '', rawTurns: [], userInput: 'q' })
 check('sin R7 ni crudo → sólo system + input', msgsNoR7.map(m => m.role), ['system', 'user'])
 
-console.log('\n— summarizeFromPairs: compactación SIN llamada al modelo —')
-const dropped = [
-  { role: 'user', content: 'pedido viejo' },
-  { role: 'tool', content: 'resultado viejo' },
-  { role: 'assistant', content: 'R1: pidió X\nR2: hizo X\nR3: respuesta visible larga' },
-  { role: 'assistant', content: '[STEP 2 RESULT: algo ya resumido]' },
-  { role: 'assistant', content: 'R1: pidió Y\nR2: hizo Y\nR3: otra respuesta' },
-]
-const sum = summarizeFromPairs(dropped)
-check('recupera las 2 parejas R1/R2', sum.includes('pidió X') && sum.includes('pidió Y'), true)
-check('NO incluye el R3 visible', sum.includes('respuesta visible larga'), false)
-check('ignora markers de step y no-assistant', sum.includes('STEP 2'), false)
-check('sin pares recuperables → null', summarizeFromPairs([{ role: 'assistant', content: '[STEP 1 RESULT: x]' }]), null)
-check('lista vacía → null', summarizeFromPairs([]), null)
-
 console.log('\n— compactWheel: compactación del sistema SIN llamada al modelo —')
 const many = Array.from({ length: 30 }, (_, i) =>
   `── Turno ${i + 1} ──\nR1: intención ${i + 1}\nR2: ${'detalle '.repeat(20)}`
@@ -162,20 +144,14 @@ check('vacío → vacío', compactWheel(''), '')
 const compactedTwice = compactWheel(compactWheel(many, { maxChars: 1200, minKeep: 3 }), { maxChars: 1200, minKeep: 3 })
 check('recompactar no acumula marcadores', (compactedTwice.match(/── Compactado ──/g) || []).length, 1)
 
-console.log('\n— Carril TAREA en la rueda: R5 como bloque (28/09) —')
-check('appendR7Task agrega un bloque con R5', appendR7Task('', 1, '100% — hecho'), '── Turno 1 ──\nR5: 100% — hecho')
-check('appendR7Task sin r5 → no agrega', appendR7Task('x', 2, ''), 'x')
+console.log('\n— commitR7Turn: sella el turno, sin turno crudo (D3 jubilado) —')
 let stTask = createWheelState('')
 stTask = commitR7Turn(stTask, { pairs: [{ r1: 'a', r2: 'b' }] })
 check('commitR7Turn sella conversacional de inmediato', countR7Turns(stTask.r7), 1)
 check('commitR7Turn deja lastTurn nulo (D3 jubilado)', stTask.lastTurn, null)
-stTask = closeWheelTask(stTask, '100% Signor Roberto — archivo creado')
-check('closeWheelTask añade el R5 como Turno 2', countR7Turns(stTask.r7), 2)
-check('el bloque R5 lleva su etiqueta', stTask.r7.includes('R5: 100% Signor Roberto'), true)
-check('closeWheelTask con r5 vacío no agrega', countR7Turns(closeWheelTask(stTask, '  ').r7), 2)
 const poppedTask = popR7Turn(stTask.r7)
-check('popR7Turn quita el bloque R5', countR7Turns(poppedTask.r7), 1)
-check('popR7Turn de un R5 devuelve pair nulo', poppedTask.pair, null)
+check('popR7Turn quita el bloque sellado', countR7Turns(poppedTask.r7), 0)
+check('popR7Turn devuelve el par quitado', poppedTask.pair, { r1: 'a', r2: 'b' })
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

@@ -104,8 +104,9 @@ como opencode:
   en `task`.)
 - **Sin R4/R5**: el cierre ya no es un request aparte. Se fue la causa #1 del gasto (un R5 sin
   cachear = ~40% del turno) y los 2-3 requests extra por paso.
-- **Sin colapso intra-turno**: no se reescribe el medio del hilo (`pruneApiMessages`/
-  `collapseStepMessages` quedan sin uso en Cochi) → el prefijo se mantiene y la caché pega.
+- **Sin colapso intra-turno**: no se reescribe el medio del hilo. `pruneApiMessages`/
+  `collapseStepMessages`/`estimateTokens`/`extractCompleteSteps` **eliminados** (eran del carril
+  tarea/planner) → el prefijo nunca se reescribe a mitad de turno y la caché pega.
 - **Prompt local**: `cochiAgentPrompt.js` (repo). Cochi **ya no lee prompts de Supabase**.
 - **Memoria R7**: cada turno sella `R1: <pedido>` / `R2: <respuesta final>` con `commitR7Turn`
   (ya no hay R1/R2 generados por el modelo). `buildWheelMessages` los manda como briefs.
@@ -144,9 +145,10 @@ facturables.
 
 ## R7: dos implementaciones (no confundir)
 
-- **Desktop (VIVA)**: `src/lib/r7Wheel.js` arma el contexto y viaja SÓLO en el carril
-  conversacional; se compacta (`pruneApiMessages`, token-aware). Persiste en
-  `AppLocalData\com.r7signal.cochi\{R7,R9}` (D5). Tito/Asun locales usan la misma rueda.
+- **Desktop (VIVA)**: `src/lib/r7Wheel.js` arma el contexto — un brief R1/R2 inmutable por turno
+  (append-only → cacheable); `compactWheel` lo compacta a mano a 70k (resumen del sistema, sin
+  modelo). Persiste en `AppLocalData\com.r7signal.cochi\{R7,R9}` (D5). Cochi/Tito/Asun comparten
+  la misma rueda.
 - **Web (LEGACY, no usar)**: la edge function `supabase/functions/procesar-input/` guarda
   `sesiones.r7_acumulado` y lo inyecta en TODOS los turnos, sin tope (crece sin límite). Hoy
   NADIE la importa: sólo la llamaba `Chat00Music.jsx`, que ya no se monta. En la web sólo hay
@@ -457,8 +459,9 @@ Supervivientes consolidados en **`src/lib/cochiGuards.js`** (+`harness/cochiGuar
    descripciones de tools (~990 tok/request; ahora de bajo impacto, el input cacheado pesa 0.03x).
 4. **Deuda técnica**: subagentes que escriban · shell revertible · SSRF en Rust · pegar `TYPO
    RESUELTO` al prompt `task` de Supabase (paso APARTE).
-5. **R7 en el carril TAREA (quemar)**: renombrar `[R7 COMPACTED]`/`[MEMORY]` de
-   `cochiContext.pruneApiMessages` a vocabulario neutro (ver sección propia).
+5. ~~**R7 en el carril TAREA (quemar)**: renombrar `[R7 COMPACTED]`/`[MEMORY]` de
+   `cochiContext.pruneApiMessages`~~ **OBSOLETO**: `pruneApiMessages` y todo el colapso intra-turno
+   se **eliminaron** (podados junto a `summarizeFromPairs`/`appendR7Task`/`closeWheelTask`, 30/09 sexies).
 6. **Revisar caché de R5 + modo TASK** (hallazgos en sección propia) y **E2E de compactación a
    70k** en la app.
 
@@ -568,15 +571,12 @@ NO). Implementación:
 - **Subagentes que escriban** · **Shell revertible** · **SSRF en Rust** · **prompt `task` remoto
   (pegarle la excepción `TYPO RESUELTO`)**.
 
-### PENDIENTE PRÓXIMA SESIÓN — R7 en el carril TAREA (quemar)
-`cochiContext.js:150-151` (`pruneApiMessages`) emite `[R7 COMPACTED]` / `[MEMORY]` como bloque
-`role:'user'` al comprimir tool results viejos de un plan. **NO es la rueda R1/R2** (el carril
-tarea no la usa), pero es vocabulario R7 viajando en el request. Decisión 30/09-quater: renombrar
-a algo neutro (p. ej. `[CONTEXT SUMMARY]`) para cumplir "R7 fuera del viaje" en los dos carriles.
-OJO: `cochiContext.COMPACT_BLOCK_RE` (`/^\[(?:CONTEXT SUMMARY|MEMORY)\]/`) y `isCompactBlock`
-reconocen `[CONTEXT SUMMARY]`/`[MEMORY]`; `[R7 COMPACTED]` NO. Cambiar el literal obliga a revisar
-`extractCompleteSteps`/`isCompactBlock` y el harness `cochiContext` (checks de `[MEMORY]`). No se
-tocó esta sesión para no ampliar el alcance del cambio conversacional.
+### CERRADO 30/09-sexies — colapso intra-turno eliminado
+`cochiContext.js` (`pruneApiMessages`/`extractCompleteSteps`/`matchStepResult`/`isCompactBlock`/
+`estimateTokens`/`CONTEXT_*`) y `r7Wheel.js` (`summarizeFromPairs`/`appendR7Task`/`closeWheelTask`)
+se borraron: eran del carril tarea/planner y el loop único no los usa. Se fue con ellos el
+vocabulario `[R7 COMPACTED]`/`[MEMORY]` que podía viajar. Harnesses `cochiContext`/`cochiR7Wheel`
+podados. Gates: lint 0/0 · `npm test` 12/12 · build OK.
 
 ### Revisión de caché en R5 + modo TASK (30/09-quater · hallazgos, sin cambios de código)
 Revisado `cochiLanes.js` (`buildTaskFinish`/`buildFinishMessages`) y `useCochiTaskLoop.js`

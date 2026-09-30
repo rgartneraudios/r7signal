@@ -18,7 +18,6 @@
 //
 // Este módulo se mantiene puro a propósito para poder ejercitarlo headless con
 // el harness Node (harness/cochiR7Wheel.harness.mjs), que mockea el disco.
-import { parseR1R2R3 } from './parseR1R2R3.js'
 
 // Nº de turnos recientes que viajan crudos (sin resumir). D3 fija 1.
 export const R7_KEEP_RAW_TURNS = 1
@@ -54,16 +53,6 @@ export function appendR7Pair(r7, turnNumber, r1, r2) {
   return r7 ? `${r7}\n${block}` : block
 }
 
-// ─── Carril TAREA en la rueda (loop de dos carriles, 28/09) ──────────────────
-// En el carril tarea NO hay R1/R2: lo único que viaja al próximo turno
-// conversacional es el R5 (cierre autoexplicativo). Se anota como un bloque más
-// de la rueda, con la misma numeración que los turnos conversacionales.
-export function appendR7Task(r7, turnNumber, r5) {
-  if (!r5) return r7 || ''
-  const block = `── Turno ${turnNumber} ──\nR5: ${r5}`
-  return r7 ? `${r7}\n${block}` : block
-}
-
 // Cierra un turno CONVERSACIONAL sellándolo en R7 de inmediato (el sistema
 // mantiene la rueda; el modelo no la devuelve). D3 jubilado: ya no queda un
 // "último turno crudo" pendiente. Ignora cualquier lastTurn legado para no
@@ -74,15 +63,6 @@ export function commitR7Turn(state, turn) {
   if (!merged) return { r7, lastTurn: null }
   const n = countR7Turns(r7) + 1
   return { r7: appendR7Pair(r7, n, merged.r1, merged.r2), lastTurn: null }
-}
-
-// Cierra un turno de TAREA añadiendo su R5 a la rueda. D3 jubilado: sin crudo.
-export function closeWheelTask(state, r5) {
-  const r7 = state?.r7 || ''
-  const text = String(r5 ?? '').trim()
-  if (!text) return { r7, lastTurn: null }
-  const n = countR7Turns(r7) + 1
-  return { r7: appendR7Task(r7, n, text), lastTurn: null }
 }
 
 // Un turno del USUARIO puede producir varias parejas R1/R2 (un plan de Cochi
@@ -224,21 +204,4 @@ export function buildWheelMessages({ systemMessages = [], r7 = '', rawTurns = []
   }
   out.push({ role: 'user', content: userInput })
   return out
-}
-
-// ─── Jubilación de summarizeDropped (D9) ─────────────────────────────────────
-// Resume una ventana de mensajes descartados usando los R1/R2 YA emitidos en los
-// assistant crudos: CERO llamadas extra al modelo. Devuelve null si no hay pares
-// (el llamador cae al placeholder estático). Los markers de step L1.2 se manejan
-// aparte en cochiContext.extractCompleteSteps.
-export function summarizeFromPairs(dropped) {
-  if (!Array.isArray(dropped) || !dropped.length) return null
-  const pairs = []
-  for (const m of dropped) {
-    if (m.role !== 'assistant' || typeof m.content !== 'string') continue
-    const { r1, r2 } = parseR1R2R3(m.content)
-    if (r1 || r2) pairs.push({ r1, r2 })
-  }
-  if (!pairs.length) return null
-  return pairs.map(p => `- R1: ${p.r1}\n  R2: ${p.r2}`).join('\n')
 }
