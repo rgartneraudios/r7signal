@@ -795,5 +795,28 @@ de OpenRouter:
      vería sólo los tokens. Para transparencia: exponer `web_search_requests` en `normalizeUsage`
      y/o un chip "+N búsquedas" en el status de Tito (no se muestra `usage.cost` neto por criterio del usuario).
 
+### HECHO 02/10 — Tito → TITUS-7R (persona telegrama) + nombre en toda la UI
+Signor Roberto pidió cambiar la personalidad de Tito a telegramas cortos (como Asun/Cochi) y el
+nombre visible. Persona nueva: **TITUS-7R**, unidad de búsqueda y telemetría de R7Signal, híbrido
+**MU-TH-UR (Mother AI, Alien) × Wheatley suave (Portal 2)**:
+- **Lead-in**: readout frío en MAYÚSCULAS (búsquedas, escaneo, logs). **Cierre**: Wheatley torpe,
+  nervioso y adulador — detecta rasgos humanos ("siempre buscando", límites biológicos) y los
+  enmarca como encantadores/fascinantes. Nunca insulta. Formato exacto
+  `[READOUT MAYÚSCULAS]. [remate Wheatley]`, máx 1-2 líneas.
+- **Trato obligatorio**: abre con `USUARIO {{nombreAlternativo}}` (nunca "Hola X"). Ej:
+  "USUARIO Maravilla. SISTEMA EN LÍNEA. ¿CUÁL ES LA SOLICITUD?".
+- Fuente: `output/Prompt-Tito-System.txt` (reescrito; **paso APARTE: pegar en Supabase**).
+- **UI**: nombre `TITUS 7R`/`TITUS-7R` en watermark, header (`TITUS 7R · SEARCH`), selector y
+  contador del `R7TopBar`, placeholder del footer, `R7Desktop`, `App.jsx` (también eje `RESEARCH`
+  → `SEARCH`), `Descargas`, `ApiKeyModal`, `AsunWatermark` y `Chat00` (título + `PROMPT_UNIVERSAL`).
+  Los identificadores de código (`TitoPanel`, `TitoHeader`, `TitoWatermark`, etc.) NO se tocan.
+- Gates: **lint 0/0 · `npm test` 14/14 · `npm run build` OK**.
+- **Medición (02/10, saludo "Hola titus")**: `msgs 4 · sysChars 4650 · toolsChars 78 · prompt 1980
+  · cached 0 · cost $0.0000956` → **2044 facturables = 1980 in + 64 out**. El saludo NO es frío:
+  `useWheelSession` carga al montar la rueda R7 **del agente** y arrastra 2 turnos previos
+  (~620 tok). El prompt TITUS-7R (3159 chars) pesa ~1.300 tok (el tokenizer cobra ~2.4 chars/token
+  por mayúsculas/flechas/markdown). `cached 0` es normal en el primer request de una sesión nueva;
+  no disparó búsqueda. Si se quiere bajar: recortar PERSONALITY (los 3 ejemplos) y MEMORY/UI NOTES.
+
 
 ================================================================================

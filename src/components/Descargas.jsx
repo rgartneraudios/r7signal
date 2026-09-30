@@ -136,7 +136,7 @@ export default function Descargas({ variant }) {
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:'2px' }}>
             <div style={{ fontSize:'0.85rem', fontWeight:700, letterSpacing:'0.15em', color:'#D4D8DC' }}>DESCARGAR R7 DESKTOP</div>
-            <div style={{ fontSize:'0.65rem', color:'#9BA3A8', fontWeight:500, letterSpacing:'0.05em' }}>Tito · Asun · Cochi — tu equipo local</div>
+            <div style={{ fontSize:'0.65rem', color:'#9BA3A8', fontWeight:500, letterSpacing:'0.05em' }}>TITUS 7R · Asun · Cochi — tu equipo local</div>
           </div>
         </button>
       ) : (
