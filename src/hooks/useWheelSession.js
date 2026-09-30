@@ -1,6 +1,6 @@
 // ─── Sesiones + rueda R7 + undo (KD/X1/X2/L4) ─────────────────────────────────
 // Denominador común de Cochi/Asun/Tito. Encapsula:
-//   · la rueda R7 { r7, lastTurn } y las parejas R1/R2 del turno en curso
+//   · la rueda R7 { r7, lastTurn } (el sistema sella R1/R2 con commitR7Turn)
 //   · el ciclo de vida de la sesión (id, nombre, autosave por turno, retoma
 //     "cargar como contexto", archivar/CLS con promoción de la rueda a global)
 //   · undo (deshace el último turno visible y retrocede la rueda)
@@ -35,7 +35,6 @@ export function useWheelSession({
   onError,
 }) {
   const wheelRef = useRef(createWheelState()) // { r7, lastTurn }
-  const sessionPairsRef = useRef([])           // pares R1/R2 emitidos en el turno
   const messagesRef = useRef([])              // espejo de `messages` para autosave
   const skipAutosaveRef = useRef(true)        // true en montaje y al retomar
   const sessionIdRef = useRef(null)           // id estable por conversación
@@ -80,7 +79,6 @@ export function useWheelSession({
         wheelRef.current = { r7: s.wheel?.r7 || '', lastTurn: s.wheel?.lastTurn ?? null }
         sessionIdRef.current = null
         sessionNameRef.current = s.name || null
-        sessionPairsRef.current = []
         ;(onResume || onReset)?.()
         onResetUsage?.(agent)
       }
@@ -114,10 +112,9 @@ export function useWheelSession({
   }
 
   // Cierra la sesión actual: captura su id (para la limpieza del panel), resetea
-  // rueda/parejas/id y, opcionalmente, hereda el nombre a la próxima.
+  // rueda/id y, opcionalmente, hereda el nombre a la próxima.
   async function closeCurrentSession({ inheritName = null } = {}) {
     const closingSessionId = sessionIdRef.current
-    sessionPairsRef.current = []
     wheelRef.current = createWheelState(await readLatestR7())
     sessionIdRef.current = null
     sessionNameRef.current = inheritName
@@ -172,7 +169,6 @@ export function useWheelSession({
       const compacted = compactWheel(sealed.r7)
       if (compacted && compacted.trim()) await writeR9File('r7', compacted)
       onReset?.()
-      sessionPairsRef.current = []
       wheelRef.current = createWheelState(compacted)
       sessionIdRef.current = null
       sessionNameRef.current = inheritedName
@@ -204,7 +200,6 @@ export function useWheelSession({
 
   return {
     wheelRef,
-    sessionPairsRef,
     messagesRef,
     skipAutosaveRef,
     sessionIdRef,

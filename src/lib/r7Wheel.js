@@ -53,6 +53,18 @@ export function appendR7Pair(r7, turnNumber, r1, r2) {
   return r7 ? `${r7}\n${block}` : block
 }
 
+// La PRIMERA línea, recortada. R1 = intención del usuario (una línea).
+export function firstLine(text, max) {
+  const line = String(text || '').split('\n')[0].trim()
+  return line.length > max ? line.slice(0, max) : line
+}
+
+// Par R1/R2 escrito por el SISTEMA (no por el modelo): R1 = pedido del usuario,
+// R2 = respuesta visible. Es el brief que viaja en "── Turno N ──" y se cachea.
+export function buildTurnPair(userText, assistantText) {
+  return { r1: firstLine(userText, 300), r2: String(assistantText || '').slice(0, 1500) }
+}
+
 // Cierra un turno CONVERSACIONAL sellándolo en R7 de inmediato (el sistema
 // mantiene la rueda; el modelo no la devuelve). D3 jubilado: ya no queda un
 // "último turno crudo" pendiente. Ignora cualquier lastTurn legado para no

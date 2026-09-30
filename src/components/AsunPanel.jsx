@@ -4,11 +4,11 @@ import { ASUN_MODELS, calculateCost, billableTokens } from '../lib/modelPrices.j
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { readFile } from '@tauri-apps/plugin-fs'
 import { getAsunTools, getProjectTools, executeTool, pathExists } from '../lib/asunTools.js'
-import { parseR1R2R3, extractR3Visible, extractR3Streaming } from '../lib/parseR1R2R3.js'
+import { extractR3Visible, extractR3Streaming } from '../lib/parseR1R2R3.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
 import { useFrameThrottle } from '../lib/streamThrottle.js'
-import { closeWheelTurn, buildWheelMessages } from '../lib/r7Wheel.js'
+import { commitR7Turn, buildWheelMessages, buildTurnPair } from '../lib/r7Wheel.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { useWheelSession } from '../hooks/useWheelSession.js'
@@ -115,7 +115,7 @@ function AsunPanel({
     onResetUsage,
     onError: (msg) => setMessages(prev => [...prev, { rol: 'asistente', contenido: msg, id: newMessageId('asun'), streaming: false }]),
   })
-  const { wheelRef, sessionPairsRef, messagesRef, sessionIdRef } = session
+  const { wheelRef, messagesRef, sessionIdRef } = session
 
   function getAsunSessionId() {
     if (!sessionIdRef.current) {
@@ -297,7 +297,6 @@ function AsunPanel({
       const apiMessages = buildWheelMessages({
         systemMessages: [{ role: 'system', content: systemContent }],
         r7: wheel.r7,
-        rawTurns: wheel.lastTurn ? [wheel.lastTurn] : [],
         userInput: messageContent,
       })
 
@@ -413,9 +412,6 @@ function AsunPanel({
         }
       }
 
-      const r7Pair = parseR1R2R3(finalText)
-      if (r7Pair.r1 || r7Pair.r2) sessionPairsRef.current.push({ r1: r7Pair.r1, r2: r7Pair.r2 })
-
       // ── Procesar respuesta final ──────────────────────────────────────────
       let displayText  = extractR3Visible(finalText)
       let handoffBrief = null
@@ -432,12 +428,10 @@ function AsunPanel({
         displayText = displayText.replace(MUSIC_RE, '').trim()
       }
 
-      // Bloque L4 — cerrar el turno de la rueda: sella el anterior en R7 y deja
-      // el actual como turno crudo (R7 va un turno por detrás, sin duplicar).
-      wheelRef.current = closeWheelTurn(wheelRef.current, {
-        user: text,
-        assistant: displayText,
-        pairs: (r7Pair.r1 || r7Pair.r2) ? [{ r1: r7Pair.r1, r2: r7Pair.r2 }] : [],
+      // Sella el turno en la rueda: R1/R2 los escribe el SISTEMA (mismo prefijo,
+      // cacheable). El modelo ya no emite R1/R2/R3.
+      wheelRef.current = commitR7Turn(wheelRef.current, {
+        pairs: [buildTurnPair(text, displayText)],
       })
 
       setMessages(prev => prev.map(m =>

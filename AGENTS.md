@@ -14,10 +14,12 @@ contexto rodante:
 - **Asun** — música e imágenes; modos `MaríaBase` e `IrmaMax` (Proyecto IrmaMax).
 - **Tito** — asistente de chat.
 
-La rueda **R7** es un commit-log de contexto (pares R1+R2 + entradas R5) que viaja en el
-prompt. **R9** es el almacén persistente global. Los prompts de sistema viven en
-**Supabase** (`agent_prompts`), no en el repo. `src/lib/cochiAgentPrompt.js` ya NO contiene el
-prompt real: es un fallback genérico mínimo por si Supabase falta o trae el contrato viejo.
+La rueda **R7** es un **almacén local** de contexto (commit-log de pares R1/R2 que escribe
+el SISTEMA por turno); se compacta a 70k con el botón del banner y **no viaja** en el prompt
+(lo que viaja son los briefs `── Turno N ──`, cacheables). **R9** es el almacén persistente
+global. Los prompts de sistema viven en **Supabase** (`agent_prompts`), no en el repo.
+`src/lib/cochiAgentPrompt.js` ya NO contiene el prompt real: es un fallback genérico mínimo
+por si Supabase falta o trae el contrato viejo (R1/R2/R3, ya jubilado).
 
 ## Comandos
 
@@ -77,8 +79,9 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
   `useLiveStream`, `useCochiTaskLoop` (**loop único de Cochi** + `handleSendText`). El viejo
   `useCochiConversational.js` fue **eliminado**.
 - `supabase/functions/get-agent-prompts/` — mapea `agent_prompts(prompt_key→content)` por
-  agente. Claves de Asun/Tito/MaríaBase. Las de Cochi (`system`, `planning`, `task`) quedaron
-  **sin uso** desde el loop único (ver más abajo).
+  agente. Cochi usa `system`; `planning`/`task` quedaron **sin uso** y se pueden borrar.
+  Asun (system/project/music) y Tito (system) siguen activos, pero sus prompts ya NO piden
+  R1/R2/R3 (migrados al modelo Cochi, 01/10).
 - `harness/` — un `.mjs` por lib; patrón `check(label, actual, expected)` con `pass/fail`.
 
 ## Convenciones
@@ -117,13 +120,26 @@ como opencode:
 - **Robustez de migración**: la respuesta final pasa por `extractR3Visible` — si el modelo
   emite R1/R2/R3 muestra sólo R3; si responde directo, muestra todo.
 
-**Asun / Tito / MaríaBase** siguen como antes: prompt remoto `system`, contrato R1/R2/R3
-(R1/R2 internos, R3 visible, R7 viaja).
+**Asun / Tito / MaríaBase migrados al modelo de Cochi (01/10).** Se jubiló el contrato
+R1/R2/R3 en Asun y Tito: **el modelo ya NO emite capas**; el SISTEMA escribe el brief
+`── Turno N ──` (R1 = pedido del usuario, R2 = respuesta visible) con `buildTurnPair` +
+`commitR7Turn` (`r7Wheel.js`), igual que Cochi. Motivo: la rueda R7 nunca se cacheaba; con
+el par escrito por el sistema y el mismo prefijo estable, el proveedor sí cachea. R7 queda
+**sólo como almacén local** que se compacta a 70k (no viaja nunca). Los paneles Asun/Tito
+ya no usan `parseR1R2R3` ni `closeWheelTurn`; comparten `buildWheelMessages` +
+`makeStreamingDisplayExtractor`. MaríaBase usa el prompt de Asun.
 
-## Contrato de carriles R1–R5 (SÓLO Asun/Tito; Cochi ya no lo usa)
+**Persona de Asun (01/10)**: fusión **MOTHER AI (Alien) × El Oráculo (Matrix)** — readout
+frío en MAYÚSCULAS, telegraphic, remate cálido con pregunta de galletas (`Prompt-Asun-System.txt`).
+Tito conserva Wheatley. Prompts fuente en `output/` (paso APARTE: pegar en Supabase).
 
-- **Asun/Tito** (prompt remoto `system`): R1 = línea interna de lo pedido, R2 = resumen
-  interno, R3 = respuesta visible. Sólo R3 se pinta; R1/R2 en inglés es correcto.
+## Contrato de capas R1–R5 — **JUBILADO en Cochi (30/09) y en Asun/Tito (01/10)**
+
+Ya no existe: ningún agente emite R1/R2/R3. El par R1/R2 del viaje lo escribe el sistema
+(`buildTurnPair`) y viaja como brief `── Turno N ──`; el R3 visible es simplemente la
+respuesta del modelo (sin etiquetas). El parser `parseR1R2R3.js` se conserva sólo como
+salvavidas: `extractR3Visible` tolera respuestas legadas con etiquetas y
+`makeStreamingDisplayExtractor` pinta directo cuando no hay marcadores.
 
 ## Tokens facturables (contadores + tope de 70k) — 29/09
 
@@ -180,10 +196,11 @@ se pagan). **D8-bis (30/09-quater): en el VIAJE no existe "R7"** — cada turno 
   cuenta y renumera. `compact()` persiste el histórico COMPLETO (sesión + `R7/chat_N.txt`) y
   siembra la versión compactada como rueda global: la sesión nueva arranca liviana sin perder
   nada. **Regla del usuario: si el "resumen" fuese una llamada al modelo, NO.** Es puro sistema.
-- **Prompts de Supabase**: hay que actualizar el `system` para que describa los briefs R1/R2
-  (ya no `[MEMORY]`) y hacerlos **más ricos** (el R3 no viaja). Es un paso APARTE: se edita/pega
-  en Supabase y/o en `output/`; cambiar el repo NO actualiza producción.
-- Aplica a los **3 paneles** porque comparten `buildWheelMessages` (Cochi, Tito, Asun).
+- **Prompts de Supabase (HECHO en repo 01/10)**: Asun/Tito ya NO piden R1/R2/R3; sus
+  `system` describen los briefs `── Turno N ──` y traen el contrato de OUT corto. Paso
+  APARTE: pegar `output/Prompt-Asun-System.txt` / `output/Prompt-Tito-System.txt` en Supabase.
+- Aplica a los **3 paneles** porque comparten `buildWheelMessages` (Cochi, Tito, Asun) y el
+  par R1/R2 lo escribe el sistema con `buildTurnPair` + `commitR7Turn`.
 
 Capas independientes y complementarias: **Capa 1** = ruteo (RESTAURADA 30/09-ter: SÍ enviar
 `body.provider` = `{order:['streamlake','parasail','alibaba'], allow_fallbacks:true}` para DeepSeek
@@ -484,13 +501,12 @@ Supervivientes consolidados en **`src/lib/cochiGuards.js`** (+`harness/cochiGuar
      (hoy no hay `TYPO` en `output/Cochi-Prompt.txt` ni en el fallback mínimo).
 4. **Opcional · vocabulario R1/R2 de la memoria**: `commitR7Turn` escribe `R1:`/`R2:` y
    `isMemoryMessage` los reconoce. Si se quiere desacoplar el prompt de esas etiquetas, renombrar.
-5. **Contrato de OUT en Asun/Tito (reducir completion)**: aplicar a **R3** (visible) y apretar
-   **R2** (interno; los 3 cuentan como completion) un contrato "una idea por línea, sin relleno"
-   — NO el de Cochi ("una línea por verbo de acción", ese es agéntico). Los prompts viven SÓLO en
-   Supabase (Asun/Tito no tienen fallback local). En repo sólo está el modo Proyecto
-   (`output/PromptAsun-IrmaMax-Proyecto.txt`); falta el `system` conversacional de Asun y el de
-   Tito. **Signor Roberto preparará los prompts a editar en `/output`.** Borradores exactos en
-   "HECHO 01/10-bis" (final del archivo).
+5. **HECHO 01/10 · migración Asun/Tito al modelo Cochi**: prompts reescritos sin R1/R2/R3
+   (`output/Prompt-Asun-System.txt` con persona Mother/Oracle, `output/Prompt-Tito-System.txt`
+   con Wheatley) + código (`AsunPanel`/`TitoPanel` usan `commitR7Turn`/`buildTurnPair`; el
+   sistema escribe R1/R2). **Falta**: (a) pegar ambos prompts en Supabase (paso APARTE);
+   (b) **revisar el modo Asun Proyecto** en otra sesión (ya se le sacó el FORMAT_RULE R1/R2/R3
+   y se alineó la persona, pero no se probó E2E).
 
 **CERRADO — no rehacer:**
 - **Capa 3 · compactación a 70k**: código 30/09-quater + **E2E 01/10** (ver "E2E del loop único",
@@ -664,24 +680,18 @@ Revisado `cochiLanes.js` (`buildTaskFinish`/`buildFinishMessages`) y `useCochiTa
   de Supabase (`useCochiTaskLoop.js:189-191`). **Paso APARTE: pegar el `system` nuevo en
   Supabase.** Fuente: `output/Cochi-Prompt.txt` (gitignored); pegar SÓLO el bloque entre los
   guiones (de "You are Cochi…" a "…report the real error verbatim").
-- **R1/R2 los escribe el SISTEMA, no el modelo** (`commitR7Turn`, `useCochiTaskLoop.js:448-452`):
-  R1 = `firstLine(mensaje del usuario, 300)`; R2 = `display.slice(0,1500)` con
-  `display = extractR3Visible(finalContent)`. Sin llamada al modelo.
+- **R1/R2 los escribe el SISTEMA, no el modelo** (`commitR7Turn` + `buildTurnPair`,
+  `r7Wheel.js`): R1 = `firstLine(mensaje del usuario, 300)`; R2 = `display.slice(0,1500)`.
+  Lo usan los 3 agentes (Cochi, Asun, Tito). Sin llamada al modelo.
 - **Contrato de OUT de Cochi** (reducir completion): se agregó a `WHEN YOU ARE DONE` de
   `output/Cochi-Prompt.txt` — una línea por acción, verbo en pasado, ~12 palabras, sin preámbulo
   ni cierre. Motivo: el output cuesta ~6.4x el input y los tokens de reasoning también son OUT.
-- **PENDIENTE Asun/Tito**: aplicar el mismo tipo de contrato a **R3** (visible) y apretar **R2**
-  (interno; los 3 cuentan como completion). NO es "una línea por verbo" (agéntico) sino "una idea
-  por línea, sin relleno". Los prompts viven SÓLO en Supabase. En repo sólo el modo Proyecto
-  (`output/PromptAsun-IrmaMax-Proyecto.txt`); falta el `system` conversacional de Asun y el de
-  Tito (Roberto los traerá a `/output`). Borradores listos:
-  - **Asun (conversacional)**: `R3 OUTPUT CONTRACT: One line per idea. Max ~18 words per line. No
-    preamble, no closing, no restating the request. No filler. Keep your voice (El Oráculo, calm,
-    "cielo"/{{nombreAlternativo}}): personality lives in word choice, not length. Yes/no question
-    → answer in the first line.`
-  - **Tito**: `R3 OUTPUT CONTRACT: One line per finding/source. Max ~18 words. No preamble, no
-    closing. Keep the source/citation in the same line. No filler, no restating the question.
-    Answer first; details only if asked.`
+- **HECHO 01/10-ter — Asun/Tito al modelo Cochi**: sus prompts se reescribieron sin
+  R1/R2/R3 con contrato de OUT corto ("una idea/línea, sin relleno") y sus paneles usan
+  `commitR7Turn`/`buildTurnPair` (el sistema escribe R1/R2). Asun además cambió de persona a
+  **MOTHER AI × El Oráculo** (readout en MAYÚSCULAS + remate cálido con galletas). Prompts
+  fuente: `output/Prompt-Asun-System.txt`, `output/Prompt-Tito-System.txt` (**paso APARTE:
+  pegar en Supabase**). El modo Asun Proyecto quedó alineado en el repo, pendiente de E2E.
 - **⚠ Deuda de seguridad**: el prompt real de Cochi **sigue en el historial de git** (commit
   `036b2fb`, repo público `github.com/rgartneraudios/r7signal`). Borrarlo del HEAD NO lo oculta.
   Si se quiere purgar: `git filter-repo`/BFG + force-push (disruptivo). Pendiente de decisión.

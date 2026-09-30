@@ -8,7 +8,7 @@ import { getOpenRouterKey } from '../lib/localConfig.js'
 import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools } from '../lib/cochiTools.js'
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
 import { buildSystemContext, READ_ONLY_TOOLS, makeStreamingDisplayExtractor } from '../lib/cochiContext.js'
-import { buildWheelMessages, commitR7Turn } from '../lib/r7Wheel.js'
+import { buildWheelMessages, commitR7Turn, buildTurnPair } from '../lib/r7Wheel.js'
 import { COCHI_AGENT_PROMPT } from '../lib/cochiAgentPrompt.js'
 import { needsFullAccess, touchesBoard, USER_ANSWER_PREFIX, isToolError, commandRan } from '../lib/cochiGuards.js'
 import { newMessageId } from '../lib/sessionStore.js'
@@ -25,11 +25,6 @@ const REPEAT_ABORT_THRESHOLD = 5
 async function nativeConfirm(message) {
   try { return await confirmDialog(message, { title: 'R7SIGNAL', kind: 'warning' }) }
   catch { return window.confirm(message) }
-}
-
-function firstLine(text, max) {
-  const line = String(text || '').split('\n')[0].trim()
-  return line.length > max ? line.slice(0, max) : line
 }
 
 export function useCochiTaskLoop({
@@ -448,7 +443,7 @@ export function useCochiTaskLoop({
       const display = extractR3Visible(finalContent) || 'Sin respuesta del modelo.'
       pushMessage({ role: 'assistant', content: display, reasoning: finalReasoning.slice(0, 8000) || undefined })
       wheelRef.current = commitR7Turn(wheelRef.current, {
-        pairs: [{ r1: firstLine(originalMessageRef.current, 300), r2: display.slice(0, 1500) }],
+        pairs: [buildTurnPair(originalMessageRef.current, display)],
       })
       auditLog(`turno: ${requestCount} request(s) · ${turnTokens} tokens facturables · ${toolLog.length} tool(s)`)
     } catch (err) {

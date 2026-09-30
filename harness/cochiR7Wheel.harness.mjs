@@ -18,6 +18,8 @@ import {
   compactWheel,
   isMemoryMessage,
   COMPACT_MARKER,
+  firstLine,
+  buildTurnPair,
 } from '../src/lib/r7Wheel.js'
 
 let pass = 0
@@ -152,6 +154,17 @@ check('commitR7Turn deja lastTurn nulo (D3 jubilado)', stTask.lastTurn, null)
 const poppedTask = popR7Turn(stTask.r7)
 check('popR7Turn quita el bloque sellado', countR7Turns(poppedTask.r7), 0)
 check('popR7Turn devuelve el par quitado', poppedTask.pair, { r1: 'a', r2: 'b' })
+
+console.log('\n— buildTurnPair: R1/R2 escritos por el SISTEMA (no por el modelo) —')
+check('R1 = primera línea del pedido', buildTurnPair('leé notas.txt\nsegunda línea', 'lo leí').r1, 'leé notas.txt')
+check('R2 = respuesta visible', buildTurnPair('pedido', 'respuesta final').r2, 'respuesta final')
+check('R1 recorta a 300', buildTurnPair('x'.repeat(500), 'y').r1.length, 300)
+check('R2 recorta a 1500', buildTurnPair('p', 'y'.repeat(2000)).r2.length, 1500)
+check('firstLine robusto null', firstLine(null, 300), '')
+check('firstLine recorta', firstLine('a'.repeat(10), 4), 'aaaa')
+const sysPairWheel = commitR7Turn(createWheelState(''), { pairs: [buildTurnPair('hola', 'HOLA. ¿Gustas una chocolatina?')] })
+check('el par del sistema sella un turno', countR7Turns(sysPairWheel.r7), 1)
+check('el turno del sistema lleva el pedido en R1', sysPairWheel.r7.includes('R1: hola'), true)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

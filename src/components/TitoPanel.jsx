@@ -3,8 +3,9 @@ import { calculateCost, billableTokens } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
 import { interpolatePrompt } from '../lib/promptLoader.js'
-import { parseR1R2R3, extractR3Visible, extractR3Streaming } from '../lib/parseR1R2R3.js'
-import { closeWheelTurn, buildWheelMessages } from '../lib/r7Wheel.js'
+import { extractR3Visible } from '../lib/parseR1R2R3.js'
+import { makeStreamingDisplayExtractor } from '../lib/cochiContext.js'
+import { commitR7Turn, buildWheelMessages, buildTurnPair } from '../lib/r7Wheel.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { useWheelSession } from '../hooks/useWheelSession.js'
@@ -44,6 +45,7 @@ function TitoPanel({
   onPromptsReady,
 }) {
   const chatLanguage = preferences.chat_language ?? 'Spanish'
+  const nombreAlternativo = preferences.nombre_alternativo ?? null
   const [messages, setMessages] = useState([]);
   // Bloque Q: el texto en vivo se empuja a TitoStreamingBubble por ref, así el
   // panel no se re-renderiza en cada frame del throttle.
@@ -70,7 +72,7 @@ function TitoPanel({
     onResetUsage,
     onError: (msg) => setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: msg }]),
   })
-  const { wheelRef, sessionPairsRef, messagesRef, sessionIdRef } = session
+  const { wheelRef, messagesRef, sessionIdRef } = session
 
   function getTitoSessionId() {
     if (!sessionIdRef.current) {
@@ -159,15 +161,15 @@ function TitoPanel({
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const titoSystem = interpolatePrompt(remotePrompts.system, { chatLanguage })
+    const titoSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
 
-    // Bloque L4 — prompt híbrido (D3/D8): system -> bloque R7 -> último turno
-    // crudo -> input actual. Sustituye el reenvío del historial R3 completo.
+    // Bloque L4 — prompt híbrido (D3/D8): system -> briefs R1/R2 (el sistema los
+    // escribe, mismo prefijo cacheable) -> input actual. Sustituye el reenvío del
+    // historial R3 completo.
     const wheel = wheelRef.current
     const wheelMessages = buildWheelMessages({
       systemMessages: [{ role: 'system', content: titoSystem }],
       r7: wheel.r7,
-      rawTurns: wheel.lastTurn ? [wheel.lastTurn] : [],
       userInput: text,
     })
 
@@ -175,6 +177,7 @@ function TitoPanel({
       // Conversational guard — skip web search for casual messages
       if (!needsWebSearch(text)) {
         const chatModel = TITO_MODELS[searchLevel]
+        const extractStream = makeStreamingDisplayExtractor()
         // Fase 3.2: streaming vía llmClient (retry + usage normalizado).
         const result = await streamChat({
           provider: resolveProvider(chatModel),
@@ -182,7 +185,7 @@ function TitoPanel({
           messages: wheelMessages,
           sessionId: getTitoSessionId(),
           signal: controller.signal,
-          onDelta: (partial) => liveRef.current?.push(extractR3Streaming(partial)),
+          onDelta: (partial) => liveRef.current?.push(extractStream(partial)),
           onUsage: (usage) => {
             const u = normalizeUsage(usage)
             const billable = billableTokens(chatModel, u)
@@ -194,16 +197,10 @@ function TitoPanel({
           },
         })
         const fullText = result.content
-         const r7Pair = parseR1R2R3(fullText)
-         if (r7Pair.r1 || r7Pair.r2) sessionPairsRef.current.push({ r1: r7Pair.r1, r2: r7Pair.r2 })
          const finalDisplay = extractR3Visible(fullText)
          const hasHandoff = fullText.includes('[→ COCHI:')
-         // Bloque L4 — cerrar el turno de la rueda.
-         wheelRef.current = closeWheelTurn(wheelRef.current, {
-           user: text,
-           assistant: finalDisplay,
-           pairs: (r7Pair.r1 || r7Pair.r2) ? [{ r1: r7Pair.r1, r2: r7Pair.r2 }] : [],
-})
+         // Sella el turno en la rueda: R1/R2 los escribe el SISTEMA (cacheable).
+         wheelRef.current = commitR7Turn(wheelRef.current, { pairs: [buildTurnPair(text, finalDisplay)] })
          liveRef.current?.clear()
          setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: finalDisplay, hasHandoff }])
          if (hasHandoff) {
@@ -215,6 +212,7 @@ function TitoPanel({
       }
 
       const searchModel = TITO_MODELS[searchLevel]
+      const extractStream = makeStreamingDisplayExtractor()
       // Fase 3.2: streaming vía llmClient (retry + usage normalizado).
       const result = await streamChat({
         provider: resolveProvider(searchModel),
@@ -222,7 +220,7 @@ function TitoPanel({
         messages: wheelMessages,
         sessionId: getTitoSessionId(),
         signal: controller.signal,
-        onDelta: (partial) => liveRef.current?.push(extractR3Streaming(partial)),
+        onDelta: (partial) => liveRef.current?.push(extractStream(partial)),
         onUsage: (usage) => {
           const u = normalizeUsage(usage)
           const billable = billableTokens(searchModel, u)
@@ -235,16 +233,10 @@ function TitoPanel({
       })
 
       const fullText = result.content;
-      const r7Pair = parseR1R2R3(fullText);
-      if (r7Pair.r1 || r7Pair.r2) sessionPairsRef.current.push({ r1: r7Pair.r1, r2: r7Pair.r2 });
       const finalDisplay = extractR3Visible(fullText);
       const hasHandoff = fullText.includes('[→ COCHI:');
-      // Bloque L4 — cerrar el turno de la rueda.
-      wheelRef.current = closeWheelTurn(wheelRef.current, {
-        user: text,
-        assistant: finalDisplay,
-        pairs: (r7Pair.r1 || r7Pair.r2) ? [{ r1: r7Pair.r1, r2: r7Pair.r2 }] : [],
-      });
+      // Sella el turno en la rueda: R1/R2 los escribe el SISTEMA (cacheable).
+      wheelRef.current = commitR7Turn(wheelRef.current, { pairs: [buildTurnPair(text, finalDisplay)] });
       liveRef.current?.clear()
       setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: finalDisplay, hasHandoff }]);
 
