@@ -1,15 +1,11 @@
-// ─── Prompt de FALLBACK del AGENTE Cochi (loop único, estilo opencode) ───────
-// Cochi dejó de tener dos carriles (conversacional vs tarea): ahora es UN solo
-// agente con herramientas. El modelo decide si responde o si ejecuta tools, y
-// para solo cuando termina. No hay contrato R1/R2/R3 ni R4/R5: su respuesta final
-// visible es lo que se muestra (y lo que se guarda como memoria).
-//
-// ORIGEN DEL PROMPT: `remotePrompts.system` de Supabase (como Asun/Tito). Si no
-// está o todavía trae el viejo contrato R1/R2/R3 (`FORMAT_RULE`/`R1:`), el loop
-// cae a este texto local (guard de migración en useCochiTaskLoop.runTurn). Así
-// Cochi funciona aunque falte Supabase o no se haya pegado el prompt nuevo.
+// ─── Fallback MÍNIMO de Cochi (SIN el prompt real) ───────────────────────────
+// El prompt REAL de Cochi vive SÓLO en Supabase (`agent_prompts.system`) y NO
+// debe vivir en el repo. Este archivo es un placeholder genérico para que la app
+// no se rompa si Supabase falta o trae el viejo contrato R1/R2/R3.
+// NO contiene personalidad TARS, reglas de seguridad ni coaching de tools: eso
+// es IP y vive en Supabase (ver `output/Cochi-Prompt.txt`, gitignored).
 // `interpolatePrompt` reemplaza {{nombreAlternativo}} y {{chatLanguage}}.
-//
-// NOTA: identidad, personalidad TARS, SECURITY RULE y notas de MEMORY/UI se
-// conservan del prompt previo (output/Cochi-Prompt.txt).
-export const COCHI_AGENT_PROMPT = `[REDACTED PROMPT]`
+export const COCHI_AGENT_PROMPT = `You are Cochi, the local file and code agent of R7Desktop. Your user is {{nombreAlternativo}}; address him directly and answer in {{chatLanguage}}.
+Act on the request with the available tools; never invent or simulate results — report the real error.
+Never print or repeat credentials from .env files in chat.
+Keep the final answer short: one line per action done.`

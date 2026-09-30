@@ -16,8 +16,8 @@ contexto rodante:
 
 La rueda **R7** es un commit-log de contexto (pares R1+R2 + entradas R5) que viaja en el
 prompt. **R9** es el almacén persistente global. Los prompts de sistema viven en
-**Supabase** (`agent_prompts`), no en el repo (Cochi tiene además un fallback local en
-`src/lib/cochiAgentPrompt.js` por si Supabase falta o trae el contrato viejo).
+**Supabase** (`agent_prompts`), no en el repo. `src/lib/cochiAgentPrompt.js` ya NO contiene el
+prompt real: es un fallback genérico mínimo por si Supabase falta o trae el contrato viejo.
 
 ## Comandos
 
@@ -40,18 +40,20 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
   cargada en la app.
 - **Prompts**: la edge function `supabase/functions/get-agent-prompts/` lee
   `agent_prompts` (filtra `agent_id` + `is_active`) y devuelve `{prompt_key: content}`.
-  La usan Asun/Tito/MaríaBase y **también Cochi**: su prompt es `system` (ahora el prompt
-  unificado del loop único; ver `output/Cochi-Prompt.txt`). Si `system` falta o es el viejo
-  contrato R1/R2/R3, Cochi cae al fallback `src/lib/cochiAgentPrompt.js`. Las claves
-  `planning`/`task` de Cochi quedaron **sin uso** y se pueden borrar (paso APARTE, en Supabase).
+  La usan Asun/Tito/MaríaBase y **también Cochi**: su prompt es `system` (el prompt unificado
+  del loop único; ver `output/Cochi-Prompt.txt`). Si `system` falta o es el viejo contrato
+  R1/R2/R3, Cochi cae al fallback **genérico mínimo** de `src/lib/cochiAgentPrompt.js` (el
+  prompt real NO vive en el repo). Las claves `planning`/`task` de Cochi quedaron **sin uso**
+  y se pueden borrar (paso APARTE, en Supabase).
 
 ## Arquitectura (dónde tocar)
 
 - `src/lib/` — lógica pura, testeable con harness. Es donde vive el grueso.
-  - `cochiAgentPrompt.js` — **prompt de FALLBACK del agente Cochi** (loop único, estilo
-    opencode). Cochi usa `remotePrompts.system` de Supabase; si falta o todavía trae el
-    viejo contrato R1/R2/R3, cae a este texto local (guard en `useCochiTaskLoop.runTurn`).
-    `interpolatePrompt` reemplaza `{{nombreAlternativo}}`/`{{chatLanguage}}`.
+  - `cochiAgentPrompt.js` — **fallback MÍNIMO** del agente Cochi (placeholder, no el prompt
+    real). Cochi usa `remotePrompts.system` de Supabase; si falta o trae el viejo contrato
+    R1/R2/R3, cae a este texto genérico (guard en `useCochiTaskLoop.runTurn`). El prompt real
+    (TARS/seguridad/coaching) vive SÓLO en Supabase. `interpolatePrompt` reemplaza
+    `{{nombreAlternativo}}`/`{{chatLanguage}}`.
   - `cochiGuards.js` — **guardas e intención del loop único** (extraído del legado al podar
     carriles/planner, 30/09-quinquies-ter). Sólo sobrevive lo que el loop usa: `needsRunCommand`/
     `needsFullAccess` (Guard Full Access), `touchesBoard` (scope `full` vs `task`),
@@ -67,7 +69,7 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
   - `subagent.js` — mini-loop aislado (hoy sólo lectura) → brief. Topes: tool result 8000 chars,
     8 iteraciones, 20k tokens.
   - `promptLoader.js` — carga prompts de Supabase (cache por agente) + `interpolatePrompt`
-    (Tito/Asun/MaríaBase; Cochi ya no consume prompts remotos).
+    (Cochi/Tito/Asun/MaríaBase).
   - `cochiPermissions.js` — allow/deny + `isBlockedUrl`.
 - `src/components/` — UI. `CochiDesktop.jsx` es el orquestador; los paneles Asun/Tito espejan la
   estructura. Subcomponentes por panel (Header/MessageList/StatusBar…).
@@ -108,7 +110,8 @@ como opencode:
 - **Sin colapso intra-turno**: no se reescribe el medio del hilo. `pruneApiMessages`/
   `collapseStepMessages`/`estimateTokens`/`extractCompleteSteps` **eliminados** (eran del carril
   tarea/planner) → el prefijo nunca se reescribe a mitad de turno y la caché pega.
-- **Prompt local**: `cochiAgentPrompt.js` (repo). Cochi **ya no lee prompts de Supabase**.
+- **Prompt**: Cochi lee `remotePrompts.system` de Supabase (prompt real, SÓLO ahí); si falta o
+  es legacy, cae al fallback genérico mínimo de `cochiAgentPrompt.js` (sin IP).
 - **Memoria R7**: cada turno sella `R1: <pedido>` / `R2: <respuesta final>` con `commitR7Turn`
   (ya no hay R1/R2 generados por el modelo). `buildWheelMessages` los manda como briefs.
 - **Robustez de migración**: la respuesta final pasa por `extractR3Visible` — si el modelo
@@ -228,7 +231,7 @@ porque `useWheelSession.busy` lo lee antes de que exista el hook.
   `windowEffects: micaDark` (Win11). En `src-tauri/src/lib.rs` hay fallback a **Acrylic**
   tintado (`Color(15,14,17,180)`) para Win10 build 17763-21999. Requiere que el webview no
   pinte opaco: `body` transparente, raíz de `R7Desktop` transparente y el **lienzo de los 3
-  chats** en `rgba(15,14,17,0.45)` (CochiDesktop, AsunPanel, `.tito-chat`). Headers/footers
+  chats** en `rgba(15,14,17,0.35)` (CochiDesktop, AsunPanel, `.tito-chat`). Headers/footers
   conservan su `rgba(9,8,10,0.5)`. Sólo Windows (Linux no soporta el efecto).
 
 ## Carril explícito Task / Conversacional (RESUELTO e implementado 29/09)
@@ -394,9 +397,10 @@ técnica** (subagentes que escriban, shell revertible, SSRF en Rust, TYPO de arc
 Motivo: una tarea trivial costaba planner + 6 requests con reasoning + un R5 full (~11.4k; hasta
 ~29k en tareas grandes). Decisión de Signor Roberto: quitar el carril tarea y hacer un solo agente
 con tools, como opencode. Cambios:
-- `src/lib/cochiAgentPrompt.js` (NUEVO): **fallback local** del prompt del agente. Cochi usa
+- `src/lib/cochiAgentPrompt.js` (NUEVO): **fallback mínimo** del prompt del agente. Cochi usa
   `remotePrompts.system` de Supabase (prompt unificado, ver `output/Cochi-Prompt.txt`); si falta
-  o sigue siendo el viejo contrato R1/R2/R3, cae a este texto.
+  o sigue siendo el viejo contrato R1/R2/R3, cae a este placeholder genérico (el prompt real no
+  vive en el repo).
 - `src/hooks/useCochiTaskLoop.js` (REESCRITO): un loop `[systemContext][agentPrompt][briefs R7][user]`
   + tools; ejecuta tool_calls y repite hasta que el modelo responde texto. Sin planner, sin R4/R5,
   sin colapso, sin `planStatus` de pasos. Se conservan tools, permisos, `ask_user`, subagentes,
@@ -477,9 +481,16 @@ Supervivientes consolidados en **`src/lib/cochiGuards.js`** (+`harness/cochiGuar
      resuelta en Rust.
    - **TYPO de archivo**: el viejo fallback `TYPO RESUELTO` vivía en el R4 (eliminado con el
      planner). Verificar que el loop único no haya perdido el manejo del nombre con typo
-     (hoy no hay `TYPO` en `cochiAgentPrompt.js` ni en `output/Cochi-Prompt.txt`).
+     (hoy no hay `TYPO` en `output/Cochi-Prompt.txt` ni en el fallback mínimo).
 4. **Opcional · vocabulario R1/R2 de la memoria**: `commitR7Turn` escribe `R1:`/`R2:` y
    `isMemoryMessage` los reconoce. Si se quiere desacoplar el prompt de esas etiquetas, renombrar.
+5. **Contrato de OUT en Asun/Tito (reducir completion)**: aplicar a **R3** (visible) y apretar
+   **R2** (interno; los 3 cuentan como completion) un contrato "una idea por línea, sin relleno"
+   — NO el de Cochi ("una línea por verbo de acción", ese es agéntico). Los prompts viven SÓLO en
+   Supabase (Asun/Tito no tienen fallback local). En repo sólo está el modo Proyecto
+   (`output/PromptAsun-IrmaMax-Proyecto.txt`); falta el `system` conversacional de Asun y el de
+   Tito. **Signor Roberto preparará los prompts a editar en `/output`.** Borradores exactos en
+   "HECHO 01/10-bis" (final del archivo).
 
 **CERRADO — no rehacer:**
 - **Capa 3 · compactación a 70k**: código 30/09-quater + **E2E 01/10** (ver "E2E del loop único",
@@ -642,5 +653,37 @@ Revisado `cochiLanes.js` (`buildTaskFinish`/`buildFinishMessages`) y `useCochiTa
 - Schema: task 18 tools/8345 chars; read 14 tools/8006 chars; estructura JSON 4.366 chars.
 - OPENROUTER (docs, 29/09): DeepSeek cache-read **0.1x**, write 1x; sticky routing por
   `session_id` con TTL 10 min.
+
+### HECHO 01/10-bis — seguridad de prompts + contrato de OUT (handoff)
+
+- **Transparencia**: los 3 lienzos de chat pasaron de `rgba(15,14,17,0.45)` a **`0.35`**
+  (`CochiDesktop.jsx`, `AsunPanel.jsx`, `R7Desktop.jsx` `.tito-chat`).
+- **Prompt de Cochi = SÓLO Supabase**: `src/lib/cochiAgentPrompt.js` ya NO contiene el prompt
+  real; quedó un **fallback genérico mínimo** (4 líneas, sin TARS/seguridad/coaching/IP) para que
+  la app no se rompa si Supabase falta o trae el contrato viejo. Cochi lee `remotePrompts.system`
+  de Supabase (`useCochiTaskLoop.js:189-191`). **Paso APARTE: pegar el `system` nuevo en
+  Supabase.** Fuente: `output/Cochi-Prompt.txt` (gitignored); pegar SÓLO el bloque entre los
+  guiones (de "You are Cochi…" a "…report the real error verbatim").
+- **R1/R2 los escribe el SISTEMA, no el modelo** (`commitR7Turn`, `useCochiTaskLoop.js:448-452`):
+  R1 = `firstLine(mensaje del usuario, 300)`; R2 = `display.slice(0,1500)` con
+  `display = extractR3Visible(finalContent)`. Sin llamada al modelo.
+- **Contrato de OUT de Cochi** (reducir completion): se agregó a `WHEN YOU ARE DONE` de
+  `output/Cochi-Prompt.txt` — una línea por acción, verbo en pasado, ~12 palabras, sin preámbulo
+  ni cierre. Motivo: el output cuesta ~6.4x el input y los tokens de reasoning también son OUT.
+- **PENDIENTE Asun/Tito**: aplicar el mismo tipo de contrato a **R3** (visible) y apretar **R2**
+  (interno; los 3 cuentan como completion). NO es "una línea por verbo" (agéntico) sino "una idea
+  por línea, sin relleno". Los prompts viven SÓLO en Supabase. En repo sólo el modo Proyecto
+  (`output/PromptAsun-IrmaMax-Proyecto.txt`); falta el `system` conversacional de Asun y el de
+  Tito (Roberto los traerá a `/output`). Borradores listos:
+  - **Asun (conversacional)**: `R3 OUTPUT CONTRACT: One line per idea. Max ~18 words per line. No
+    preamble, no closing, no restating the request. No filler. Keep your voice (El Oráculo, calm,
+    "cielo"/{{nombreAlternativo}}): personality lives in word choice, not length. Yes/no question
+    → answer in the first line.`
+  - **Tito**: `R3 OUTPUT CONTRACT: One line per finding/source. Max ~18 words. No preamble, no
+    closing. Keep the source/citation in the same line. No filler, no restating the question.
+    Answer first; details only if asked.`
+- **⚠ Deuda de seguridad**: el prompt real de Cochi **sigue en el historial de git** (commit
+  `036b2fb`, repo público `github.com/rgartneraudios/r7signal`). Borrarlo del HEAD NO lo oculta.
+  Si se quiere purgar: `git filter-repo`/BFG + force-push (disruptivo). Pendiente de decisión.
 
 ================================================================================
