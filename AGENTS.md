@@ -420,6 +420,24 @@ el turno frío). El pin cubre Cochi (Centinela y Terminator), el subagente y **A
 técnica** (subagentes que escriban, shell revertible, SSRF en Rust, TYPO de archivo) — ver
 "PRIMERA FILA" al final. Gates al cerrar: **lint 0/0 · `npm test` 12/12 · `npm run build` OK**.
 
+### HECHO (esta sesión) · RUEDA R7 POR-AGENTE (Tito/Asun como Cochi)
+Motivo: Tito y Asun leían la MISMA rueda global que Cochi (`readLatestR7`/`writeR9File('r7')`),
+así que un saludo arrastraba turnos ajenos (medido: Tito `sysChars 8813`). Decisión de Signor
+Roberto: cada agente tiene su PROPIA rueda, el sistema sigue escribiendo R1/R2 (`commitR7Turn` +
+`buildTurnPair`) para cachear con el mismo prefijo. Cambios:
+- `src/lib/agentScope.js` (NUEVO, puro): `sanitizeAgent`/`agentFolder` → carpeta segura por agente.
+  Harness `harness/agentScope.harness.mjs`.
+- `src/lib/r9Store.js`: R7 pasa a `R7/<agente>/chat_N.txt` (`opts.agent`); **R9 sigue global** (`R9/`).
+- `src/hooks/useWheelSession.js`: pasa `agent` a `readLatestR7`/`writeR9File` (montaje, archivar,
+  compactar, cerrar). `promoteWheelToGlobal` → `promoteWheelToAgent`.
+- `src/components/TitoPanel.jsx`: `reasoning: false` (Tito sólo busca con `openrouter:web_search`).
+- `src/lib/llmMetrics.js`: `MODEL_CAPS` queda **vacío** (ningún modelo declara reasoning; Cochi,
+  Asun, Tito y el subagente lo apagan). Harness `cochiLlmMetrics` actualizado.
+- `src/components/AsunPanel.jsx`: la rama MÚSICA usa `buildWheelMessages` + `commitR7Turn` (antes
+  reenviaba el historial crudo completo, no cacheable). Asun conserva sus tools (decisión del usuario).
+- Gates: **lint 0/0 · `npm test` 14/14 · `npm run build` OK**. **Falta E2E** en `npx tauri dev`
+  (verificar que cada agente arranca con su rueda y `cached>0` sin contaminación cruzada).
+
 ### HECHO 30/09-quinquies · LOOP ÚNICO (elimina planner + R4/R5 + toggle Tarea)
 Motivo: una tarea trivial costaba planner + 6 requests con reasoning + un R5 full (~11.4k; hasta
 ~29k en tareas grandes). Decisión de Signor Roberto: quitar el carril tarea y hacer un solo agente

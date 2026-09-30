@@ -1,5 +1,31 @@
 import { memo, forwardRef, useImperativeHandle } from 'react'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import { useLiveStream } from '../hooks/useLiveStream.js'
+import { tokenizeLinks } from '../lib/linkify.js'
+
+const LINK_COLOR = '#5FD3E0'
+
+function openExternal(e, url) {
+  e.preventDefault()
+  openUrl(url).catch(() => window.open(url, '_blank'))
+}
+
+export function LinkifiedText({ text }) {
+  const segments = tokenizeLinks(text)
+  if (!segments.some(s => s.type === 'link')) return text
+  return segments.map((seg, i) => seg.type === 'link'
+    ? (
+      <a
+        key={i}
+        href={seg.value}
+        onClick={(e) => openExternal(e, seg.value)}
+        title={seg.value}
+        style={{ color: LINK_COLOR, textDecoration: 'underline', cursor: 'pointer', wordBreak: 'break-all' }}
+      >{seg.value}</a>
+    )
+    : <span key={i}>{seg.value}</span>
+  )
+}
 
 // ─── Lista de mensajes memoizada (Bloque P) ──────────────────────────────────
 // Mientras llega el streaming, el placeholder cambia ~30 veces/seg. Sin esto,
@@ -9,7 +35,7 @@ import { useLiveStream } from '../hooks/useLiveStream.js'
 export const TitoMessageList = memo(function TitoMessageList({ messages, lastAssistantId, streaming, onUndo, onRegenerate, onHandoff }) {
   return messages.map((msg) => (
     <div key={msg.id} className={`tito-msg tito-msg--${msg.role}`}>
-      <div className="tito-msg-content">{msg.content}</div>
+      <div className="tito-msg-content"><LinkifiedText text={msg.content} /></div>
       {msg.hasHandoff && (
         <button
           className="tito-handoff-btn"
@@ -57,7 +83,7 @@ export const TitoStreamingBubble = memo(forwardRef(function TitoStreamingBubble(
   if (!text) return null
   return (
     <div className="tito-msg tito-msg--assistant">
-      <div className="tito-msg-content">{text}</div>
+      <div className="tito-msg-content"><LinkifiedText text={text} /></div>
     </div>
   )
 }))

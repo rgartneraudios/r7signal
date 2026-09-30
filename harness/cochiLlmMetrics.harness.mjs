@@ -38,22 +38,22 @@ const TERMINATOR = '~deepseek/deepseek-flash-latest'
 const REQUIRED = 'test/reasoning-required'
 MODEL_CAPS[REQUIRED] = { reasoning: true, reasoningRequired: true }
 
-console.log('— capacidades por modelo (whitelist) —')
-check('Centinela soporta reasoning', supportsReasoning(CENTINELA), true)
-check('Terminator soporta reasoning', supportsReasoning(TERMINATOR), true)
+console.log('— capacidades por modelo (whitelist vacía: todo apagado) —')
+check('Centinela NO soporta reasoning', supportsReasoning(CENTINELA), false)
+check('Terminator NO soporta reasoning', supportsReasoning(TERMINATOR), false)
 check('modelo REQUIRED soporta reasoning', supportsReasoning(REQUIRED), true)
 check('modelo REQUIRED exige reasoning', reasoningRequired(REQUIRED), true)
 check('Centinela NO exige reasoning', reasoningRequired(CENTINELA), false)
 check('modelo desconocido NO exige reasoning', reasoningRequired('x/y'), false)
 check('modelo desconocido NO soporta reasoning', supportsReasoning('x/y'), false)
 check('getModelCapabilities default {}', getModelCapabilities('x/y'), {})
-check('MODEL_CAPS declara whitelist', Object.keys(MODEL_CAPS).sort(), [CENTINELA, TERMINATOR, REQUIRED].sort())
+check('MODEL_CAPS sólo el registro sintético', Object.keys(MODEL_CAPS).sort(), [REQUIRED].sort())
 
 console.log('— buildReasoningConfig (flag por modelo + override) —')
-check('flag ON → enabled', buildReasoningConfig(CENTINELA), { enabled: true })
+check('modelo sin flag → disabled', buildReasoningConfig(CENTINELA), { enabled: false })
 check('modelo REQUIRED default → enabled', buildReasoningConfig(REQUIRED), { enabled: true })
 check('modelo sin flag → disabled', buildReasoningConfig('x/y'), { enabled: false })
-check('override false gana sobre flag ON', buildReasoningConfig(CENTINELA, false), { enabled: false })
+check('override true gana sobre modelo sin flag', buildReasoningConfig(CENTINELA, true), { enabled: true })
 check('override true gana sobre modelo sin flag', buildReasoningConfig('x/y', true), { enabled: true })
 check('override false NO puede apagar un modelo que exige reasoning', buildReasoningConfig(REQUIRED, false), { enabled: true })
 

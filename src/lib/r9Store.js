@@ -1,8 +1,12 @@
 import { writeTextFile, readTextFile, readDir, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'
 import { buildR7Header, stripR7Header } from './r7Wheel.js'
+import { agentFolder } from './agentScope.js'
 
-// ─── R7/R9 GLOBAL: una carpeta compartida por los 3 agentes y todos los
-//     workspaces (Bloque L4, decisión D5). Vive en AppLocalData:
+// ─── R7 POR-AGENTE + R9 GLOBAL ────────────────────────────────────────────────
+// Cada agente (cochi/tito/asun) tiene su PROPIA rueda R7 en R7/<agente>/chat_N.txt
+// (ya no se comparte un archivo global: se corta la contaminación cruzada y cada
+// agente cachea su propio prefijo). R9 (selección manual del usuario) sigue
+// global en R9/. Todo vive en AppLocalData:
 //     C:\Users\PC\AppData\Local\com.r7signal.cochi\  (identifier de Tauri).
 //     NO se usa ProgramData (requiere admin) ni el workspace del usuario (D10).
 //
@@ -17,13 +21,14 @@ const SEP = '────────────────'
 function baseDirFrom(opts) {
   return opts?.baseDir ?? BaseDirectory.AppLocalData
 }
-function folderDir(folder) {
-  return FOLDER_NAME[folder]
+// R7 es por-agente (R7/<agente>); R9 es global (R9).
+function folderDir(folder, agent) {
+  return folder === 'r7' ? agentFolder(FOLDER_NAME.r7, agent) : FOLDER_NAME[folder]
 }
 
-async function nextIndex(folder, baseDir) {
+async function nextIndex(folder, baseDir, agent) {
   let entries = []
-  try { entries = await readDir(folderDir(folder), { baseDir }) } catch { return 1 }
+  try { entries = await readDir(folderDir(folder, agent), { baseDir }) } catch { return 1 }
   const nums = entries
     .map(e => e.name.match(/_(\d+)\.txt$/))
     .filter(Boolean)
@@ -31,13 +36,13 @@ async function nextIndex(folder, baseDir) {
   return nums.length ? Math.max(...nums) + 1 : 1
 }
 
-// Escribe una entrada nueva en R7 o R9 (archivo NUEVO acumulativo, D4).
-// Sin costo — pura escritura a disco.
+// Escribe una entrada nueva en R7 (por-agente, `opts.agent`) o R9 (global).
+// Archivo NUEVO acumulativo (D4). Sin costo — pura escritura a disco.
 export async function writeR9File(folder, content, meta = {}, opts = {}) {
   const baseDir = baseDirFrom(opts)
-  const dir = folderDir(folder)
+  const dir = folderDir(folder, opts.agent)
   await mkdir(dir, { baseDir, recursive: true })
-  const n = await nextIndex(folder, baseDir)
+  const n = await nextIndex(folder, baseDir, opts.agent)
   const fileName = `${FILE_PREFIX[folder]}_${n}.txt`
   // Ruta RELATIVA a AppLocalData (leída/escrita con { baseDir }).
   const filePath = `${dir}/${fileName}`
@@ -49,10 +54,10 @@ export async function writeR9File(folder, content, meta = {}, opts = {}) {
   return { fileName, filePath, index: n }
 }
 
-// Lista archivos de una carpeta (R7 o R9), más recientes primero.
+// Lista archivos de una carpeta (R7 por-agente o R9 global), más recientes primero.
 export async function listR9Files(folder, opts = {}) {
   const baseDir = baseDirFrom(opts)
-  const dir = folderDir(folder)
+  const dir = folderDir(folder, opts.agent)
   let entries = []
   try { entries = await readDir(dir, { baseDir }) } catch { return [] }
   return entries
@@ -70,8 +75,8 @@ export async function readR9File(relativePath, opts = {}) {
   return await readTextFile(relativePath, { baseDir: baseDirFrom(opts) })
 }
 
-// Carga la rueda: el R7 más reciente (por índice desc), sin header.
-// Nunca lanza: ante error/devuelve '' para que la rueda arranque vacía.
+// Carga la rueda DEL AGENTE (`opts.agent`): su R7 más reciente (índice desc),
+// sin header. Nunca lanza: ante error devuelve '' para que arranque vacía.
 export async function readLatestR7(opts = {}) {
   try {
     const files = await listR9Files('r7', opts)

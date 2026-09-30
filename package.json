@@ -18,6 +18,7 @@
     "harness:guards": "node harness/cochiGuards.harness.mjs",
     "harness:tools": "node harness/cochiTools.harness.mjs",
     "harness:context": "node harness/cochiContext.harness.mjs",
+    "harness:linkify": "node harness/linkify.harness.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

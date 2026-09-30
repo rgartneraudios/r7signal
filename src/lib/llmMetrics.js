@@ -4,15 +4,13 @@
 import { calculateCost } from './modelPrices.js'
 
 // ─── Capacidades por modelo ──────────────────────────────────────────────────
-// Sólo se declara lo que el proveedor expone HOY vía OpenRouter. El flag
-// `reasoning` es la whitelist: un modelo fuera de aquí NO pide reasoning.
-// Nota: `~deepseek/deepseek-v4-flash-latest` lo comparten Cochi (Centinela) y la
-// música de Asun; Cochi lo hereda del flag y Asun lo apaga explícitamente (D1:
-// reasoning sólo en Cochi).
-export const MODEL_CAPS = {
-  '~deepseek/deepseek-v4-flash-latest': { reasoning: true },
-  '~deepseek/deepseek-flash-latest':    { reasoning: true },
-}
+// Ya NINGÚN modelo del catálogo declara reasoning: Cochi (loop único), Asun,
+// Tito y el subagente lo apagan explícitamente (`reasoning: false`). Tito en
+// particular sólo busca con `openrouter:web_search` y no debe razonar. La
+// whitelist queda vacía; `buildReasoningConfig` mantiene la capacidad por si un
+// modelo futuro la exige (`reasoningRequired`), cubierto con un registro
+// sintético en el harness.
+export const MODEL_CAPS = {}
 
 export function getModelCapabilities(modelId) {
   return MODEL_CAPS[modelId] || {}

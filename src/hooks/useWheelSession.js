@@ -43,10 +43,10 @@ export function useWheelSession({
   // Espejo de `messages` (setState es async; el autosave necesita el estado final).
   useEffect(() => { messagesRef.current = messages }, [messages])
 
-  // Al abrir, adoptar la rueda R7 global desde disco.
+  // Al abrir, adoptar la rueda R7 DEL AGENTE desde disco (R7/<agente>/).
   useEffect(() => {
-    readLatestR7().then(r7 => { wheelRef.current = createWheelState(r7) })
-  }, [])
+    readLatestR7({ agent }).then(r7 => { wheelRef.current = createWheelState(r7) })
+  }, [agent])
 
   // Autosave tras cerrar cada turno (KD5). Salta montaje/retomas y nunca guarda
   // mientras hay trabajo en curso.
@@ -102,20 +102,21 @@ export function useWheelSession({
     saveSession(session).catch(err => console.error(`autosave ${agent}:`, err))
   }
 
-  // Al archivar/CLS, la rueda actual se promueve a global como chat_N nuevo para
-  // que la sesión siguiente herede la continuidad (K2 decisión 3). `bodyOverride`
-  // permite sembrar una versión compactada en vez del cuerpo completo.
-  async function promoteWheelToGlobal(bodyOverride = null) {
+  // Al archivar/CLS, la rueda actual se promueve como chat_N nuevo DEL AGENTE
+  // (R7/<agente>/) para que la sesión siguiente herede la continuidad (K2
+  // decisión 3). `bodyOverride` permite sembrar una versión compactada en vez del
+  // cuerpo completo.
+  async function promoteWheelToAgent(bodyOverride = null) {
     const sealed = flushWheel(wheelRef.current)
     const body = bodyOverride ?? sealed.r7
-    if (body && body.trim()) await writeR9File('r7', body)
+    if (body && body.trim()) await writeR9File('r7', body, {}, { agent })
   }
 
   // Cierra la sesión actual: captura su id (para la limpieza del panel), resetea
   // rueda/id y, opcionalmente, hereda el nombre a la próxima.
   async function closeCurrentSession({ inheritName = null } = {}) {
     const closingSessionId = sessionIdRef.current
-    wheelRef.current = createWheelState(await readLatestR7())
+    wheelRef.current = createWheelState(await readLatestR7({ agent }))
     sessionIdRef.current = null
     sessionNameRef.current = inheritName
     await onAfterArchive?.(closingSessionId)
@@ -132,7 +133,7 @@ export function useWheelSession({
     try {
       if (inheritedName) sessionNameRef.current = inheritedName
       persistCurrentSession()
-      await promoteWheelToGlobal()
+      await promoteWheelToAgent()
       onReset?.()
       await closeCurrentSession({ inheritName: inheritedName || null })
       onResetUsage?.(agent)
@@ -165,9 +166,9 @@ export function useWheelSession({
       const sealed = flushWheel(wheelRef.current)
       wheelRef.current = sealed
       persistCurrentSession()
-      if (sealed.r7 && sealed.r7.trim()) await writeR9File('r7', sealed.r7)
+      if (sealed.r7 && sealed.r7.trim()) await writeR9File('r7', sealed.r7, {}, { agent })
       const compacted = compactWheel(sealed.r7)
-      if (compacted && compacted.trim()) await writeR9File('r7', compacted)
+      if (compacted && compacted.trim()) await writeR9File('r7', compacted, {}, { agent })
       onReset?.()
       wheelRef.current = createWheelState(compacted)
       sessionIdRef.current = null
@@ -183,7 +184,7 @@ export function useWheelSession({
   // El confirm() y el reset del panel los aporta quien llama.
   async function clearSession() {
     persistCurrentSession()
-    await promoteWheelToGlobal()
+    await promoteWheelToAgent()
     onReset?.()
     await closeCurrentSession({ inheritName: null })
     onResetUsage?.(agent)
@@ -205,7 +206,7 @@ export function useWheelSession({
     sessionIdRef,
     sessionNameRef,
     persistCurrentSession,
-    promoteWheelToGlobal,
+    promoteWheelToAgent,
     archive,
     archiveWithName,
     compact,

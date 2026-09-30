@@ -162,6 +162,7 @@ function TitoPanel({
         stream: true,
         messages: wheelMessages,
         tools: WEB_SEARCH_TOOL,
+        reasoning: false,
         sessionId: getTitoSessionId(),
         signal: controller.signal,
         onDelta: (partial) => liveRef.current?.push(extractStream(partial)),

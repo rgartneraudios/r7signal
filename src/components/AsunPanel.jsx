@@ -230,14 +230,14 @@ function AsunPanel({
       // ── MODO MÚSICA: sin herramientas, streaming directo ──────────────────
       if (category === 'musica') {
         const systemContent = interpolatePrompt(remotePrompts.music, { chatLanguage, nombreAlternativo })
-        const history = messagesRef.current
-          .filter(m => !m.streaming)
-          .map(m => ({ role: m.rol === 'usuario' ? 'user' : 'assistant', content: m.contenido }))
-        const apiMessages = [
-          { role: 'system', content: systemContent },
-          ...history,
-          { role: 'user', content: text },
-        ]
+        // Mismo patrón que Cochi/Asun LLM: system estable + briefs R1/R2 del
+        // sistema (cacheable, mismo prefijo) + input actual. Reemplaza el reenvío
+        // del historial crudo.
+        const apiMessages = buildWheelMessages({
+          systemMessages: [{ role: 'system', content: systemContent }],
+          r7: wheelRef.current.r7,
+          userInput: text,
+        })
         const fullText = await streamOR(MODELS.musica.chat, apiMessages, (partial) => {
           scheduleStream(() => setMessages(prev => prev.map(m =>
             m.id === placeholderId ? { ...m, contenido: extractR3Streaming(partial) } : m
@@ -247,10 +247,13 @@ function AsunPanel({
         if (musicMatch) {
           setPromptMusica(musicMatch[1].trim())
         }
+        const displayText = extractR3Visible(fullText).replace(MUSIC_RE, '').trim()
+        // Sella el turno de música en la rueda (R1/R2 del sistema, cacheable).
+        wheelRef.current = commitR7Turn(wheelRef.current, { pairs: [buildTurnPair(text, displayText)] })
         flushStream()
         setMessages(prev => prev.map(m =>
           m.id === placeholderId
-            ? { ...m, contenido: extractR3Visible(fullText).replace(MUSIC_RE, '').trim(), streaming: false }
+            ? { ...m, contenido: displayText, streaming: false }
             : m
         ))
         return
@@ -641,7 +644,7 @@ function AsunPanel({
       />
 
       {/* ── Contenido ── */}
-      <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', position: 'relative', display: 'flex', flexDirection: 'column', background: 'rgba(15,14,17,0.35)' }}>
+      <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', position: 'relative', display: 'flex', flexDirection: 'column', background: 'rgba(15,14,17,0.25)' }}>
 
         {/* ── IMAGEN: wizard ── */}
         {category === 'imagen' && (
