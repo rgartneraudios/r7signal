@@ -128,24 +128,31 @@ facturables.
   NADIE la importa: sólo la llamaba `Chat00Music.jsx`, que ya no se monta. En la web sólo hay
   `Chat00.jsx`. No replicar su patrón de R7 (acumula tokens).
 
-## Caché conversacional: R1/R2 por turno, R7 sólo almacén (30/09)
+## Caché conversacional: R1/R2 por turno, R7 sólo almacén (30/09 · actualizado 30/09-quater)
 
-Decisión (Signor Roberto). El carril conversacional DEBE cachear el contexto. Hoy el prompt
-manda **UN** bloque `[R7 MEMORY]\n<todos los pares R1/R2>` que **se reescribe/crece** cada
-turno: si el proveedor cachea por mensaje (no por prefijo de tokens dentro del mensaje),
-sólo pega el prefijo estático (`sys1+sys2`) y **todo el R7 se paga full** cada turno. Cambio:
+Decisión (Signor Roberto). El carril conversacional DEBE cachear el contexto. El prompt
+manda **un mensaje inmutable por turno** con el brief R1/R2; los turnos `1..N-1` quedan
+byte-idénticos entre requests y el proveedor los cachea enteros (sólo el par nuevo + el input
+se pagan). **D8-bis (30/09-quater): en el VIAJE no existe "R7"** — cada turno viaja como
+`── Turno N ──\nR1: …\nR2: …`, **sin tag `[MEMORY]` ni vocabulario R7** (el tag viejo
+`[MEMORY]`/`[R7 MEMORY]` se tolera sólo por compatibilidad de ruedas viejas). Cambios:
 
-- El prompt lleva **un mensaje inmutable por turno** (`[MEMORY]\n── Turno N ──\nR1: …\nR2: …`),
-  emitido por `splitR7Turns` (`r7Wheel.js`). Así los turnos `1..N-1` quedan byte-idénticos
-  entre turnos y el proveedor los cachea enteros; sólo el par nuevo + el input se pagan.
+- El prompt lleva **un mensaje `system` inmutable por turno** (`── Turno N ──\nR1: …\nR2: …`),
+  emitido por `splitR7Turns` (`r7Wheel.js`). `isMemoryMessage` los identifica para la auditoría.
 - **Sin bloque R7 en el prompt** y **sin R3** (R3 nunca viajó; se mantiene la regla).
-- **R7 queda SÓLO como almacén**: el archivo acumulativo `R7/chat_N.txt` (D4) sirve para
-  persistir/undo/CLI; **no** es el transporte del prompt. El prompt reconstruye los R1/R2
-  desde ese almacén. (A confirmar con Signor Roberto el punto "no los 70.000": interpretación
-  = R7 no alimenta el presupuesto de contexto rodante, sólo archiva.)
-- **Prompts de Supabase**: hay que hacer los R1/R2 **más ricos** (que expliquen el contexto
-  por sí solos, ya que el R3 no viaja). Es un paso APARTE: se edita/pega en Supabase y/o en
-  `output/Prompts-Final.txt`; cambiar el repo NO actualiza producción.
+- **R7 queda SÓLO como almacén local acumulativo**: el archivo `R7/chat_N.txt` (D4) y el JSON
+  de sesión sirven para persistir/undo/CLI; **no** es el transporte del prompt ni alimenta el
+  presupuesto de 70k.
+- **Compactación a 70k (SIN llamada al modelo)**: el botón del banner (`TokenWarningBanner`,
+  antes "Archivar sesión R7") ahora dice **"Compactar contexto"** y llama a `session.compact()`.
+  `compactWheel` (`r7Wheel.js`) conserva el primer turno + los recientes que entren en
+  `maxChars` (default 6000, `minKeep` 4), colapsa los intermedios en `── Compactado ──` con su
+  cuenta y renumera. `compact()` persiste el histórico COMPLETO (sesión + `R7/chat_N.txt`) y
+  siembra la versión compactada como rueda global: la sesión nueva arranca liviana sin perder
+  nada. **Regla del usuario: si el "resumen" fuese una llamada al modelo, NO.** Es puro sistema.
+- **Prompts de Supabase**: hay que actualizar el `system` para que describa los briefs R1/R2
+  (ya no `[MEMORY]`) y hacerlos **más ricos** (el R3 no viaja). Es un paso APARTE: se edita/pega
+  en Supabase y/o en `output/`; cambiar el repo NO actualiza producción.
 - Aplica a los **3 paneles** porque comparten `buildWheelMessages` (Cochi, Tito, Asun).
 
 Capas independientes y complementarias: **Capa 1** = ruteo (RESTAURADA 30/09-ter: SÍ enviar
@@ -355,14 +362,18 @@ cubre Cochi (Centinela y Terminator) y el subagente; MaríaBase (visión) queda 
 Gates al cerrar: **lint 0/0 · `npm test` 13/13 · `npm run build` OK**.
 
 **Tareas restantes (en orden sugerido):**
-1. **Capa 3 · poda/compactación de R7 en conversacional** (ver abajo). Límite real observado:
-   la rueda global arrastra ~53 turnos (`msgs 53`, `sysChars 17160`) y **crece sin tope**. Hoy es
-   barata (98% cacheada) pero es el próximo techo.
+1. ~~**Capa 3 · poda/compactación de R7 en conversacional**~~ **HECHO 30/09-quater** (ver abajo):
+   botón 70k "Compactar contexto" → `compactWheel` + `session.compact()` (resumen del sistema,
+   sin modelo). Falta **medir en la app** que a >70k el contexto baja y la sesión nueva arranca liviana.
 2. **T5-bis · MEDIR el ahorro** de R5/R4/coaching (implementado 29/09, nunca re-medido).
 3. **Secundarios post-caché**: P2-bis anti-verificación 2→1 · P1 scope `edit` mínimo · P3 recortar
    descripciones de tools (~990 tok/request; ahora de bajo impacto, el input cacheado pesa 0.03x).
 4. **Deuda técnica**: subagentes que escriban · shell revertible · SSRF en Rust · pegar `TYPO
    RESUELTO` al prompt `task` de Supabase (paso APARTE).
+5. **R7 en el carril TAREA (quemar)**: renombrar `[R7 COMPACTED]`/`[MEMORY]` de
+   `cochiContext.pruneApiMessages` a vocabulario neutro (ver sección propia).
+6. **Revisar caché de R5 + modo TASK** (hallazgos en sección propia) y **E2E de compactación a
+   70k** en la app.
 
 ### HECHO esta sesión (capa 0 + instrumentación)
 - **Tarifas verificadas 29/09**: `modelPrices.js` → DeepSeek `cachedInputPerM` = **0.1x** (antes
@@ -376,6 +387,7 @@ Gates al cerrar: **lint 0/0 · `npm test` 13/13 · `npm run build` OK**.
 - **`r7Wheel.js` auditado**: es **append-only** (`appendR7Pair`) y **NO se poda en conversacional**
   (el único `pruneApiMessages` vive en el carril tarea, `useCochiTaskLoop:755`). R7 del
   conversacional crece sin tope. La web legacy (acumulaba sin tope) NO se arrastra.
+  (**Actualizado 30/09-quater**: el crecimiento se acota con la compactación manual a 70k.)
 
 ### 0) CONFIRMADO (30/09-ter) — `[cache:audit]` en la app
 `npx tauri dev` + F12, 3 turnos conversacionales: turno 1 `cached 0`; turnos 2-3 `cached 7424 ·
@@ -406,14 +418,15 @@ queda desactivado por `order` (no importa: el pin fijo a StreamLake mantiene su 
 
 ### 2) HECHO (30/09) · Capa 2 · Colocación append-only
 Implementado en `r7Wheel.js`: `splitR7Turns(r7)` parte el cuerpo de la rueda en un bloque por
-turno y `buildWheelMessages` emite **un mensaje `system` inmutable por turno** (`[MEMORY]\n──
-Turno N ──\nR1/R2`), en lugar del único bloque `[R7 MEMORY]` reescrito. La volatilidad (input
-nuevo) queda al FINAL; `[sysA][sysB]` siguen 100% estáticos. `cacheAudit.systemFingerprint`
-excluye los mensajes de memoria (tag `[MEMORY]` y legacy `[R7 MEMORY]`) para que `sysStable`
-siga midiendo el prompt base. Aplica a los 3 paneles (comparten `buildWheelMessages`). R7
-queda SÓLO como almacén en disco (D4). Harness `cochiR7Wheel`/`cochiCacheAudit` actualizados.
-Gates 30/09: lint 0/0 · `npm test` 12/12 · build OK. **CONFIRMADO** junto con la Capa 1:
-`appendOnly=true` en la app.
+turno y `buildWheelMessages` emite **un mensaje `system` inmutable por turno**. **D8-bis
+(30/09-quater): el brief viaja PELADO (`── Turno N ──\nR1/R2`), sin tag `[MEMORY]` ni
+vocabulario R7** (antes `[MEMORY]\n── Turno N ──…`). La volatilidad (input nuevo) queda al
+FINAL; `[sysA][sysB]` siguen 100% estáticos. `cacheAudit.systemFingerprint` excluye los
+mensajes de memoria vía `isMemoryMessage` (reconoce el encabezado `── Turno`/`── Compactado`
+y tolera los legacy `[MEMORY]`/`[R7 MEMORY]`) para que `sysStable` siga midiendo el prompt
+base. Aplica a los 3 paneles (comparten `buildWheelMessages`). R7 queda SÓLO como almacén en
+disco (D4). Harness `cochiR7Wheel`/`cochiCacheAudit` actualizados. Gates 30/09: lint 0/0 ·
+`npm test` 12/12 · build OK. **CONFIRMADO** junto con la Capa 1: `appendOnly=true` en la app.
 
 ### 2-bis) SUPERSEDIDO (30/09-ter) · Capa 1 REVERTIDA (`provider.order` mataba el sticky)
 ⚠ Esta conclusión quedó **invalidada** por el experimento de la sección 1): el pin fallaba porque
@@ -440,15 +453,25 @@ caía a `r3 || streamed.content`, pintando `R1: … R2: …` en la UI. Tito/Asun
 `[R7 MEMORY]`). **Es paso APARTE: pegar en Supabase.** Gates 30/09-bis: lint 0/0 · `npm test` 13/13 ·
 build OK.
 
-### 3) PENDIENTE #1 · Capa 3 · Poda/compactación de R7 en conversacional (reabrir D3)
-Motivo medido (30/09-ter): la rueda global arrastra ~53 turnos (`msgs 53`, `sysChars 17160`) y
-**crece sin tope** en el carril conversacional (`appendR7Pair`, sin `pruneApiMessages`). Hoy es
-barata porque está 98% cacheada, pero es el próximo techo de contexto/costo. Opciones: (a) mandar
-turnos crudos append-only cacheados y compactar a R7 FIJO sólo al pasar el budget; (b) podar los
-mensajes `[MEMORY]` más viejos a un resumen consolidado. **Ojo**: `collapseStepMessages`/
-`pruneApiMessages` REESCRIBEN el medio del hilo y rompen la caché intra-turno → desacoplar el rol
-conductual del carril tarea (suprimir R1/R2/R3, juez R5, planner) de sus tácticas de tokens:
-medir si bajo caching conviene NO colapsar.
+### 3) HECHO (30/09-quater) · Capa 3 · Compactación a 70k en conversacional
+Motivo medido (30/09-ter): la rueda global arrastraba ~53 turnos (`msgs 53`, `sysChars 17160`) y
+**crecía sin tope** en el carril conversacional. Decisión (Signor Roberto): el botón del banner
+de 70k (`TokenWarningBanner`, antes "Archivar sesión R7") ahora **compacta** y arranca liviano,
+**pero el resumen lo hace el SISTEMA, sin llamada al modelo** (si fuese una llamada al modelo,
+NO). Implementación:
+- `compactWheel(r7, { maxChars=6000, minKeep=4 })` (`r7Wheel.js`): conserva el primer turno +
+  los recientes que entren en `maxChars`, colapsa los intermedios en `── Compactado ──` con su
+  cuenta y renumera. Puro y determinista; descarta marcadores previos (no se acumulan).
+- `session.compact()` (`useWheelSession`): persiste el histórico COMPLETO (sesión + un
+  `R7/chat_N.txt` con el cuerpo entero) y siembra la versión compactada como rueda global
+  (`R7/chat_N+1`). La sesión nueva arranca con esa semilla; nada se pierde (el completo queda en
+  la sesión y en el archivo). `onResetUsage` limpia el contador de 70k.
+- Cableado en los 3 paneles (`onCompact={() => session.compact()}`).
+- Harness `cochiR7Wheel` +8 checks de compactación. Gates 30/09-quater: lint 0/0 · `npm test`
+  13/13 · `npm run build` OK.
+- **Ojo**: `collapseStepMessages`/`pruneApiMessages` del carril tarea REESCRIBEN el medio del
+  hilo y rompen la caché intra-turno; la compactación conversacional es deliberada (rompe el
+  prefijo una vez a cambio de bajar contexto) y queda fuera del carril tarea.
 
 ### Pendientes secundarios (post-caché)
 - **P2-bis** anti-verificación 2→1 (`STEP_VERIFY_NUDGE_AT`, harness `cochiPlanning`).
@@ -457,6 +480,48 @@ medir si bajo caching conviene NO colapsar.
   cacheado pesa 0.03x; evaluar igual porque el primer request de cada turno paga full.
 - **Subagentes que escriban** · **Shell revertible** · **SSRF en Rust** · **prompt `task` remoto
   (pegarle la excepción `TYPO RESUELTO`)**.
+
+### PENDIENTE PRÓXIMA SESIÓN — R7 en el carril TAREA (quemar)
+`cochiContext.js:150-151` (`pruneApiMessages`) emite `[R7 COMPACTED]` / `[MEMORY]` como bloque
+`role:'user'` al comprimir tool results viejos de un plan. **NO es la rueda R1/R2** (el carril
+tarea no la usa), pero es vocabulario R7 viajando en el request. Decisión 30/09-quater: renombrar
+a algo neutro (p. ej. `[CONTEXT SUMMARY]`) para cumplir "R7 fuera del viaje" en los dos carriles.
+OJO: `cochiContext.COMPACT_BLOCK_RE` (`/^\[(?:CONTEXT SUMMARY|MEMORY)\]/`) y `isCompactBlock`
+reconocen `[CONTEXT SUMMARY]`/`[MEMORY]`; `[R7 COMPACTED]` NO. Cambiar el literal obliga a revisar
+`extractCompleteSteps`/`isCompactBlock` y el harness `cochiContext` (checks de `[MEMORY]`). No se
+tocó esta sesión para no ampliar el alcance del cambio conversacional.
+
+### Revisión de caché en R5 + modo TASK (30/09-quater · hallazgos, sin cambios de código)
+Revisado `cochiLanes.js` (`buildTaskFinish`/`buildFinishMessages`) y `useCochiTaskLoop.js`
+(requests `task` / `task-r5` / `task-r5-notools`). Estado:
+- **R5 anclado OK**: `r5BaseMessages = apiMessages.slice()` (L450) se captura ANTES de
+  `pruneApiMessages`/`collapseStepMessages` y el cierre (`buildFinishMessages`, L827) reusa ese
+  hilo con las MISMAS tools + `tool_choice:'auto'` → el prefijo coincide byte a byte con el
+  último request. El fallback `task-r5-notools` (L862) pierde tools a propósito (sólo si el
+  modelo intenta llamar una tool en el cierre).
+- **El carril TASK no lleva R7** (por diseño): cada turno de tarea arranca con caché fría en su
+  primer request (base distinta a la conversacional). Esperado.
+- **Riesgo intra-turno**: en planes multi-paso, `pruneApiMessages` (L756) y `collapseStepMessages`
+  (L760) **reescriben el medio** de `apiMessages` al cerrar cada step → el prefijo cacheado se
+  rompe desde el punto reescrito; el step siguiente paga full lo reescrito (los tool results del
+  step). El R5 se salva por el snapshot, pero la transición step→step no. **Medir** con F12
+  `[cache:audit]` en un plan de ≥3 pasos: ver `cached` por request `task` y confirmar el corte.
+- **Detalle**: el system base del plan usa `buildSystemContext(..., { technical: true })` (L360)
+  y el de single-pass no (L366) → prompts base distintos entre ambos modos de tarea (no es bug
+  de caché; los turnos de tarea son fríos igual).
+- `reasoning` (on si `planStepCount>=3`) es un campo del body, no de `messages`: no altera el
+  prefijo cacheable.
+
+### Medición 70k · compactación del sistema (headless, 30/09-quater)
+`compactWheel` sobre una rueda sintética de **53 turnos / 18.637 chars** (calibrada con el
+`sysChars 17160` medido el 30/09-ter); tokens estimados = chars/4:
+- `maxChars 6000` (default): **53 → 17 turnos**, 18.637 → 6.040 chars (~4.659 → ~1.510 tok),
+  **−68%**. Primer turno intacto; un solo marcador `── Compactado ──`.
+- `maxChars 4000`: 53 → 11 turnos, **−79%**.
+- `maxChars 2000`: 53 → 5 turnos, **−90%**.
+- Recompactar no acumula marcadores (harness). **Falta el E2E en la app** (`npx tauri dev` + F12):
+  confirmar que a >70k el contador baja a ~0, la sesión nueva arranca liviana y el histórico
+  completo queda en `Sessions/<id>.json` + `R7/chat_N.txt`.
 
 ### Datos crudos de referencia (run 29/09, `npx tauri dev` + F12 `[cochi:audit]`)
 - "agrega «Mas contenido»": 2 requests + R5 = **5.291** facturables. R5 `prompt 3586 · cached 3072`.

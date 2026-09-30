@@ -156,7 +156,6 @@ function AsunPanel({
     if (!window.confirm('¿Borrar toda la conversación?')) return
     await session.clearSession()
   }
-  const handleSaveR7 = (nameOverride) => session.archive(nameOverride)
   const handleArchiveWithName = () => session.archiveWithName()
 
   // Notificar categoría activa al padre
@@ -710,7 +709,7 @@ function AsunPanel({
         dismissed={tokenWarningDismissed}
         disabled={loading || generating}
         onDismiss={() => setTokenWarningDismissed(true)}
-        onArchive={() => handleSaveR7()}
+        onCompact={() => session.compact()}
         theme={{
           border: 'rgba(200,162,216,0.3)', background: 'rgba(200,162,216,0.07)', text: '#C8A2D8',
           buttonBg: 'rgba(200,162,216,0.15)', buttonBorder: 'rgba(200,162,216,0.5)', buttonText: '#C8A2D8',

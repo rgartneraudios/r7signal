@@ -331,7 +331,6 @@ function CochiDesktop({
     if (!window.confirm('¿Borrar toda la conversación?')) return
     await session.clearSession()
   }
-  const handleSaveR7 = (nameOverride) => session.archive(nameOverride)
   const handleArchiveWithName = () => session.archiveWithName()
 
   // ── Bloque K3: undo / regenerate ──────────────────────────────────────────
@@ -476,7 +475,7 @@ function CochiDesktop({
         dismissed={tokenWarningDismissed}
         disabled={loading || planStatus === 'executing'}
         onDismiss={() => setTokenWarningDismissed(true)}
-        onArchive={() => handleSaveR7()}
+        onCompact={() => session.compact()}
         theme={{
           border: 'rgba(232,108,50,0.3)', background: 'rgba(232,108,50,0.07)', text: '#E8762A',
           buttonBg: 'rgba(232,108,50,0.15)', buttonBorder: 'rgba(232,108,50,0.5)', buttonText: '#E8762A',

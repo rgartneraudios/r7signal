@@ -11,7 +11,10 @@
 //       turno crudo -> input actual. Un turno NUNCA se reescribe: los mensajes de
 //       los turnos 1..N-1 son byte-idénticos entre requests, así el proveedor los
 //       cachea enteros (antes iban en UN bloque R7 que crecía y se pagaba full).
-//       R7 queda como almacén en disco, NO como transporte del prompt.
+//   D8-bis (30/09-quater): en el VIAJE no existe "R7": viajan sólo los briefs R1/R2
+//       de cada turno, sin tag `[MEMORY]` ni vocabulario R7. El R7 queda SÓLO como
+//       almacén acumulativo en disco (persistir/undo/CLI). A >70k tokens el usuario
+//       compacta con el botón del sistema (compactWheel, SIN llamada al modelo).
 //
 // Este módulo se mantiene puro a propósito para poder ejercitarlo headless con
 // el harness Node (harness/cochiR7Wheel.harness.mjs), que mockea el disco.
@@ -148,14 +151,26 @@ export function flushWheel(state) {
   return { r7: sealed.r7, lastTurn: null }
 }
 
-// ─── Construcción del prompt híbrido (D3/D8) ─────────────────────────────────
+// ─── Construcción del prompt híbrido (D3/D8/D8-bis) ──────────────────────────
 // [ system estable ... ] [ R1/R2 de cada turno (inmutable) ] [ último turno crudo ]
-// [ input actual ]. Los pares NO viajan en un bloque R7 reescrito: cada turno es
-// un mensaje propio, para que 1..N-1 queden byte-idénticos y el proveedor los
-// cachee. El marcador [MEMORY] permite a la auditoría excluirlos del `sysStable`.
-export const R7_MEMORY_TAG = '[MEMORY]'
+// [ input actual ]. Los pares NO viajan en un bloque R7 reescrito ni con tag: cada
+// turno es un mensaje propio con su brief R1/R2 pelado, para que 1..N-1 queden
+// byte-idénticos y el proveedor los cachee. `isMemoryMessage` permite a la
+// auditoría excluirlos del `sysStable`.
+export const COMPACT_MARKER = '── Compactado ──'
 
-const TURN_SPLIT_RE = /(?=──\s*Turno\s+\d+\s*──)/
+const TURN_HEAD_RE = /^──\s*Turno\s+\d+\s*──/
+const TURN_SPLIT_RE = /(?=──\s*(?:Turno\s+\d+|Compactado)\s*──)/
+
+// ¿Es un mensaje de memoria (brief R1/R2 por turno) y no parte del prompt base?
+// Se reconoce por el encabezado del bloque; se toleran los tags legacy
+// `[MEMORY]`/`[R7 MEMORY]` por compatibilidad con ruedas viejas.
+export function isMemoryMessage(m) {
+  if (m?.role !== 'system') return false
+  const c = typeof m.content === 'string' ? m.content : ''
+  if (c.startsWith('[MEMORY]') || c.startsWith('[R7 MEMORY]')) return true
+  return TURN_HEAD_RE.test(c) || c.startsWith(COMPACT_MARKER)
+}
 
 // Parte el cuerpo de R7 (o el archivo completo) en un bloque por turno, en orden.
 export function splitR7Turns(r7) {
@@ -164,10 +179,43 @@ export function splitR7Turns(r7) {
   return body.split(TURN_SPLIT_RE).map(s => s.trim()).filter(Boolean)
 }
 
+// Compacta la rueda SIN llamar al modelo: conserva el primer turno (la intención
+// original) + los turnos más recientes que entren en `maxChars`, y colapsa los
+// intermedios en un marcador con su cuenta. Renumera los turnos conservados.
+// Los marcadores de compactaciones previas se descartan (nunca se acumulan).
+export function compactWheel(r7, { maxChars = 6000, minKeep = 4 } = {}) {
+  const body = stripR7Header(r7)
+  if (!body) return r7 || ''
+  const blocks = splitR7Turns(body).filter(b => !b.startsWith(COMPACT_MARKER))
+  if (!blocks.length) return r7 || ''
+  const total = blocks.reduce((n, b) => n + b.length + 2, 0)
+  if (total <= maxChars) return body
+  const first = blocks[0]
+  const rest = blocks.slice(1)
+  const kept = []
+  let used = first.length
+  for (let i = rest.length - 1; i >= 0; i--) {
+    const b = rest[i]
+    if (used + b.length > maxChars && kept.length >= minKeep) break
+    kept.unshift(b)
+    used += b.length + 2
+  }
+  const dropped = rest.length - kept.length
+  const out = [first]
+  if (dropped > 0) {
+    out.push(`${COMPACT_MARKER}\n(${dropped} turno${dropped === 1 ? '' : 's'} anteriores compactados por el sistema)`)
+  }
+  out.push(...kept)
+  let n = 0
+  return out
+    .map(b => TURN_HEAD_RE.test(b) ? b.replace(TURN_HEAD_RE, `── Turno ${++n} ──`) : b)
+    .join('\n\n')
+}
+
 export function buildWheelMessages({ systemMessages = [], r7 = '', rawTurns = [], userInput }) {
   const out = [...systemMessages]
   for (const turn of splitR7Turns(r7)) {
-    out.push({ role: 'system', content: `${R7_MEMORY_TAG}\n${turn}` })
+    out.push({ role: 'system', content: turn })
   }
   for (const t of rawTurns.slice(-R7_KEEP_RAW_TURNS)) {
     if (!t) continue

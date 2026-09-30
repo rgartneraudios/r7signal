@@ -14,7 +14,7 @@
 //   · onError(msg)  → pintar el fallo de archivado con el shape del panel
 import { useEffect, useRef } from 'react'
 import { makeSession, saveSession, loadSession, undoLastTurn, suggestSessionName } from '../lib/sessionStore.js'
-import { createWheelState, flushWheel } from '../lib/r7Wheel.js'
+import { createWheelState, flushWheel, compactWheel } from '../lib/r7Wheel.js'
 import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
 
 // Acepta el shape canónico (role/content) y el interno de Asun (rol/contenido).
@@ -105,10 +105,12 @@ export function useWheelSession({
   }
 
   // Al archivar/CLS, la rueda actual se promueve a global como chat_N nuevo para
-  // que la sesión siguiente herede la continuidad (K2 decisión 3).
-  async function promoteWheelToGlobal() {
+  // que la sesión siguiente herede la continuidad (K2 decisión 3). `bodyOverride`
+  // permite sembrar una versión compactada en vez del cuerpo completo.
+  async function promoteWheelToGlobal(bodyOverride = null) {
     const sealed = flushWheel(wheelRef.current)
-    if (sealed.r7 && sealed.r7.trim()) await writeR9File('r7', sealed.r7)
+    const body = bodyOverride ?? sealed.r7
+    if (body && body.trim()) await writeR9File('r7', body)
   }
 
   // Cierra la sesión actual: captura su id (para la limpieza del panel), resetea
@@ -154,6 +156,33 @@ export function useWheelSession({
     await archive(name)
   }
 
+  // Compactación del sistema (botón 70k): NO llama al modelo. Persiste el
+  // histórico COMPLETO (sesión + artefacto R7) y siembra una versión compactada
+  // como rueda global para que la sesión nueva arranque liviana sin perder nada.
+  async function compact() {
+    if (busy) return
+    if (!messagesRef.current.some(isUserMsg)) return
+    const closingSessionId = sessionIdRef.current
+    const inheritedName = sessionNameRef.current
+    try {
+      const sealed = flushWheel(wheelRef.current)
+      wheelRef.current = sealed
+      persistCurrentSession()
+      if (sealed.r7 && sealed.r7.trim()) await writeR9File('r7', sealed.r7)
+      const compacted = compactWheel(sealed.r7)
+      if (compacted && compacted.trim()) await writeR9File('r7', compacted)
+      onReset?.()
+      sessionPairsRef.current = []
+      wheelRef.current = createWheelState(compacted)
+      sessionIdRef.current = null
+      sessionNameRef.current = inheritedName
+      await onAfterArchive?.(closingSessionId)
+      onResetUsage?.(agent)
+    } catch (err) {
+      onError?.(`⚠️ No se pudo compactar la sesión: ${err.message}`)
+    }
+  }
+
   // CLS: archiva la sesión y arranca una conversación nueva con la rueda global.
   // El confirm() y el reset del panel los aporta quien llama.
   async function clearSession() {
@@ -184,6 +213,7 @@ export function useWheelSession({
     promoteWheelToGlobal,
     archive,
     archiveWithName,
+    compact,
     clearSession,
     undoTurn,
   }

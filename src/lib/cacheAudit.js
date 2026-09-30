@@ -9,7 +9,7 @@
 // Es PURO salvo el log DEV. `import.meta.env?.DEV` es seguro en Node (harness):
 // en Node `import.meta.env` es undefined y el optional chaining no lanza.
 import { normalizeUsage } from './llmMetrics.js'
-import { R7_MEMORY_TAG } from './r7Wheel.js'
+import { isMemoryMessage } from './r7Wheel.js'
 
 const IS_DEV = !!import.meta.env?.DEV
 
@@ -75,16 +75,13 @@ export function prefixFingerprint(messages) {
 }
 
 // Huella SOLO de los mensajes `system` que no son memoria de turnos (R1/R2). La
-// memoria viaja como `[MEMORY]…` (o el legacy `[R7 MEMORY]…`); la excluimos para
-// que `sysStable` mida el prompt base, no el crecimiento de los pares.
+// memoria viaja como briefs con encabezado `── Turno N ──` (sin tag; se toleran
+// los legacy `[MEMORY]`/`[R7 MEMORY]`); la excluimos para que `sysStable` mida el
+// prompt base, no el crecimiento de los pares.
 export function systemFingerprint(messages, { excludeR7 = true } = {}) {
   const arr = Array.isArray(messages) ? messages : []
   const sys = arr.filter(m => m.role === 'system')
-    .filter(m => {
-      if (!excludeR7) return true
-      const c = contentOf(m)
-      return !c.startsWith(R7_MEMORY_TAG) && !c.startsWith('[R7 MEMORY]')
-    })
+    .filter(m => !(excludeR7 && isMemoryMessage(m)))
   return fnv1a(sys.map(m => contentOf(m)).join('\u0001'))
 }
 

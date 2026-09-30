@@ -18,6 +18,9 @@ import {
   splitR7Turns,
   buildWheelMessages,
   summarizeFromPairs,
+  compactWheel,
+  isMemoryMessage,
+  COMPACT_MARKER,
 } from '../src/lib/r7Wheel.js'
 
 let pass = 0
@@ -110,10 +113,14 @@ const msgs = buildWheelMessages({
   userInput: 'input_actual',
 })
 check('orden de roles', msgs.map(m => m.role), ['system', 'system', 'user', 'assistant', 'user'])
-check('el turno viaja como mensaje de memoria propio', msgs[1].content, '[MEMORY]\n── Turno 1 ──\nR1: x\nR2: y')
+check('el turno viaja como brief R1/R2 pelado (sin tag)', msgs[1].content, '── Turno 1 ──\nR1: x\nR2: y')
+check('NO queda ningún tag [MEMORY] en el viaje', msgs.some(m => m.content.startsWith('[MEMORY]')), false)
 check('NO queda ningún bloque [R7 MEMORY]', msgs.some(m => m.content.startsWith('[R7 MEMORY]')), false)
 check('último mensaje = input actual', msgs[msgs.length - 1].content, 'input_actual')
 check('memoria va ANTES del turno crudo', msgs[1].role === 'system' && msgs[2].role === 'user', true)
+check('isMemoryMessage reconoce el brief por turno', isMemoryMessage(msgs[1]), true)
+check('isMemoryMessage ignora el prompt base', isMemoryMessage(msgs[0]), false)
+check('isMemoryMessage tolera el tag legacy [MEMORY]', isMemoryMessage({ role: 'system', content: '[MEMORY] viejo' }), true)
 const msgsTwo = buildWheelMessages({
   systemMessages: [{ role: 'system', content: 'S' }],
   r7: '── Turno 1 ──\nR1: a\nR2: b\n── Turno 2 ──\nR1: c\nR2: d',
@@ -138,6 +145,22 @@ check('NO incluye el R3 visible', sum.includes('respuesta visible larga'), false
 check('ignora markers de step y no-assistant', sum.includes('STEP 2'), false)
 check('sin pares recuperables → null', summarizeFromPairs([{ role: 'assistant', content: '[STEP 1 RESULT: x]' }]), null)
 check('lista vacía → null', summarizeFromPairs([]), null)
+
+console.log('\n— compactWheel: compactación del sistema SIN llamada al modelo —')
+const many = Array.from({ length: 30 }, (_, i) =>
+  `── Turno ${i + 1} ──\nR1: intención ${i + 1}\nR2: ${'detalle '.repeat(20)}`
+).join('\n')
+const small = compactWheel(many, { maxChars: 1200, minKeep: 3 })
+check('compacta y conserva el primer turno', small.startsWith('── Turno 1 ──\nR1: intención 1'), true)
+check('inserta el marcador del sistema', small.includes(COMPACT_MARKER), true)
+check('conserva los turnos recientes', small.includes('intención 30'), true)
+check('acota el tamaño por debajo del input', small.length < many.length, true)
+check('no toca el archivo original', many.includes('intención 15'), true)
+check('renumera/recorta los turnos conservados', countR7Turns(small) < 30, true)
+check('bajo el tope → no compacta', compactWheel('── Turno 1 ──\nR1: a\nR2: b', { maxChars: 6000 }), '── Turno 1 ──\nR1: a\nR2: b')
+check('vacío → vacío', compactWheel(''), '')
+const compactedTwice = compactWheel(compactWheel(many, { maxChars: 1200, minKeep: 3 }), { maxChars: 1200, minKeep: 3 })
+check('recompactar no acumula marcadores', (compactedTwice.match(/── Compactado ──/g) || []).length, 1)
 
 console.log('\n— Carril TAREA en la rueda: R5 como bloque (28/09) —')
 check('appendR7Task agrega un bloque con R5', appendR7Task('', 1, '100% — hecho'), '── Turno 1 ──\nR5: 100% — hecho')

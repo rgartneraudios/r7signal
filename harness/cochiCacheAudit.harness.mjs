@@ -10,7 +10,7 @@ import {
   buildCacheReport,
   providerRouting,
 } from '../src/lib/cacheAudit.js'
-import { splitR7Turns, R7_MEMORY_TAG } from '../src/lib/r7Wheel.js'
+import { splitR7Turns, isMemoryMessage } from '../src/lib/r7Wheel.js'
 import { buildBody } from '../src/lib/llmClient.js'
 
 let pass = 0
@@ -24,7 +24,7 @@ function check(label, actual, expected) {
 
 const base = (r7, user) => [
   { role: 'system', content: 'SYS' },
-  ...splitR7Turns(r7).map(t => ({ role: 'system', content: `${R7_MEMORY_TAG}\n${t}` })),
+  ...splitR7Turns(r7).map(t => ({ role: 'system', content: t })),
   { role: 'user', content: `[LANE: CONVERSATIONAL]\n${user}` },
 ]
 
@@ -52,6 +52,7 @@ check('R7 no altera la huella del system',
   systemFingerprint(base(R7_T1, 'a')) === systemFingerprint(base(R7_T2, 'b')), true)
 check('cambio de SYS sí altera la huella',
   systemFingerprint(base(R7_T1, 'a')) === systemFingerprint([{ role: 'system', content: 'OTRO' }, { role: 'system', content: `[R7 MEMORY]\n${R7_T1}` }, { role: 'user', content: 'x' }]), false)
+check('la memoria por turno (sin tag) se reconoce como memoria', isMemoryMessage(base(R7_T1, 'a')[1]), true)
 
 console.log('— buildCacheReport —')
 const usage = { prompt_tokens: 1000, completion_tokens: 0, prompt_tokens_details: { cached_tokens: 500, cache_write_tokens: 200 } }

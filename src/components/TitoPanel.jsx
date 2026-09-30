@@ -104,7 +104,6 @@ function TitoPanel({
     if (!window.confirm('¿Borrar toda la conversación?')) return
     await session.clearSession()
   }
-  const handleSaveR7 = (nameOverride) => session.archive(nameOverride)
   const handleArchiveWithName = () => session.archiveWithName()
 
   useEffect(() => {
@@ -316,7 +315,7 @@ function TitoPanel({
         dismissed={tokenWarningDismissed}
         disabled={streaming}
         onDismiss={() => setTokenWarningDismissed(true)}
-        onArchive={() => handleSaveR7()}
+        onCompact={() => session.compact()}
         theme={{
           border: 'rgba(232,200,74,0.3)', background: 'rgba(232,200,74,0.07)', text: '#D1C490',
           buttonBg: 'rgba(232,200,74,0.15)', buttonBorder: 'rgba(232,200,74,0.5)', buttonText: '#D1C490',
