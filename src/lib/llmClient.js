@@ -81,7 +81,8 @@ export function buildBody({ provider, messages, tools, toolChoice = 'auto', stre
   if (sessionId && !provider.isLocal) body.session_id = sessionId
   // Capa 1 (30/09-ter): prefiere proveedores que SÍ cachean el prefijo. Sin esto,
   // OpenRouter balancea entre endpoints y la caché se pierde turno por turno (ver
-  // cacheAudit.providerRouting). Sólo modelos DeepSeek no-visión.
+  // cacheAudit.providerRouting). DeepSeek no-visión → StreamLake/Parasail/Alibaba;
+  // visión (MaríaBase) → DeepInfra (medido 01/10: cached ~93%).
   const routing = providerRouting(provider.model)
   if (routing) body.provider = routing
   if (maxTokens) body.max_tokens = maxTokens

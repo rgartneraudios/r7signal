@@ -79,13 +79,15 @@ check('reporte saneado sin args', (() => { const r = buildCacheReport(); return 
 console.log('— providerRouting (Capa 1 RESTAURADA 30/09-ter: pin a proveedores que cachean) —')
 // Diagnóstico real vs OpenRouter: el modelo lo sirven terceros y sólo StreamLake/
 // Parasail/Alibaba reportan cached>0. Sin pin, Relace/Cohere/DeepInfra dan cached=0.
-// Se prefiere el orden con fallback; visión (MaríaBase) queda sin pin.
+// Visión (MaríaBase) se pinea aparte a DeepInfra: medido 01/10 → sin pin cached=0
+// ($0.001397); con pin, cached 2816/3042 (~93%) y $0.000107 (13x menos).
 const PIN = { order: ['streamlake', 'parasail', 'alibaba'], allow_fallbacks: true }
+const VISION_PIN = { order: ['deepinfra', 'gmicloud', 'siliconflow', 'novita'], allow_fallbacks: true }
 check('centinela se pinea a proveedores con caché', providerRouting('~deepseek/deepseek-v4-flash-latest'), PIN)
 check('terminator se pinea', providerRouting('~deepseek/deepseek-flash-latest'), PIN)
 check('deepseek v4.1 flash se pinea', providerRouting('deepseek/deepseek-v4.1-flash'), PIN)
 check('deepseek genérico se pinea', providerRouting('deepseek/deepseek-chat'), PIN)
-check('deepseek visión (MaríaBase) NO se pinea', providerRouting('deepseek/deepseek-v4-flash-vision-exp'), null)
+check('deepseek visión (MaríaBase) se pinea a DeepInfra', providerRouting('deepseek/deepseek-v4-flash-vision-exp'), VISION_PIN)
 check('gemini (Asun/IrmaMax) no se pinea', providerRouting('google/gemini-3.8-flash'), null)
 check('perplexity (Tito) no se pinea', providerRouting('perplexity/sonar'), null)
 check('vacío/undefined no se pinea', [providerRouting(''), providerRouting(undefined)], [null, null])
@@ -101,7 +103,7 @@ check('body DeepSeek lleva provider.order+fallback', bodyDeep.provider, PIN)
 check('body DeepSeek lleva session_id (sticky/agrupación)', bodyDeep.session_id, 'sess-abc')
 check('body Gemini NO lleva provider', buildBody({ provider: orProvider('google/gemini-3.8-flash'), messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }).provider, undefined)
 check('body Perplexity NO lleva provider', buildBody({ provider: orProvider('perplexity/sonar'), messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }).provider, undefined)
-check('body visión NO lleva provider', buildBody({ provider: orProvider('deepseek/deepseek-v4-flash-vision-exp'), messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }).provider, undefined)
+check('body visión lleva provider.order+fallback (DeepInfra)', buildBody({ provider: orProvider('deepseek/deepseek-v4-flash-vision-exp'), messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }).provider, VISION_PIN)
 check('provider local (ollama) NO lleva provider ni session_id', (() => { const b = buildBody({ provider: { id: 'ollama', isLocal: true, supportsUsage: false, model: 'llama3.2', headers: {} }, messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }); return [b.provider, b.session_id] })(), [undefined, undefined])
 
 console.log(`\n${pass} PASS · ${fail} FAIL`)

@@ -32,12 +32,19 @@ const IS_DEV = !!import.meta.env?.DEV
 //   sin pin (Relace) $0.000340 · con pin $0.000069 (cached 4/4).
 const CACHE_PROVIDER_ORDER = ['streamlake', 'parasail', 'alibaba']
 
+// Visión (MaríaBase `deepseek/deepseek-v4-flash-vision-exp`): medido contra
+// OpenRouter (01/10) — sin pin balancea entre SiliconFlow/DeepInfra/etc y cached=0
+// ($0.001397); pinneada a DeepInfra el primer request ya trae cached 2816/3042
+// (~93%) y cuesta $0.000107 (13x menos). DeepInfra es además el input más barato
+// (0.2156/M) y declara cache-read 0.0318x; GMICloud/SiliconFlow/Novita quedan de
+// fallback (input 0.44/M). Antes se dejaba sin pin por una medición vieja
+// (cached=256) que el prefijo append-only actual ya no reproduce.
+const VISION_CACHE_PROVIDER_ORDER = ['deepinfra', 'gmicloud', 'siliconflow', 'novita']
+
 export function providerRouting(modelId) {
   const id = String(modelId || '').toLowerCase()
   if (!id.includes('deepseek')) return null
-  // MaríaBase (visión) no tiene un proveedor con caché útil (DeepInfra cached=256);
-  // pinnearla no ayuda. Se deja sin pin.
-  if (id.includes('vision')) return null
+  if (id.includes('vision')) return { order: [...VISION_CACHE_PROVIDER_ORDER], allow_fallbacks: true }
   return { order: [...CACHE_PROVIDER_ORDER], allow_fallbacks: true }
 }
 

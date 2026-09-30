@@ -52,6 +52,7 @@ async function streamOR(model, messages, onChunk, onUsage, sessionId, signal) {
     sessionId,
     signal,
     reasoning: false,
+    auditLabel: 'asun-music',
     onDelta: (partial) => onChunk?.(partial),
     onUsage: (usage) => {
       const u = normalizeUsage(usage)
@@ -318,6 +319,7 @@ function AsunPanel({
           maxTokens: 4096,
           sessionId: getAsunSessionId(),
           reasoning: false,
+          auditLabel: 'asun',
         })
 
         // Acumular coste (input cacheado con descuento, Fase 3.2)

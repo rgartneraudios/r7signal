@@ -86,6 +86,12 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
 
 ## Convenciones
 
+- **REGLA DE ORO (01/10): un modelo que NO cachea el prefijo no vale.** Antes de sumar/rotar un
+  modelo, verificar en `/api/v1/models/:id/endpoints` de OpenRouter que declare `input_cache_read`
+  barato (DeepSeek 0.032–0.1x, Gemini 0.25x pero **exige `cache_control` explícito y mínimo
+  ~4096 tok**, Perplexity **NO cachea**) y medir en vivo `cached>0` con `[cache:audit]`. Motivo: la
+  rueda R7 compartida + system + tools hacen que el input domine el costo; sin caché el saludo de
+  Asun pasó de ~$0.0001 (MaríaBase pineada) a $0.0023 (Gemini) y $0.0079 (Perplexity).
 - **No agregar comentarios** al código salvo que se pida explícitamente.
 - Toda lógica no-UI nueva debe ser **pura e inyectable** y tener harness en `harness/`.
 - Commits: en español, prefijo del agente (`Cochi: ...`, `Refactor ...`, `Fix ...`).
@@ -405,8 +411,8 @@ Estado: **caché OK y loop único con sus 4 E2E en verde (01/10).** El pin de la
 proveedores que cachean, ver sección 1) resolvió el `cached=0`; el loop único pasó charla, lectura,
 tarea multi-tool con escritura y compactación a 70k (ver "E2E del loop único"). Medido en la app:
 turnos con `prev` dan `cached` ~98% · `sysStable=true · appendOnly=true` (~**6.7x más barato** que
-el turno frío). El pin cubre Cochi (Centinela y Terminator) y el subagente; MaríaBase (visión) queda
-sin pin. **PRIMERA FILA de la próxima sesión: P1 scope `edit` · P3 recortar descriptions · deuda
+el turno frío). El pin cubre Cochi (Centinela y Terminator), el subagente y **Asun/MaríaBase**
+(visión → DeepInfra, 01/10: cached ~93%). **PRIMERA FILA de la próxima sesión: P1 scope `edit` · P3 recortar descriptions · deuda
 técnica** (subagentes que escriban, shell revertible, SSRF en Rust, TYPO de archivo) — ver
 "PRIMERA FILA" al final. Gates al cerrar: **lint 0/0 · `npm test` 13/13 · `npm run build` OK**.
 
@@ -482,6 +488,12 @@ Supervivientes consolidados en **`src/lib/cochiGuards.js`** (+`harness/cochiGuar
 
 **PRIMERA FILA — pendientes de la próxima sesión (handoff 01/10):**
 
+0. **Rotación de modelos por caché (decidido 01/10, regla de oro)**: (a) cambiar **IrmaMax
+   (Gemini 3.8 Flash) por DeepSeek 4.1 Flash** (`deepseek/deepseek-v4.1-flash`) — Gemini no cachea
+   un saludo (mínimo ~4096 tok + `cache_control` explícito) y cuesta 21x MaríaBase; verificar que
+   la variante DeepSeek cubra lo que IrmaMax necesitaba (reasoning/Proyecto). (b) **estudiar un
+   reemplazo para Perplexity en Tito** (`perplexity/sonar*` NO cachea nunca; medido $0.0079 por
+   saludo). Medir con la API key como en `HECHO 01/10-quater` antes de adoptar.
 1. **P1 · scope `edit` mínimo** (`cochiTools.js`): hoy sólo hay `read`/`task`/`full`
    (`READ_SCOPE_TOOLS` + `TASK_SCOPE_EXCLUDED`, ~L791/L810). Falta un scope `edit` con allowlist
    de mutación atómica (read_file + replace_in_file + append/write) para no mandar el schema
@@ -551,9 +563,12 @@ Medición (prompt ~4k tokens, 4 turnos, mismo `session_id`):
 - **`order:['streamlake','parasail','alibaba']`, `allow_fallbacks:true`** → StreamLake: cached
   `0/3840/4096/4352` (t1 frío), total **$0.000265**; con caché tibia de un run previo, **$0.000069**.
 - Terminator (`~deepseek/deepseek-flash-latest`) y `deepseek/deepseek-v4.1-flash`: same pin, cached ✓.
-- MaríaBase (visión) NO se pinea: sus proveedores (DeepInfra/GMICloud/SiliconFlow/Novita) casi no cachean.
-`providerRouting(modelId)` → pin para todo DeepSeek **no-visión**, `null` al resto. `buildBody` lo manda.
-Harness `cochiCacheAudit` +12 checks (40). Gates 30/09-ter: lint 0/0 · `npm test` 13/13 · `npm run build`
+- MaríaBase (visión) se pinea aparte a **DeepInfra**: medido 01/10 sin pin cached=0 ($0.001397);
+  con `order:['deepinfra','gmicloud','siliconflow','novita']`, `allow_fallbacks:true` → cached
+  **2816/3042 (~93%)** y **$0.000107** (13x menos). DeepInfra es también el input más barato.
+`providerRouting(modelId)` → pin a proveedores que cachean para todo DeepSeek (no-visión y visión);
+`null` al resto (Gemini/Perplexity/local). `buildBody` lo manda.
+Harness `cochiCacheAudit` +12 checks (41). Gates 30/09-ter: lint 0/0 · `npm test` 13/13 · `npm run build`
 OK. **CONFIRMADO en la app** (`npx tauri dev` + F12): turnos 2-3 `cached 7424 · hit 98% ·
 sysStable/appendOnly=true · $0.00005` vs turno 1 frío `$0.00034` (~6.7x). ⚠ El sticky de OpenRouter
 queda desactivado por `order` (no importa: el pin fijo a StreamLake mantiene su caché de prefijo caliente).
@@ -695,5 +710,22 @@ Revisado `cochiLanes.js` (`buildTaskFinish`/`buildFinishMessages`) y `useCochiTa
 - **⚠ Deuda de seguridad**: el prompt real de Cochi **sigue en el historial de git** (commit
   `036b2fb`, repo público `github.com/rgartneraudios/r7signal`). Borrarlo del HEAD NO lo oculta.
   Si se quiere purgar: `git filter-repo`/BFG + force-push (disruptivo). Pendiente de decisión.
+
+### HECHO 01/10-quater — saludo de Asun caro: causa raíz y fix (pin visión)
+Signor Roberto reportó que un **saludo** en Asun (`deepseek/deepseek-v4-flash-vision-exp`, sesión
+`asun-…`) costó **$0.00089** / **4009 facturables** (~4x los ~962 de Cochi). Traza F12:
+`msgs 8 · sysChars 10112 · toolsChars 3009 · cached 0`. Diagnóstico (medido con la API key):
+1. **Sin pin, cached=0**: `providerRouting` devolvía `null` para `vision` por una medición vieja
+   ("DeepInfra cached=256"). Probe real contra OpenRouter: sin pin balancea SiliconFlow/DeepInfra y
+   `cached=0` ($0.001397); pineado a **DeepInfra**, el **primer** request ya trae `cached 2816/3042
+   (~93%)` y cuesta **$0.000107** (13x menos). DeepInfra declara `input_cache_read` 0.0318x y es el
+   input más barato (0.2156/M). **Fix**: `providerRouting` pinea visión a
+   `['deepinfra','gmicloud','siliconflow','novita']`. Harness `cochiCacheAudit` actualizado (41).
+2. **El 64% del prompt es la rueda R7 compartida**: `useWheelSession` monta leyendo el último
+   `R7/chat_N.txt` global (ese día `chat_86`, 6 bloques ≈ 6482 chars: los turnos de Cochi leyendo
+   archivos). Un "primer saludo" NO es frío y arrastra conversación ajena. **Por diseño** (D5
+   compartida), pero es el motivo de que el saludo pese. Si se quiere bajar más: rueda por-agente
+   (el prompt de Asun dice que comparte contexto vía **R9**, no R7) — decisión pendiente.
+3. El saludo también manda el schema de tools (~750 tok), igual que Cochi.
 
 ================================================================================
