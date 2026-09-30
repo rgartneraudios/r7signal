@@ -16,7 +16,8 @@ contexto rodante:
 
 La rueda **R7** es un commit-log de contexto (pares R1+R2 + entradas R5) que viaja en el
 prompt. **R9** es el almacén persistente global. Los prompts de sistema viven en
-**Supabase** (`agent_prompts`), no en el repo.
+**Supabase** (`agent_prompts`), no en el repo (Cochi tiene además un fallback local en
+`src/lib/cochiAgentPrompt.js` por si Supabase falta o trae el contrato viejo).
 
 ## Comandos
 
@@ -39,22 +40,24 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
   cargada en la app.
 - **Prompts**: la edge function `supabase/functions/get-agent-prompts/` lee
   `agent_prompts` (filtra `agent_id` + `is_active`) y devuelve `{prompt_key: content}`.
-  Claves de Cochi: `system`, `planning`, `task`. Se despliega aparte (`supabase functions
-  deploy get-agent-prompts`); el repo no lo hace solo.
-- El CHECK `agent_prompts_prompt_key_check` DEBE incluir `'task'` o el carril de tarea
-  falla al cargar.
+  La usan Asun/Tito/MaríaBase y **también Cochi**: su prompt es `system` (ahora el prompt
+  unificado del loop único; ver `output/Cochi-Prompt.txt`). Si `system` falta o es el viejo
+  contrato R1/R2/R3, Cochi cae al fallback `src/lib/cochiAgentPrompt.js`. Las claves
+  `planning`/`task` de Cochi quedaron **sin uso** y se pueden borrar (paso APARTE, en Supabase).
 
 ## Arquitectura (dónde tocar)
 
 - `src/lib/` — lógica pura, testeable con harness. Es donde vive el grueso.
-  - `cochiLanes.js` — loop de dos carriles, `resolveLane` (toggle-only desde 30/09), `taskSucceeded`
-    (juez), `buildTaskFinish` (R4), `cleanR5`, `commandRan` (sólo marca "no revertible" si el
-    comando CORRIÓ).
-  - `cochiPlanningPrompts.js` — `needsRunCommand` (Guard Full Access),
-    `needsPlanning` (planner DENTRO del carril tarea), `isAtomicMutation` (T5: una mutación atómica
-    —"borrá X", "agregá Y"— NO paga planner: single-pass con scope `task`),
-    parseo de planes, `stripLeadGreetings`, `stepSilentlySucceeded`
-    (un step solo cierra si ejecutó ≥1 tool) + `isEmptyStepResponse`/nudges de reintento.
+  - `cochiAgentPrompt.js` — **prompt de FALLBACK del agente Cochi** (loop único, estilo
+    opencode). Cochi usa `remotePrompts.system` de Supabase; si falta o todavía trae el
+    viejo contrato R1/R2/R3, cae a este texto local (guard en `useCochiTaskLoop.runTurn`).
+    `interpolatePrompt` reemplaza `{{nombreAlternativo}}`/`{{chatLanguage}}`.
+  - `cochiLanes.js` — **legado** (dos carriles). Cochi ya NO lo usa; sólo quedan
+    `isToolError`/`commandRan` (los usa el loop). `resolveLane`/`markInput`/`buildTaskFinish`/
+    `cleanR5`/`TASK_SYSTEM_PROMPT` quedan huérfanos (limpiar cuando se toque).
+  - `cochiPlanningPrompts.js` — **legado** (planner/carril). El loop sólo usa
+    `needsRunCommand` (Guard Full Access), `needsFullAccess`, `touchesBoard` y
+    `USER_ANSWER_PREFIX`. El resto (planner, `needsPlanning`, pasos, nudges) quedó huérfano.
   - `cochiTools.js` — tools (incl. `delete_dir`, destructiva con snapshot), permisos por scope,
     tablero, `buildShellInvocation`, `formatRunCommandOutput` (exit code SIEMPRE). La coaching
     de tools vive en las descriptions de cada tool (no en el system).
@@ -64,15 +67,17 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
     reasoning, costos.
   - `subagent.js` — mini-loop aislado (hoy sólo lectura) → brief. Topes: tool result 8000 chars,
     8 iteraciones, 20k tokens.
-  - `promptLoader.js` — carga prompts de Supabase (cache por agente) + `interpolatePrompt`.
+  - `promptLoader.js` — carga prompts de Supabase (cache por agente) + `interpolatePrompt`
+    (Tito/Asun/MaríaBase; Cochi ya no consume prompts remotos).
   - `cochiPermissions.js` — allow/deny + `isBlockedUrl`.
-- `src/components/` — UI. `CochiDesktop.jsx` es el orquestador del carril; los paneles
-  Asun/Tito espejan la estructura. Subcomponentes por panel (Header/MessageList/StatusBar…).
+- `src/components/` — UI. `CochiDesktop.jsx` es el orquestador; los paneles Asun/Tito espejan la
+  estructura. Subcomponentes por panel (Header/MessageList/StatusBar…).
 - `src/hooks/` — `useWheelSession`, `useStableCallback`, `useAgentPrompts`, `useR9Selection`,
-  `useLiveStream`, `useCochiTaskLoop` (carril tarea), `useCochiConversational` (carril
-  conversacional + `handleSendText`).
+  `useLiveStream`, `useCochiTaskLoop` (**loop único de Cochi** + `handleSendText`). El viejo
+  `useCochiConversational.js` fue **eliminado**.
 - `supabase/functions/get-agent-prompts/` — mapea `agent_prompts(prompt_key→content)` por
-  agente. Claves de Cochi: `system`, `planning`, `task`.
+  agente. Claves de Asun/Tito/MaríaBase. Las de Cochi (`system`, `planning`, `task`) quedaron
+  **sin uso** desde el loop único (ver más abajo).
 - `harness/` — un `.mjs` por lib; patrón `check(label, actual, expected)` con `pass/fail`.
 
 ## Convenciones
@@ -86,15 +91,35 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
   a mano en Supabase.
 - Idempotencia/rendimiento: no re-renderizar por token (usar `streamThrottle`).
 
-## Contrato de carriles (R1–R5) — no romper
+## Cochi: loop único estilo opencode (30/09-quinquies) — REEMPLAZA carriles R1–R5
 
-- **Conversacional** (prompt remoto `system`): R1 = línea interna de lo pedido, R2 =
-  resumen interno, R3 = respuesta visible. Sólo R3 se pinta; R1/R2 en inglés es correcto.
-- **Tarea** (prompt `task`; fallback local `TASK_SYSTEM_PROMPT`): NO emite R1/R2/R3.
-  R4 = IN interno al cerrar con todas las tool results; R5 = OUT visible
-  `"100% <usuario> — …"` / `"0% <usuario> — …"`. El modelo DEBE juzgar el OUTCOME
-  (archivo no encontrado = 0%), no el estado de tools.
-- R3 NUNCA viaja en el prompt. R7 SÓLO viaja en el carril conversacional.
+Cochi **ya no tiene dos carriles**. Se eliminó el toggle Tarea/Task y todo el aparato de
+carriles (planner LLM, R4/R5, colapso intra-turno). Ahora es UN solo agente con herramientas,
+como opencode:
+
+- **Un turno = un loop**: se manda `[systemContext][prompt del agente][briefs R7][user]` + tools;
+  el modelo llama tools; el sistema las ejecuta y devuelve los resultados; se repite hasta que
+  el modelo responde texto (o tope `MAX_ITER=25`). Ese texto final es la respuesta visible.
+- **Sin planner LLM**: no hay `generatePlan`/`confirmPlan`/`PlanViewer`. El modelo decide los
+  pasos sobre la marcha. (El tablero `todowrite`/`spawn_agent` sólo entra en scope `full`, no
+  en `task`.)
+- **Sin R4/R5**: el cierre ya no es un request aparte. Se fue la causa #1 del gasto (un R5 sin
+  cachear = ~40% del turno) y los 2-3 requests extra por paso.
+- **Sin colapso intra-turno**: no se reescribe el medio del hilo (`pruneApiMessages`/
+  `collapseStepMessages` quedan sin uso en Cochi) → el prefijo se mantiene y la caché pega.
+- **Prompt local**: `cochiAgentPrompt.js` (repo). Cochi **ya no lee prompts de Supabase**.
+- **Memoria R7**: cada turno sella `R1: <pedido>` / `R2: <respuesta final>` con `commitR7Turn`
+  (ya no hay R1/R2 generados por el modelo). `buildWheelMessages` los manda como briefs.
+- **Robustez de migración**: la respuesta final pasa por `extractR3Visible` — si el modelo
+  emite R1/R2/R3 muestra sólo R3; si responde directo, muestra todo.
+
+**Asun / Tito / MaríaBase** siguen como antes: prompt remoto `system`, contrato R1/R2/R3
+(R1/R2 internos, R3 visible, R7 viaja).
+
+## Contrato de carriles R1–R5 (SÓLO Asun/Tito; Cochi ya no lo usa)
+
+- **Asun/Tito** (prompt remoto `system`): R1 = línea interna de lo pedido, R2 = resumen
+  interno, R3 = respuesta visible. Sólo R3 se pinta; R1/R2 en inglés es correcto.
 
 ## Tokens facturables (contadores + tope de 70k) — 29/09
 
@@ -361,11 +386,60 @@ hit 98% · sysStable=true · appendOnly=true · $0.0000508` (~**6.7x más barato
 cubre Cochi (Centinela y Terminator) y el subagente; MaríaBase (visión) queda sin pin.
 Gates al cerrar: **lint 0/0 · `npm test` 13/13 · `npm run build` OK**.
 
+### HECHO 30/09-quinquies · LOOP ÚNICO (elimina planner + R4/R5 + toggle Tarea)
+Motivo: una tarea trivial costaba planner + 6 requests con reasoning + un R5 full (~11.4k; hasta
+~29k en tareas grandes). Decisión de Signor Roberto: quitar el carril tarea y hacer un solo agente
+con tools, como opencode. Cambios:
+- `src/lib/cochiAgentPrompt.js` (NUEVO): **fallback local** del prompt del agente. Cochi usa
+  `remotePrompts.system` de Supabase (prompt unificado, ver `output/Cochi-Prompt.txt`); si falta
+  o sigue siendo el viejo contrato R1/R2/R3, cae a este texto.
+- `src/hooks/useCochiTaskLoop.js` (REESCRITO): un loop `[systemContext][agentPrompt][briefs R7][user]`
+  + tools; ejecuta tool_calls y repite hasta que el modelo responde texto. Sin planner, sin R4/R5,
+  sin colapso, sin `planStatus` de pasos. Se conservan tools, permisos, `ask_user`, subagentes,
+  snapshots, `todowrite` (cuando el scope lo incluye) y el reparto de tokens con `billable`.
+  Expone `handleSendText`. El scope sigue `touchesBoard(msg) ? 'full' : 'task'`.
+- `src/hooks/useCochiConversational.js` **ELIMINADO**; `CochiDesktop` ya no usa `conv` ni
+  `PlanViewer`/`executionPlan`.
+- Toggle Tarea/Task **eliminado**: `CochiStatusBar.jsx` (botón), `R7FooterInputs.jsx` (glow azul,
+  chip TAREA, Ctrl+T, `mode`), `R7Desktop.jsx` (`cochiMode`/`handleToggleCochiMode`),
+  `CochiWatermark.jsx` (texto del toggle). `CochiDesktop` ya no recibe `cochiMode`/`onPromptsReady`.
+- **Prompts de Cochi en Supabase**: `system` es el prompt unificado (pegar el texto de
+  `output/Cochi-Prompt.txt`; es paso APARTE). `planning`/`task` quedaron **sin uso** y se pueden
+  borrar de `agent_prompts`. Si `system` falta o es el viejo contrato R1/R2/R3, el loop usa el
+  fallback local (no se rompe).
+- `cochiLanes.js`/`cochiPlanningPrompts.js` quedan en el repo como **legado**; los harness siguen
+  verdes (no se tocaron sus exports). Pendiente: podar lo huérfano cuando se toque.
+- Gates 30/09-quinquies: lint 0/0 · `npm test` 13/13 · `npm run build` OK. **Falta E2E real**
+  (`npx tauri dev`): confirmar tarea de 3 escrituras en un solo loop, con caché y sin planner.
+
+### PENDIENTE tras el loop único
+- **E2E del loop único — MEDIDO (01/10, `npx tauri dev` + F12, prompt nuevo ya en Supabase)**:
+  - Turno charla ("Hola Cochi, ¿estás ahí?"): **1 request · 962 facturables · cached 7936 (hit 98%)**.
+  - Turno lectura ("leé notas.txt y decime qué hay"): **2 requests (1 tool + 1 final) · 2416
+    facturables · cached 7936 (hit 95%)**. Sin `planner:`, sin `task-r5`, sin colapso.
+  - `sysStable=true · appendOnly=true` en los requests con `prev`. La caché pega entre turnos.
+  - Contraste con el carril viejo: una tarea de 3 escrituras costaba ~11.4k (hasta ~29k). El
+    loop único hace 1 request por tool + 1 final.
+- **Falta E2E de tarea MULTI-tool con escritura** (3 writes en un mismo turno): confirmar que
+  encadena tool calls en un solo loop y que el resultado final es correcto (ojo con "agregar al
+  final": el prompt ya instruye `append_to_file`/`replace_in_file` para no pisar el archivo).
+- **Supabase (paso APARTE)**: borrar las filas `planning` y `task` de Cochi en `agent_prompts`
+  (ya sin uso). `system` queda con el prompt unificado.
+- **Herramientas en scope `task`**: `spawn_agent`/`todowrite`/tablero/R9 sólo entran en scope
+  `full` (mensajes que tocan el tablero). Si se quiere agentes+todo siempre, subir el scope
+  (cuesta ~schema extra en cada request).
+- **Renombrar vocabulario R1/R2 de la memoria** si se quiere que el prompt no dependa de
+  etiquetas R1/R2 (hoy `commitR7Turn` escribe `R1:`/`R2:`; `isMemoryMessage` los reconoce).
+- **Legado a podar cuando se toque**: `cochiLanes.js` (`resolveLane`/`markInput`/`buildTaskFinish`/
+  `cleanR5`/`TASK_SYSTEM_PROMPT`), `cochiPlanningPrompts.js` (planner/pasos/nudges) y
+  `PlanViewer.jsx` (sin uso). Los harness siguen verdes porque no se tocaron sus exports.
+
 **Tareas restantes (en orden sugerido):**
 1. ~~**Capa 3 · poda/compactación de R7 en conversacional**~~ **HECHO 30/09-quater** (ver abajo):
    botón 70k "Compactar contexto" → `compactWheel` + `session.compact()` (resumen del sistema,
    sin modelo). Falta **medir en la app** que a >70k el contexto baja y la sesión nueva arranca liviana.
-2. **T5-bis · MEDIR el ahorro** de R5/R4/coaching (implementado 29/09, nunca re-medido).
+2. ~~**T5-bis · MEDIR el ahorro** de R5/R4/coaching~~ **OBSOLETO**: R4/R5/planner ya no existen
+   (loop único). Lo que queda es el E2E del loop único (arriba).
 3. **Secundarios post-caché**: P2-bis anti-verificación 2→1 · P1 scope `edit` mínimo · P3 recortar
    descripciones de tools (~990 tok/request; ahora de bajo impacto, el input cacheado pesa 0.03x).
 4. **Deuda técnica**: subagentes que escriban · shell revertible · SSRF en Rust · pegar `TYPO

@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, memo } from 'react'
 import { readTextFile, writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs'
-import PlanViewer from './PlanViewer'
 import { COCHI_MODELS, MODEL_PRICES } from '../lib/modelPrices.js'
 import { resolveStoredModel } from '../lib/llmMetrics.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
@@ -9,7 +8,6 @@ import { resolveStoredSubagentModel, DEFAULT_SUBAGENT_MODEL } from '../lib/subag
 import { SubagentBubble } from './SubagentView.jsx'
 import { useWheelSession } from '../hooks/useWheelSession.js'
 import { useCochiTaskLoop } from '../hooks/useCochiTaskLoop.js'
-import { useCochiConversational } from '../hooks/useCochiConversational.js'
 import { useAgentPrompts } from '../hooks/useAgentPrompts.js'
 import { useR9Selection } from '../hooks/useR9Selection.js'
 import { useStableCallback } from '../hooks/useStableCallback.js'
@@ -75,8 +73,6 @@ function CochiDesktop({
   onSavePreferences,
   onPreferencesLoaded,
   onPromptsReady,
-  cochiMode,
-  onToggleCochiMode,
 }) {
   const [messages,        setMessages]        = useState([])
   const [tokens,          setTokens]          = useState(0)
@@ -150,16 +146,18 @@ function CochiDesktop({
   })
   const { wheelRef, messagesRef, sessionIdRef } = session
 
-  // Prompts remotos + selección R9 (compartidos).
-  const { remotePrompts, promptsError } = useAgentPrompts('cochi', onPromptsReady)
+  // Prompt remoto de Cochi (Supabase). Si no está o todavía es el viejo contrato
+  // R1/R2/R3, el loop cae al prompt local agentPrompt (cochiAgentPrompt.js).
+  const { remotePrompts } = useAgentPrompts('cochi', onPromptsReady)
+
+  // Selección R9 (compartida).
   const { r9Btn, handleSelectionMouseUp, handleConfirmR9 } = useR9Selection(chatContainerRef, 'cochi')
 
-  // ─── Carril TAREA (Fase 2 del refactor) ────────────────────────────────────
-  // El hook se queda con plan/actividad/subagentes/permisos/ask/todos/snapshots y
-  // expone los handlers; el orquestador le inyecta el estado compartido del turno.
+  // ─── Loop único del agente (system + tools + conversación) ─────────────────
   const taskLoop = useCochiTaskLoop({
     pushMessage,
     setLoading,
+    loading,
     liveRef,
     abortRef,
     sessionIdRef,
@@ -171,7 +169,6 @@ function CochiDesktop({
     subagentModel,
     savePreferences,
     remotePrompts,
-    promptsError,
     workspace,
     planStatus,
     setPlanStatus,
@@ -179,32 +176,6 @@ function CochiDesktop({
     setCost,
     setCachedTokens,
     onUsage,
-  })
-
-  // ─── Carril CONVERSACIONAL (Fase 3 del refactor) ───────────────────────────
-  // Se queda con executeConversational y handleSendText (el enrutador de carril).
-  const conv = useCochiConversational({
-    pushMessage,
-    setLoading,
-    liveRef,
-    abortRef,
-    sessionIdRef,
-    wheelRef,
-    loading,
-    planStatus,
-    setPlanStatus,
-    selectedModel,
-    preferences,
-    ollamaModel,
-    lmStudioModel,
-    remotePrompts,
-    promptsError,
-    workspace,
-    setTokens,
-    setCost,
-    setCachedTokens,
-    onUsage,
-    taskLoop,
   })
 
   // Scroll al final (Bloque M/N: scrollTop directo en el contenedor en vez de
@@ -297,7 +268,7 @@ function CochiDesktop({
     if (planStatus === 'executing') { onMessageConsumed?.(); return }
     onMessageConsumed?.()
     const text = pendingMessage.text.trim()
-    if (text) conv.handleSendText(text, pendingMessage.mode)
+    if (text) taskLoop.handleSendText(text)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingMessage?.id])
 
@@ -314,7 +285,7 @@ function CochiDesktop({
       handoff.brief,
       handoff.type === 'image' ? `URL de imagen: ${handoff.content}` : `Contenido:\n${handoff.content}`,
     ].join('\n')
-    conv.handleSendText(briefText)
+    taskLoop.handleSendText(briefText)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handoff?.id])
 
@@ -367,7 +338,7 @@ function CochiDesktop({
     const notes = await taskLoop.maybeRevertFiles()
     applyUndo()
     for (const n of notes) pushMessage(n)
-    await conv.handleSendText(userText)
+    await taskLoop.handleSendText(userText)
   })
 
   const isTerminator = selectedModel === '~deepseek/deepseek-flash-latest'
@@ -422,16 +393,6 @@ function CochiDesktop({
             onUndo={handleUndo}
             onRegenerate={handleRegenerate}
           />
-
-          {/* Plan activo (Bloque J) — confirmar/cancelar y progreso en vivo */}
-          {taskLoop.executionPlan && planStatus !== 'idle' && (
-            <PlanViewer
-              plan={taskLoop.executionPlan}
-              planStatus={planStatus}
-              onConfirm={taskLoop.confirmPlan}
-              onCancel={taskLoop.cancelPlan}
-            />
-          )}
 
           {/* Subagentes en vivo (Fase 3.3c) — mini-loop aislado, sólo lectura */}
           {loading && taskLoop.subagents.some(s => s.status === 'running') && (
@@ -514,8 +475,6 @@ function CochiDesktop({
         onClear={handleClear}
         onArchiveWithName={handleArchiveWithName}
         onCancel={taskLoop.handleEsc}
-        cochiMode={cochiMode}
-        onToggleCochiMode={onToggleCochiMode}
       />
     </div>
   )
