@@ -15,9 +15,8 @@
     "harness:llm": "node harness/cochiLlmMetrics.harness.mjs",
     "harness:subagent": "node harness/cochiSubagent.harness.mjs",
     "harness:plans": "node harness/cochiPlans.harness.mjs",
-    "harness:planning": "node harness/cochiPlanning.harness.mjs",
+    "harness:guards": "node harness/cochiGuards.harness.mjs",
     "harness:tools": "node harness/cochiTools.harness.mjs",
-    "harness:lanes": "node harness/cochiLanes.harness.mjs",
     "harness:context": "node harness/cochiContext.harness.mjs",
     "preview": "vite preview"
   },

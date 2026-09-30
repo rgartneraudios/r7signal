@@ -52,12 +52,11 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
     opencode). Cochi usa `remotePrompts.system` de Supabase; si falta o todavía trae el
     viejo contrato R1/R2/R3, cae a este texto local (guard en `useCochiTaskLoop.runTurn`).
     `interpolatePrompt` reemplaza `{{nombreAlternativo}}`/`{{chatLanguage}}`.
-  - `cochiLanes.js` — **legado** (dos carriles). Cochi ya NO lo usa; sólo quedan
-    `isToolError`/`commandRan` (los usa el loop). `resolveLane`/`markInput`/`buildTaskFinish`/
-    `cleanR5`/`TASK_SYSTEM_PROMPT` quedan huérfanos (limpiar cuando se toque).
-  - `cochiPlanningPrompts.js` — **legado** (planner/carril). El loop sólo usa
-    `needsRunCommand` (Guard Full Access), `needsFullAccess`, `touchesBoard` y
-    `USER_ANSWER_PREFIX`. El resto (planner, `needsPlanning`, pasos, nudges) quedó huérfano.
+  - `cochiGuards.js` — **guardas e intención del loop único** (extraído del legado al podar
+    carriles/planner, 30/09-quinquies-ter). Sólo sobrevive lo que el loop usa: `needsRunCommand`/
+    `needsFullAccess` (Guard Full Access), `touchesBoard` (scope `full` vs `task`),
+    `USER_ANSWER_PREFIX` (ask_user), `isToolError`/`commandRan` (clasificación de tools). Puro;
+    `harness/cochiGuards.harness.mjs`.
   - `cochiTools.js` — tools (incl. `delete_dir`, destructiva con snapshot), permisos por scope,
     tablero, `buildShellInvocation`, `formatRunCommandOutput` (exit code SIEMPRE). La coaching
     de tools vive en las descriptions de cada tool (no en el system).
@@ -407,10 +406,24 @@ con tools, como opencode. Cambios:
   `output/Cochi-Prompt.txt`; es paso APARTE). `planning`/`task` quedaron **sin uso** y se pueden
   borrar de `agent_prompts`. Si `system` falta o es el viejo contrato R1/R2/R3, el loop usa el
   fallback local (no se rompe).
-- `cochiLanes.js`/`cochiPlanningPrompts.js` quedan en el repo como **legado**; los harness siguen
-  verdes (no se tocaron sus exports). Pendiente: podar lo huérfano cuando se toque.
+- ~~`cochiLanes.js`/`cochiPlanningPrompts.js` quedan como legado~~ **PODADO 30/09-quinquies-ter**:
+  borrados junto con `PlanViewer.jsx`; los supervivientes viven en `cochiGuards.js`.
 - Gates 30/09-quinquies: lint 0/0 · `npm test` 13/13 · `npm run build` OK. **Falta E2E real**
   (`npx tauri dev`): confirmar tarea de 3 escrituras en un solo loop, con caché y sin planner.
+
+### HECHO 30/09-quinquies-ter · PODA DEL LEGADO (carriles + planner)
+Cochi ya no tiene dos carriles ni planner, así que todo su aparato quedó huérfano. Se borró:
+- `src/lib/cochiLanes.js` (LANE/`resolveLane`/`markInput`/`buildTaskFinish`/`buildFinishMessages`/
+  `cleanR5`/`TASK_SYSTEM_PROMPT`/`taskSucceeded`) — todo sin uso tras el loop único.
+- `src/lib/cochiPlanningPrompts.js` (`needsPlanning`/`isAtomicMutation`/`PLANNING_SYSTEM_PROMPT`/
+  `parsePlanResponse`/`buildPlanContext`/`STEP_EXECUTION_PROMPT`/nudges/`MUTATING_TOOLS`/
+  `collapseStepMessages`/`stepSilentlySucceeded`/`isEmptyStepResponse`) — planner y pasos fuera.
+- `src/components/PlanViewer.jsx` — no se importaba en ningún lado.
+- Harnesses `cochiLanes.harness.mjs` y `cochiPlanning.harness.mjs` (probaban lo borrado).
+Supervivientes consolidados en **`src/lib/cochiGuards.js`** (+`harness/cochiGuards.harness.mjs`):
+`needsRunCommand`/`needsFullAccess`, `touchesBoard`, `USER_ANSWER_PREFIX`, `isToolError`/
+`commandRan`. `useCochiTaskLoop.js` importa de ahí. `package.json`: `harness:lanes` fuera,
+`harness:planning` → `harness:guards`. Gates: lint 0/0 · **`npm test` 12/12** · build OK.
 
 ### PENDIENTE tras el loop único
 - **E2E del loop único — MEDIDO (01/10, `npx tauri dev` + F12, prompt nuevo ya en Supabase)**:
@@ -423,16 +436,16 @@ con tools, como opencode. Cambios:
 - **Falta E2E de tarea MULTI-tool con escritura** (3 writes en un mismo turno): confirmar que
   encadena tool calls en un solo loop y que el resultado final es correcto (ojo con "agregar al
   final": el prompt ya instruye `append_to_file`/`replace_in_file` para no pisar el archivo).
-- **Supabase (paso APARTE)**: borrar las filas `planning` y `task` de Cochi en `agent_prompts`
-  (ya sin uso). `system` queda con el prompt unificado.
+- ~~**Supabase (paso APARTE)**: borrar las filas `planning` y `task` de Cochi en `agent_prompts`~~
+  **HECHO (30/09-quinquies-ter)**: filas `planning`/`task` de Cochi borradas; `system` queda con el
+  prompt unificado. Asun/Tito no se tocan (van por `agent_id`).
 - **Herramientas en scope `task`**: `spawn_agent`/`todowrite`/tablero/R9 sólo entran en scope
   `full` (mensajes que tocan el tablero). Si se quiere agentes+todo siempre, subir el scope
   (cuesta ~schema extra en cada request).
 - **Renombrar vocabulario R1/R2 de la memoria** si se quiere que el prompt no dependa de
   etiquetas R1/R2 (hoy `commitR7Turn` escribe `R1:`/`R2:`; `isMemoryMessage` los reconoce).
-- **Legado a podar cuando se toque**: `cochiLanes.js` (`resolveLane`/`markInput`/`buildTaskFinish`/
-  `cleanR5`/`TASK_SYSTEM_PROMPT`), `cochiPlanningPrompts.js` (planner/pasos/nudges) y
-  `PlanViewer.jsx` (sin uso). Los harness siguen verdes porque no se tocaron sus exports.
+- ~~**Legado a podar cuando se toque**: `cochiLanes.js`/`cochiPlanningPrompts.js`/`PlanViewer.jsx`~~
+  **HECHO 30/09-quinquies-ter** (ver "HECHO esta sesión").
 
 **Tareas restantes (en orden sugerido):**
 1. ~~**Capa 3 · poda/compactación de R7 en conversacional**~~ **HECHO 30/09-quater** (ver abajo):
