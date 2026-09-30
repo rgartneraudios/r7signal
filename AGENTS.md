@@ -86,8 +86,9 @@ en verde**. Los harness son la red de seguridad del loop de Cochi.
 - Commits: en español, prefijo del agente (`Cochi: ...`, `Refactor ...`, `Fix ...`).
   Mensaje que explique causa raíz y qué harness/gate cambió.
 - **Prompts**: editar el prompt en Supabase es un paso APARTE. Cambiar código/prompt local
-  NO actualiza producción. Textos fuente en `output/Prompts-Final.txt` (local) y se pegan
-  a mano en Supabase.
+  NO actualiza producción. Texto fuente de Cochi en `output/Cochi-Prompt.txt` (local) y se pega
+  a mano en Supabase. Limpieza 01/10: se borraron de `output/` los viejos `Prompts-Final.txt`,
+  `prueba_cache.txt` y `Prueba-Cache-Task-Cochi.txt`.
 - Idempotencia/rendimiento: no re-renderizar por token (usar `streamThrottle`).
 
 ## Cochi: loop único estilo opencode (30/09-quinquies) — REEMPLAZA carriles R1–R5
@@ -377,15 +378,17 @@ implementado y verificado E2E** (un solo input, botón ⚡ Tarea/Task junto a CL
 Ctrl+T, `resolveLane`; ver sección propia arriba).
 
 ================================================================================
-## PRÓXIMA SESIÓN — PRIORIDADES (handoff 30/09-ter)
+## PRÓXIMA SESIÓN — PRIORIDADES (handoff 01/10)
 ================================================================================
 
-Estado: **la caché YA FUNCIONA y está verificada E2E.** El pin de la Capa 1 (preferir proveedores
-que cachean, ver sección 1) resolvió el `cached=0`. Medido en la app (`npx tauri dev` + F12):
-turno 1 frío (`prompt 7550 · cached 0 · $0.0003406`) → turnos 2-3 `prompt 7608 · cached 7424 ·
-hit 98% · sysStable=true · appendOnly=true · $0.0000508` (~**6.7x más barato** por turno). El pin
-cubre Cochi (Centinela y Terminator) y el subagente; MaríaBase (visión) queda sin pin.
-Gates al cerrar: **lint 0/0 · `npm test` 13/13 · `npm run build` OK**.
+Estado: **caché OK y loop único con sus 4 E2E en verde (01/10).** El pin de la Capa 1 (preferir
+proveedores que cachean, ver sección 1) resolvió el `cached=0`; el loop único pasó charla, lectura,
+tarea multi-tool con escritura y compactación a 70k (ver "E2E del loop único"). Medido en la app:
+turnos con `prev` dan `cached` ~98% · `sysStable=true · appendOnly=true` (~**6.7x más barato** que
+el turno frío). El pin cubre Cochi (Centinela y Terminator) y el subagente; MaríaBase (visión) queda
+sin pin. **PRIMERA FILA de la próxima sesión: P1 scope `edit` · P3 recortar descriptions · deuda
+técnica** (subagentes que escriban, shell revertible, SSRF en Rust, TYPO de archivo) — ver
+"PRIMERA FILA" al final. Gates al cerrar: **lint 0/0 · `npm test` 13/13 · `npm run build` OK**.
 
 ### HECHO 30/09-quinquies · LOOP ÚNICO (elimina planner + R4/R5 + toggle Tarea)
 Motivo: una tarea trivial costaba planner + 6 requests con reasoning + un R5 full (~11.4k; hasta
@@ -410,8 +413,9 @@ con tools, como opencode. Cambios:
   fallback local (no se rompe).
 - ~~`cochiLanes.js`/`cochiPlanningPrompts.js` quedan como legado~~ **PODADO 30/09-quinquies-ter**:
   borrados junto con `PlanViewer.jsx`; los supervivientes viven en `cochiGuards.js`.
-- Gates 30/09-quinquies: lint 0/0 · `npm test` 13/13 · `npm run build` OK. **Falta E2E real**
-  (`npx tauri dev`): confirmar tarea de 3 escrituras en un solo loop, con caché y sin planner.
+- Gates 30/09-quinquies: lint 0/0 · `npm test` 13/13 · `npm run build` OK. **E2E real HECHO
+  01/10** (`npx tauri dev`): la tarea de 3 escrituras corrió en un solo loop, con caché y sin
+  planner (ver "E2E del loop único").
 
 ### HECHO 30/09-quinquies-ter · PODA DEL LEGADO (carriles + planner)
 Cochi ya no tiene dos carriles ni planner, así que todo su aparato quedó huérfano. Se borró:
@@ -427,17 +431,23 @@ Supervivientes consolidados en **`src/lib/cochiGuards.js`** (+`harness/cochiGuar
 `commandRan`. `useCochiTaskLoop.js` importa de ahí. `package.json`: `harness:lanes` fuera,
 `harness:planning` → `harness:guards`. Gates: lint 0/0 · **`npm test` 12/12** · build OK.
 
-### PENDIENTE tras el loop único
-- **E2E del loop único — MEDIDO (01/10, `npx tauri dev` + F12, prompt nuevo ya en Supabase)**:
-  - Turno charla ("Hola Cochi, ¿estás ahí?"): **1 request · 962 facturables · cached 7936 (hit 98%)**.
-  - Turno lectura ("leé notas.txt y decime qué hay"): **2 requests (1 tool + 1 final) · 2416
-    facturables · cached 7936 (hit 95%)**. Sin `planner:`, sin `task-r5`, sin colapso.
-  - `sysStable=true · appendOnly=true` en los requests con `prev`. La caché pega entre turnos.
-  - Contraste con el carril viejo: una tarea de 3 escrituras costaba ~11.4k (hasta ~29k). El
-    loop único hace 1 request por tool + 1 final.
-- **Falta E2E de tarea MULTI-tool con escritura** (3 writes en un mismo turno): confirmar que
-  encadena tool calls en un solo loop y que el resultado final es correcto (ojo con "agregar al
-  final": el prompt ya instruye `append_to_file`/`replace_in_file` para no pisar el archivo).
+### HECHO · E2E del loop único (01/10, `npx tauri dev` + F12, prompt nuevo ya en Supabase)
+- Turno charla ("Hola Cochi, ¿estás ahí?"): **1 request · 962 facturables · cached 7936 (hit 98%)**.
+- Turno lectura ("leé notas.txt y decime qué hay"): **2 requests (1 tool + 1 final) · 2416
+  facturables · cached 7936 (hit 95%)**. Sin `planner:`, sin `task-r5`, sin colapso.
+- **Turno MULTI-tool con escritura** (fixture `output/Prueba-Multi-Cochi.txt`: 3 cambios —agregar
+  Seccion D + 2 `replace_in_file`— en un mismo turno): **3 requests · 4 tools · 11.698 facturables**.
+  Los 3 cambios quedaron correctos y el archivo NO se pisó (Seccion D antes de `FIN DEL INFORME`).
+  `[cache:audit] cached 0 → 8448 (hit 98%) → 8448 (hit 93%) · sysStable=true · appendOnly=true ·
+  sysHash 77df6131`. Cochi encadenó read + 3 replaces en el mismo loop, sin planner.
+- `sysStable=true · appendOnly=true` en los requests con `prev`. La caché pega entre turnos.
+- Contraste con el carril viejo: una tarea de 3 escrituras costaba ~11.4k (hasta ~29k) y usaba
+  planner + R5; el loop único hace 1 request por tool + 1 final.
+- **Compactación a 70k — E2E (01/10)**: 11 turnos de tarea acumularon ~75k facturables → apareció
+  el banner; al pulsar "Compactar contexto" NO hubo request (resumen del sistema) y el contador
+  volvió a 0. Verificado en disco: `R7/chat_85.txt` (30.356 bytes · 76 turnos, completo) +
+  `chat_86.txt` (6.745 bytes · 6 turnos, con `── Compactado ── (65 turnos anteriores…)`) +
+  `Sessions/cochi-1790763831582-5npofk.json` (31.210 bytes). **−78%** y nada perdido.
 - ~~**Supabase (paso APARTE)**: borrar las filas `planning` y `task` de Cochi en `agent_prompts`~~
   **HECHO (30/09-quinquies-ter)**: filas `planning`/`task` de Cochi borradas; `system` queda con el
   prompt unificado. Asun/Tito no se tocan (van por `agent_id`).
@@ -449,21 +459,36 @@ Supervivientes consolidados en **`src/lib/cochiGuards.js`** (+`harness/cochiGuar
 - ~~**Legado a podar cuando se toque**: `cochiLanes.js`/`cochiPlanningPrompts.js`/`PlanViewer.jsx`~~
   **HECHO 30/09-quinquies-ter** (ver "HECHO esta sesión").
 
-**Tareas restantes (en orden sugerido):**
-1. ~~**Capa 3 · poda/compactación de R7 en conversacional**~~ **HECHO 30/09-quater** (ver abajo):
-   botón 70k "Compactar contexto" → `compactWheel` + `session.compact()` (resumen del sistema,
-   sin modelo). Falta **medir en la app** que a >70k el contexto baja y la sesión nueva arranca liviana.
-2. ~~**T5-bis · MEDIR el ahorro** de R5/R4/coaching~~ **OBSOLETO**: R4/R5/planner ya no existen
-   (loop único). Lo que queda es el E2E del loop único (arriba).
-3. **Secundarios post-caché**: P2-bis anti-verificación 2→1 · P1 scope `edit` mínimo · P3 recortar
-   descripciones de tools (~990 tok/request; ahora de bajo impacto, el input cacheado pesa 0.03x).
-4. **Deuda técnica**: subagentes que escriban · shell revertible · SSRF en Rust · pegar `TYPO
-   RESUELTO` al prompt `task` de Supabase (paso APARTE).
-5. ~~**R7 en el carril TAREA (quemar)**: renombrar `[R7 COMPACTED]`/`[MEMORY]` de
-   `cochiContext.pruneApiMessages`~~ **OBSOLETO**: `pruneApiMessages` y todo el colapso intra-turno
-   se **eliminaron** (podados junto a `summarizeFromPairs`/`appendR7Task`/`closeWheelTask`, 30/09 sexies).
-6. **Revisar caché de R5 + modo TASK** (hallazgos en sección propia) y **E2E de compactación a
-   70k** en la app.
+**PRIMERA FILA — pendientes de la próxima sesión (handoff 01/10):**
+
+1. **P1 · scope `edit` mínimo** (`cochiTools.js`): hoy sólo hay `read`/`task`/`full`
+   (`READ_SCOPE_TOOLS` + `TASK_SCOPE_EXCLUDED`, ~L791/L810). Falta un scope `edit` con allowlist
+   de mutación atómica (read_file + replace_in_file + append/write) para no mandar el schema
+   `task` completo en pedidos de edición. Recorta el primer request de cada turno (paga full).
+   Toca `cochiTools.getToolsForPermission` + `useCochiTaskLoop` (scope) + harness de tools.
+2. **P3 · recortar descripciones de tools** (`cochiTools.js`): ~990 tok/request de descriptions.
+   Bajo impacto con caché (input cacheado 0.03x), pero el primer request de cada turno paga full →
+   evaluar qué descripciones se pueden acortar sin perder la coaching clave.
+3. **Deuda técnica**:
+   - **Subagentes que escriban**: hoy sólo lectura (`spawn_agent`, `MAX_SUBAGENT_DEPTH=1`,
+     `getSubagentTools` reusa scope `read`). Falta abrirles escritura con permisos.
+   - **Shell revertible**: `run_command` está FUERA de los snapshots; hoy sólo aviso al undo.
+   - **SSRF**: `isBlockedUrl` (`cochiPermissions.js`) es corte por globs; falta validar la IP
+     resuelta en Rust.
+   - **TYPO de archivo**: el viejo fallback `TYPO RESUELTO` vivía en el R4 (eliminado con el
+     planner). Verificar que el loop único no haya perdido el manejo del nombre con typo
+     (hoy no hay `TYPO` en `cochiAgentPrompt.js` ni en `output/Cochi-Prompt.txt`).
+4. **Opcional · vocabulario R1/R2 de la memoria**: `commitR7Turn` escribe `R1:`/`R2:` y
+   `isMemoryMessage` los reconoce. Si se quiere desacoplar el prompt de esas etiquetas, renombrar.
+
+**CERRADO — no rehacer:**
+- **Capa 3 · compactación a 70k**: código 30/09-quater + **E2E 01/10** (ver "E2E del loop único",
+  −78% y nada perdido).
+- **T5-bis · ahorro R5/R4/coaching**: OBSOLETO (R4/R5/planner eliminados).
+- **P2-bis · anti-verificación 2→1** (`STEP_VERIFY_NUDGE_AT`): OBSOLETO — vivía en
+  `cochiPlanningPrompts` (borrado). El loop único no tiene nudges de verificación; la coaching
+  actual es "ONE read, then the edit / do not re-read to verify" en las descriptions de tools.
+- **R7 en carril tarea** (`pruneApiMessages`/`[R7 COMPACTED]`): OBSOLETO (podado 30/09-sexies).
 
 ### HECHO esta sesión (capa 0 + instrumentación)
 - **Tarifas verificadas 29/09**: `modelPrices.js` → DeepSeek `cachedInputPerM` = **0.1x** (antes
