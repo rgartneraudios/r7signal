@@ -12,9 +12,6 @@ import { calculateCost } from './modelPrices.js'
 export const MODEL_CAPS = {
   '~deepseek/deepseek-v4-flash-latest': { reasoning: true },
   '~deepseek/deepseek-flash-latest':    { reasoning: true },
-  // IrmaMax (Asun, incl. Modo Proyecto): su endpoint EXIGE reasoning y rechaza
-  // `enabled:false` (API 400). Marcado como requerido: gana sobre cualquier override.
-  'google/gemini-3.8-flash':            { reasoning: true, reasoningRequired: true },
 }
 
 export function getModelCapabilities(modelId) {

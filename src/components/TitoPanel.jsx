@@ -18,24 +18,15 @@ import TitoHeader from './TitoHeader.jsx'
 import TitoWatermark from './TitoWatermark.jsx'
 import TitoStatusBar from './TitoStatusBar.jsx'
 
-const TITO_MODELS = {
-  rapido: 'perplexity/sonar',
-  pro:    'perplexity/sonar-pro',
-  deep:   'perplexity/sonar-deep-research',
-};
-
-const needsWebSearch = (message) => {
-  const msg = message.toLowerCase().trim()
-  const conversational = [
-    /^hola/, /^hi/, /^hey/, /^buenos/, /^buenas/, /^qué tal/,
-    /^como est/, /^cómo est/, /^todo bien/, /^gracias/, /^ok$/,
-    /^perfecto/, /^entendido/, /^sí$/, /^no$/, /^claro/,
-    /^qué (eres|puedes|haces|sabes)/, /^who are/, /^what (are|can)/,
-  ]
-  if (conversational.some(r => r.test(msg))) return false
-  if (msg.length < 40) return false
-  return true
-}
+// Pestaña única de Tito (01/10): DeepSeek V4 Flash (mismo alias que Cochi
+// Centinela). Cachea y la búsqueda real la aporta el server tool
+// `openrouter:web_search` (el modelo decide si/cuántas veces buscar; motor Exa,
+// ~$0.007 por búsqueda). `max_uses` capa el costo por turno.
+const TITO_MODEL = '~deepseek/deepseek-v4-flash-latest'
+const WEB_SEARCH_TOOL = [{
+  type: 'openrouter:web_search',
+  parameters: { max_results: 5, max_uses: 3 },
+}]
 
 function TitoPanel({ 
   pendingMessage, onMessageConsumed, 
@@ -50,7 +41,6 @@ function TitoPanel({
   // Bloque Q: el texto en vivo se empuja a TitoStreamingBubble por ref, así el
   // panel no se re-renderiza en cada frame del throttle.
   const liveRef = useRef(null)
-  const [searchLevel, setSearchLevel] = useState('rapido');
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef(null);
   const bottomRef = useRef(null);
@@ -145,16 +135,6 @@ function TitoPanel({
       return
     }
 
-    if (searchLevel === 'deep') {
-      const confirm = window.confirm(
-        '🔬 Investigación profunda seleccionada.\n' +
-        'Coste estimado: €0.15–0.50 por búsqueda.\n' +
-        '¿Confirmas?'
-      );
-      if (!confirm) return;
-    }
-
-
     const userMsg = { id: newMessageId('tito'), role: 'user', content: text };
     setMessages(prev => [...prev, userMsg]);
     setStreaming(true);
@@ -174,57 +154,21 @@ function TitoPanel({
     })
 
     try {
-      // Conversational guard — skip web search for casual messages
-      if (!needsWebSearch(text)) {
-        const chatModel = TITO_MODELS[searchLevel]
-        const extractStream = makeStreamingDisplayExtractor()
-        // Fase 3.2: streaming vía llmClient (retry + usage normalizado).
-        const result = await streamChat({
-          provider: resolveProvider(chatModel),
-          stream: true,
-          messages: wheelMessages,
-          sessionId: getTitoSessionId(),
-          signal: controller.signal,
-          onDelta: (partial) => liveRef.current?.push(extractStream(partial)),
-          onUsage: (usage) => {
-            const u = normalizeUsage(usage)
-            const billable = billableTokens(chatModel, u)
-            const cost = calculateCost(chatModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
-            setTokens(prev => prev + billable)
-            if (typeof onUsage === 'function') {
-              onUsage({ source: 'tito', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost })
-            }
-          },
-        })
-        const fullText = result.content
-         const finalDisplay = extractR3Visible(fullText)
-         const hasHandoff = fullText.includes('[→ COCHI:')
-         // Sella el turno en la rueda: R1/R2 los escribe el SISTEMA (cacheable).
-         wheelRef.current = commitR7Turn(wheelRef.current, { pairs: [buildTurnPair(text, finalDisplay)] })
-         liveRef.current?.clear()
-         setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: finalDisplay, hasHandoff }])
-         if (hasHandoff) {
-          const briefMatch = fullText.match(/\[→ COCHI:\s*(.+?)\]/s)
-          if (briefMatch) onHandoff?.(briefMatch[1].trim())
-        }
-        setStreaming(false)
-        return
-      }
-
-      const searchModel = TITO_MODELS[searchLevel]
+      // El server tool `openrouter:web_search` viaja siempre; el modelo decide si
+      // busca (0–N veces, tope en `max_uses`). Un saludo no dispara búsqueda.
       const extractStream = makeStreamingDisplayExtractor()
-      // Fase 3.2: streaming vía llmClient (retry + usage normalizado).
       const result = await streamChat({
-        provider: resolveProvider(searchModel),
+        provider: resolveProvider(TITO_MODEL),
         stream: true,
         messages: wheelMessages,
+        tools: WEB_SEARCH_TOOL,
         sessionId: getTitoSessionId(),
         signal: controller.signal,
         onDelta: (partial) => liveRef.current?.push(extractStream(partial)),
         onUsage: (usage) => {
           const u = normalizeUsage(usage)
-          const billable = billableTokens(searchModel, u)
-          const cost = calculateCost(searchModel, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
+          const billable = billableTokens(TITO_MODEL, u)
+          const cost = calculateCost(TITO_MODEL, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
           setTokens(prev => prev + billable)
           if (typeof onUsage === 'function') {
             onUsage({ source: 'tito', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost })
@@ -232,19 +176,17 @@ function TitoPanel({
         },
       })
 
-      const fullText = result.content;
-      const finalDisplay = extractR3Visible(fullText);
-      const hasHandoff = fullText.includes('[→ COCHI:');
+      const fullText = result.content
+      const finalDisplay = extractR3Visible(fullText)
+      const hasHandoff = fullText.includes('[→ COCHI:')
       // Sella el turno en la rueda: R1/R2 los escribe el SISTEMA (cacheable).
-      wheelRef.current = commitR7Turn(wheelRef.current, { pairs: [buildTurnPair(text, finalDisplay)] });
+      wheelRef.current = commitR7Turn(wheelRef.current, { pairs: [buildTurnPair(text, finalDisplay)] })
       liveRef.current?.clear()
-      setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: finalDisplay, hasHandoff }]);
-
-    if (hasHandoff) {
-      const briefMatch = fullText.match(/\[→ COCHI:\s*(.+?)\]/s);
-      if (briefMatch) onHandoff?.(briefMatch[1].trim());
-    }
-
+      setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: finalDisplay, hasHandoff }])
+      if (hasHandoff) {
+        const briefMatch = fullText.match(/\[→ COCHI:\s*(.+?)\]/s)
+        if (briefMatch) onHandoff?.(briefMatch[1].trim())
+      }
   } catch (err) {
       if (err.name !== 'AbortError') {
         liveRef.current?.clear()
@@ -267,7 +209,7 @@ function TitoPanel({
   return (
     <div className="tito-panel">
       {/* Header */}
-      <TitoHeader searchLevel={searchLevel} onSearchLevelChange={setSearchLevel} />
+      <TitoHeader />
 
       {/* Chat area */}
       <div className="tito-chat" ref={chatContainerRef} onMouseUp={handleSelectionMouseUp} style={{ position: 'relative' }}>
@@ -316,7 +258,7 @@ function TitoPanel({
 
       {/* Status bar */}
       <TitoStatusBar
-        modelLabel={TITO_MODELS[searchLevel]}
+        modelLabel={TITO_MODEL}
         streaming={streaming}
         onClear={handleClear}
         onArchiveWithName={handleArchiveWithName}

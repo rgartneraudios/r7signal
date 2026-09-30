@@ -47,7 +47,7 @@ export default function AsunHeader({
                   <button key={m.id}
                     className={`asun-header-btn${selectedLLMModel === m.id ? ' active' : ''}`}
                     onClick={() => onSelectLLMModel(m.id)}
-                    style={selectedLLMModel === m.id ? { color: m.id === 'google/gemini-3.8-flash' ? '#FA7A9A' : '#DF9CFF' } : undefined}
+                    style={selectedLLMModel === m.id ? { color: m.id === '~deepseek/deepseek-flash-latest' ? '#FA7A9A' : '#DF9CFF' } : undefined}
                   >
                     {m.label}
                   </button>

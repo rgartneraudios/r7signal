@@ -1,21 +1,11 @@
-// ─── Header de Tito: selector de nivel de búsqueda ───────────────────────────
-const LEVELS = [
-  { key: 'rapido', label: '⚡ Rápido' },
-  { key: 'deep',   label: '🔬 Deep' },
-  { key: 'pro',    label: '🔍 Pro' },
-]
-
-export default function TitoHeader({ searchLevel, onSearchLevelChange }) {
+// ─── Header de Tito: pestaña única de búsqueda (01/10) ───────────────────────
+// Se jubilaron las 3 pestañas (Rápido/Pro/Max) de Perplexity por un único modo
+// con DeepSeek V4 Flash + server tool `openrouter:web_search`.
+export default function TitoHeader() {
   return (
     <div className="tito-header">
       <div className="tito-level-selector">
-        {LEVELS.map(({ key, label }) => (
-          <button
-            key={key}
-            className={`level-btn ${searchLevel === key ? 'active' : ''}`}
-            onClick={() => onSearchLevelChange(key)}
-          >{label}</button>
-        ))}
+        <span className="level-btn active">🔎 Búsqueda · DeepSeek V4 Flash</span>
       </div>
     </div>
   )

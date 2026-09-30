@@ -29,7 +29,7 @@ const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // ─── Modelos ──────────────────────────────────────────────────────────────────
 const MODELS = {
-  llm:    { occidente: 'google/gemini-3.8-flash', asia: 'deepseek/deepseek-v4-flash-vision-exp' },
+  llm:    { occidente: '~deepseek/deepseek-flash-latest', asia: 'deepseek/deepseek-v4-flash-vision-exp' },
   imagen: { occidente: 'x-ai/grok-imagine-image-quality', asia: 'bytedance-seed/seedream-5-0-pro' },
   musica: { chat: '~deepseek/deepseek-v4-flash-latest', gen: 'google/lyria-3-pro-preview' },
 }
@@ -94,7 +94,7 @@ function AsunPanel({
   const [generating,  setGenerating]   = useState(false)
   const [attachedFile, setAttachedFile] = useState(null)
   const [selectedLLMModel, setSelectedLLMModel] = useState(ASUN_MODELS[0].id)
-  const isIrmaMax = selectedLLMModel === 'google/gemini-3.8-flash'
+  const isIrmaMax = selectedLLMModel === '~deepseek/deepseek-flash-latest'
   const [projectMode, setProjectMode] = useState(false) // Modo Proyecto — Arquitecto Senior, toggle ortogonal
   const messagesEndRef = useRef(null)
   const chatContainerRef = useRef(null)
@@ -530,7 +530,7 @@ function AsunPanel({
   // El modo Proyecto es exclusivo de IrmaMax: al pasar a MaríaBase se desactiva.
   function selectLLMModel(id) {
     setSelectedLLMModel(id)
-    if (id !== 'google/gemini-3.8-flash') setProjectMode(false)
+    if (id !== '~deepseek/deepseek-flash-latest') setProjectMode(false)
   }
 
   // ─── Cambio de categoría ───────────────────────────────────────────────────

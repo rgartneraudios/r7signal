@@ -233,10 +233,14 @@ porque `useWheelSession.busy` lo lee antes de que exista el hook.
   `buildShellInvocation` con prologue UTF-8. Python NO es dependencia (sólo fixtures en
   `r7test/`). La `ó` puede salir U+FFFD porque Node no honra `PYTHONIOENCODING`.
 - **`run_command` corre con cwd = raíz del workspace** (`resolveCommandCwd`).
-- **Reasoning**: Gemini/IrmaMax EXIGEN reasoning (API 400 si se apaga; el override no puede
-  apagarlo). Reasoning ON sólo en planes complejos (`planStepCount >= 3`).
-- **Tito**: usa SÓLO Perplexity (`TITO_MODELS[searchLevel]`). `z-ai` está descartado del
-  proyecto (el modelo del chat casual no va hardcodeado).
+- **Reasoning**: Gemini se fue del proyecto (IrmaMax migró a DeepSeek, 01/10); ya no hay modelo
+  que EXIJA reasoning (`reasoningRequired` queda como capacidad cubierta por harness con un
+  registro sintético). Reasoning ON sólo en planes complejos (`planStepCount >= 3`).
+- **Tito**: pestaña ÚNICA con **DeepSeek V4 Flash** (`~deepseek/deepseek-v4-flash-latest`, el mismo
+  alias que Cochi Centinela). Cachea; la búsqueda real la aporta el **server tool**
+  `openrouter:web_search` de OpenRouter (motor Exa, ~$0.007 por búsqueda; el modelo decide 0–N
+  búsquedas, capadas con `max_uses:3`). Se jubilaron las 3 pestañas de Perplexity y el plugin
+  `web` (OpenRouter lo **deprecó** a favor del server tool). `z-ai` está descartado del proyecto.
 - **Cierre de step (tarea)**: `[STEP_COMPLETE]` NO cuenta si el step no ejecutó ninguna tool →
   se reintenta una vez con nudge y, si insiste, `failed`. Una respuesta vacía del modelo
   (completion ~1 token) recibe el mismo reintento (`isEmptyStepResponse`).
@@ -414,7 +418,7 @@ turnos con `prev` dan `cached` ~98% · `sysStable=true · appendOnly=true` (~**6
 el turno frío). El pin cubre Cochi (Centinela y Terminator), el subagente y **Asun/MaríaBase**
 (visión → DeepInfra, 01/10: cached ~93%). **PRIMERA FILA de la próxima sesión: P1 scope `edit` · P3 recortar descriptions · deuda
 técnica** (subagentes que escriban, shell revertible, SSRF en Rust, TYPO de archivo) — ver
-"PRIMERA FILA" al final. Gates al cerrar: **lint 0/0 · `npm test` 13/13 · `npm run build` OK**.
+"PRIMERA FILA" al final. Gates al cerrar: **lint 0/0 · `npm test` 12/12 · `npm run build` OK**.
 
 ### HECHO 30/09-quinquies · LOOP ÚNICO (elimina planner + R4/R5 + toggle Tarea)
 Motivo: una tarea trivial costaba planner + 6 requests con reasoning + un R5 full (~11.4k; hasta
@@ -488,12 +492,10 @@ Supervivientes consolidados en **`src/lib/cochiGuards.js`** (+`harness/cochiGuar
 
 **PRIMERA FILA — pendientes de la próxima sesión (handoff 01/10):**
 
-0. **Rotación de modelos por caché (decidido 01/10, regla de oro)**: (a) cambiar **IrmaMax
-   (Gemini 3.8 Flash) por DeepSeek 4.1 Flash** (`deepseek/deepseek-v4.1-flash`) — Gemini no cachea
-   un saludo (mínimo ~4096 tok + `cache_control` explícito) y cuesta 21x MaríaBase; verificar que
-   la variante DeepSeek cubra lo que IrmaMax necesitaba (reasoning/Proyecto). (b) **estudiar un
-   reemplazo para Perplexity en Tito** (`perplexity/sonar*` NO cachea nunca; medido $0.0079 por
-   saludo). Medir con la API key como en `HECHO 01/10-quater` antes de adoptar.
+0. **~~Rotación de modelos por caché~~ HECHO 01/10-quinquies**: (a) IrmaMax pasó de Gemini 3.8
+   Flash a **`~deepseek/deepseek-flash-latest`** (es multimodal `text+image` → conserva la visión
+   de Proyecto/adjuntos; cachea, cache-read 0.147x). (b) Tito se unificó a **una pestaña** con
+   **Qwen3.8 Flash** + plugin `web` (Exa) para búsqueda. Ver sección propia al final.
 1. **P1 · scope `edit` mínimo** (`cochiTools.js`): hoy sólo hay `read`/`task`/`full`
    (`READ_SCOPE_TOOLS` + `TASK_SCOPE_EXCLUDED`, ~L791/L810). Falta un scope `edit` con allowlist
    de mutación atómica (read_file + replace_in_file + append/write) para no mandar el schema
@@ -727,5 +729,53 @@ Signor Roberto reportó que un **saludo** en Asun (`deepseek/deepseek-v4-flash-v
    compartida), pero es el motivo de que el saludo pese. Si se quiere bajar más: rueda por-agente
    (el prompt de Asun dice que comparte contexto vía **R9**, no R7) — decisión pendiente.
 3. El saludo también manda el schema de tools (~750 tok), igual que Cochi.
+
+### HECHO 01/10-quinquies — rotación de modelos por caché (IrmaMax + Tito)
+Decisión de Signor Roberto (regla de oro: un modelo sin caché no vale). Medido contra la API real
+de OpenRouter:
+- **IrmaMax: Gemini 3.8 Flash → `~deepseek/deepseek-flash-latest`** (mismo alias que Cochi
+  Terminator; comparten tarifa). El modelo es **`text+image`** → conserva la visión (adjuntos y
+  modo Proyecto). Precio actual: **$0.0198/M in · $0.396/M out · cache-read $0.00291/M (0.147x)**.
+  - `modelPrices.js`: se borró la tarifa de Gemini; se actualizó la de `~deepseek/deepseek-flash-latest`
+    a precios reales (antes 0.04/0.49) y `ASUN_MODELS` ahora tiene IrmaMax = ese alias (vision:true).
+  - `llmMetrics.js`: fuera Gemini de `MODEL_CAPS`; `~deepseek/deepseek-flash-latest` ya era
+    `{reasoning:true}`. Ya no hay modelo con `reasoningRequired` (la capacidad queda cubierta por
+    un registro sintético en el harness).
+  - `AsunPanel.jsx` / `AsunHeader.jsx`: todas las comparaciones `isIrmaMax` usan el nuevo alias.
+  - Ruteo: el alias incluye `deepseek` y no `vision` → usa el pin de texto
+    (`streamlake/parasail/alibaba`), el mismo que ya usa Terminator y que cachea.
+- **Tito: 3 pestañas (Perplexity) → 1 pestaña** con **`~deepseek/deepseek-v4-flash-latest`**
+  (mismo alias que Cochi Centinela). Cachea (**$0.0099/M in · $0.13068/M out · cache-read
+  $0.001386/M = 0.14x**). Se descartó Qwen3.8 Flash (cachea 0.107x pero sin búsqueda nativa). La
+  búsqueda real la aporta el **server tool `openrouter:web_search`** (NO el plugin `web`, que
+  OpenRouter **deprecó**): el modelo decide si/cuántas veces buscar; motor **Exa** ~$0.007 por
+  búsqueda, capado con `max_uses:3`. Medición real: 6 búsquedas sin cap = $0.042 en una consulta;
+  con cap ≤$0.021. Sin heurística `needsWebSearch` (el modelo decide; un saludo no busca).
+  - `TitoPanel.jsx`: `TITO_MODELS` (3 niveles) → `TITO_MODEL` único + `WEB_SEARCH_TOOL`; un solo
+    `streamChat` con `tools: WEB_SEARCH_TOOL`. Fuera `searchLevel`, `needsWebSearch` y el
+    `window.confirm` de "Deep".
+  - `TitoHeader.jsx`: sin selector; pestaña estática "🔎 Búsqueda · DeepSeek V4 Flash".
+  - `modelPrices.js`: `~deepseek/deepseek-v4-flash-latest` a precio real (antes 0.05/0.32); se
+    quitó `qwen/qwen3.8-flash`; `sonar-pro`/`sonar-deep-research` fuera; se conserva
+    `perplexity/sonar` sólo como modelo "sin descuento de caché" en los harness de precio.
+  - `llmClient.js`: sin plumbing nuevo (el server tool viaja por `tools`); se retiró el soporte de
+    `plugins` que se había agregado para el plugin deprecado.
+- Gates: **lint 0/0 · `npm test` 12/12 · `npm run build` OK**.
+- **PENDIENTE (paso APARTE)**: probar E2E en `npx tauri dev`. OJO: la respuesta piloto vía API real
+  usó `provider OpenAI` y **6 búsquedas**; medir que el cap `max_uses:3` se respeta, que un saludo
+  no dispara búsqueda, y ver si los `url_citation` (que hoy NO renderizamos) conviene mostrarlos.
+  Los 3× `429` vistos en la app son del retry de `streamChat` (rate limit transitorio), no del server tool.
+- **DOS COSAS A TENER PRESENTES (Tito, 01/10)**:
+  1. **Las citas NO se renderizan.** El server tool devuelve `message.annotations[]` con
+     `url_citation` (url/title/content) y `usage.server_tool_use_details.web_search_requests`, pero
+     nuestro `streamChat` sólo acumula `delta.content`: descarta `annotations`. El texto igual trae
+     links, pero no mostramos "Fuentes: …". Si se quiere, capturar `annotations` en `llmClient`
+     (streaming + no-stream) y pintarlas en `TitoMessageList`.
+  2. **El costo de búsqueda NO entra en los "tokens facturables".** Cada búsqueda del server tool
+     cuesta **~$0.007** (Exa), pero el header/status sólo cuentan tokens del modelo
+     (`billableTokens`). Medido: 6 búsquedas = ~$0.042 de búsqueda + ~$0.0018 de tokens; el header
+     vería sólo los tokens. Para transparencia: exponer `web_search_requests` en `normalizeUsage`
+     y/o un chip "+N búsquedas" en el status de Tito (no se muestra `usage.cost` neto por criterio del usuario).
+
 
 ================================================================================

@@ -12,19 +12,19 @@
 export const MODEL_PRICES = {
   // Asun — LLM
   'deepseek/deepseek-v4-flash-vision-exp': { inputPerM: 0.2156,  outputPerM: 0.6468, cachedInputPerM: 0.02156 },
-  'google/gemini-3.8-flash':                  { inputPerM: 0.75,   outputPerM: 3.75 },
   // Asun — Imagen
   'x-ai/grok-imagine-image-quality':       { perImage: 0.05  },
   'bytedance-seed/seedream-5-0-pro':       { perImage: 0.045 },
   // Asun — Música
   'google/lyria-3-pro-preview':            { perSong: 0.08 },
-  // Tito
+  // Tito — búsqueda web vía server tool `openrouter:web_search` (motor Exa).
+  // Cochi Centinela y Tito comparten el alias flash-latest (precio real 01/10).
+  '~deepseek/deepseek-v4-flash-latest':    { inputPerM: 0.0099, outputPerM: 0.13068, cachedInputPerM: 0.001386 },
+  // Perplexity quedó fuera de Tito (no cachea); se conserva `sonar` como modelo
+  // "sin descuento de caché" en los harness de precio.
   'perplexity/sonar':                      { inputPerM: 1, outputPerM: 1  },
-  'perplexity/sonar-deep-research':        { inputPerM: 2, outputPerM: 8  },
-  'perplexity/sonar-pro':                  { inputPerM: 3, outputPerM: 15 },
-  // Cochi
-  '~deepseek/deepseek-v4-flash-latest':       { inputPerM: 0.05, outputPerM: 0.32, cachedInputPerM: 0.005 },
-  '~deepseek/deepseek-flash-latest':            { inputPerM: 0.04, outputPerM: 0.49, cachedInputPerM: 0.004 },
+  // Asun IrmaMax y Cochi Terminator comparten el alias flash-latest
+  '~deepseek/deepseek-flash-latest':       { inputPerM: 0.0198, outputPerM: 0.396, cachedInputPerM: 0.00291 },
   // Local (free)
   'ollama':    { inputPerM: 0, outputPerM: 0 },
   'lmstudio':  { inputPerM: 0, outputPerM: 0 },
@@ -74,7 +74,7 @@ export function billableTokens(modelId, { promptTokens = 0, completionTokens = 0
 // Asun LLM tier names
 export const ASUN_MODELS = [
   { id: 'deepseek/deepseek-v4-flash-vision-exp', label: 'MaríaBase',  vision: true  },
-  { id: 'google/gemini-3.8-flash',             label: 'IrmaMax', vision: true },
+  { id: '~deepseek/deepseek-flash-latest',     label: 'IrmaMax', vision: true },
 ]
 
 // Cochi tier names

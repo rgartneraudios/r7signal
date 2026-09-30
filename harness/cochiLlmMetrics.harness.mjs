@@ -32,26 +32,30 @@ function checkClose(label, actual, expected, eps = 1e-9) {
 
 const CENTINELA = '~deepseek/deepseek-v4-flash-latest'
 const TERMINATOR = '~deepseek/deepseek-flash-latest'
-const GEMINI = 'google/gemini-3.8-flash'
+// `reasoningRequired` (endpoints que rechazan `enabled:false`) ya no lo declara
+// ningún modelo en catálogo (Gemini salió al migrar IrmaMax a DeepSeek, 01/10).
+// Se conserva la capacidad y se cubre con un registro sintético.
+const REQUIRED = 'test/reasoning-required'
+MODEL_CAPS[REQUIRED] = { reasoning: true, reasoningRequired: true }
 
 console.log('— capacidades por modelo (whitelist) —')
 check('Centinela soporta reasoning', supportsReasoning(CENTINELA), true)
 check('Terminator soporta reasoning', supportsReasoning(TERMINATOR), true)
-check('Gemini soporta reasoning', supportsReasoning(GEMINI), true)
-check('Gemini EXIGE reasoning', reasoningRequired(GEMINI), true)
+check('modelo REQUIRED soporta reasoning', supportsReasoning(REQUIRED), true)
+check('modelo REQUIRED exige reasoning', reasoningRequired(REQUIRED), true)
 check('Centinela NO exige reasoning', reasoningRequired(CENTINELA), false)
 check('modelo desconocido NO exige reasoning', reasoningRequired('x/y'), false)
 check('modelo desconocido NO soporta reasoning', supportsReasoning('x/y'), false)
 check('getModelCapabilities default {}', getModelCapabilities('x/y'), {})
-check('MODEL_CAPS declara whitelist + Gemini', Object.keys(MODEL_CAPS).sort(), [CENTINELA, TERMINATOR, GEMINI].sort())
+check('MODEL_CAPS declara whitelist', Object.keys(MODEL_CAPS).sort(), [CENTINELA, TERMINATOR, REQUIRED].sort())
 
 console.log('— buildReasoningConfig (flag por modelo + override) —')
 check('flag ON → enabled', buildReasoningConfig(CENTINELA), { enabled: true })
-check('Gemini default → enabled', buildReasoningConfig(GEMINI), { enabled: true })
+check('modelo REQUIRED default → enabled', buildReasoningConfig(REQUIRED), { enabled: true })
 check('modelo sin flag → disabled', buildReasoningConfig('x/y'), { enabled: false })
 check('override false gana sobre flag ON', buildReasoningConfig(CENTINELA, false), { enabled: false })
 check('override true gana sobre modelo sin flag', buildReasoningConfig('x/y', true), { enabled: true })
-check('override false NO puede apagar un modelo que exige reasoning', buildReasoningConfig(GEMINI, false), { enabled: true })
+check('override false NO puede apagar un modelo que exige reasoning', buildReasoningConfig(REQUIRED, false), { enabled: true })
 
 console.log('— extractReasoningDelta —')
 check('delta.reasoning string', extractReasoningDelta({ reasoning: 'pienso' }), 'pienso')
@@ -81,39 +85,44 @@ check('fallback cached_tokens top-level',
 check('prompt_tokens_details gana sobre top-level',
   normalizeUsage({ prompt_tokens: 1000, cached_tokens: 1, prompt_tokens_details: { cached_tokens: 900 } }).cachedTokens, 900)
 
-console.log('— costo con descuento de caché (DeepSeek cache-read 0.1x) —')
-// ~deepseek/deepseek-flash-latest: input 0.04/M, cached 0.004/M (factor 0.1).
+console.log('— costo con descuento de caché (DeepSeek cache-read ~0.147x) —')
+// ~deepseek/deepseek-flash-latest: input 0.0198/M, cached 0.00291/M.
 const cachedCost = calculateCost(TERMINATOR, 1_000_000, 0, 'token', 400_000)
-checkClose('400k de 1M cacheado → 0.0256', cachedCost, 0.0256)
-checkClose('sin cachear → 0.04', calculateCost(TERMINATOR, 1_000_000, 0), 0.04)
-checkClose('cacheado = 0 no descuenta', calculateCost(TERMINATOR, 1_000_000, 0, 'token', 0), 0.04)
-checkClose('cacheado > input se capa al input', calculateCost(TERMINATOR, 1_000_000, 0, 'token', 5_000_000), 0.004)
-checkClose('modelo sin tarifa cacheada NO descuenta', calculateCost(GEMINI, 1_000_000, 0, 'token', 500_000), 0.75)
+checkClose('400k de 1M cacheado → 0.013044', cachedCost, 0.013044)
+checkClose('sin cachear → 0.0198', calculateCost(TERMINATOR, 1_000_000, 0), 0.0198)
+checkClose('cacheado = 0 no descuenta', calculateCost(TERMINATOR, 1_000_000, 0, 'token', 0), 0.0198)
+checkClose('cacheado > input se capa al input', calculateCost(TERMINATOR, 1_000_000, 0, 'token', 5_000_000), 0.00291)
+checkClose('modelo sin tarifa cacheada NO descuenta', calculateCost('perplexity/sonar', 1_000_000, 0, 'token', 500_000), 1)
 
 const bd = costBreakdown(TERMINATOR, {
   prompt_tokens: 1_000_000,
   completion_tokens: 0,
   prompt_tokens_details: { cached_tokens: 400_000 },
 })
-checkClose('costBreakdown.cost', bd.cost, 0.0256)
-checkClose('costBreakdown.fullCost', bd.fullCost, 0.04)
-checkClose('costBreakdown.savedByCache', bd.savedByCache, 0.0144)
-checkClose('savedByCache 0 sin tarifa cacheada', costBreakdown(GEMINI, {
+checkClose('costBreakdown.cost', bd.cost, 0.013044)
+checkClose('costBreakdown.fullCost', bd.fullCost, 0.0198)
+checkClose('costBreakdown.savedByCache', bd.savedByCache, 0.006756)
+checkClose('savedByCache 0 sin tarifa cacheada', costBreakdown('perplexity/sonar', {
   prompt_tokens: 1_000_000, completion_tokens: 0,
   prompt_tokens_details: { cached_tokens: 500_000 },
 }).savedByCache, 0)
 
+// DeepSeek V4 Flash Latest (Centinela de Cochi = Tito): input 0.0099/M,
+// cached 0.001386/M (factor 0.14 exacto).
+checkClose('centinela cacheado descuenta', calculateCost('~deepseek/deepseek-v4-flash-latest', 1_000_000, 0, 'token', 500_000), 0.005643)
+check('centinela billable con caché', billableTokens('~deepseek/deepseek-v4-flash-latest', { promptTokens: 1000, completionTokens: 0, cachedTokens: 500 }), 570)
+
 console.log('— tokens facturables (billableTokens) —')
-// Terminator: input 0.04/M, cached 0.004/M → factor 0.1.
+// Terminator: input 0.0198/M, cached 0.00291/M → factor ~0.147.
 check('sin cache: input + output 1:1', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 200, cachedTokens: 0 }), 1200)
-check('con cache: 300 + 700*0.1 + 200', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 200, cachedTokens: 700 }), 570)
-check('cached > input se capa al input', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 0, cachedTokens: 5000 }), 100)
-check('modelo sin tarifa cacheada: factor 1', billableTokens(GEMINI, { promptTokens: 1000, completionTokens: 100, cachedTokens: 500 }), 1100)
+check('con cache: 300 + 700*factor + 200', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 200, cachedTokens: 700 }), 603)
+check('cached > input se capa al input', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 0, cachedTokens: 5000 }), 147)
+check('modelo sin tarifa cacheada: factor 1', billableTokens('perplexity/sonar', { promptTokens: 1000, completionTokens: 100, cachedTokens: 500 }), 1100)
 check('modelo desconocido: factor 1', billableTokens('x/y', { promptTokens: 1000, completionTokens: 100, cachedTokens: 500 }), 1100)
 check('sin args → 0', billableTokens(TERMINATOR), 0)
 checkClose('coherente con costo (sin output): billable/1M*inputPerM = cost',
-  (billableTokens(TERMINATOR, { promptTokens: 1_000_000, completionTokens: 0, cachedTokens: 400_000 }) / 1_000_000) * 0.04,
-  0.0256)
+  (billableTokens(TERMINATOR, { promptTokens: 1_000_000, completionTokens: 0, cachedTokens: 400_000 }) / 1_000_000) * 0.0198,
+  0.013044, 1e-6)
 
 console.log('— resolveStoredModel (persistencia del modelo, 3.4f) —')
 const parentIds = [CENTINELA, TERMINATOR, 'ollama', 'lmstudio']
