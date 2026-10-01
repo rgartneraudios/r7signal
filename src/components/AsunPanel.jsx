@@ -9,6 +9,7 @@ import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
 import { useFrameThrottle } from '../lib/streamThrottle.js'
 import { commitR7Turn, buildWheelMessages, buildTurnPair } from '../lib/r7Wheel.js'
+import { stripAsunOpening } from '../lib/sessionOpening.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { useWheelSession } from '../hooks/useWheelSession.js'
@@ -224,6 +225,11 @@ function AsunPanel({
     setMessages(prev => [...prev, userMsg])
     setLoading(true)
 
+    // "accediendo {nombre}." es recibimiento: sólo vale en el primer turno de la
+    // sesión. Este guard determinista lo recorta en los siguientes (el modelo
+    // tiende a repetirlo aunque el prompt lo prohíba).
+    const isFirstTurn = !wheelRef.current?.r7
+
     const placeholderId = newMessageId('asun')
     setMessages(prev => [...prev, { rol: 'asistente', contenido: '', id: placeholderId, streaming: true }])
 
@@ -249,7 +255,7 @@ function AsunPanel({
         if (musicMatch) {
           setPromptMusica(musicMatch[1].trim())
         }
-        const displayText = extractR3Visible(fullText).replace(MUSIC_RE, '').trim()
+        const displayText = stripAsunOpening(extractR3Visible(fullText).replace(MUSIC_RE, '').trim(), { isFirstTurn })
         // Sella el turno de música en la rueda (R1/R2 del sistema, cacheable).
         wheelRef.current = commitR7Turn(wheelRef.current, { pairs: [buildTurnPair(text, displayText)] })
         flushStream()
@@ -421,7 +427,7 @@ function AsunPanel({
       }
 
       // ── Procesar respuesta final ──────────────────────────────────────────
-      let displayText  = extractR3Visible(finalText)
+      let displayText  = stripAsunOpening(extractR3Visible(finalText), { isFirstTurn })
       let handoffBrief = null
 
       const cochiMatch = COCHI_RE.exec(finalText)
@@ -533,8 +539,16 @@ function AsunPanel({
   }
 
   // ─── Cambio de modelo LLM ──────────────────────────────────────────────────
+  // Modelo CONGELADO por sesión: cambiar de modelo rompe la caché de prefijo del
+  // proveedor (cada modelo va pineado a proveedores distintos), así que una vez
+  // que la sesión arrancó (hay mensaje de usuario) no se permite cambiarlo en
+  // caliente: el selector queda bloqueado y se sale por CLS (sesión nueva). Si
+  // se cambia, el primer request sale frío y se paga el prefijo entero.
+  const modelLocked = messages.some(m => m.rol === 'usuario')
+
   // El modo Proyecto es exclusivo de IrmaMax: al pasar a MaríaBase se desactiva.
   function selectLLMModel(id) {
+    if (modelLocked && id !== selectedLLMModel) return
     setSelectedLLMModel(id)
     if (id !== '~deepseek/deepseek-flash-latest') setProjectMode(false)
   }
@@ -642,6 +656,7 @@ function AsunPanel({
         onToggleProject={() => setProjectMode(v => !v)}
         selectedLLMModel={selectedLLMModel}
         onSelectLLMModel={selectLLMModel}
+        modelLocked={modelLocked}
         submenu={submenu}
         onSubmenuChange={setSubmenu}
       />

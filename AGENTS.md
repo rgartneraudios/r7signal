@@ -462,6 +462,41 @@ agente, inactivo → `#1C1C1C`); antes el inactivo no lo declaraba y al quitarse
 navegador caía a `currentColor` (texto claro ~blanco) durante la transición al cambiar de agente.
 Gates: lint 0/0 · `npm test` 14/14 · build OK.
 
+### HECHO 03/10 · MODELO CONGELADO POR SESIÓN (Asun y Cochi)
+Motivo (Signor Roberto): cambiar de modelo a mitad de sesión rompe la caché de prefijo
+del proveedor. La caché está atada a **modelo + endpoint**, y cada uno va pineado a
+proveedores distintos (MaríaBase/visión → DeepInfra; IrmaMax/Centinela/Terminator →
+StreamLake/Parasail/Alibaba; Ollama/LM Studio → local). El **contexto SÍ se conserva**
+(`messages` y rueda R7 son del agente, no del modelo), pero el primer request tras el
+cambio sale **frío (`cached=0`) y paga el prefijo entero**. Por eso el modelo se
+**congela al primer envío** de la sesión:
+- `AsunPanel.jsx`: `modelLocked = messages.some(m => m.rol === 'usuario')`; `selectLLMModel`
+  no-op si está bloqueado; `modelLocked` a `AsunHeader` (botones deshabilitados + tooltip).
+- `CochiDesktop.jsx`: `modelLocked = messages.some(m => m.role === 'user')`; `selectModel`
+  no-op; `modelLocked` a `CochiHeader` (botones OpenRouter/Ollama/LM Studio e inputs locales
+  deshabilitados).
+- El proveedor local del subagente (`sub`) NO se congela: es del `spawn_agent`, no de la sesión.
+- Salida para cambiar de modelo: **CLS / sesión nueva** (los mensajes se resetean → desbloquea).
+- Nota: una sesión retomada de R9 no guarda su modelo original; se congela el modelo activo.
+- Gates: **lint 0/0 · `npm test` 15/15 · `npm run build` OK**. **Falta E2E** en `npx tauri dev`
+  (cambiar modelo con sesión vacía sí, con sesión iniciada no; `cached>0` se mantiene).
+
+### HECHO 03/10 · RECIBIMIENTO DE SESIÓN (Asun y Tito) + apodos
+El "accediendo {{nombreAlternativo}}." (Asun) y "usuario {{nombreAlternativo}}." (Tito)
+deben salir **una sola vez** (primer turno). El prompt lo pide así, pero DeepSeek/IrmaMax los
+repetía en cada turno (Tito incluso los concatenaba dos veces en el mismo texto). Fix
+determinista, no confía en el modelo:
+- `src/lib/sessionOpening.js` (NUEVO, puro): `stripAsunOpening` y `stripTitoOpening(text,
+  { isFirstTurn, nombre })` recortan la apertura si no es el primer turno; Tito quita TODAS
+  las apariciones (conserva una en el primer turno); si el texto queda vacío, conserva el
+  original. Harness `harness/sessionOpening.harness.mjs` (21 checks).
+- `AsunPanel.jsx` / `TitoPanel.jsx`: `isFirstTurn = !wheelRef.current?.r7` capturado al enviar;
+  el guard se aplica al texto visible (Asun: LLM + Música; Tito: respuesta final).
+- El prompt también se acotó ("SESSION OPENING: ONLY on the FIRST reply…").
+- **Apodos**: el prompt de Tito prohíbe pet names (campeón/crack/jefe/amigo/genio/maestro):
+  sólo "humano" o "usuario {{nombreAlternativo}}"; el elogio va a la acción, no al apodo.
+- Gates: **lint 0/0 · `npm test` 16/16 · `npm run build` OK**. **Falta E2E**.
+
 ### HECHO (esta sesión) · RUEDA R7 POR-AGENTE (Tito/Asun como Cochi)
 Motivo: Tito y Asun leían la MISMA rueda global que Cochi (`readLatestR7`/`writeR9File('r7')`),
 así que un saludo arrastraba turnos ajenos (medido: Tito `sysChars 8813`). Decisión de Signor

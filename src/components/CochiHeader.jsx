@@ -7,6 +7,7 @@ import { COCHI_MODELS } from '../lib/modelPrices.js'
 export default function CochiHeader({
   selectedModel,
   onSelectModel,
+  modelLocked,
   ollamaModel,
   onOllamaModelChange,
   lmStudioModel,
@@ -26,17 +27,21 @@ export default function CochiHeader({
         {COCHI_MODELS.map(m => {
           const isSelected = selectedModel === m.id
           const isCentinela = m.label === 'Centinela'
+          const locked = modelLocked && !isSelected
           return (
             <button
               key={m.id}
               onClick={() => onSelectModel(m.id)}
+              disabled={locked}
+              title={locked ? 'Modelo congelado en esta sesión — usá CLS para cambiarlo' : undefined}
               style={{
-                padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+                padding: '3px 10px', borderRadius: 4, cursor: locked ? 'not-allowed' : 'pointer',
                 fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
                 background: isSelected ? '#2a2a35' : 'transparent',
                 border: '1px solid',
                 borderColor: isSelected ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
                 color: isCentinela ? 'transparent' : (isSelected ? '#C0C0C0' : 'rgba(207,68,77,0.5)'),
+                opacity: locked ? 0.4 : 1,
                 transition: 'all 0.2s',
               }}
             >
@@ -57,13 +62,16 @@ export default function CochiHeader({
 
         <button
           onClick={() => onSelectModel('ollama')}
+          disabled={modelLocked && selectedModel !== 'ollama'}
+          title={modelLocked && selectedModel !== 'ollama' ? 'Modelo congelado en esta sesión — usá CLS para cambiarlo' : undefined}
           style={{
-            padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+            padding: '3px 10px', borderRadius: 4, cursor: (modelLocked && selectedModel !== 'ollama') ? 'not-allowed' : 'pointer',
             fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
             background: selectedModel === 'ollama' ? '#2a2a35' : 'transparent',
             border: '1px solid',
             borderColor: selectedModel === 'ollama' ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
             color: selectedModel === 'ollama' ? '#C0C0C0' : 'rgba(207,68,77,0.5)',
+            opacity: (modelLocked && selectedModel !== 'ollama') ? 0.4 : 1,
             transition: 'all 0.2s',
           }}
         >
@@ -71,13 +79,16 @@ export default function CochiHeader({
         </button>
         <button
           onClick={() => onSelectModel('lmstudio')}
+          disabled={modelLocked && selectedModel !== 'lmstudio'}
+          title={modelLocked && selectedModel !== 'lmstudio' ? 'Modelo congelado en esta sesión — usá CLS para cambiarlo' : undefined}
           style={{
-            padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+            padding: '3px 10px', borderRadius: 4, cursor: (modelLocked && selectedModel !== 'lmstudio') ? 'not-allowed' : 'pointer',
             fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
             background: selectedModel === 'lmstudio' ? '#2a2a35' : 'transparent',
             border: '1px solid',
             borderColor: selectedModel === 'lmstudio' ? '#C0C0C0' : 'rgba(207,68,77,0.2)',
             color: selectedModel === 'lmstudio' ? '#C0C0C0' : 'rgba(207,68,77,0.5)',
+            opacity: (modelLocked && selectedModel !== 'lmstudio') ? 0.4 : 1,
             transition: 'all 0.2s',
           }}
         >
@@ -90,6 +101,7 @@ export default function CochiHeader({
             value={ollamaModel}
             onChange={e => onOllamaModelChange(e.target.value)}
             placeholder="modelo"
+            disabled={modelLocked}
             style={{
               background: 'transparent', border: 'none', borderBottom: '1px solid #424045',
               fontSize: '0.65rem', padding: '0 4px', outline: 'none', width: 80,
@@ -102,6 +114,7 @@ export default function CochiHeader({
             value={lmStudioModel}
             onChange={e => onLmStudioModelChange(e.target.value)}
             placeholder="modelo"
+            disabled={modelLocked}
             style={{
               background: 'transparent', border: 'none', borderBottom: '1px solid #424045',
               fontSize: '0.65rem', padding: '0 4px', outline: 'none', width: 80,

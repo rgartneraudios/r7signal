@@ -249,9 +249,17 @@ function CochiDesktop({
     pruneOldSnapshots().catch(() => {})
   }, [])
 
+  // Modelo CONGELADO por sesión: cambiar de modelo rompe la caché de prefijo del
+  // proveedor (Centinela/Terminator van pineados a StreamLake/Parasail/Alibaba;
+  // los locales usan otro endpoint), así que una vez que la sesión arrancó (hay
+  // mensaje de usuario) no se permite cambiarlo en caliente: se sale por CLS.
+  // Si se cambia, el primer request sale frío y se paga el prefijo entero.
+  const modelLocked = messages.some(m => m.role === 'user')
+
   // Fase 3.4f: el modelo del PADRE también se persiste (antes se reseteaba al
   // recargar, igual que pasaba con el "sub"). Cambiar en la UI guarda la pref.
   const selectModel = (modelId) => {
+    if (modelLocked && modelId !== selectedModel) return
     setSelectedModel(modelId)
     savePreferences({ selectedModel: modelId })
   }
@@ -365,6 +373,7 @@ function CochiDesktop({
       <CochiHeader
         selectedModel={selectedModel}
         onSelectModel={selectModel}
+        modelLocked={modelLocked}
         ollamaModel={ollamaModel}
         onOllamaModelChange={setOllamaModel}
         lmStudioModel={lmStudioModel}

@@ -9,6 +9,7 @@ export default function AsunHeader({
   onToggleProject,
   selectedLLMModel,
   onSelectLLMModel,
+  modelLocked,
   submenu,
   onSubmenuChange,
 }) {
@@ -43,15 +44,22 @@ export default function AsunHeader({
         {category !== 'musica' && (
           <>
             {category === 'llm'
-              ? ASUN_MODELS.map(m => (
-                  <button key={m.id}
-                    className={`asun-header-btn${selectedLLMModel === m.id ? ' active' : ''}`}
-                    onClick={() => onSelectLLMModel(m.id)}
-                    style={selectedLLMModel === m.id ? { color: m.id === '~deepseek/deepseek-flash-latest' ? '#FA7A9A' : '#DF9CFF' } : undefined}
-                  >
-                    {m.label}
-                  </button>
-                ))
+              ? ASUN_MODELS.map(m => {
+                  const locked = modelLocked && selectedLLMModel !== m.id
+                  return (
+                    <button key={m.id}
+                      className={`asun-header-btn${selectedLLMModel === m.id ? ' active' : ''}`}
+                      onClick={() => onSelectLLMModel(m.id)}
+                      disabled={locked}
+                      title={locked ? 'Modelo congelado en esta sesión — usá CLS para cambiarlo' : undefined}
+                      style={selectedLLMModel === m.id
+                        ? { color: m.id === '~deepseek/deepseek-flash-latest' ? '#FA7A9A' : '#DF9CFF' }
+                        : (locked ? { opacity: 0.4, cursor: 'not-allowed' } : undefined)}
+                    >
+                      {m.label}
+                    </button>
+                  )
+                })
               : ['occidente', 'asia'].map(s => (
                   <button key={s}
                     className={`asun-header-btn${submenu === s ? ' active' : ''}`}

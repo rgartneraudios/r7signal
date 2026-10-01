@@ -6,6 +6,7 @@ import { interpolatePrompt } from '../lib/promptLoader.js'
 import { extractR3Visible } from '../lib/parseR1R2R3.js'
 import { makeStreamingDisplayExtractor } from '../lib/cochiContext.js'
 import { commitR7Turn, buildWheelMessages, buildTurnPair } from '../lib/r7Wheel.js'
+import { stripTitoOpening } from '../lib/sessionOpening.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { useWheelSession } from '../hooks/useWheelSession.js'
@@ -140,6 +141,10 @@ function TitoPanel({
     setMessages(prev => [...prev, userMsg]);
     setStreaming(true);
 
+    // "usuario {nombre}." es recibimiento: sólo vale en el primer turno. Guard
+    // determinista (el modelo lo repetía, incluso dos veces en el mismo texto).
+    const isFirstTurn = !wheelRef.current?.r7
+
     const controller = new AbortController();
     abortRef.current = controller;
     const titoSystem = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
@@ -180,7 +185,7 @@ function TitoPanel({
       })
 
       const fullText = result.content
-      const finalDisplay = extractR3Visible(fullText)
+      const finalDisplay = stripTitoOpening(extractR3Visible(fullText), { isFirstTurn, nombre: nombreAlternativo })
       const hasHandoff = fullText.includes('[→ COCHI:')
       // Sella el turno en la rueda: R1/R2 los escribe el SISTEMA (cacheable).
       wheelRef.current = commitR7Turn(wheelRef.current, { pairs: [buildTurnPair(text, finalDisplay)] })
