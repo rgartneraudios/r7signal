@@ -73,6 +73,7 @@ function CochiDesktop({
   onSavePreferences,
   onPreferencesLoaded,
   onPromptsReady,
+  memories = '',
 }) {
   const [messages,        setMessages]        = useState([])
   const [tokens,          setTokens]          = useState(0)
@@ -176,6 +177,7 @@ function CochiDesktop({
     setCost,
     setCachedTokens,
     onUsage,
+    memories,
   })
 
   // Scroll al final (Bloque M/N: scrollTop directo en el contenedor en vez de

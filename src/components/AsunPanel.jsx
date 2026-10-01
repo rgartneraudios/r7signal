@@ -81,6 +81,7 @@ function AsunPanel({
   workspace,
   preferences = {},
   onPromptsReady,
+  memories = '',
 }) {
   const chatLanguage      = preferences.chat_language     ?? 'Spanish'
   const nombreAlternativo = preferences.nombre_alternativo ?? null
@@ -237,6 +238,7 @@ function AsunPanel({
           systemMessages: [{ role: 'system', content: systemContent }],
           r7: wheelRef.current.r7,
           userInput: text,
+          memories,
         })
         const fullText = await streamOR(MODELS.musica.chat, apiMessages, (partial) => {
           scheduleStream(() => setMessages(prev => prev.map(m =>
@@ -302,6 +304,7 @@ function AsunPanel({
         systemMessages: [{ role: 'system', content: systemContent }],
         r7: wheel.r7,
         userInput: messageContent,
+        memories,
       })
 
       const MAX_ITER = 10

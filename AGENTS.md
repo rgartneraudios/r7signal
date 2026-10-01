@@ -867,5 +867,35 @@ nombre visible. Persona nueva: **TITUS-7R**, unidad de búsqueda y telemetría d
   por mayúsculas/flechas/markdown). `cached 0` es normal en el primer request de una sesión nueva;
   no disparó búsqueda. Si se quiere bajar: recortar PERSONALITY (los 3 ejemplos) y MEMORY/UI NOTES.
 
+### HECHO 02/10-quinquies — SESIÓN FRÍA por defecto + HOT=Memories + puertas laterales
+Decisión de Signor Roberto. Corrige la causa del crecimiento de tokens: el sistema **acumulaba
+todos los turnos** en la rueda R7 (par R1 300 chars / R2 1500 chars por turno) y la inyectaba
+entera cada request. Ahora:
+- **Todas las sesiones arrancan FRÍAS.** `useWheelSession` ya NO hace `readLatestR7` al montar ni
+  al CLS (`createWheelState('')` en ambos). Los `R7/<agente>/chat_N.txt` se siguen escribiendo como
+  historial, pero **no se auto-cargan**. Las sesiones anteriores se incorporan **sólo** si el
+  usuario las carga desde la pestaña **Sesiones** (R9 compartida), o R9/Planes desde sus pestañas.
+- **Toggle global FRÍA/HOT centrado en el header** (`SessionModeToggle`; estado en `R7Desktop`,
+  prop-drilling a los 3 paneles). FRÍA = azul reina `#4169E1` ON por defecto; HOT = rojo `#C0392B`.
+  **HOT NO carga ruedas viejas**: inyecta el archivo global **`Memories`** como `system` estable
+  (`buildWheelMessages({ memories })`, tag `[USER MEMORIES]`, tras el prompt base y antes de los
+  briefs de turno). Sirve a Cochi/Titus/Asun.
+- **`src/lib/memoriesStore.js`** (NUEVO, puro + IO inyectable): `Memories.txt` global en
+  AppLocalData, formato telegrama (una línea por memoria). Lo escribe **sólo el usuario** (modal);
+  los agentes SÓLO lo leen por HOT. Sin tool de Cochi (decisión: evita líos). Harness
+  `harness/memoriesStore.harness.mjs` (20 checks).
+- **Botón rosa "Memories"** en la **puerta izquierda** → `MemoriesModal` (agregar/borrar frases).
+- **Puertas laterales con gatillos** (`SideDoors`, Tailwind ya activo): derecha → abre `R9Drawer`
+  (Sesiones/Planes/R9); izquierda → Memories, **Base de datos** (abre `AppLocalData` en el
+  Explorador con `openPath`; se agregó `opener:allow-open-path` a `cochi-full-access.json`) y OR
+  Credits/Activity. Se quitaron del header el 🗂️ y los botones OR; el **workspace pill** se corrió
+  a la derecha (donde estaban los OR). El toggle ocupa el centro.
+- **`tito` → `TITUS 7R`** en textos visibles del `R9Drawer` (`AGENT_LABEL`); los identificadores de
+  código no se tocan.
+- Gates: **lint 0/0 · `npm test` 15/15 · `npm run build` OK**.
+- **Falta E2E** en `npx tauri dev`: (a) abrir la app y verificar que cada agente arranca frío
+  (`cached`/`prompt` chico); (b) activar HOT y ver `[USER MEMORIES]` en el viaje; (c) abrir la
+  carpeta con Base de datos; (d) el gatillo derecho abre R9. Nota: el costo de `openPath` es 0 tokens.
+
 
 ================================================================================

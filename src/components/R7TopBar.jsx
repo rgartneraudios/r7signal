@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, memo } from 'react'
-import { openUrl } from '@tauri-apps/plugin-opener'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
+import SessionModeToggle from './SessionModeToggle.jsx'
 
 // Bloque R (performance): la top bar vivía inline en R7Desktop (928 líneas) y se
 // reconciliaba en cada render del shell. Al extraerla a un memo, los cambios de
@@ -12,10 +12,11 @@ const R7TopBar = memo(function R7TopBar({
   onSelectLeft,
   apiKeyConfigured,
   onOpenApiKey,
-  onOpenR9,
   onOpenPrefs,
   workspace,
   onWorkspaceChange,
+  sessionMode,
+  onSessionModeChange,
 }) {
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false)
   const workspaceRef = useRef(null)
@@ -29,10 +30,6 @@ const R7TopBar = memo(function R7TopBar({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
-
-  const openExternal = (url) => {
-    openUrl(url).catch(() => window.open(url, '_blank'))
-  }
 
   async function handleWorkspacePick() {
     try {
@@ -201,41 +198,13 @@ const R7TopBar = memo(function R7TopBar({
         )}
       </div>
 
-      <div style={{ flex:1 }} />
-
-      {/* OR Credits */}
-      <button
-        onClick={() => openExternal('https://openrouter.ai/settings/credits')}
-        style={{
-          background:'none',
-          border:'1px solid #B2FF61',
-          color:'#B2FF61',
-          fontFamily:"'JetBrains Mono', monospace",
-          fontSize:'11px',
-          padding:'2px 8px',
-          borderRadius:'4px',
-          cursor:'pointer',
-        }}
-      >
-        OR Credits
-      </button>
-
-      {/* OR Activity */}
-      <button
-        onClick={() => openExternal('https://openrouter.ai/activity')}
-        style={{
-          background:'none',
-          border:'1px solid #B2FF61',
-          color:'#B2FF61',
-          fontFamily:"'JetBrains Mono', monospace",
-          fontSize:'11px',
-          padding:'2px 8px',
-          borderRadius:'4px',
-          cursor:'pointer',
-        }}
-      >
-        OR Activity
-      </button>
+      {/* Toggle global de contexto — FRÍA / HOT — centrado en el header */}
+      <div style={{
+        position: 'absolute', left: '50%', top: '50%',
+        transform: 'translate(-50%, -50%)', zIndex: 11,
+      }}>
+        <SessionModeToggle mode={sessionMode} onChange={onSessionModeChange} />
+      </div>
 
       <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', flexShrink:0 }} />
 
@@ -265,22 +234,6 @@ const R7TopBar = memo(function R7TopBar({
         }}
         title={apiKeyConfigured ? 'API key configurada — click para cambiarla' : 'Falta tu API key de OpenRouter — click para cargarla'}
       >🔑</button>
-
-      <button
-        onClick={onOpenR9}
-        style={{
-          background:'none',
-          border:'none',
-          cursor:'pointer',
-          color:'#9BA3A8',
-          fontSize:'1.1rem',
-          padding:'0 8px',
-          transition:'color 0.2s',
-        }}
-        onMouseEnter={e => e.currentTarget.style.color = '#D4D8DC'}
-        onMouseLeave={e => e.currentTarget.style.color = '#9BA3A8'}
-        title="R9 — Memoria compartida"
-      >🗂️</button>
 
       <button
         onClick={onOpenPrefs}

@@ -49,6 +49,7 @@ export function useCochiTaskLoop({
   setCost,
   setCachedTokens,
   onUsage,
+  memories = '',
 }) {
   const [activity, setActivity] = useState([])
   const [subagents, setSubagents] = useState([])
@@ -195,6 +196,7 @@ export function useCochiTaskLoop({
       ],
       r7: wheelRef.current.r7,
       userInput: originalMessageRef.current || '',
+      memories,
     })
 
     let remainingIter = MAX_ITER

@@ -10,6 +10,8 @@ const TABS = [
 ]
 
 const AGENT_ACCENT = { cochi: '#CF444D', asun: '#C8A2D8', tito: '#E8C84A' }
+// Nombre VISIBLE por agente (los identificadores de código siguen siendo Tito*).
+const AGENT_LABEL = { cochi: 'COCHI', asun: 'ASUN', tito: 'TITUS 7R' }
 
 function formatWhen(iso) {
   try { return new Date(iso).toLocaleString('es-ES') } catch { return '' }
@@ -183,7 +185,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
                 <span style={{
                   fontSize: '0.55rem', fontWeight: 700, letterSpacing: '0.1em',
                   textTransform: 'uppercase', color: AGENT_ACCENT[session.agent] || '#9BA3A8',
-                }}>{session.agent}</span>
+                }}>{AGENT_LABEL[session.agent] || session.agent}</span>
                 <span style={{ flex: 1 }} />
                 <button onClick={() => handleOpenSession(session)} style={miniBtnStyle(activeAccent)}>Cargar</button>
                 <button

@@ -18,6 +18,7 @@ import {
   compactWheel,
   isMemoryMessage,
   COMPACT_MARKER,
+  MEMORIES_TAG,
   firstLine,
   buildTurnPair,
 } from '../src/lib/r7Wheel.js'
@@ -129,6 +130,19 @@ const msgsTwo = buildWheelMessages({
 check('2 turnos → 2 mensajes de memoria', msgsTwo.map(m => m.role), ['system', 'system', 'system', 'user'])
 const msgsNoR7 = buildWheelMessages({ systemMessages: [{ role: 'system', content: 'S' }], r7: '', rawTurns: [], userInput: 'q' })
 check('sin R7 ni crudo → sólo system + input', msgsNoR7.map(m => m.role), ['system', 'user'])
+
+console.log('\n— buildWheelMessages + MEMORIES (Sesión Hot) —')
+const msgsMem = buildWheelMessages({
+  systemMessages: [{ role: 'system', content: 'S' }],
+  r7: '── Turno 1 ──\nR1: x\nR2: y',
+  userInput: 'q',
+  memories: '{{nombreAlternativo}} buscó herboristerías.',
+})
+check('memories entra como system tras el prompt', msgsMem[1].content, `${MEMORIES_TAG}\n{{nombreAlternativo}} buscó herboristerías.`)
+check('memories va ANTES de los turnos', msgsMem.map(m => m.role), ['system', 'system', 'system', 'user'])
+check('el turno sigue pelado tras memories', msgsMem[2].content.startsWith('── Turno 1 ──'), true)
+check('sin memories no se agrega mensaje', msgsNoR7.some(m => m.content.startsWith(MEMORIES_TAG)), false)
+check('memories vacío/espacios no se agrega', buildWheelMessages({ systemMessages: [{ role: 'system', content: 'S' }], r7: '', userInput: 'q', memories: '   ' }).length, 2)
 
 console.log('\n— compactWheel: compactación del sistema SIN llamada al modelo —')
 const many = Array.from({ length: 30 }, (_, i) =>

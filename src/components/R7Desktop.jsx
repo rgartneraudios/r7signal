@@ -7,8 +7,11 @@ import ApiKeyModal from './ApiKeyModal'
 import R9Drawer from './R9Drawer'
 import R7TopBar from './R7TopBar'
 import R7FooterInputs from './R7FooterInputs'
+import SideDoors from './SideDoors'
+import MemoriesModal from './MemoriesModal'
 import { supabase } from '../supabaseClient'
 import { loadLocalConfig, hasOpenRouterKey } from '../lib/localConfig.js'
+import { readMemories } from '../lib/memoriesStore.js'
 
 const DEFAULT_WORKSPACE = { path: '', permission: 'read' }
 
@@ -42,6 +45,10 @@ export default function R7Desktop() {
   const [workspace,   setWorkspace]   = useState(DEFAULT_WORKSPACE)
   const [handoff,     setHandoff]     = useState(null)
   const [showR9Drawer, setShowR9Drawer] = useState(false)
+  // Sesión FRÍA por defecto; HOT inyecta el archivo global Memories (los 3 agentes).
+  const [sessionMode, setSessionMode] = useState('cold')
+  const [memories,    setMemories]    = useState('')
+  const [showMemories, setShowMemories] = useState(false)
 
   // Inputs: viven en R7FooterInputs (Bloque R) para no re-renderizar el shell al
   // tipear. Aquí sólo quedan los mensajes pendientes de cada panel.
@@ -108,6 +115,16 @@ export default function R7Desktop() {
   const openApiKey = useCallback(() => setShowApiKey(true), [])
   const openR9     = useCallback(() => setShowR9Drawer(true), [])
   const openPrefs  = useCallback(() => setShowPrefs(true), [])
+  const openMemories = useCallback(() => setShowMemories(true), [])
+
+  // Memories sólo viaja al modelo cuando la Sesión Hot está activa.
+  const memoriesContext = sessionMode === 'hot' ? memories : ''
+  const refreshMemories = useCallback(() => {
+    readMemories().then(setMemories).catch(() => setMemories(''))
+  }, [])
+  useEffect(() => {
+    if (sessionMode === 'hot') refreshMemories()
+  }, [sessionMode, refreshMemories])
 
   // Bloque K2: abrir una sesión guardada. Activa el panel izquierdo correcto
   // (Asun/Tito) y encola la sesión; Cochi vive en el panel derecho y no cambia
@@ -442,11 +459,18 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, bi
         onSelectLeft={setActiveLeftPanel}
         apiKeyConfigured={apiKeyConfigured}
         onOpenApiKey={openApiKey}
-        onOpenR9={openR9}
         onOpenPrefs={openPrefs}
         workspace={workspace}
         onWorkspaceChange={handleWorkspaceChange}
+        sessionMode={sessionMode}
+        onSessionModeChange={setSessionMode}
       />
+
+      <SideDoors onOpenMemories={openMemories} onOpenR9={openR9} />
+
+      {showMemories && (
+        <MemoriesModal onClose={() => { setShowMemories(false); refreshMemories() }} />
+      )}
 
       {showPrefs && (
         <PreferencesModal
@@ -527,6 +551,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, bi
               workspace={workspace}
               preferences={preferences}
               onPromptsReady={handlePromptsReady}
+              memories={memoriesContext}
             />
           </div>
 
@@ -545,6 +570,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, bi
               preferences={preferences}
               onPromptsReady={handlePromptsReady}
               workspace={workspace}
+              memories={memoriesContext}
             />
           </div>
         </div>

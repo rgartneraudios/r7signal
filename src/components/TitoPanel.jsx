@@ -34,6 +34,7 @@ function TitoPanel({
   onUsage, onResetUsage, onHandoff,
   preferences = {},
   onPromptsReady,
+  memories = '',
 }) {
   const chatLanguage = preferences.chat_language ?? 'Spanish'
   const nombreAlternativo = preferences.nombre_alternativo ?? null
@@ -151,6 +152,7 @@ function TitoPanel({
       systemMessages: [{ role: 'system', content: titoSystem }],
       r7: wheel.r7,
       userInput: text,
+      memories,
     })
 
     try {

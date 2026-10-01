@@ -15,7 +15,7 @@
 import { useEffect, useRef } from 'react'
 import { makeSession, saveSession, loadSession, undoLastTurn, suggestSessionName } from '../lib/sessionStore.js'
 import { createWheelState, flushWheel, compactWheel } from '../lib/r7Wheel.js'
-import { writeR9File, readLatestR7 } from '../lib/r9Store.js'
+import { writeR9File } from '../lib/r9Store.js'
 
 // Acepta el shape canónico (role/content) y el interno de Asun (rol/contenido).
 export function isUserMsg(m) {
@@ -43,9 +43,11 @@ export function useWheelSession({
   // Espejo de `messages` (setState es async; el autosave necesita el estado final).
   useEffect(() => { messagesRef.current = messages }, [messages])
 
-  // Al abrir, adoptar la rueda R7 DEL AGENTE desde disco (R7/<agente>/).
+  // Sesión FRÍA por defecto (01/10): al abrir SIEMPRE se arranca sin rueda. La
+  // continuidad ya no es automática; las sesiones anteriores se incorporan SÓLO
+  // si el usuario las carga desde la pestaña Sesiones (R9 compartida).
   useEffect(() => {
-    readLatestR7({ agent }).then(r7 => { wheelRef.current = createWheelState(r7) })
+    wheelRef.current = createWheelState('')
   }, [agent])
 
   // Autosave tras cerrar cada turno (KD5). Salta montaje/retomas y nunca guarda
@@ -116,7 +118,7 @@ export function useWheelSession({
   // rueda/id y, opcionalmente, hereda el nombre a la próxima.
   async function closeCurrentSession({ inheritName = null } = {}) {
     const closingSessionId = sessionIdRef.current
-    wheelRef.current = createWheelState(await readLatestR7({ agent }))
+    wheelRef.current = createWheelState('')
     sessionIdRef.current = null
     sessionNameRef.current = inheritName
     await onAfterArchive?.(closingSessionId)

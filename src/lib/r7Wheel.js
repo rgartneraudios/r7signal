@@ -204,8 +204,15 @@ export function compactWheel(r7, { maxChars = 6000, minKeep = 4 } = {}) {
     .join('\n\n')
 }
 
-export function buildWheelMessages({ systemMessages = [], r7 = '', rawTurns = [], userInput }) {
+// Bloque MEMORIES (01/10): cuando la "Sesión Hot" está activa, el archivo global
+// Memories viaja como un `system` inmutable tras el prompt base. Va FUERA de la
+// rueda R7 (no es un turno) y se mantiene estable dentro de la sesión → cacheable.
+export const MEMORIES_TAG = '[USER MEMORIES]'
+
+export function buildWheelMessages({ systemMessages = [], r7 = '', rawTurns = [], userInput, memories = '' }) {
   const out = [...systemMessages]
+  const mem = String(memories || '').trim()
+  if (mem) out.push({ role: 'system', content: `${MEMORIES_TAG}\n${mem}` })
   for (const turn of splitR7Turns(r7)) {
     out.push({ role: 'system', content: turn })
   }
