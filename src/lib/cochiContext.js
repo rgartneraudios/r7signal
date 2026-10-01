@@ -5,7 +5,7 @@ export const READ_ONLY_TOOLS = new Set([
 ])
 
 export const BATCHING_RULE =
-  'When you need several independent read-only tool calls (existence, size, listing, lookup), emit them ALL in ONE assistant turn as parallel tool calls; never one per turn. Only sequence calls that depend on a previous result. If the user names a file, read it directly — do not add get_file_info/file_exists probes unless you actually need the size.'
+  'Independent read-only calls (exists, size, list, lookup) -> ALL in ONE turn, parallel; never one per turn. Sequence only dependent calls. Named file -> read it direct; no get_file_info/file_exists probes unless the size is needed.'
 
 export function makeStreamingDisplayExtractor() {
   let r3At = -1
@@ -35,13 +35,13 @@ export function makeStreamingDisplayExtractor() {
 export function buildSystemContext(workspacePath, permissionLabel, { technical = false } = {}) {
   const lines = [
     'SYSTEM CONTEXT',
-    'You are operating on a Windows system. Use absolute paths only.',
-    `Active workspace: ${workspacePath || 'not set'} (access level: ${permissionLabel}).`,
+    'OS: Windows. Absolute paths only.',
+    `Workspace: ${workspacePath || 'not set'} (access: ${permissionLabel}).`,
   ]
   if (!technical) {
     lines.push(
-      'Memory files at C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt and r3_history.txt.',
-      'Read memory files only when the user explicitly asks about past operations.',
+      'Memory files: C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt, r3_history.txt.',
+      'Read memory only when the user explicitly asks about past operations.',
     )
   }
   lines.push(BATCHING_RULE)

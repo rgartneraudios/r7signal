@@ -85,13 +85,13 @@ export function getAsunTools(workspace) {
       type: 'function',
       function: {
         name: 'list_files',
-        description: 'Lista archivos y carpetas en el workspace o en una subcarpeta.',
+        description: 'List files/folders in the workspace or a subfolder.',
         parameters: {
           type: 'object',
           properties: {
             subpath: {
               type: 'string',
-              description: 'Ruta relativa dentro del workspace. Vacío para la raíz.',
+              description: 'Relative path inside the workspace. Empty = root.',
             },
           },
           required: [],
@@ -102,11 +102,11 @@ export function getAsunTools(workspace) {
       type: 'function',
       function: {
         name: 'read_text_file',
-        description: 'Lee el contenido de un archivo de texto (.txt, .md, .json, .js, .jsx, .ts, .tsx, .css, .html, etc.).',
+        description: 'Read a text file (.txt, .md, .json, .js, .jsx, .ts, .tsx, .css, .html, etc.).',
         parameters: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: 'Ruta relativa al workspace.' },
+            path: { type: 'string', description: 'Relative path inside the workspace.' },
           },
           required: ['path'],
         },
@@ -116,11 +116,11 @@ export function getAsunTools(workspace) {
       type: 'function',
       function: {
         name: 'read_image_file',
-        description: 'Lee una imagen y la devuelve como base64 para análisis visual. Soporta png, jpg, jpeg, webp.',
+        description: 'Read an image -> base64 for visual analysis. png/jpg/jpeg/webp.',
         parameters: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: 'Ruta relativa al workspace.' },
+            path: { type: 'string', description: 'Relative path inside the workspace.' },
           },
           required: ['path'],
         },
@@ -130,13 +130,13 @@ export function getAsunTools(workspace) {
       type: 'function',
       function: {
         name: 'search_in_files',
-        description: 'Busca texto dentro de archivos, recursivamente desde el workspace o una subcarpeta. Devuelve ruta, línea y texto coincidente. Úsala en vez de leer archivos completos para localizar algo específico. Máximo 50 resultados.',
+        description: 'Search text in files, recursive. Returns path:line:text. Prefer over reading whole files to locate something. Max 50 results.',
         parameters: {
           type: 'object',
           properties: {
-            pattern: { type: 'string', description: 'Texto a buscar (no distingue mayúsculas).' },
-            subpath: { type: 'string', description: 'Subcarpeta relativa al workspace. Vacío para buscar desde la raíz.' },
-            filePattern: { type: 'string', description: 'Filtro opcional de archivo, ej. "*.jsx".' },
+            pattern: { type: 'string', description: 'Text to search (case-insensitive).' },
+            subpath: { type: 'string', description: 'Subfolder relative to the workspace. Empty = root.' },
+            filePattern: { type: 'string', description: 'Optional file filter, e.g. "*.jsx".' },
           },
           required: ['pattern'],
         },
@@ -146,11 +146,11 @@ export function getAsunTools(workspace) {
       type: 'function',
       function: {
         name: 'get_file_info',
-        description: 'Obtiene metadata de un archivo: tamaño y cantidad de líneas, sin gastar contexto en contenido. Úsala antes de read_text_file en archivos desconocidos.',
+        description: 'Metadata: size + line count, no content. Use before read_text_file on unknown files.',
         parameters: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: 'Ruta relativa al workspace.' },
+            path: { type: 'string', description: 'Relative path inside the workspace.' },
           },
           required: ['path'],
         },
@@ -160,13 +160,13 @@ export function getAsunTools(workspace) {
       type: 'function',
       function: {
         name: 'read_file_chunk',
-        description: 'Lee un rango de líneas de un archivo sin cargarlo entero. Tope de 150 líneas por llamada — si endLine se omite o excede el tope, solo se devuelven 150 líneas desde startLine; llama de nuevo con otro startLine para continuar.',
+        description: 'Read a line range without loading the whole file. Cap 150/call; continue with another startLine.',
         parameters: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: 'Ruta relativa al workspace.' },
-            startLine: { type: 'number', description: 'Primera línea (base 1).' },
-            endLine: { type: 'number', description: 'Última línea (base 1). Opcional, tope 150 líneas desde startLine.' },
+            path: { type: 'string', description: 'Relative path inside the workspace.' },
+            startLine: { type: 'number', description: 'First line (1-based).' },
+            endLine: { type: 'number', description: 'Last line (1-based). Optional, cap 150 lines from startLine.' },
           },
           required: ['path', 'startLine'],
         },
@@ -176,12 +176,12 @@ export function getAsunTools(workspace) {
       type: 'function',
       function: {
         name: 'save_to_r9',
-        description: 'Guarda texto en la memoria compartida R9 para que Cochi (u otro agente) lo consulte después. Úsalo SOLO si el usuario te lo pide explícitamente (ej. "guarda esto en R9"). Nunca lo uses automáticamente.',
+        description: 'Save text to shared R9 for Cochi or another agent. ONLY when the user explicitly asks. Never automatic.',
         parameters: {
           type: 'object',
           properties: {
-            content: { type: 'string', description: 'Texto a guardar.' },
-            label: { type: 'string', description: 'Etiqueta corta opcional.' },
+            content: { type: 'string', description: 'Text to save.' },
+            label: { type: 'string', description: 'Optional short label.' },
           },
           required: ['content'],
         },
@@ -195,12 +195,12 @@ export function getAsunTools(workspace) {
         type: 'function',
         function: {
           name: 'write_text_file',
-          description: 'Escribe o sobreescribe un archivo de texto en el workspace.',
+          description: 'Write or overwrite a text file.',
           parameters: {
             type: 'object',
             properties: {
-              path: { type: 'string', description: 'Ruta relativa al workspace.' },
-              content: { type: 'string', description: 'Contenido del archivo.' },
+              path: { type: 'string', description: 'Relative path inside the workspace.' },
+              content: { type: 'string', description: 'File content.' },
             },
             required: ['path', 'content'],
           },
@@ -210,11 +210,11 @@ export function getAsunTools(workspace) {
         type: 'function',
         function: {
           name: 'create_dir',
-          description: 'Crea una carpeta (y subcarpetas si es necesario).',
+          description: 'Create folder + subfolders.',
           parameters: {
             type: 'object',
             properties: {
-              path: { type: 'string', description: 'Ruta relativa al workspace.' },
+              path: { type: 'string', description: 'Relative path inside the workspace.' },
             },
             required: ['path'],
           },
@@ -224,12 +224,12 @@ export function getAsunTools(workspace) {
         type: 'function',
         function: {
           name: 'move_file',
-          description: 'Mueve o renombra un archivo o carpeta dentro del workspace.',
+          description: 'Move or rename a file/folder.',
           parameters: {
             type: 'object',
             properties: {
-              from: { type: 'string', description: 'Ruta origen relativa al workspace.' },
-              to:   { type: 'string', description: 'Ruta destino relativa al workspace.' },
+              from: { type: 'string', description: 'Source path relative to the workspace.' },
+              to:   { type: 'string', description: 'Destination path relative to the workspace.' },
             },
             required: ['from', 'to'],
           },
@@ -239,11 +239,11 @@ export function getAsunTools(workspace) {
         type: 'function',
         function: {
           name: 'delete_file',
-          description: 'Elimina un archivo o carpeta del workspace.',
+          description: 'Delete a file or folder.',
           parameters: {
             type: 'object',
             properties: {
-              path: { type: 'string', description: 'Ruta relativa al workspace.' },
+              path: { type: 'string', description: 'Relative path inside the workspace.' },
             },
             required: ['path'],
           },
@@ -265,32 +265,32 @@ export function getProjectTools() {
       type: 'function',
       function: {
         name: 'save_project_plan',
-        description: 'Guarda/actualiza el PLAN del proyecto en el tablero persistente (fuera del workspace). Llamala SÓLO después de entrevistar al usuario y tener el alcance claro. Segmentá el proyecto en bloques cortos y verificables (A/B/C/...). Cada bloque DEBE incluir su criterio de "hecho" (evidence): cómo se comprueba (harness/test/commit/prueba manual). Llamala una sola vez con el plan completo; pasá planId para actualizar un plan existente. Al actualizar podés mandar SÓLO los bloques que cambian: el tablero conserva la definición de los no reenviados y el ESTADO (avance/evidencia) de todos.',
+        description: 'Save/update the project PLAN on the persistent board (outside the workspace). Call ONLY after interviewing the user and having the scope clear. Short, verifiable blocks (A/B/C). Every block MUST carry its "done when" criterion (evidence): how it is checked (harness/test/commit/manual). Call once with the full plan; planId to update. On update you may send ONLY the changed blocks: the board keeps the definition of non-resent blocks and the STATE (progress/evidence) of all.',
         parameters: {
           type: 'object',
           properties: {
             planId: {
               type: 'string',
-              description: 'id del plan a actualizar. Omitilo para crear uno nuevo.',
+              description: 'Plan id to update. Omit to create a new one.',
             },
             title: {
               type: 'string',
-              description: 'Título corto del proyecto.',
+              description: 'Short project title.',
             },
             description: {
               type: 'string',
-              description: 'Resumen del alcance acordado en la entrevista.',
+              description: 'Scope summary agreed in the interview.',
             },
             blocks: {
               type: 'array',
-              description: 'Bloques del plan, en orden de ejecución.',
+              description: 'Plan blocks, in execution order.',
               items: {
                 type: 'object',
                 properties: {
-                  id: { type: 'string', description: 'Etiqueta corta (A, B, C...). Si se omite, se asigna por orden.' },
-                  title: { type: 'string', description: 'Tarea concreta del bloque.' },
-                  description: { type: 'string', description: 'Qué hay que hacer, breve y accionable.' },
-                  evidence: { type: 'string', description: 'CÓMO se verifica que el bloque está hecho (harness/test/commit/prueba). Obligatorio.' },
+                  id: { type: 'string', description: 'Short label (A, B, C...). If omitted, assigned by order.' },
+                  title: { type: 'string', description: 'Concrete task of the block.' },
+                  description: { type: 'string', description: 'What to do, brief and actionable.' },
+                  evidence: { type: 'string', description: 'HOW the block is verified as done (harness/test/commit/manual). Required.' },
                 },
                 required: ['title', 'evidence'],
               },

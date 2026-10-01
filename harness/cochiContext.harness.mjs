@@ -18,7 +18,7 @@ function check(label, actual, expected) {
 
 console.log('— buildSystemContext: system estable —')
 const sys = buildSystemContext('/ws', 'Full Access')
-check('incluye workspace + permiso', sys.includes('Active workspace: /ws (access level: Full Access)'), true)
+check('incluye workspace + permiso', sys.includes('Workspace: /ws (access: Full Access)'), true)
 check('incluye la regla de batching', sys.includes(BATCHING_RULE), true)
 check('incluye memoria por defecto', sys.includes('cochi_memory.txt'), true)
 check('technical omite memoria', buildSystemContext('/ws', 'Read', { technical: true }).includes('cochi_memory.txt'), false)

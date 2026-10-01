@@ -410,7 +410,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: "Read a file's full text. To check size use get_file_info; for one line use search_in_files; for a range use read_file_chunk. For an edit, ONE read is enough — do not re-read the same file or add existence/size probes before editing.",
+      description: 'Read full text. Size -> get_file_info; one line -> search_in_files; range -> read_file_chunk. Editing: ONE read, no re-read, no probes.',
       parameters: {
         type: 'object',
         properties: { path: { type: 'string', description: 'Absolute path.' } },
@@ -422,7 +422,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'read_file_chunk',
-      description: 'Read a line range from a file without loading it all. Capped at 150 lines per call; call again with a new startLine to continue.',
+      description: 'Read line range, cap 150 lines/call. Continue with a new startLine.',
       parameters: {
         type: 'object',
         properties: {
@@ -438,7 +438,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'write_file',
-      description: 'Write or overwrite a complete file. For small changes prefer replace_in_file.',
+      description: 'Write or overwrite a whole file. Small change -> replace_in_file.',
       parameters: {
         type: 'object',
         properties: {
@@ -453,7 +453,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'replace_in_file',
-      description: 'Replace oldText with newText inside a file. oldText must match exactly once unless replaceAll is true. If you already know the file: ONE read, then this edit — do not chain list_dir / get_file_info / file_exists probes first, and do not re-read to verify.',
+      description: 'Replace oldText -> newText in a file. oldText unique unless replaceAll true. Know the file: ONE read then edit; no list_dir/get_file_info/file_exists probes, no re-read to verify.',
       parameters: {
         type: 'object',
         properties: {
@@ -470,7 +470,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'append_to_file',
-      description: 'Append content to the end of a file without reading it first.',
+      description: 'Append to end of a file without reading it first.',
       parameters: {
         type: 'object',
         properties: {
@@ -485,7 +485,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'list_dir',
-      description: 'List files and folders in a directory (non-recursive). For recursive search use find_files.',
+      description: 'List dir, non-recursive. Recursive -> find_files.',
       parameters: {
         type: 'object',
         properties: { path: { type: 'string' } },
@@ -497,7 +497,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'find_files',
-      description: 'Find files by glob recursively (*, **, ?, {a,b}, [abc]). Pattern with "/" matches relative path, else file name. Skips node_modules and .git. Skip it if you already know the exact path.',
+      description: 'Glob find (*, **, ?, {a,b}, [abc]). "/" -> relative path, else file name. Skips node_modules/.git. Skip if path known.',
       parameters: {
         type: 'object',
         properties: {
@@ -513,7 +513,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'search_in_files',
-      description: 'Search text or regex inside files recursively. Returns path:line, max 50 results. Prefer an exact value over a generic term to cut false positives.',
+      description: 'Search text/regex in files recursively. path:line, max 50. Prefer an exact value over a generic term.',
       parameters: {
         type: 'object',
         properties: {
@@ -531,7 +531,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'get_file_info',
-      description: 'Get file size (bytes, KB) and line count. No content sent. Use before read_file on unknown files.',
+      description: 'File size (bytes/KB) and line count, no content. Use before read_file on unknown files.',
       parameters: {
         type: 'object',
         properties: { path: { type: 'string' } },
@@ -543,7 +543,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'file_exists',
-      description: 'Check if a file or folder exists.',
+      description: 'Check if a file or folder exists. Only when you actually need it.',
       parameters: {
         type: 'object',
         properties: { path: { type: 'string' } },
@@ -555,7 +555,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'run_command',
-      description: 'Run a shell command (PowerShell on Windows, bash on macOS/Linux). Output capped at 64KB; killed on timeout (default 120s, max 600s). The exit code is ALWAYS reported as "(exit N)" — read it there, do not re-run to obtain it.',
+      description: 'Run shell (PowerShell Windows, bash macOS/Linux). Output cap 64KB; timeout default 120s max 600s. Exit code ALWAYS "(exit N)" — read there, never re-run for it.',
       parameters: {
         type: 'object',
         properties: {
@@ -571,7 +571,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'todowrite',
-      description: 'Create or update the task list. Pass the COMPLETE list every time (replaces previous). At most one task in_progress.',
+      description: 'Create or update the task list. Send the COMPLETE list every time (replaces previous). Max one in_progress.',
       parameters: {
         type: 'object',
         properties: {
@@ -596,7 +596,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'ask_user',
-      description: 'Ask the user a question and wait for the answer. Use for decisions, clarification or missing values — do not guess. Provide options for quick choices when possible.',
+      description: 'Ask the user and wait for the answer. Use for decisions, clarification or missing values — do not guess. Give options for quick choices when possible.',
       parameters: {
         type: 'object',
         properties: {
@@ -613,7 +613,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'web_fetch',
-      description: 'Fetch an http(s) URL and return text (HTML→text, JSON as-is). Timeout 30s, output capped 100KB. Not for web search.',
+      description: 'Fetch an http(s) URL, return text (HTML -> text, JSON as-is). Timeout 30s, output cap 100KB. Not for web search.',
       parameters: {
         type: 'object',
         properties: {
@@ -629,7 +629,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'delete_file',
-      description: 'Delete a single file (not directories). Destructive — always requires user confirmation.',
+      description: 'Delete one file (not directories). Destructive — requires confirmation.',
       parameters: {
         type: 'object',
         properties: { path: { type: 'string', description: 'Absolute path.' } },
@@ -641,7 +641,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'delete_dir',
-      description: 'Delete a directory and everything inside it (recursively). Use this instead of run_command to remove folders. Destructive — always requires user confirmation.',
+      description: 'Delete a directory recursively. Use instead of run_command to remove folders. Destructive — requires confirmation.',
       parameters: {
         type: 'object',
         properties: { path: { type: 'string', description: 'Absolute path of the directory to delete.' } },
@@ -653,7 +653,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'create_dir',
-      description: 'Create a directory (and any missing parent directories). No-op if it already exists.',
+      description: 'Create a directory + missing parents. No-op if it exists.',
       parameters: {
         type: 'object',
         properties: { path: { type: 'string', description: 'Absolute path of the directory to create.' } },
@@ -665,7 +665,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'move_file',
-      description: 'Move or rename a file or directory. Refuses to overwrite unless overwrite: true.',
+      description: 'Move or rename a file/dir. Refuses overwrite unless overwrite: true.',
       parameters: {
         type: 'object',
         properties: {
@@ -681,7 +681,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'copy_file',
-      description: 'Copy a file or a directory (recursively). Refuses to overwrite unless overwrite: true.',
+      description: 'Copy a file/dir recursively. Refuses overwrite unless overwrite: true.',
       parameters: {
         type: 'object',
         properties: {
@@ -697,7 +697,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'spawn_agent',
-      description: 'Delegate ONE self-contained subtask to an isolated subagent and get back a concise BRIEF (plain text). The subagent CANNOT see this conversation — put everything it needs in "task". It has its own read/edit/run tools, capped by the current workspace permission, and anything it changes is real, permission-gated and tracked for undo. Use it to offload isolated work that would pollute this context. Do NOT use it to ask the user anything.',
+      description: 'Delegate ONE self-contained subtask to an isolated subagent -> concise plain-text BRIEF. It cannot see this conversation — put everything it needs in "task". It has own read/edit/run tools, capped by workspace permission; its changes are real, permission-gated and undo-tracked. Offload isolated work that would pollute this context. Never ask the user via it.',
       parameters: {
         type: 'object',
         properties: {
@@ -713,7 +713,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'save_to_r9',
-      description: 'Save text to shared R9 memory so Asun (or another agent) can read it later. Use ONLY when the user explicitly asks (e.g. "guarda esto en R9"). Never use automatically.',
+      description: 'Save text to shared R9 memory so Asun or another agent can read it later. Use ONLY when the user explicitly asks. Never automatic.',
       parameters: {
         type: 'object',
         properties: {
@@ -728,7 +728,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'list_project_plans',
-      description: 'List the project plans on the board (created by Asun in Project mode). Each plan has blocks A/B/C with a status and a "done when" criterion. Call this FIRST when the user mentions a plan but not which one — then use ask_user to let them choose.',
+      description: 'List board plans (created by Asun in Project mode). Blocks A/B/C with status + "done when". Call FIRST when the user mentions a plan but not which one; then ask_user to choose.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -736,7 +736,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'read_project_plan',
-      description: 'Read the full board of ONE project plan: title, progress and every block with status, description and "done when" criterion. Use the planId from list_project_plans; if omitted, reads the most recent plan.',
+      description: 'Read ONE plan board: title, progress, every block with status/description/"done when". planId from list_project_plans; omit -> most recent.',
       parameters: {
         type: 'object',
         properties: {
@@ -750,7 +750,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'update_plan_block',
-      description: 'Update the STATUS of one block (you own status; Asun owns the definition). Set in_progress when you start and done when the block\'s "done when" criterion is met. Marking done REQUIRES evidence. Never rewrite the definition.',
+      description: 'Update the STATUS of one block (you own status; Asun owns the definition). in_progress when you start, done when the "done when" is met. done REQUIRES evidence. Never rewrite the definition.',
       parameters: {
         type: 'object',
         properties: {
@@ -767,7 +767,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'request_replan',
-      description: 'Register that a block on the board is BADLY DEFINED (wrong scope, missing dependency, impossible evidence...) and propose a correction, INSTEAD of deviating silently. Does NOT rewrite the block (Asun owns the definition): raises a proposal the user arbitrates. Requires a reason and a concrete proposal. Do not use it to update status.',
+      description: 'Register a BADLY DEFINED block (wrong scope, missing dependency, impossible evidence...) + a correction, INSTEAD of deviating silently. Does NOT rewrite the block (Asun owns it): raises a proposal the user arbitrates. Needs reason + concrete proposal. Not for status.',
       parameters: {
         type: 'object',
         properties: {
