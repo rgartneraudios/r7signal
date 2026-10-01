@@ -3,7 +3,8 @@
 // Ejecutar:  node harness/cochiSubagent.harness.mjs   (o npm run harness:subagent)
 // Cubre la lógica PURA + el contrato de runSubagent con `callModel`/`executeTool`
 // inyectados (sin red ni disco). Verifica el mini-loop aislado, el scope de solo
-// lectura del subagente y que el R7 del padre nunca se toca.
+// lectura del subagente, su herencia de capacidad (read/write/full) y que el R7
+// del padre nunca se toca.
 import {
   MAX_SUBAGENT_DEPTH,
   DEFAULT_SUBAGENT_MAX_TOKENS,
@@ -59,6 +60,10 @@ checkTrue('prompt incluye BRIEF STYLE (3.4c)', SUBAGENT_SYSTEM_PROMPT.includes('
 checkTrue('prompt prohíbe narrar el proceso', SUBAGENT_SYSTEM_PROMPT.includes('NEVER narrate your process'))
 checkTrue('prompt prohíbe secciones meta (Notes/Notas)', SUBAGENT_SYSTEM_PROMPT.includes('"Notes" / "Notas"'))
 checkTrue('prompt exige arrancar con contenido', SUBAGENT_SYSTEM_PROMPT.includes('Start DIRECTLY with the findings'))
+checkTrue('prompt ya no prohíbe escribir (edita con permiso)', !SUBAGENT_SYSTEM_PROMPT.includes('You CANNOT write files'))
+checkTrue('prompt pide reportar los archivos cambiados', SUBAGENT_SYSTEM_PROMPT.includes('every file you changed and how'))
+checkTrue('prompt advierte que los cambios son reales', SUBAGENT_SYSTEM_PROMPT.includes('are REAL'))
+checkTrue('prompt prohíbe re-leer para verificar', SUBAGENT_SYSTEM_PROMPT.includes('never re-read a file to verify'))
 
 console.log('— Fase 3.4c · stripLeadingNarration —')
 check('sin narración → intacto', stripLeadingNarration('Resultado: 42'), 'Resultado: 42')
@@ -146,18 +151,36 @@ checkTrue('permiso read incluye spawn_agent (no muta disco)', getToolsForPermiss
 checkTrue('scope full incluye spawn_agent', getToolsForPermission('full', 'full').some(t => t.function.name === 'spawn_agent'))
 
 console.log('— Fase 3.3b · scope aislado del subagente (getSubagentTools) —')
-const subTools = getSubagentTools('full').map(t => t.function.name)
-checkTrue('incluye read_file', subTools.includes('read_file'))
-checkTrue('incluye search_in_files', subTools.includes('search_in_files'))
-checkTrue('excluye spawn_agent (sin recursión)', !subTools.includes('spawn_agent'))
-checkTrue('excluye ask_user (sin UI)', !subTools.includes('ask_user'))
-checkTrue('excluye mutadores del tablero (E4)', !subTools.includes('update_plan_block') && !subTools.includes('request_replan'))
-checkTrue('no incluye tools de escritura', !subTools.some(n => ['write_file', 'replace_in_file', 'append_to_file', 'create_dir', 'move_file', 'copy_file'].includes(n)))
-checkTrue('no incluye run_command', !subTools.includes('run_command'))
-checkTrue('no incluye delete_file', !subTools.includes('delete_file'))
-checkTrue('no incluye delete_dir', !subTools.includes('delete_dir'))
-checkTrue('no incluye todowrite/save_to_r9', !subTools.includes('todowrite') && !subTools.includes('save_to_r9'))
-checkTrue('todas las del subagente son de lectura', subTools.every(n => getToolsForPermission('full', 'read').some(t => t.function.name === n)))
+const WRITE_TOOLS = ['write_file', 'replace_in_file', 'append_to_file', 'create_dir', 'move_file', 'copy_file']
+const subRead = getSubagentTools('read').map(t => t.function.name)
+checkTrue('read: incluye read_file', subRead.includes('read_file'))
+checkTrue('read: incluye search_in_files', subRead.includes('search_in_files'))
+checkTrue('read: excluye spawn_agent (sin recursión)', !subRead.includes('spawn_agent'))
+checkTrue('read: excluye ask_user (sin UI)', !subRead.includes('ask_user'))
+checkTrue('read: excluye mutadores del tablero (E4)', !subRead.includes('update_plan_block') && !subRead.includes('request_replan'))
+checkTrue('read: sin tools de escritura', !subRead.some(n => WRITE_TOOLS.includes(n)))
+checkTrue('read: sin run_command', !subRead.includes('run_command'))
+checkTrue('read: sin delete_file/delete_dir', !subRead.includes('delete_file') && !subRead.includes('delete_dir'))
+checkTrue('read: sin todowrite/save_to_r9', !subRead.includes('todowrite') && !subRead.includes('save_to_r9'))
+
+const subWrite = getSubagentTools('readwrite').map(t => t.function.name)
+checkTrue('readwrite: incluye write_file', subWrite.includes('write_file'))
+checkTrue('readwrite: incluye replace_in_file', subWrite.includes('replace_in_file'))
+checkTrue('readwrite: excluye delete_file (full only, destructiva)', !subWrite.includes('delete_file'))
+checkTrue('readwrite: excluye run_command (full only)', !subWrite.includes('run_command'))
+checkTrue('readwrite: excluye spawn_agent/ask_user', !subWrite.includes('spawn_agent') && !subWrite.includes('ask_user'))
+checkTrue('readwrite: sin todowrite/save_to_r9', !subWrite.includes('todowrite') && !subWrite.includes('save_to_r9'))
+
+const subFull = getSubagentTools('full').map(t => t.function.name)
+checkTrue('full: incluye read_file', subFull.includes('read_file'))
+checkTrue('full: incluye tools de escritura', WRITE_TOOLS.every(n => subFull.includes(n)))
+checkTrue('full: incluye run_command', subFull.includes('run_command'))
+checkTrue('full: incluye delete_file/delete_dir', subFull.includes('delete_file') && subFull.includes('delete_dir'))
+checkTrue('full: excluye spawn_agent (sin recursión)', !subFull.includes('spawn_agent'))
+checkTrue('full: excluye ask_user (sin UI)', !subFull.includes('ask_user'))
+checkTrue('full: excluye mutadores del tablero (E4)', !subFull.includes('update_plan_block') && !subFull.includes('request_replan'))
+checkTrue('full: sin todowrite/save_to_r9', !subFull.includes('todowrite') && !subFull.includes('save_to_r9'))
+checkTrue('permiso read nunca habilita escritura', getSubagentTools('read').every(n => !['run_command', 'delete_file', 'delete_dir'].includes(n.function.name)))
 
 console.log('— Fase 3.3b · mini-loop aislado (rueda/contexto propios) —')
 const parentWheel = { r7: '── Turno 1 ──\nR1: pidió X\nR2: hizo X', lastTurn: { user: 'u', assistant: 'a' } }

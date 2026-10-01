@@ -697,7 +697,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'spawn_agent',
-      description: 'Delegate ONE self-contained subtask to an isolated subagent and get back a concise BRIEF (plain text). The subagent has NO access to this conversation, the filesystem or tools — put everything it needs in "task". Use it for isolated research, drafting or analysis that would pollute this context. Do NOT use it for file actions or to ask the user anything.',
+      description: 'Delegate ONE self-contained subtask to an isolated subagent and get back a concise BRIEF (plain text). The subagent CANNOT see this conversation — put everything it needs in "task". It has its own read/edit/run tools, capped by the current workspace permission, and anything it changes is real, permission-gated and tracked for undo. Use it to offload isolated work that would pollute this context. Do NOT use it to ask the user anything.',
       parameters: {
         type: 'object',
         properties: {
@@ -841,17 +841,21 @@ export function getToolsForPermission(permission, scope = 'full') {
 }
 
 // ─── Scope del subagente (Fase 3.3b: contexto/scope aislado) ──────────────────
-// El subagente trabaja aislado y hoy es SÓLO LECTURA (permisos/presupuesto = 3.3d).
-// Excluye:
+// El subagente trabaja aislado y HEREDA la capacidad del workspace: con permiso
+// 'read' es sólo lectura; con 'write'/'readwrite' obtiene los mutadores de
+// archivo (write/replace/append/create/move/copy); con 'full', además
+// run_command/delete_file/delete_dir. Reusa el scope 'task' (que ya excluye
+// spawn_agent, el tablero, save_to_r9 y todowrite) y su filtro canWrite/canRun.
+// El padre monta cada mutación por el MISMO pipeline de permisos + snapshots del
+// turno, así que son aprobables (o bloqueables por regla deny) y revertibles.
+// Excluye además:
 //   · spawn_agent → sin recursión (MAX_SUBAGENT_DEPTH = 1).
 //   · ask_user    → no hay UI que responda dentro del subagente.
-// Reusa el scope 'read' (no muta disco) y quita las tools interactivas.
-// También quita las que MUTAN el tablero de planes (update_plan_block/request_replan):
-// aunque no tocan el disco del usuario, el subagente es de SÓLO LECTURA.
+//   · tablero (update_plan_block/request_replan): el plan lo arbitra el padre.
 export const SUBAGENT_EXCLUDED_TOOLS = new Set(['spawn_agent', 'ask_user', 'update_plan_block', 'request_replan'])
 
 export function getSubagentTools(permission = 'full') {
-  return getToolsForPermission(permission, 'read')
+  return getToolsForPermission(permission, 'task')
     .filter(t => !SUBAGENT_EXCLUDED_TOOLS.has(t.function.name))
 }
 

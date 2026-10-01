@@ -13,9 +13,11 @@
 //     `executeTool` INYECTABLES. Su `messages` local ES su rueda propia: crece
 //     con sus turnos internos y se descarta al terminar. NUNCA se fusiona con el
 //     R7/pares del padre.
-//   · Su scope por defecto es de SOLO LECTURA (lo arma cochiTools.getSubagentTools):
-//     puede leer/buscar/navegar, pero no escribe ni ejecuta. Los permisos y el
-//     presupuesto por subagente se cierran en 3.3d.
+//   · Su scope lo arma cochiTools.getSubagentTools y HEREDA la capacidad del
+//     workspace: read → sólo lectura; write/readwrite → edición de archivos;
+//     full → además run_command/delete_*. Las mutaciones las monta el PADRE por
+//     el mismo pipeline de permisos + snapshots del turno (aprobables/bloqueables
+//     por regla y revertibles), no este módulo.
 //   · No tiene `spawn_agent` (sin recursión; MAX_SUBAGENT_DEPTH=1) ni `ask_user`
 //     (no hay UI que responder dentro del subagente).
 //
@@ -80,14 +82,15 @@ export function resolveStoredSubagentModel(stored, validIds) {
 export const SUBAGENT_SYSTEM_PROMPT = [
   'You are a SUBAGENT: a focused, isolated worker spawned by a parent agent to complete ONE delegated task.',
   'You have NO access to the parent conversation or its memory — everything you need is in TASK (and optional CONTEXT).',
-  'You MAY be given READ-ONLY tools (file reading, listing, searching, web_fetch) to gather what the task needs. Use them when useful.',
-  'You CANNOT write files, run commands, ask the user, or spawn other agents.',
+  'You may be given tools (reading, listing, searching, web_fetch, and possibly file edits or commands) to gather what the task needs. Use ONLY the tools that are actually given to you; whether you can modify files or run commands depends on the workspace permission.',
+  'You CANNOT ask the user or spawn other agents.',
   '',
   'Rules:',
   '- Do ONLY the delegated task. Do not ask questions; if something is missing, state the assumption you made.',
   '- You have a LIMITED number of turns. Read each file ONCE and summarize from what you got; do not re-read or re-search the same thing. Tool results may be truncated — work with what you have instead of looping.',
   '- Never emit the R1/R2/R3 contract and never emit control signals like [STEP_COMPLETE], [STEP_FAILED] or [NEED_REPLAN].',
-  '- Return exactly ONE self-contained BRIEF in {{language}} with: findings, decisions, exact identifiers (paths, names, values) and caveats.',
+  '- If you edit files or run commands, make MINIMAL, targeted changes. Your file changes and commands are REAL and are tracked so the parent can review or undo them: never do anything destructive unless the task explicitly requires it, and never re-read a file to verify an edit you just made.',
+  '- Return exactly ONE self-contained BRIEF in {{language}} with: findings, decisions, exact identifiers (paths, names, values), every file you changed and how, and caveats.',
   '',
   'BRIEF STYLE (strict — the parent only sees this text, never your steps):',
   '- Start DIRECTLY with the findings or the answer. The first line must carry content, never setup.',

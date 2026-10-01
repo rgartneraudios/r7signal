@@ -421,9 +421,41 @@ tarea multi-tool con escritura y compactación a 70k (ver "E2E del loop único")
 turnos con `prev` dan `cached` ~98% · `sysStable=true · appendOnly=true` (~**6.7x más barato** que
 el turno frío). El pin cubre Cochi (Centinela y Terminator), el subagente y **Asun/MaríaBase**
 (visión → DeepInfra, 01/10: cached ~93%). **P1 scope `edit` + P3 recortar descriptions HECHOS
-(02/10-bis)**; queda la **deuda técnica** (subagentes que escriban, shell revertible, SSRF en Rust,
-TYPO de archivo) — ver "PRIMERA FILA" al final. Gates al cerrar: **lint 0/0 · `npm test` 14/14 ·
-`npm run build` OK**.
+(02/10-bis)**; **subagentes que escriben HECHO (02/10-ter)**; queda la **deuda técnica** (shell
+revertible, SSRF en Rust, TYPO de archivo) — ver "PRIMERA FILA" al final. Gates al cerrar:
+**lint 0/0 · `npm test` 14/14 · `npm run build` OK**.
+
+### HECHO 02/10-ter · SUBAGENTES QUE ESCRIBEN (heredan la capacidad del workspace)
+Motivo: `spawn_agent` era SÓLO LECTURA (deuda de la Fase 3.3b); se abre para delegar también
+mutaciones, **con el mismo pipeline de permisos + snapshots del turno** (nada de bypass).
+- `src/lib/cochiTools.js`: `getSubagentTools(permission)` ahora reusa el scope `task`
+  (`getToolsForPermission(permission, 'task')`) en vez de `read`: con `read` sigue siendo sólo
+  lectura; con `write`/`readwrite` obtiene los mutadores de archivo (write/replace/append/create/
+  move/copy); con `full`, además `run_command`/`delete_file`/`delete_dir`. Sigue sin `spawn_agent`
+  (sin recursión), `ask_user` (sin UI) ni tablero/R9/todowrite. `spawn_agent` description actualizada.
+- `src/hooks/useCochiTaskLoop.js`: se extrajo `runAuthorizedTool(name, args, {activityLabel})` del
+  cuerpo de `executeToolCall` (permisos deny, aprobación guardada con diff dryRun, `sessionAllow`,
+  `executeTool` con `snapshot`, `commandRan`→aviso de undo, activity + mensaje de diff). El wrapper
+  `executeTool` del subagente ahora llama a `runAuthorizedTool` con etiqueta `sub:<tool>`: **cada
+  mutación del hijo pasa por el MISMO pipeline del padre** (aprobable/bloqueable por regla y
+  revertible). Se bloquea explícitamente `SUBAGENT_EXCLUDED_TOOLS` dentro del subagente; `onActivity`
+  ya no duplica el push al feed (lo hace `runAuthorizedTool`).
+- `src/lib/subagent.js`: `SUBAGENT_SYSTEM_PROMPT` ya no dice "no podés escribir": declara que las
+  tools dependen del permiso, exige cambios mínimos, advierte que son REALES/trackeados para undo,
+  prohíbe re-leer para verificar y pide reportar cada archivo cambiado en el brief.
+- Harness `cochiSubagent`: checks de scope por permiso (read/readwrite/full; `delete_*` y
+  `run_command` sólo con `full`) + checks del prompt. Gates: **lint 0/0 · npm test 14/14 · build OK**.
+- **Falta**: E2E real en `npx tauri dev` (que un subagente edite, pida aprobación, salga el diff y
+  el undo restaure) y, opcional, un scope `edit` para el subagente (hoy hereda write/full).
+
+### HECHO 02/10-quater · GLOW DE FOCO EN EL CHATINPUT (por agente)
+Signor Roberto pidió que los inputs se iluminen al pinchar para escribir. En
+`src/components/R7FooterInputs.jsx` (footer compartido Asun/Titus/Cochi) se agregó estado de foco
+(`onFocus`/`onBlur` por textarea) y `inputGlow(rgb, focused)`: al enfocar ilumina **todo** el input
+—fondo con degradado radial del color + glow interior `inset` + halo exterior—, no sólo el borde.
+Colores finales: **Cochi `#C42E00`** (rojo-naranja) · **Asun `#3500FF`** (azul-violeta) ·
+**Titus `#007F8A`** (verde-teal). El input izquierdo toma el color del agente activo
+(`activeLeftPanel`). Transición 0.25s. Gates: lint 0/0 · `npm test` 14/14 · build OK.
 
 ### HECHO (esta sesión) · RUEDA R7 POR-AGENTE (Tito/Asun como Cochi)
 Motivo: Tito y Asun leían la MISMA rueda global que Cochi (`readLatestR7`/`writeR9File('r7')`),
@@ -534,8 +566,9 @@ Supervivientes consolidados en **`src/lib/cochiGuards.js`** (+`harness/cochiGuar
    run_command, ask_user, web_fetch, spawn_agent, save_to_r9 y el tablero) sin quitar coaching.
    Schema: full 12.984→12.355 · task 8.345→7.971 · read 8.006→7.506 chars.
 3. **Deuda técnica**:
-   - **Subagentes que escriban**: hoy sólo lectura (`spawn_agent`, `MAX_SUBAGENT_DEPTH=1`,
-     `getSubagentTools` reusa scope `read`). Falta abrirles escritura con permisos.
+   - **~~Subagentes que escriban~~ HECHO 02/10-ter**: `getSubagentTools` hereda la capacidad del
+     workspace (read/write/full) y el padre monta sus mutaciones por `runAuthorizedTool` (permisos +
+     snapshots). Falta sólo el E2E y, opcional, un scope `edit` propio.
    - **Shell revertible**: `run_command` está FUERA de los snapshots; hoy sólo aviso al undo.
    - **SSRF**: `isBlockedUrl` (`cochiPermissions.js`) es corte por globs; falta validar la IP
      resuelta en Rust.
@@ -666,8 +699,8 @@ NO). Implementación:
 - **P1** scope `edit` mínimo para mutación atómica (allowlist en `cochiTools`).
 - **P3** recortar descripciones de tools (~990 tok/request). Ahora de bajo impacto: el input
   cacheado pesa 0.03x; evaluar igual porque el primer request de cada turno paga full.
-- **Subagentes que escriban** · **Shell revertible** · **SSRF en Rust** · **prompt `task` remoto
-  (pegarle la excepción `TYPO RESUELTO`)**.
+- ~~**Subagentes que escriban**~~ (HECHO 02/10-ter) · **Shell revertible** · **SSRF en Rust** ·
+  **prompt `task` remoto (pegarle la excepción `TYPO RESUELTO`)**.
 
 ### CERRADO 30/09-sexies — colapso intra-turno eliminado
 `cochiContext.js` (`pruneApiMessages`/`extractCompleteSteps`/`matchStepResult`/`isCompactBlock`/

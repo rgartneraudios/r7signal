@@ -5,7 +5,7 @@ import { calculateCost, billableTokens } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
-import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools } from '../lib/cochiTools.js'
+import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools, SUBAGENT_EXCLUDED_TOOLS } from '../lib/cochiTools.js'
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
 import { buildSystemContext, READ_ONLY_TOOLS, makeStreamingDisplayExtractor } from '../lib/cochiContext.js'
 import { buildWheelMessages, commitR7Turn, buildTurnPair } from '../lib/r7Wheel.js'
@@ -207,6 +207,53 @@ export function useCochiTaskLoop({
     const extractDisplay = makeStreamingDisplayExtractor()
     let requestCount = 0
 
+    const runAuthorizedTool = async (name, args, { activityLabel = name } = {}) => {
+      const icon = TOOL_ICONS[name] || '🔧'
+      const permRequest = buildPermissionRequest(name, args)
+      const permDecision = evaluatePermission(permRequest, permissionRules)
+      if (permDecision === 'deny') {
+        pushActivity(icon, activityLabel, 'denegado por regla')
+        return { content: '⛔ Bloqueado: una regla de permisos (deny) impide esta acción.' }
+      }
+      if (permRequest.guarded && permDecision !== 'allow' && !sessionAllowRef.current.has(permRequest.signature)) {
+        if (permRequest.kind === 'edit') {
+          try {
+            const preview = await executeTool(name, args, workspace.permission, workspace.path, { dryRun: true })
+            if (preview?.diff) permRequest.diff = preview.diff
+            if (typeof preview?.modelResult === 'string' && preview.modelResult.startsWith('⛔')) {
+              pushActivity(icon, activityLabel, 'bloqueado')
+              return { content: preview.modelResult }
+            }
+          } catch {}
+        }
+        const choice = await requestPermission(permRequest, controller.signal)
+        if (choice === 'deny') {
+          pushActivity(icon, activityLabel, 'cancelado')
+          return { content: 'Cancelado por el usuario' }
+        }
+        if (choice === 'allow_session') sessionAllowRef.current.add(permRequest.signature)
+      }
+
+      let shortLabel = name === 'run_command'
+        ? (args.command?.slice(0, 60) + (args.command?.length > 60 ? '…' : ''))
+        : ((args.path || args.fromPath)?.split('\\').pop() || args.path || args.fromPath || name)
+      let modelResult = ''
+      let diff = null
+      try {
+        const execResult = await executeTool(name, args, workspace.permission, workspace.path, { snapshot: snapshotRef.current })
+        modelResult = execResult.modelResult
+        diff = execResult.diff
+        if (name === 'todowrite' && execResult.todos) {
+          setTodos(execResult.todos)
+          shortLabel = `${execResult.todos.length} tarea(s)`
+        }
+      } catch (err) { modelResult = `ERROR: ${err.message}` }
+      if (commandRan(name, modelResult)) lastTurnHadCommandRef.current = true
+      pushActivity(icon, activityLabel, shortLabel, diff)
+      if (diff) pushMessage({ role: 'diff', diff })
+      return { content: String(modelResult) }
+    }
+
     const executeToolCall = async (toolCall) => {
       const name = toolCall.function.name
       let args = {}
@@ -243,13 +290,15 @@ export function useCochiTaskLoop({
           signal: controller.signal,
           tools: getSubagentTools(workspace.permission),
           executeTool: async (subName, subArgs) => {
-            const execResult = await executeTool(subName, subArgs, workspace.permission, workspace.path)
-            return execResult?.modelResult ?? String(execResult)
+            if (SUBAGENT_EXCLUDED_TOOLS.has(subName)) {
+              return `⛔ ${subName} no está disponible dentro de un subagente.`
+            }
+            const res = await runAuthorizedTool(subName, subArgs, { activityLabel: `sub:${subName}` })
+            return res.content
           },
           onActivity: (act) => {
             const detail = subagentActivityDetail(act)
             addSubagentTool(subId, { name: act.name, detail, icon: TOOL_ICONS[act.name] || '🔧' })
-            pushActivity(TOOL_ICONS[act.name] || '🔧', `sub:${act.name}`, detail)
           },
           onUsage: (usage) => {
             const u = normalizeUsage(usage)
@@ -283,55 +332,13 @@ export function useCochiTaskLoop({
         return { role: 'tool', tool_call_id: toolCall.id, content: formatBriefResult(sub) }
       }
 
-      const permRequest = buildPermissionRequest(name, args)
-      const permDecision = evaluatePermission(permRequest, permissionRules)
-      if (permDecision === 'deny') {
-        pushActivity(TOOL_ICONS[name] || '🔧', name, 'denegado por regla')
-        return { role: 'tool', tool_call_id: toolCall.id, content: '⛔ Bloqueado: una regla de permisos (deny) impide esta acción.' }
-      }
-      if (permRequest.guarded && permDecision !== 'allow' && !sessionAllowRef.current.has(permRequest.signature)) {
-        if (permRequest.kind === 'edit') {
-          try {
-            const preview = await executeTool(name, args, workspace.permission, workspace.path, { dryRun: true })
-            if (preview?.diff) permRequest.diff = preview.diff
-            if (typeof preview?.modelResult === 'string' && preview.modelResult.startsWith('⛔')) {
-              pushActivity(TOOL_ICONS[name] || '🔧', name, 'bloqueado')
-              return { role: 'tool', tool_call_id: toolCall.id, content: preview.modelResult }
-            }
-          } catch {}
-        }
-        const choice = await requestPermission(permRequest, controller.signal)
-        if (choice === 'deny') {
-          pushActivity(TOOL_ICONS[name] || '🔧', name, 'cancelado')
-          return { role: 'tool', tool_call_id: toolCall.id, content: 'Cancelado por el usuario' }
-        }
-        if (choice === 'allow_session') sessionAllowRef.current.add(permRequest.signature)
-      }
-
-      const icon = TOOL_ICONS[name] || '🔧'
-      let shortLabel = name === 'run_command'
-        ? (args.command?.slice(0, 60) + (args.command?.length > 60 ? '…' : ''))
-        : ((args.path || args.fromPath)?.split('\\').pop() || args.path || args.fromPath || name)
-      let modelResult = ''
-      let diff = null
-      try {
-        const execResult = await executeTool(name, args, workspace.permission, workspace.path, { snapshot: snapshotRef.current })
-        modelResult = execResult.modelResult
-        diff = execResult.diff
-        if (name === 'todowrite' && execResult.todos) {
-          setTodos(execResult.todos)
-          shortLabel = `${execResult.todos.length} tarea(s)`
-        }
-      } catch (err) { modelResult = `ERROR: ${err.message}` }
-      if (commandRan(name, modelResult)) lastTurnHadCommandRef.current = true
-      pushActivity(icon, name, shortLabel, diff)
-      if (diff) pushMessage({ role: 'diff', diff })
+      const res = await runAuthorizedTool(name, args)
       toolLog.push({
         name,
-        result: String(modelResult),
+        result: res.content,
         file: args.path || args.fromPath || args.toPath || null,
       })
-      return { role: 'tool', tool_call_id: toolCall.id, content: String(modelResult) }
+      return { role: 'tool', tool_call_id: toolCall.id, content: res.content }
     }
 
     try {
