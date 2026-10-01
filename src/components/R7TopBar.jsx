@@ -102,7 +102,7 @@ const R7TopBar = memo(function R7TopBar({
                 : 'none',
             }}
           >
-            {id === 'tito' ? 'TITUS 7R' : id.toUpperCase()}
+            {id === 'tito' ? 'TITO 7R' : id.toUpperCase()}
           </button>
         ))}
       </div>
@@ -130,7 +130,7 @@ const R7TopBar = memo(function R7TopBar({
           fontFamily:"'Orbitron',sans-serif", fontSize:'0.5rem',
           letterSpacing:'0.25em', fontWeight:700,
           color:'#A89EC4', opacity:0.8,
-        }}>TITUS 7R</span>
+        }}>TITO 7R</span>
         <span style={{
           fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
           fontWeight:700, color:'#A89EC4', letterSpacing:'0.04em', lineHeight:1,

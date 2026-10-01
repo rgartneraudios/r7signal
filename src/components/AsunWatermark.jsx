@@ -14,8 +14,7 @@ export default function AsunWatermark({ category, isIrmaMax }) {
       <div className="watermark-sub" style={{ color: accent, fontSize: '0.8rem' }}>
         {category === 'llm'
           ? <>Asun es un agente diseñado para conversar, generar imágenes y música.<br />
-Tiene dos selectores con dos modelos distintos:<br />
-MaríaBase e IrmaMax, según el tipo de conversación que necesites.<br />
+Tiene dos modos de conversación según lo que necesites.<br />
 Las imágenes y la música se generan <br />
 con modelos aptos y testeados para cada tipo de contenido.<br />
 Asun puede leer y escribir dentro de su propia área de trabajo,<br />
@@ -24,7 +23,7 @@ Si necesitas administrar archivos o generar código,<br />
 ese trabajo es de Cochi — cambia de panel y decile qué necesitás.<br />
 La función Proyecto activa un modo de planificación:<br />
 Asun entrevista la tarea y arma un plan segmentado<br />
-para que lo ejecuten Cochi, TITUS-7R y el propio Asun en modo Standard.<br />
+para que lo ejecuten Cochi, TITO-7R y el propio Asun en modo Standard.<br />
 Cuando necesites empezar de cero, usa el botón CLS al pie del Panel;<br />
 limpiará el chat por completo, sin dejar rastro.<br />
 A los 70.000 tokens aparecerá R7 para guardar tus avances.<br />

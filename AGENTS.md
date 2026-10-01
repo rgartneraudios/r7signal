@@ -12,10 +12,11 @@ contexto rodante:
 - **Cochi** — agente de tareas sobre el workspace (leer/escribir/ejecutar comandos,
   planner multi-paso, subagentes, tablero de planes). En foco la mayor parte del tiempo.
 - **Asun** — música e imágenes; modos `MaríaBase` e `IrmaMax` (Proyecto IrmaMax).
-- **Tito** — asistente de chat y búsqueda. En la charla el usuario lo llama **Titus** o
-  **Titus 7R**, y en la UI aparece como **TITUS-7R** / `TITUS 7R` (watermark, header, topbar).
-  Los **identificadores de código siguen siendo `Tito*`** (`TitoPanel`, `TitoHeader`,
-  `TitoWatermark`, `TITO_MODEL`, rueda `tito/`, etc.): cuando el usuario diga "Titus", es Tito.
+- **Tito** — asistente de chat y búsqueda. En la UI aparece como **TITO-7R** / `TITO 7R`
+  (watermark, header, topbar). (Antes se había renombrado a `TITUS 7R`, revertido el 03/10:
+  "Tito 7R" encaja mejor.) Los **identificadores de código siguen siendo `Tito*`**
+  (`TitoPanel`, `TitoHeader`, `TitoWatermark`, `TITO_MODEL`, rueda `tito/`, etc.): Tito = Tito 7R.
+  Los watermarks **no nombran modelos** (03/10): como los modelos rotan, no se hardcodean en la UI.
 
 La rueda **R7** es un **almacén local** de contexto (commit-log de pares R1/R2 que escribe
 el SISTEMA por turno); se compacta a 70k con el botón del banner y **no viaja** en el prompt
@@ -932,5 +933,29 @@ entera cada request. Ahora:
   (`cached`/`prompt` chico); (b) activar HOT y ver `[USER MEMORIES]` en el viaje; (c) abrir la
   carpeta con Base de datos; (d) el gatillo derecho abre R9. Nota: el costo de `openPath` es 0 tokens.
 
+
+### HECHO 03/10-bis — MaríaBase → Xiaomi MiMo-V2.6-Flash (visión más barata + cacheo 0.02x)
+Motivo (Signor Roberto): `deepseek/deepseek-v4-flash-vision-exp` (MaríaBase) era **más caro**
+que `~deepseek/deepseek-flash-latest` (IrmaMax/Terminator) en input y output, y encima ambos
+ven imágenes. Verificado contra la API pública de OpenRouter: `deepseek/deepseek-flash-latest`
+e IrmaMax son `[text,image]`; el único ciego es `~deepseek/deepseek-v4-flash-latest`
+(Centinela/Tito)=`[text]`. Se reemplaza el slot MaríaBase por **`xiaomi/mimo-v2.6-flash`**:
+`[text,image,video,audio]`, 1M contexto, input $0.14/M (Darkbloom $0.07/M), output $0.28/M,
+**cache-read $0.0028/M = 0.02x** (mejor que DeepSeek 0.15x). Vs vision-exp: −35% input,
+−57% output, −59% cache.
+- `modelPrices.js`: fuera la tarifa `deepseek-v4-flash-vision-exp`; alta de
+  `xiaomi/mimo-v2.6-flash` {0.14 / 0.28 / 0.0028}; `ASUN_MODELS[0]` = MiMo (MaríaBase, vision:true).
+- `cacheAudit.js`: `providerRouting` pinea MiMo a
+  `['deepinfra','gmicloud','novita','darkbloom']`. Medido en vivo 03/10: con
+  **Darkbloom primero dio `cached=0`** en turno 2 (`sysStable/appendOnly=true`) → no cachea;
+  con **DeepInfra primero, el 3er request dio `cached 1792 · hit 95% · $0.0000838`** →
+  cachea (más barato que IrmaMax caliente, ~$0.00013). El arranque es frío por modelo nuevo.
+- `AsunPanel.jsx`: `MODELS.llm.asia` → `xiaomi/mimo-v2.6-flash`. `isIrmaMax`/Proyecto siguen
+  atados a `~deepseek/deepseek-flash-latest`.
+- Harness `cochiCacheAudit` (+2: routing y body de MiMo) y `cochiLlmMetrics` (+3: costo/billable
+  de MiMo). Gates: **lint 0/0 · `npm test` 16/16 · `npm run build` OK**.
+- **E2E 03/10 (DeepInfra)**: 3 requests (saludo + pregunta con un tool call); los 2 primeros fríos
+  (`cached 0`), el 3º cacheado 95%. El "gasto mayor" fue arranque frío + request extra del tool,
+  no falta de caché. En régimen MiMo cacheado ($0.000084) sale más barato que IrmaMax ($0.00013).
 
 ================================================================================

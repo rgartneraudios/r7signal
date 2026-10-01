@@ -10,8 +10,10 @@
 // ~0.2x → se contaba el input cacheado al doble de su tarifa real.
 
 export const MODEL_PRICES = {
-  // Asun — LLM
-  'deepseek/deepseek-v4-flash-vision-exp': { inputPerM: 0.2156,  outputPerM: 0.6468, cachedInputPerM: 0.02156 },
+  // Asun — LLM (MaríaBase). Xiaomi MiMo-V2.6-Flash: text/image/video/audio,
+  // cache-read 0.02x (Darkbloom 0.07/M in · 0.002/M cache). Reemplaza a
+  // deepseek-v4-flash-vision-exp (0.2156/0.6468), que era más caro que IrmaMax.
+  'xiaomi/mimo-v2.6-flash':                { inputPerM: 0.14, outputPerM: 0.28, cachedInputPerM: 0.0028 },
   // Asun — Imagen
   'x-ai/grok-imagine-image-quality':       { perImage: 0.05  },
   'bytedance-seed/seedream-5-0-pro':       { perImage: 0.045 },
@@ -73,7 +75,7 @@ export function billableTokens(modelId, { promptTokens = 0, completionTokens = 0
 
 // Asun LLM tier names
 export const ASUN_MODELS = [
-  { id: 'deepseek/deepseek-v4-flash-vision-exp', label: 'MaríaBase',  vision: true  },
+  { id: 'xiaomi/mimo-v2.6-flash',              label: 'MaríaBase',  vision: true  },
   { id: '~deepseek/deepseek-flash-latest',     label: 'IrmaMax', vision: true },
 ]
 

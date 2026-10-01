@@ -17,7 +17,7 @@ const R7FooterInputs = memo(forwardRef(function R7FooterInputs({
   const leftInputRef = useRef(null)
   const cochiInputRef = useRef(null)
 
-  // Luz de foco por agente: Cochi, Asun y Titus. El resplandor ilumina TODO el
+  // Luz de foco por agente: Cochi, Asun y Tito. El resplandor ilumina TODO el
   // input (borde + fondo + halo exterior), no sólo el contorno.
   const AGENT_GLOW = { cochi: '196,75,65', asun: '60,45,173', tito: '33,129,138' }
   const leftGlow = activeLeftPanel === 'asun' ? AGENT_GLOW.asun : AGENT_GLOW.tito
@@ -91,7 +91,7 @@ const R7FooterInputs = memo(forwardRef(function R7FooterInputs({
             placeholder={
               activeLeftPanel === 'asun' && !promptsReady.asun ? 'Conectando…' :
               activeLeftPanel === 'tito' && !promptsReady.tito ? 'Conectando…' :
-              'Asun / TITUS 7R'
+              'Asun / TITO 7R'
             }
             disabled={
               (activeLeftPanel === 'asun' && !promptsReady.asun) ||

@@ -83,11 +83,13 @@ console.log('— providerRouting (Capa 1 RESTAURADA 30/09-ter: pin a proveedores
 // ($0.001397); con pin, cached 2816/3042 (~93%) y $0.000107 (13x menos).
 const PIN = { order: ['streamlake', 'parasail', 'alibaba'], allow_fallbacks: true }
 const VISION_PIN = { order: ['deepinfra', 'gmicloud', 'siliconflow', 'novita'], allow_fallbacks: true }
+const MIMO_PIN = { order: ['deepinfra', 'gmicloud', 'novita', 'darkbloom'], allow_fallbacks: true }
 check('centinela se pinea a proveedores con caché', providerRouting('~deepseek/deepseek-v4-flash-latest'), PIN)
 check('terminator se pinea', providerRouting('~deepseek/deepseek-flash-latest'), PIN)
 check('deepseek v4.1 flash se pinea', providerRouting('deepseek/deepseek-v4.1-flash'), PIN)
 check('deepseek genérico se pinea', providerRouting('deepseek/deepseek-chat'), PIN)
-check('deepseek visión (MaríaBase) se pinea a DeepInfra', providerRouting('deepseek/deepseek-v4-flash-vision-exp'), VISION_PIN)
+check('deepseek visión (retirado) se pinea a DeepInfra', providerRouting('deepseek/deepseek-v4-flash-vision-exp'), VISION_PIN)
+check('MiMo (MaríaBase) se pinea a proveedores que cachean', providerRouting('xiaomi/mimo-v2.6-flash'), MIMO_PIN)
 check('perplexity (Tito) no se pinea', providerRouting('perplexity/sonar'), null)
 check('vacío/undefined no se pinea', [providerRouting(''), providerRouting(undefined)], [null, null])
 check('el reporte incluye cost real de OpenRouter', first.cost, 0)
@@ -104,6 +106,7 @@ check('body Perplexity NO lleva provider', buildBody({ provider: orProvider('per
 check('body centinela (Tito/Cochi) lleva provider.order+fallback', buildBody({ provider: orProvider('~deepseek/deepseek-v4-flash-latest'), messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }).provider, PIN)
 check('body con server tool web_search lo reenvía en tools', buildBody({ provider: orProvider('~deepseek/deepseek-v4-flash-latest'), messages: base(R7_T1, 'x'), stream: true, sessionId: 's', tools: [{ type: 'openrouter:web_search' }] }).tools, [{ type: 'openrouter:web_search' }])
 check('body visión lleva provider.order+fallback (DeepInfra)', buildBody({ provider: orProvider('deepseek/deepseek-v4-flash-vision-exp'), messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }).provider, VISION_PIN)
+check('body MiMo (MaríaBase) lleva provider.order+fallback+session', (() => { const b = buildBody({ provider: orProvider('xiaomi/mimo-v2.6-flash'), messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }); return [b.provider, b.session_id] })(), [MIMO_PIN, 's'])
 check('provider local (ollama) NO lleva provider ni session_id', (() => { const b = buildBody({ provider: { id: 'ollama', isLocal: true, supportsUsage: false, model: 'llama3.2', headers: {} }, messages: base(R7_T1, 'x'), stream: true, sessionId: 's' }); return [b.provider, b.session_id] })(), [undefined, undefined])
 
 console.log(`\n${pass} PASS · ${fail} FAIL`)

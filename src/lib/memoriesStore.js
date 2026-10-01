@@ -1,6 +1,6 @@
 // ─── MEMORIES · memoria global del usuario (formato telegrama) ────────────────
 // Un ÚNICO archivo global (AppLocalData/Memories.txt) con datos del usuario que
-// quiere compartir con los TRES agentes (Cochi/Titus/Asun): gustos, costumbres y
+// quiere compartir con los TRES agentes (Cochi/Tito/Asun): gustos, costumbres y
 // proyectos. Lo escribe el USUARIO (modal de la puerta izquierda o edición manual
 // del archivo); los agentes SÓLO lo leen, vía la "Sesión Hot".
 //

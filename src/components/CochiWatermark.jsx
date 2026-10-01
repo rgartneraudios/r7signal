@@ -11,11 +11,8 @@ export default function CochiWatermark({ isTerminator }) {
       <div className="watermark-name" style={{ color: accent, fontSize: '1.9rem' }}>COCHI DESKTOP</div>
       <div className="watermark-sub" style={{ color: accent, fontSize: '0.8rem' }}>
       Cochi es un agente diseñado para administrar tus archivos y tu código.<br />
-Tiene dos selectores con dos modelos distintos : <br />
-Centinela para tareas técnicas cotidianas,<br />
-Terminator para decisiones de mayor calibre.<br />
-Ambos modelos fueron seleccionados conscientemente <br />
-para equilibrar velocidad y capacidad según la exigencia de cada tarea.<br />
+Tiene dos selectores pensados para equilibrar <br />
+velocidad y capacidad según la exigencia de cada tarea.<br />
 También puedes operar a Cochi <br />
 con tus propios modelos locales vía Ollama o LM Studio.<br />
 Con tu autorización, Cochi administra archivos y código <br />

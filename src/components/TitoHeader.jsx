@@ -5,7 +5,7 @@ export default function TitoHeader() {
   return (
     <div className="tito-header">
       <div className="tito-level-selector">
-        <span className="level-btn active">🔎 TITUS 7R · SEARCH · DeepSeek V4 Flash</span>
+        <span className="level-btn active">🔎 TITO 7R · SEARCH</span>
       </div>
     </div>
   )

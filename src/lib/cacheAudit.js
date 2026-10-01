@@ -41,8 +41,17 @@ const CACHE_PROVIDER_ORDER = ['streamlake', 'parasail', 'alibaba']
 // (cached=256) que el prefijo append-only actual ya no reproduce.
 const VISION_CACHE_PROVIDER_ORDER = ['deepinfra', 'gmicloud', 'siliconflow', 'novita']
 
+// Xiaomi MiMo-V2.6-Flash (MaríaBase, reemplaza a vision-exp 03/10): text/image/
+// video/audio. Todos los endpoints declaran cache_read ~0.02x del input. Medido
+// 03/10 en vivo: con Darkbloom primero → cached=0 en turno 2 (sysStable/
+// appendOnly=true), o sea NO cachea. Se pone DeepInfra al frente (infra ya probada
+// cacheando ~93% en visión); Darkbloom queda de último por input más barato pero
+// sin caché efectiva.
+const MIMO_CACHE_PROVIDER_ORDER = ['deepinfra', 'gmicloud', 'novita', 'darkbloom']
+
 export function providerRouting(modelId) {
   const id = String(modelId || '').toLowerCase()
+  if (id.includes('mimo')) return { order: [...MIMO_CACHE_PROVIDER_ORDER], allow_fallbacks: true }
   if (!id.includes('deepseek')) return null
   if (id.includes('vision')) return { order: [...VISION_CACHE_PROVIDER_ORDER], allow_fallbacks: true }
   return { order: [...CACHE_PROVIDER_ORDER], allow_fallbacks: true }

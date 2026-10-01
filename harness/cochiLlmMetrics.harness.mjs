@@ -112,6 +112,12 @@ checkClose('savedByCache 0 sin tarifa cacheada', costBreakdown('perplexity/sonar
 checkClose('centinela cacheado descuenta', calculateCost('~deepseek/deepseek-v4-flash-latest', 1_000_000, 0, 'token', 500_000), 0.005643)
 check('centinela billable con caché', billableTokens('~deepseek/deepseek-v4-flash-latest', { promptTokens: 1000, completionTokens: 0, cachedTokens: 500 }), 570)
 
+// Xiaomi MiMo-V2.6-Flash (MaríaBase): input 0.14/M, output 0.28/M,
+// cached 0.0028/M (factor 0.02 exacto).
+checkClose('MiMo cacheado descuenta (0.02x)', calculateCost('xiaomi/mimo-v2.6-flash', 1_000_000, 0, 'token', 500_000), 0.0714)
+check('MiMo billable con caché (factor 0.02)', billableTokens('xiaomi/mimo-v2.6-flash', { promptTokens: 1000, completionTokens: 0, cachedTokens: 500 }), 510)
+checkClose('MiMo output factura a 0.28/M', calculateCost('xiaomi/mimo-v2.6-flash', 0, 1_000_000), 0.28)
+
 console.log('— tokens facturables (billableTokens) —')
 // Terminator: input 0.0198/M, cached 0.00291/M → factor ~0.147.
 check('sin cache: input + output 1:1', billableTokens(TERMINATOR, { promptTokens: 1000, completionTokens: 200, cachedTokens: 0 }), 1200)

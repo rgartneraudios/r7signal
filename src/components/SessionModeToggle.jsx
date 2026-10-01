@@ -1,5 +1,5 @@
 // ─── Toggle global de contexto: Sesión FRÍA / Sesión Memories ────────────────
-// Vive en el centro del header y aplica a los TRES agentes (Cochi/Titus/Asun).
+// Vive en el centro del header y aplica a los TRES agentes (Cochi/Tito/Asun).
 //   · FRÍA (default, azul reina): sin contexto previo; sólo el sistema + tools +
 //     los turnos de la sesión actual. Encendida con mucha luz (glow).
 //   · MEMORIES (rosado): inyecta el archivo global `Memories` (memoria del

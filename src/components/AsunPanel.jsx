@@ -30,7 +30,7 @@ const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // ─── Modelos ──────────────────────────────────────────────────────────────────
 const MODELS = {
-  llm:    { occidente: '~deepseek/deepseek-flash-latest', asia: 'deepseek/deepseek-v4-flash-vision-exp' },
+  llm:    { occidente: '~deepseek/deepseek-flash-latest', asia: 'xiaomi/mimo-v2.6-flash' },
   imagen: { occidente: 'x-ai/grok-imagine-image-quality', asia: 'bytedance-seed/seedream-5-0-pro' },
   musica: { chat: '~deepseek/deepseek-v4-flash-latest', gen: 'google/lyria-3-pro-preview' },
 }

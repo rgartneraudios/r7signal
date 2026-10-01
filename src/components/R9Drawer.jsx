@@ -11,7 +11,7 @@ const TABS = [
 
 const AGENT_ACCENT = { cochi: '#CF444D', asun: '#C8A2D8', tito: '#E8C84A' }
 // Nombre VISIBLE por agente (los identificadores de código siguen siendo Tito*).
-const AGENT_LABEL = { cochi: 'COCHI', asun: 'ASUN', tito: 'TITUS 7R' }
+const AGENT_LABEL = { cochi: 'COCHI', asun: 'ASUN', tito: 'TITO 7R' }
 
 function formatWhen(iso) {
   try { return new Date(iso).toLocaleString('es-ES') } catch { return '' }

@@ -65,7 +65,7 @@ export default function ApiKeyModal({ onClose, onSaved, required = false }) {
 
         <div style={{ fontSize: '0.78rem', color: THEME.textMed, lineHeight: 1.6, marginBottom: 20 }}>
           {required
-            ? 'Es tu primer arranque y Asun, TITUS-7R y Cochi necesitan una key propia para funcionar.'
+            ? 'Es tu primer arranque y Asun, TITO-7R y Cochi necesitan una key propia para funcionar.'
             : 'Actualizá tu API key de OpenRouter.'}
           {' '}Se guarda únicamente en esta computadora (nunca se sincroniza a la nube ni al navegador).
         </div>
