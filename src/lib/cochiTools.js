@@ -410,7 +410,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: "Read a file's full text. Reserve it for when you need the complete content (e.g. rewriting it): to check size use get_file_info, to locate one line use search_in_files, for a range use read_file_chunk. For an edit, ONE read is enough — do not re-read the same file or add existence/size probes before editing.",
+      description: "Read a file's full text. To check size use get_file_info; for one line use search_in_files; for a range use read_file_chunk. For an edit, ONE read is enough — do not re-read the same file or add existence/size probes before editing.",
       parameters: {
         type: 'object',
         properties: { path: { type: 'string', description: 'Absolute path.' } },
@@ -453,14 +453,14 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'replace_in_file',
-      description: 'Replace oldText with newText inside a file. oldText must match exactly once unless replaceAll: true. If you already know the file: ONE read, then this edit — never chain list_dir / get_file_info / file_exists probes first, and do not re-read to verify.',
+      description: 'Replace oldText with newText inside a file. oldText must match exactly once unless replaceAll is true. If you already know the file: ONE read, then this edit — do not chain list_dir / get_file_info / file_exists probes first, and do not re-read to verify.',
       parameters: {
         type: 'object',
         properties: {
           path: { type: 'string', description: 'Absolute path.' },
           oldText: { type: 'string', description: 'Exact text to find. Must be unique unless replaceAll is true.' },
           newText: { type: 'string', description: 'Text to replace it with.' },
-          replaceAll: { type: 'boolean', description: 'Replace every occurrence (default false). When false, oldText must match exactly once.' },
+          replaceAll: { type: 'boolean', description: 'Replace every occurrence (default false).' },
         },
         required: ['path', 'oldText', 'newText'],
       },
@@ -497,13 +497,13 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'find_files',
-      description: 'Find files by glob recursively (*, **, ?, {a,b}, [abc]). Pattern with "/" matches relative path, else file name. Skips node_modules and .git. If you already know the exact path, skip this tool.',
+      description: 'Find files by glob recursively (*, **, ?, {a,b}, [abc]). Pattern with "/" matches relative path, else file name. Skips node_modules and .git. Skip it if you already know the exact path.',
       parameters: {
         type: 'object',
         properties: {
-          namePattern: { type: 'string', description: 'Glob pattern. E.g. "*.jsx", "src/**/*.js", "**/{test,spec}/*.js".' },
+          namePattern: { type: 'string', description: 'Glob pattern, e.g. "*.jsx", "src/**/*.js".' },
           dirPath: { type: 'string', description: 'Root directory to search from.' },
-          maxResults: { type: 'number', description: 'Optional cap on returned files (default 200, max 2000).' },
+          maxResults: { type: 'number', description: 'Optional cap (default 200, max 2000).' },
         },
         required: ['namePattern', 'dirPath'],
       },
@@ -513,15 +513,15 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'search_in_files',
-      description: 'Search text or regex inside files recursively. Returns path:line. Max 50 results. Prefer an exact value (e.g. a hex code) over a generic term to cut false positives.',
+      description: 'Search text or regex inside files recursively. Returns path:line, max 50 results. Prefer an exact value over a generic term to cut false positives.',
       parameters: {
         type: 'object',
         properties: {
-          pattern: { type: 'string', description: 'Text or regex to search. Case-insensitive by default.' },
+          pattern: { type: 'string', description: 'Text or regex to search (case-insensitive).' },
           dirPath: { type: 'string', description: 'Root directory.' },
-          filePattern: { type: 'string', description: 'Optional glob file filter. E.g. "*.jsx" or "src/**/*.js".' },
-          regex: { type: 'boolean', description: 'Treat pattern as a regular expression (default false = literal substring).' },
-          caseSensitive: { type: 'boolean', description: 'Match case-sensitively (default false).' },
+          filePattern: { type: 'string', description: 'Optional glob file filter, e.g. "*.jsx".' },
+          regex: { type: 'boolean', description: 'Regex mode (default false = literal substring).' },
+          caseSensitive: { type: 'boolean', description: 'Case-sensitive match (default false).' },
         },
         required: ['pattern', 'dirPath'],
       },
@@ -555,13 +555,13 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'run_command',
-      description: 'Run a shell command (PowerShell on Windows, bash on macOS/Linux). Output capped at 64KB; killed on timeout (default 120s, max 600s). The exit code is ALWAYS reported as "(exit N)" — read it there, do not re-run the command to obtain it.',
+      description: 'Run a shell command (PowerShell on Windows, bash on macOS/Linux). Output capped at 64KB; killed on timeout (default 120s, max 600s). The exit code is ALWAYS reported as "(exit N)" — read it there, do not re-run to obtain it.',
       parameters: {
         type: 'object',
         properties: {
           command: { type: 'string', description: 'Command to run.' },
-          cwd: { type: 'string', description: 'Optional working directory. Must be inside the active workspace. Defaults to the workspace root.' },
-          timeoutMs: { type: 'number', description: 'Optional timeout in milliseconds (default 120000, max 600000). The process is killed when exceeded.' },
+          cwd: { type: 'string', description: 'Optional working dir inside the workspace (default: workspace root).' },
+          timeoutMs: { type: 'number', description: 'Optional timeout in ms (default 120000, max 600000).' },
         },
         required: ['command'],
       },
@@ -596,7 +596,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'ask_user',
-      description: 'Pause and ask the user a question, then wait for the answer. Use for decisions, clarification, or missing values — do not guess. Provide options for quick choices when possible.',
+      description: 'Ask the user a question and wait for the answer. Use for decisions, clarification or missing values — do not guess. Provide options for quick choices when possible.',
       parameters: {
         type: 'object',
         properties: {
@@ -617,9 +617,9 @@ export const COCHI_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          url: { type: 'string', description: 'Absolute http(s) URL to fetch.' },
-          maxBytes: { type: 'number', description: 'Optional cap on returned bytes (default 102400, max 1048576).' },
-          timeoutMs: { type: 'number', description: 'Optional timeout in milliseconds (default 30000, max 120000).' },
+          url: { type: 'string', description: 'Absolute http(s) URL.' },
+          maxBytes: { type: 'number', description: 'Optional cap in bytes (default 102400, max 1048576).' },
+          timeoutMs: { type: 'number', description: 'Optional timeout in ms (default 30000, max 120000).' },
         },
         required: ['url'],
       },
@@ -697,7 +697,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'spawn_agent',
-      description: 'Delegate ONE self-contained subtask to an isolated subagent and get back a concise BRIEF (plain text). The subagent has NO access to this conversation, the filesystem or tools — put everything it needs in "task" (and optional "context"). Use it for isolated research, drafting or analysis that would otherwise pollute this context. Do NOT use it for file actions (do those yourself) and do NOT spawn a subagent to ask the user anything.',
+      description: 'Delegate ONE self-contained subtask to an isolated subagent and get back a concise BRIEF (plain text). The subagent has NO access to this conversation, the filesystem or tools — put everything it needs in "task". Use it for isolated research, drafting or analysis that would pollute this context. Do NOT use it for file actions or to ask the user anything.',
       parameters: {
         type: 'object',
         properties: {
@@ -728,7 +728,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'list_project_plans',
-      description: 'List the project plans on the board (created by Asun in Project mode). Each plan is a project segmented into blocks A/B/C with a status and a "done when" criterion. Call this FIRST when the user mentions a plan but not which one — then use ask_user to let them choose if there is more than one.',
+      description: 'List the project plans on the board (created by Asun in Project mode). Each plan has blocks A/B/C with a status and a "done when" criterion. Call this FIRST when the user mentions a plan but not which one — then use ask_user to let them choose.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -736,7 +736,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'read_project_plan',
-      description: 'Read the full canonical board of ONE project plan: title, progress, and every block with its status, description and "done when" criterion. Use the planId from list_project_plans; if omitted, reads the most recently updated plan.',
+      description: 'Read the full board of ONE project plan: title, progress and every block with status, description and "done when" criterion. Use the planId from list_project_plans; if omitted, reads the most recent plan.',
       parameters: {
         type: 'object',
         properties: {
@@ -750,14 +750,14 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'update_plan_block',
-      description: 'Update the STATUS of one block on the board (you own the status; Asun owns the definition). Set status to in_progress when you start and done when you meet the block\'s "done when" criterion. Marking done REQUIRES evidence (what you ran/verified). Never rewrite the block definition.',
+      description: 'Update the STATUS of one block (you own status; Asun owns the definition). Set in_progress when you start and done when the block\'s "done when" criterion is met. Marking done REQUIRES evidence. Never rewrite the definition.',
       parameters: {
         type: 'object',
         properties: {
           planId: { type: 'string', description: 'Plan id (from list_project_plans). Omit for the most recent plan.' },
           blockId: { type: 'string', description: 'Block id (A, B, C...).' },
           status: { type: 'string', enum: PLAN_STATUSES, description: 'New status: pending | in_progress | done.' },
-          evidence: { type: 'string', description: 'Required when status is "done": how you verified it (harness/test/commit/manual). Recorded in the block evidence log.' },
+          evidence: { type: 'string', description: 'Required when status is "done": how you verified it (harness/test/commit/manual).' },
         },
         required: ['blockId', 'status'],
       },
@@ -767,7 +767,7 @@ export const COCHI_TOOLS = [
     type: 'function',
     function: {
       name: 'request_replan',
-      description: 'Register that a block on the board is BADLY DEFINED (wrong scope, missing dependency, impossible evidence...) and propose a correction, INSTEAD of deviating silently. Does NOT rewrite the block (Asun owns the definition): it raises a proposal the user arbitrates. Requires a reason and a concrete proposal. Do not use it to update status.',
+      description: 'Register that a block on the board is BADLY DEFINED (wrong scope, missing dependency, impossible evidence...) and propose a correction, INSTEAD of deviating silently. Does NOT rewrite the block (Asun owns the definition): raises a proposal the user arbitrates. Requires a reason and a concrete proposal. Do not use it to update status.',
       parameters: {
         type: 'object',
         properties: {
@@ -814,12 +814,25 @@ export const TASK_SCOPE_EXCLUDED = new Set([
   'todowrite',
 ])
 
+// `scope='edit'` (P1, 02/10): una MUTACIÓN ATÓMICA de archivo. Allowlist: lectura/
+// navegación + las tools que mutan el filesystem, y NADA más (sin run_command,
+// web_fetch, ask_user, subagente, tablero, R9 ni todowrite). El criterio de cuándo
+// usarlo es la guarda pura `isAtomicMutation` (cochiGuards.js): cualquier duda cae
+// a 'task'. Recorta el primer request de un turno de edición (~6.4k vs ~8.3k chars).
+export const EDIT_SCOPE_TOOLS = new Set([
+  'read_file', 'read_file_chunk', 'list_dir', 'find_files', 'search_in_files',
+  'get_file_info', 'file_exists',
+  'write_file', 'replace_in_file', 'append_to_file', 'create_dir',
+  'move_file', 'copy_file', 'delete_file', 'delete_dir',
+])
+
 export function getToolsForPermission(permission, scope = 'full') {
   const canWrite = permission === 'write' || permission === 'readwrite' || permission === 'full'
   const canRun   = permission === 'full'
   return COCHI_TOOLS.filter(t => {
     const name = t.function.name
     if (scope === 'read' && !READ_SCOPE_TOOLS.has(name)) return false
+    if (scope === 'edit' && !EDIT_SCOPE_TOOLS.has(name)) return false
     if (scope === 'task' && TASK_SCOPE_EXCLUDED.has(name)) return false
     if (['write_file', 'replace_in_file', 'append_to_file', 'create_dir', 'move_file', 'copy_file'].includes(name)) return canWrite
     if (['run_command', 'delete_file', 'delete_dir'].includes(name)) return canRun

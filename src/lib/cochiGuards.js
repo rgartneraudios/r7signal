@@ -2,7 +2,8 @@
 // Extraído al podar el legado cochiLanes.js / cochiPlanningPrompts.js (carriles
 // R1–R5 + planner). Sólo sobrevive lo que el loop usa hoy:
 //   · needsRunCommand / needsFullAccess → Guard Full Access (corta ANTES del modelo).
-//   · touchesBoard → elige el scope de tools ('full' si toca el tablero, 'task' si no).
+//   · touchesBoard / isAtomicMutation → eligen el scope de tools ('full' si
+//     toca el tablero, 'edit' si es una mutación atómica, 'task' en el resto).
 //   · USER_ANSWER_PREFIX → protocolo de ask_user.
 //   · isToolError / commandRan → clasificación de resultados de tools del loop.
 // Puro y sin estado; se ejercita con harness/cochiGuards.harness.mjs.
@@ -52,6 +53,41 @@ export function touchesBoard(message) {
   const msg = normalizeMessage(message)
   if (!msg) return false
   return hasBoardIntent(msg)
+}
+
+// ── Scope 'edit': mutación atómica de UN archivo (P1, 02/10) ─────────────────
+// Un pedido que es UNA sola mutación (crear/escribir/borrar/agregar/reemplazar/
+// mover/copiar/corregir X) no necesita el schema completo de 'task' (18 tools,
+// ~8.3k chars): alcanza con lectura/navegación + las tools de archivo. El primer
+// request de cada turno paga full, así que recortarlo tiene impacto directo. Es
+// un criterio CONSERVADOR (cualquier duda cae a 'task'): se exige exactamente un
+// verbo atómico, sin verbo complejo (refactor/migrar/ejecutar/...), sin
+// secuenciación, sin tablero y mensaje corto. Puro y testeable.
+const COMPLEX_WRITE_RE = /\b(refactor\w*|implement\w*|migr\w*|convert\w*|instal\w*|ejecut\w*|export\w*|patch\w*)\b/
+const ATOMIC_WRITE_RE = /\b(crea\w*|escrib\w*|borr\w*|elimin\w*|agreg\w*|anad\w*|reemplaz\w*|sobrescrib\w*|insert\w*|correg\w*|corrig\w*|arregl\w*|cambi\w*|sete\w*|renombr\w*|muev\w*|mover|copi\w*|guard\w*|salv\w*|actualiz\w*|update\w*|quit\w*|sac\w*|remov\w*|remuev\w*|mete\w*)\b/g
+const SEQUENCE_RE = /\b(luego|despues|entonces|primero|finalmente|seguidamente|and then)\b|;\s*/
+const ATOMIC_MAX_CHARS = 160
+
+// El CONTENIDO que el usuario quiere insertar/mutar suele venir entre comillas
+// ("Parrafo agregado"). Si no se descarta, una palabra del propio payload
+// ("agregado") se cuenta como un segundo verbo y la mutación se cae a 'task'.
+function stripQuoted(text) {
+  return String(text ?? '').replace(/"[^"]*"|'[^']*'|«[^»]*»|“[^”]*”/g, ' ')
+}
+
+// isAtomicMutation: true ⇒ el loop usa scope 'edit'. Un mensaje con un solo verbo
+// atómico y nada más. Un comando ("corré X") no entra: 'ejecut' es verbo complejo.
+export function isAtomicMutation(message) {
+  const msg = normalizeMessage(message)
+  if (!msg) return false
+  const core = stripLeadGreetings(msg) || msg
+  if (core.length > ATOMIC_MAX_CHARS) return false
+  if (hasBoardIntent(core)) return false
+  const bare = stripQuoted(core)
+  if (SEQUENCE_RE.test(bare)) return false
+  if (COMPLEX_WRITE_RE.test(bare)) return false
+  const atomic = bare.match(ATOMIC_WRITE_RE) || []
+  return atomic.length === 1
 }
 
 // Ejecución de COMANDOS: "Corré X", "ejecutá Y", o cualquier mensaje que mencione

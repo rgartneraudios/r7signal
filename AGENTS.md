@@ -12,7 +12,10 @@ contexto rodante:
 - **Cochi** — agente de tareas sobre el workspace (leer/escribir/ejecutar comandos,
   planner multi-paso, subagentes, tablero de planes). En foco la mayor parte del tiempo.
 - **Asun** — música e imágenes; modos `MaríaBase` e `IrmaMax` (Proyecto IrmaMax).
-- **Tito** — asistente de chat.
+- **Tito** — asistente de chat y búsqueda. En la charla el usuario lo llama **Titus** o
+  **Titus 7R**, y en la UI aparece como **TITUS-7R** / `TITUS 7R` (watermark, header, topbar).
+  Los **identificadores de código siguen siendo `Tito*`** (`TitoPanel`, `TitoHeader`,
+  `TitoWatermark`, `TITO_MODEL`, rueda `tito/`, etc.): cuando el usuario diga "Titus", es Tito.
 
 La rueda **R7** es un **almacén local** de contexto (commit-log de pares R1/R2 que escribe
 el SISTEMA por turno); se compacta a 70k con el botón del banner y **no viaja** en el prompt
@@ -258,7 +261,8 @@ porque `useWheelSession.busy` lo lee antes de que exista el hook.
   `windowEffects: micaDark` (Win11). En `src-tauri/src/lib.rs` hay fallback a **Acrylic**
   tintado (`Color(15,14,17,180)`) para Win10 build 17763-21999. Requiere que el webview no
   pinte opaco: `body` transparente, raíz de `R7Desktop` transparente y el **lienzo de los 3
-  chats** en `rgba(15,14,17,0.35)` (CochiDesktop, AsunPanel, `.tito-chat`). Headers/footers
+  chats** en `rgba(15,14,17,0.15)` (CochiDesktop, AsunPanel, `.tito-chat`; bajado de 0.25 a 0.15
+  el 02/10-bis). Headers/footers
   conservan su `rgba(9,8,10,0.5)`. Sólo Windows (Linux no soporta el efecto).
 
 ## Carril explícito Task / Conversacional (RESUELTO e implementado 29/09)
@@ -416,9 +420,10 @@ proveedores que cachean, ver sección 1) resolvió el `cached=0`; el loop único
 tarea multi-tool con escritura y compactación a 70k (ver "E2E del loop único"). Medido en la app:
 turnos con `prev` dan `cached` ~98% · `sysStable=true · appendOnly=true` (~**6.7x más barato** que
 el turno frío). El pin cubre Cochi (Centinela y Terminator), el subagente y **Asun/MaríaBase**
-(visión → DeepInfra, 01/10: cached ~93%). **PRIMERA FILA de la próxima sesión: P1 scope `edit` · P3 recortar descriptions · deuda
-técnica** (subagentes que escriban, shell revertible, SSRF en Rust, TYPO de archivo) — ver
-"PRIMERA FILA" al final. Gates al cerrar: **lint 0/0 · `npm test` 12/12 · `npm run build` OK**.
+(visión → DeepInfra, 01/10: cached ~93%). **P1 scope `edit` + P3 recortar descriptions HECHOS
+(02/10-bis)**; queda la **deuda técnica** (subagentes que escriban, shell revertible, SSRF en Rust,
+TYPO de archivo) — ver "PRIMERA FILA" al final. Gates al cerrar: **lint 0/0 · `npm test` 14/14 ·
+`npm run build` OK**.
 
 ### HECHO (esta sesión) · RUEDA R7 POR-AGENTE (Tito/Asun como Cochi)
 Motivo: Tito y Asun leían la MISMA rueda global que Cochi (`readLatestR7`/`writeR9File('r7')`),
@@ -514,14 +519,20 @@ Supervivientes consolidados en **`src/lib/cochiGuards.js`** (+`harness/cochiGuar
    Flash a **`~deepseek/deepseek-flash-latest`** (es multimodal `text+image` → conserva la visión
    de Proyecto/adjuntos; cachea, cache-read 0.147x). (b) Tito se unificó a **una pestaña** con
    **Qwen3.8 Flash** + plugin `web` (Exa) para búsqueda. Ver sección propia al final.
-1. **P1 · scope `edit` mínimo** (`cochiTools.js`): hoy sólo hay `read`/`task`/`full`
-   (`READ_SCOPE_TOOLS` + `TASK_SCOPE_EXCLUDED`, ~L791/L810). Falta un scope `edit` con allowlist
-   de mutación atómica (read_file + replace_in_file + append/write) para no mandar el schema
-   `task` completo en pedidos de edición. Recorta el primer request de cada turno (paga full).
-   Toca `cochiTools.getToolsForPermission` + `useCochiTaskLoop` (scope) + harness de tools.
-2. **P3 · recortar descripciones de tools** (`cochiTools.js`): ~990 tok/request de descriptions.
-   Bajo impacto con caché (input cacheado 0.03x), pero el primer request de cada turno paga full →
-   evaluar qué descripciones se pueden acortar sin perder la coaching clave.
+1. **~~P1 · scope `edit` mínimo~~ HECHO 02/10-bis**: `cochiTools.js` ahora tiene
+   `EDIT_SCOPE_TOOLS` (lectura/navegación + mutadores de archivo: read_file/read_file_chunk/
+   list_dir/find_files/search_in_files/get_file_info/file_exists + write_file/replace_in_file/
+   append_to_file/create_dir/move_file/copy_file/delete_file/delete_dir; SIN run_command,
+   web_fetch, ask_user, spawn_agent, tablero, R9 ni todowrite). `getToolsForPermission` filtra
+   `scope='edit'`. El scope se elige con la guarda pura `isAtomicMutation` (`cochiGuards.js`,
+   rescatada del viejo `cochiPlanningPrompts`): un solo verbo atómico, sin verbo complejo, sin
+   secuenciación, sin tablero, mensaje corto → `edit`; si toca tablero → `full`; resto → `task`.
+   `useCochiTaskLoop` usa los 3. Primer request de un turno de edición: ~8.3k → ~6.1k chars.
+   Harness `cochiGuards` (+13) y `cochiTools` (+15).
+2. **~~P3 · recortar descripciones de tools~~ HECHO 02/10-bis**: se comprimieron descripciones y
+   params de las tools más verbosas (read_file, replace_in_file, find_files, search_in_files,
+   run_command, ask_user, web_fetch, spawn_agent, save_to_r9 y el tablero) sin quitar coaching.
+   Schema: full 12.984→12.355 · task 8.345→7.971 · read 8.006→7.506 chars.
 3. **Deuda técnica**:
    - **Subagentes que escriban**: hoy sólo lectura (`spawn_agent`, `MAX_SUBAGENT_DEPTH=1`,
      `getSubagentTools` reusa scope `read`). Falta abrirles escritura con permisos.

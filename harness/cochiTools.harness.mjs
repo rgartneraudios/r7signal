@@ -82,6 +82,28 @@ console.log('- scope task: recorte de tools (auditoria 28/09-ter) -')
   check('read NO incluye delete_dir', readScope.includes('delete_dir'), false)
 }
 
+console.log('- scope edit: allowlist de mutación atómica (P1) -')
+{
+  const edit = getToolsForPermission('full', 'edit').map(t => t.function.name)
+  check('edit SI incluye read_file', edit.includes('read_file'), true)
+  check('edit SI incluye replace_in_file', edit.includes('replace_in_file'), true)
+  check('edit SI incluye append_to_file', edit.includes('append_to_file'), true)
+  check('edit SI incluye write_file', edit.includes('write_file'), true)
+  check('edit SI incluye search_in_files', edit.includes('search_in_files'), true)
+  check('edit NO incluye run_command', edit.includes('run_command'), false)
+  check('edit NO incluye web_fetch', edit.includes('web_fetch'), false)
+  check('edit NO incluye ask_user', edit.includes('ask_user'), false)
+  check('edit NO incluye spawn_agent', edit.includes('spawn_agent'), false)
+  check('edit NO incluye tablero', edit.some(n => ['list_project_plans', 'read_project_plan', 'update_plan_block', 'request_replan'].includes(n)), false)
+  check('edit NO incluye todowrite', edit.includes('todowrite'), false)
+  check('edit pesa menos que task', JSON.stringify(getToolsForPermission('full', 'edit')).length < JSON.stringify(getToolsForPermission('full', 'task')).length, true)
+  const editWrite = getToolsForPermission('write', 'edit').map(t => t.function.name)
+  check('edit respeta permisos: sin delete_file en write', editWrite.includes('delete_file'), false)
+  check('edit respeta permisos: sin delete_dir en write', editWrite.includes('delete_dir'), false)
+  const editRead = getToolsForPermission('read', 'edit').map(t => t.function.name)
+  check('edit respeta permisos: sin write_file en read', editRead.includes('write_file'), false)
+}
+
 console.log('- formatRunCommandOutput: reporta SIEMPRE el exit code (28/09-ter) -')
 check('exit 0 visible', formatRunCommandOutput({ stdout: 'SMOKE OK', code: 0 }), '(exit 0)\nSMOKE OK')
 check('exit != 0 visible', formatRunCommandOutput({ stdout: 'boom', code: 3 }), '(exit 3)\nboom')

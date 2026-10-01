@@ -10,7 +10,7 @@ import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFr
 import { buildSystemContext, READ_ONLY_TOOLS, makeStreamingDisplayExtractor } from '../lib/cochiContext.js'
 import { buildWheelMessages, commitR7Turn, buildTurnPair } from '../lib/r7Wheel.js'
 import { COCHI_AGENT_PROMPT } from '../lib/cochiAgentPrompt.js'
-import { needsFullAccess, touchesBoard, USER_ANSWER_PREFIX, isToolError, commandRan } from '../lib/cochiGuards.js'
+import { needsFullAccess, touchesBoard, isAtomicMutation, USER_ANSWER_PREFIX, isToolError, commandRan } from '../lib/cochiGuards.js'
 import { newMessageId } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot } from '../lib/snapshotStore.js'
 import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider } from '../lib/subagent.js'
@@ -177,7 +177,9 @@ export function useCochiTaskLoop({
     setSubagents([])
     liveRef.current?.clear()
 
-    const scope = touchesBoard(originalMessageRef.current) ? 'full' : 'task'
+    const scope = touchesBoard(originalMessageRef.current)
+      ? 'full'
+      : isAtomicMutation(originalMessageRef.current) ? 'edit' : 'task'
     const toolsForRequest = getToolsForPermission(workspace.permission, scope)
     // Prompt remoto de Supabase si es el nuevo (agente con tools). Si falta o
     // todavía trae el viejo contrato R1/R2/R3, se usa el fallback local.

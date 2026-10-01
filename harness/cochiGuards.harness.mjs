@@ -7,6 +7,7 @@ import {
   needsRunCommand,
   needsFullAccess,
   touchesBoard,
+  isAtomicMutation,
   USER_ANSWER_PREFIX,
   isToolError,
   commandRan,
@@ -29,6 +30,21 @@ check('token tablero -> board', touchesBoard('leé el tablero y seguí'), true)
 check('token request_replan -> board', touchesBoard('usá request_replan para el bloque'), true)
 check('vacío -> no board', touchesBoard(''), false)
 check('"bloque de código" sin contexto -> no board', touchesBoard('escribí un bloque de código de ejemplo'), false)
+
+console.log('- isAtomicMutation: elige scope edit (P1) -')
+check('agregar texto -> atómica', isAtomicMutation('agregá un párrafo al final de notas.txt'), true)
+check('borrar párrafo -> atómica', isAtomicMutation('borrá el último párrafo de notas.txt'), true)
+check('reemplazar valor -> atómica', isAtomicMutation('reemplazá el puerto 8080 por 9090 en config.py'), true)
+check('crear archivo -> atómica', isAtomicMutation('creá un archivo TODO.md con la lista'), true)
+check('correr comando -> NO atómica (verbo complejo)', isAtomicMutation('ejecutá los tests'), false)
+check('refactor -> NO atómica', isAtomicMutation('refactorizá el módulo de auth'), false)
+check('secuenciación -> NO atómica', isAtomicMutation('primero borrá el archivo y después creá otro'), false)
+check('dos verbos atómicos -> NO atómica', isAtomicMutation('creá notas.txt y escribí el contenido'), false)
+check('contenido entre comillas no cuenta como verbo', isAtomicMutation('agregá el texto "Parrafo agregado" al final'), true)
+check('tablero -> NO atómica', isAtomicMutation('actualizá el bloque A del plan al estado done'), false)
+check('mensaje largo -> NO atómica', isAtomicMutation('cambiá ' + 'x'.repeat(200) + ' en el archivo'), false)
+check('vacío -> NO atómica', isAtomicMutation(''), false)
+check('charla -> NO atómica', isAtomicMutation('hola Cochi, ¿todo bien?'), false)
 
 console.log('- needsRunCommand: comandos — sólo Guard Full Access -')
 check('needsRunCommand: "Corré node x.js" -> true', needsRunCommand('Corré node _stderr_cp850.js y decime la salida'), true)
