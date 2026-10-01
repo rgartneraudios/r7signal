@@ -19,12 +19,12 @@ const R7FooterInputs = memo(forwardRef(function R7FooterInputs({
 
   // Luz de foco por agente: Cochi, Asun y Titus. El resplandor ilumina TODO el
   // input (borde + fondo + halo exterior), no sólo el contorno.
-  const AGENT_GLOW = { cochi: '196,46,0', asun: '53,0,255', tito: '0,127,138' }
+  const AGENT_GLOW = { cochi: '196,75,65', asun: '60,45,173', tito: '33,129,138' }
   const leftGlow = activeLeftPanel === 'asun' ? AGENT_GLOW.asun : AGENT_GLOW.tito
   const inputGlow = (rgb, focused) => ({
     transition: 'border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease',
+    borderColor: focused ? `rgba(${rgb},0.95)` : '#1C1C1C',
     ...(focused ? {
-      borderColor: `rgba(${rgb},0.95)`,
       background: `radial-gradient(130% 170% at 50% 115%, rgba(${rgb},0.30), rgba(${rgb},0.11) 55%, #0C0B0F 100%)`,
       boxShadow: `inset 0 0 22px rgba(${rgb},0.30), inset 0 0 48px rgba(${rgb},0.13), 0 0 0 1px rgba(${rgb},0.55), 0 0 16px rgba(${rgb},0.6), 0 0 40px rgba(${rgb},0.3)`,
     } : {}),
@@ -73,7 +73,7 @@ const R7FooterInputs = memo(forwardRef(function R7FooterInputs({
         <div style={{
           flex: 1,
           background: '#0C0B0F',
-          border: '1px solid rgba(255,255,255,0.07)',
+          border: '1px solid #1C1C1C',
           borderRadius: 10,
           padding: '9px 14px',
           display: 'flex', alignItems: 'flex-end',
@@ -106,7 +106,7 @@ const R7FooterInputs = memo(forwardRef(function R7FooterInputs({
       <div style={{
         flex: 1,
         background: '#0C0B0F',
-        border: '1px solid rgba(255,255,255,0.07)',
+        border: '1px solid #1C1C1C',
         borderRadius: 10,
         padding: '9px 14px',
         display: 'flex', alignItems: 'flex-end', gap: 8,

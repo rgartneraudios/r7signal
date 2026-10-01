@@ -453,9 +453,14 @@ Signor Roberto pidió que los inputs se iluminen al pinchar para escribir. En
 `src/components/R7FooterInputs.jsx` (footer compartido Asun/Titus/Cochi) se agregó estado de foco
 (`onFocus`/`onBlur` por textarea) y `inputGlow(rgb, focused)`: al enfocar ilumina **todo** el input
 —fondo con degradado radial del color + glow interior `inset` + halo exterior—, no sólo el borde.
-Colores finales: **Cochi `#C42E00`** (rojo-naranja) · **Asun `#3500FF`** (azul-violeta) ·
-**Titus `#007F8A`** (verde-teal). El input izquierdo toma el color del agente activo
-(`activeLeftPanel`). Transición 0.25s. Gates: lint 0/0 · `npm test` 14/14 · build OK.
+Colores finales **actualizados 02/10-bis** (RGB en `AGENT_GLOW`): **Cochi `#C44B41`**
+(rojo-terracota) · **Asun `#3C2DAD`** (azul-violeta) · **Titus `#21818A`** (verde-teal). El input
+izquierdo toma el color del agente activo (`activeLeftPanel`). Transición 0.25s. Borde inactivo
+**negro carbón `#1C1C1C`** (antes `rgba(255,255,255,0.07)`, 02/10-bis). **Fix borde blanco
+intermedio (02/10-bis)**: `inputGlow` ahora declara `borderColor` SIEMPRE (foco → color del
+agente, inactivo → `#1C1C1C`); antes el inactivo no lo declaraba y al quitarse el inline el
+navegador caía a `currentColor` (texto claro ~blanco) durante la transición al cambiar de agente.
+Gates: lint 0/0 · `npm test` 14/14 · build OK.
 
 ### HECHO (esta sesión) · RUEDA R7 POR-AGENTE (Tito/Asun como Cochi)
 Motivo: Tito y Asun leían la MISMA rueda global que Cochi (`readLatestR7`/`writeR9File('r7')`),
