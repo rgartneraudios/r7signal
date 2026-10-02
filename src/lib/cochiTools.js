@@ -394,14 +394,25 @@ async function ensureParentDir(filePath) {
   if (dir && !(await exists(dir))) await mkdir(dir, { recursive: true })
 }
 
-// Fetch con soporte Tauri (evita el bloqueo CORS del webview) y fallback al
-// fetch nativo cuando la app corre fuera de Tauri.
-async function httpFetch(url, options) {
+async function guardedWebFetch(url, { maxBytes, timeoutMs }) {
   if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
-    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
-    return tauriFetch(url, options)
+    const { invoke } = await import('@tauri-apps/api/core')
+    return invoke('fetch_url_guarded', { url, maxBytes, timeoutMs })
   }
-  return fetch(url, options)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { Accept: 'text/html,application/json,text/plain,*/*' },
+    })
+    const contentType = res.headers?.get?.('content-type') || ''
+    const body = await res.text()
+    return { status: res.status, contentType, body, finalUrl: res.url || url }
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
@@ -1167,29 +1178,24 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       }
       const maxBytes = Math.min(Math.max(Number(args.maxBytes) || MAX_FETCH_BYTES, 1024), MAX_READ_BYTES)
       const timeoutMs = Math.min(Math.max(Number(args.timeoutMs) || DEFAULT_FETCH_TIMEOUT, 1000), MAX_FETCH_TIMEOUT)
-      const fcontroller = new AbortController()
-      const timer = setTimeout(() => fcontroller.abort(), timeoutMs)
       try {
-        const res = await httpFetch(url, {
-          method: 'GET',
-          signal: fcontroller.signal,
-          headers: { Accept: 'text/html,application/json,text/plain,*/*' },
-        })
-        if (!res.ok) return { modelResult: `⚠️ HTTP ${res.status} al leer ${url}`, diff: null }
-        const contentType = res.headers?.get?.('content-type') || ''
-        const raw = await res.text()
-        const isJson = /json/i.test(contentType) || /^\s*[[{]/.test(raw)
+        const res = await guardedWebFetch(url, { maxBytes, timeoutMs })
+        if (res.status < 200 || res.status >= 300) {
+          return { modelResult: `⚠️ HTTP ${res.status} al leer ${url}`, diff: null }
+        }
+        const raw = res.body || ''
+        const isJson = /json/i.test(res.contentType) || /^\s*[[{]/.test(raw)
         const body = isJson ? raw : htmlToText(raw)
         const truncated = truncateBytes(body, maxBytes)
+        const redirected = res.finalUrl && res.finalUrl !== url ? ` (redirigido a ${res.finalUrl})` : ''
         return {
-          modelResult: `${url}\n[HTTP ${res.status} · ${contentType || 'sin content-type'} · ${isJson ? 'json' : 'html→texto'}]\n\n${truncated}`,
+          modelResult: `${url}${redirected}\n[HTTP ${res.status} · ${res.contentType || 'sin content-type'} · ${isJson ? 'json' : 'html→texto'}]\n\n${truncated}`,
           diff: null,
         }
       } catch (err) {
         if (err?.name === 'AbortError') return { modelResult: `⏱️ Timeout (${timeoutMs}ms) al leer ${url}`, diff: null }
-        return { modelResult: `ERROR al leer ${url}: ${err.message}`, diff: null }
-      } finally {
-        clearTimeout(timer)
+        const message = typeof err === 'string' ? err : err?.message || String(err)
+        return { modelResult: message, diff: null }
       }
     }
 

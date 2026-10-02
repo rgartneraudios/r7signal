@@ -72,7 +72,9 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
   - `cacheAudit.js` — `providerRouting` (pin por modelo) + log `[cache:audit]`.
   - `subagent.js` — mini-loop aislado (hereda capacidad del workspace) → brief.
   - `promptLoader.js` — carga prompts de Supabase (cache por agente) + `interpolatePrompt`.
-  - `cochiPermissions.js` — allow/deny + `isBlockedUrl` (SSRF).
+  - `cochiPermissions.js` — allow/deny + `isBlockedUrl` (SSRF, 1ª capa JS).
+- `src-tauri/src/fetch.rs` — comando `fetch_url_guarded` de `web_fetch` (SSRF real: DNS + IP fijada
+  + redirecciones revalidadas).
 - `src/components/` — UI. `CochiDesktop.jsx` es el orquestador; Asun/Tito espejan la estructura.
 - `src/hooks/` — `useWheelSession`, `useCochiTaskLoop` (**loop único** + `handleSendText`),
   `useAgentPrompts`, `useR9Selection`, `useLiveStream`, `useStableCallback`.
@@ -184,8 +186,11 @@ usuario). El costo de las búsquedas web (server tool) va **aparte** de los toke
   (Win11); fallback **Acrylic** tintado (`Color(15,14,17,180)`) en `src-tauri/src/lib.rs` para Win10
   build 17763-21999. Webview transparente; lienzo de los 3 chats en `rgba(15,14,17,0.15)`.
   Headers/footers `rgba(9,8,10,0.5)`. Sólo Windows.
-- **SSRF**: `isBlockedUrl` (`cochiPermissions.js`) es corte por globs + IP literal; **falta validar
-  la IP resuelta en Rust** (DNS rebinding). Deuda.
+- **SSRF (cerrado, 06/10)**: dos capas. `isBlockedUrl` (`cochiPermissions.js`) filtra por globs +
+  IP literal en JS; el fetch real de `web_fetch` va por el comando Rust `fetch_url_guarded`
+  (`src-tauri/src/fetch.rs`), que resuelve el DNS, rechaza IPs internas (privadas/loopback/link-local/
+  CGNAT/etc.), **fija la IP validada** con `resolve_to_addrs` (anti DNS-rebinding) y sigue las
+  redirecciones a mano revalidando cada salto. Tests `cargo test` en `fetch::tests`.
 - **Snapshots**: `run_command` está FUERA de alcance (sólo aviso). Undo/Regenerate conversación;
   Regenerate avisa si el turno tocó archivos/música.
 - **TYPO de archivo**: `read_file` detecta el nombre mal escrito y lee el archivo más parecido
@@ -194,7 +199,6 @@ usuario). El costo de las búsquedas web (server tool) va **aparte** de los toke
 ## Deuda técnica / pendientes
 
 - **Shell revertible**: `run_command` fuera de los snapshots (sólo aviso). No crítico.
-- **SSRF en Rust**: validar la IP resuelta antes de conectar. Es la única deuda de seguridad real.
 - **Vocabulario R1/R2** (opcional): `commitR7Turn` escribe `R1:`/`R2:` y `isMemoryMessage` los
   reconoce. Renombrar si se quiere desacoplar el prompt de esas etiquetas.
 - **Tito Etapa 2/3**: probar motores `parallel`/`perplexity`/`firecrawl` (matriz A/B en español) y
@@ -203,17 +207,6 @@ usuario). El costo de las búsquedas web (server tool) va **aparte** de los toke
 - **Modo Asun Proyecto**: revisar E2E (alineado en repo, sin probar).
 - **Prompt `task` remoto**: la excepción `TYPO RESUELTO` la aplica el sistema; pegar en Supabase es
   opcional.
-
-## E2E pendientes (`npx tauri dev`)
-
-Código hecho, falta verificar en la app:
-1. **Subagente que escribe**: que edite, pida aprobación, salga el diff y el undo restaure.
-2. **Modelo congelado por sesión** (Asun/Cochi): con sesión iniciada no cambia; `cached>0` se mantiene.
-3. **Recibimiento de sesión** (Asun/Tito): sale una sola vez (primer turno).
-4. **Rueda R7 por-agente**: cada agente arranca con su rueda, sin contaminación cruzada.
-5. **Sesión fría/HOT**: arranca frío; HOT inyecta `[USER MEMORIES]`; puertas laterales y `openPath`.
-6. **Readout MU-TH-UR**: Asun/Tito/Cochi explican sin etiquetas y cierran (prompts ya pegados).
-7. **Tito Etapa 1**: re-medir con el prompt nuevo; cap `max_uses:2`, saludo no busca, FUENTES visibles.
 
 ## Historial compactado (cerrado — no rehacer)
 
@@ -239,6 +232,9 @@ Código hecho, falta verificar en la app:
 - **Sesión fría + HOT=Memories + puertas laterales (02/10-quinquies)**.
 - **Recibimiento de sesión una sola vez + apodos (03/10)**; **readout MU-TH-UR + rename TITO (04/10)**;
   **Tito Etapa 1: citas reales + server tool afinado (04/10-bis/ter)**.
+- **SSRF real en Rust (06/10)**: `fetch_url_guarded` (`fetch.rs`) con `resolve_to_addrs` + redirects
+  revalidadas; `web_fetch` deja `@tauri-apps/plugin-http` (plugin y permiso `http:default`
+  eliminados) y usa `invoke` (cargo test 5/5).
 
 **CERRADO — no rehacer**: Capa 3 (compactación), T5-bis (R5/R4, obsoleto), P2-bis (anti-verificación,
 obsoleto), R7 en carril tarea (obsoleto), colapso intra-turno (obsoleto).
