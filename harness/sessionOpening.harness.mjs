@@ -1,6 +1,6 @@
 // Harness de stripAsunOpening · recibimiento de sesión de Asun.
 // Ejecutar:  node harness/sessionOpening.harness.mjs
-import { stripAsunOpening, stripTitoOpening } from '../src/lib/sessionOpening.js'
+import { stripAsunOpening, stripTitoOpening, isGreetingOnly } from '../src/lib/sessionOpening.js'
 
 let pass = 0
 let fail = 0
@@ -41,6 +41,18 @@ check('case-insensitive', stripTitoOpening('USUARIO MARAVILLA. listo', { isFirst
 check('nombre con regex-char', stripTitoOpening('usuario A.B. listo', { isFirstTurn: false, nombre: 'A.B' }), 'listo')
 check('sin apertura → intacto', stripTitoOpening('DATOS: 2 herboristerias', { isFirstTurn: false, nombre: 'Maravilla' }), 'DATOS: 2 herboristerias')
 check('null → vacío', stripTitoOpening(null, { isFirstTurn: false, nombre: 'Maravilla' }), '')
+
+console.log('— Tito: isGreetingOnly (no ofrece web_search en saludos) —')
+check('saludo simple', isGreetingOnly('Hola Tito!'), true)
+check('saludo con cortesía', isGreetingOnly('Hola Tito todo bien?'), true)
+check('saludo con "ingresa"', isGreetingOnly('Hola Tito, por favor ingresa'), true)
+check('buenos días', isGreetingOnly('Buenos días'), true)
+check('agradecimiento', isGreetingOnly('gracias che'), true)
+check('pedido real → false', isGreetingOnly('Busca herboristerías en Gijón'), false)
+check('pregunta con tema → false', isGreetingOnly('¿qué se sabe de Gemini 4?'), false)
+check('saludo + pedido → false', isGreetingOnly('Hola, podés leer notas.txt?'), false)
+check('vacío → false', isGreetingOnly(''), false)
+check('null → false', isGreetingOnly(null), false)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail === 0 ? 0 : 1)

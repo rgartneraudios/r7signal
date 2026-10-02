@@ -40,8 +40,8 @@ export function buildSystemContext(workspacePath, permissionLabel, { technical =
   ]
   if (!technical) {
     lines.push(
-      'Memory files: C:\\Users\\PC\\AppData\\Local\\com.r7signal.cochi\\ — cochi_memory.txt, r3_history.txt.',
-      'Read memory only when the user explicitly asks about past operations.',
+      'Memories: the user\'s persistent notes, when available, arrive as a system block tagged "[USER MEMORIES]" — read it to answer; no tool is needed.',
+      'You CANNOT read memory files from disk and there is no tool for that: never try, and never claim you lack access. If no "[USER MEMORIES]" block is present, just say you have no memories to consult.',
     )
   }
   lines.push(BATCHING_RULE)

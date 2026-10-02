@@ -6,7 +6,7 @@ import { interpolatePrompt } from '../lib/promptLoader.js'
 import { extractR3Visible } from '../lib/parseR1R2R3.js'
 import { makeStreamingDisplayExtractor } from '../lib/cochiContext.js'
 import { commitR7Turn, buildWheelMessages, buildTurnPair } from '../lib/r7Wheel.js'
-import { stripTitoOpening } from '../lib/sessionOpening.js'
+import { stripTitoOpening, isGreetingOnly } from '../lib/sessionOpening.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
 import { useWheelSession } from '../hooks/useWheelSession.js'
@@ -178,15 +178,15 @@ function TitoPanel({
     })
 
     try {
-      // El server tool `openrouter:web_search` viaja siempre; el modelo decide si
-      // busca (0–N veces, tope en `max_uses`). Un saludo no dispara búsqueda.
+      // El server tool `openrouter:web_search` viaja salvo en saludos puros: ahí
+      // el modelo se lanzaba a buscar igual. Un pedido real siempre lo lleva.
       const extractStream = makeStreamingDisplayExtractor()
       let searches = 0
       const result = await streamChat({
         provider: resolveProvider(TITO_MODEL),
         stream: true,
         messages: wheelMessages,
-        tools: WEB_SEARCH_TOOL,
+        ...(isGreetingOnly(text) ? {} : { tools: WEB_SEARCH_TOOL }),
         reasoning: false,
         sessionId: getTitoSessionId(),
         signal: controller.signal,
