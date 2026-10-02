@@ -120,10 +120,20 @@ export default function R7Desktop() {
   // Memories sólo viaja al modelo cuando la Sesión Hot está activa.
   const memoriesContext = sessionMode === 'hot' ? memories : ''
   const refreshMemories = useCallback(() => {
-    readMemories().then(setMemories).catch(() => setMemories(''))
+    readMemories()
+      .then(setMemories)
+      .catch(err => { console.error('memories read:', err); setMemories('') })
   }, [])
   useEffect(() => {
     if (sessionMode === 'hot') refreshMemories()
+  }, [sessionMode, refreshMemories])
+  // Refresca al recuperar foco: cubre la edición manual del archivo mientras la
+  // app está abierta (el modal ya refresca al cerrarse).
+  useEffect(() => {
+    if (sessionMode !== 'hot') return
+    const onFocus = () => refreshMemories()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
   }, [sessionMode, refreshMemories])
 
   // Bloque K2: abrir una sesión guardada. Activa el panel izquierdo correcto
@@ -592,6 +602,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, bi
             onPreferencesLoaded={handlePreferencesLoaded}
             onSavePreferences={handleRegisterSavePrefs}
             onPromptsReady={handlePromptsReady}
+            memories={memoriesContext}
           />
         </div>
       </div>
