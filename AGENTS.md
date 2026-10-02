@@ -12,11 +12,12 @@ contexto rodante:
 - **Cochi** — agente de tareas sobre el workspace (leer/escribir/ejecutar comandos,
   planner multi-paso, subagentes, tablero de planes). En foco la mayor parte del tiempo.
 - **Asun** — música e imágenes; modos `MaríaBase` e `IrmaMax` (Proyecto IrmaMax).
-- **Tito** — asistente de chat y búsqueda. En la UI aparece como **TITO-7R** / `TITO 7R`
-  (watermark, header, topbar). (Antes se había renombrado a `TITUS 7R`, revertido el 03/10:
-  "Tito 7R" encaja mejor.) Los **identificadores de código siguen siendo `Tito*`**
-  (`TitoPanel`, `TitoHeader`, `TitoWatermark`, `TITO_MODEL`, rueda `tito/`, etc.): Tito = Tito 7R.
-  Los watermarks **no nombran modelos** (03/10): como los modelos rotan, no se hardcodean en la UI.
+- **Tito** — asistente de chat y búsqueda. En la UI aparece como **TITO** (header, topbar,
+  watermark y textos) salvo el **título del watermark**, que dice **TITO Research** (04/10).
+  (Historial: fue `TITUS 7R` y luego `TITO-7R` / `TITO 7R`, retirados.) Los **identificadores
+  de código siguen siendo `Tito*`** (`TitoPanel`, `TitoHeader`, `TitoWatermark`, `TITO_MODEL`,
+  rueda `tito/`, etc.): Tito = TITO. Los watermarks **no nombran modelos** (03/10): como los
+  modelos rotan, no se hardcodean en la UI.
 
 La rueda **R7** es un **almacén local** de contexto (commit-log de pares R1/R2 que escribe
 el SISTEMA por turno); se compacta a 70k con el botón del banner y **no viaja** en el prompt
@@ -206,9 +207,12 @@ se pagan). **D8-bis (30/09-quater): en el VIAJE no existe "R7"** — cada turno 
   cuenta y renumera. `compact()` persiste el histórico COMPLETO (sesión + `R7/chat_N.txt`) y
   siembra la versión compactada como rueda global: la sesión nueva arranca liviana sin perder
   nada. **Regla del usuario: si el "resumen" fuese una llamada al modelo, NO.** Es puro sistema.
-- **Prompts de Supabase (HECHO en repo 01/10)**: Asun/Tito ya NO piden R1/R2/R3; sus
-  `system` describen los briefs `── Turno N ──` y traen el contrato de OUT corto. Paso
-  APARTE: pegar `output/Prompt-Asun-System.txt` / `output/Prompt-Tito-System.txt` en Supabase.
+- **Prompts de Supabase (HECHO en repo 01/10; readout 04/10)**: Asun/Tito ya NO piden R1/R2/R3;
+  sus `system` describen los briefs `── Turno N ──` y el OUT es un **readout MU-TH-UR**: líneas
+  encadenadas, **sin etiquetas** (TEMA/DATOS/ESTADO/SUBTEMAS/etc.), sin `[-> COCHI: brief]`, con
+  conectores lógicos permitidos (`porque`, `entonces`) y longitud atada a la pregunta; cierres
+  cálidos (Asun comida · Tito Wheatley · Cochi TARS). Paso APARTE: pegar `output/Prompt-Asun-*.txt`,
+  `output/Prompt-Tito-System.txt` y `output/Cochi-Prompt.txt` en Supabase.
 - Aplica a los **3 paneles** porque comparten `buildWheelMessages` (Cochi, Tito, Asun) y el
   par R1/R2 lo escribe el sistema con `buildTurnPair` + `commitR7Turn`.
 
@@ -804,8 +808,9 @@ Revisado `cochiLanes.js` (`buildTaskFinish`/`buildFinishMessages`) y `useCochiTa
   `r7Wheel.js`): R1 = `firstLine(mensaje del usuario, 300)`; R2 = `display.slice(0,1500)`.
   Lo usan los 3 agentes (Cochi, Asun, Tito). Sin llamada al modelo.
 - **Contrato de OUT de Cochi** (reducir completion): se agregó a `WHEN YOU ARE DONE` de
-  `output/Cochi-Prompt.txt` — una línea por acción, verbo en pasado, ~12 palabras, sin preámbulo
-  ni cierre. Motivo: el output cuesta ~6.4x el input y los tokens de reasoning también son OUT.
+  `output/Cochi-Prompt.txt` — una línea por acción, verbo en pasado, sin preámbulo ni cierre.
+  Motivo: el output cuesta ~6.4x el input y los tokens de reasoning también son OUT.
+  (**Actualizado 04/10**: readout MU-TH-UR sin etiquetas; ver HECHO al final.)
 - **HECHO 01/10-ter — Asun/Tito al modelo Cochi**: sus prompts se reescribieron sin
   R1/R2/R3 con contrato de OUT corto ("una idea/línea, sin relleno") y sus paneles usan
   `commitR7Turn`/`buildTurnPair` (el sistema escribe R1/R2). Asun además cambió de persona a
@@ -957,5 +962,23 @@ e IrmaMax son `[text,image]`; el único ciego es `~deepseek/deepseek-v4-flash-la
 - **E2E 03/10 (DeepInfra)**: 3 requests (saludo + pregunta con un tool call); los 2 primeros fríos
   (`cached 0`), el 3º cacheado 95%. El "gasto mayor" fue arranque frío + request extra del tool,
   no falta de caché. En régimen MiMo cacheado ($0.000084) sale más barato que IrmaMax ($0.00013).
+
+
+### HECHO 04/10 — readout MU-TH-UR (sin etiquetas) + rename TITO · TITO Research
+Motivo (Signor Roberto): el contrato de OUT con etiquetas (`TEMA:`/`ESTADO:`/`SUBTEMAS:`/…) sonaba
+a formulario humano y Asun quedaba mudo para explicar. Decisión: **readout MU-TH-UR**, sin
+etiquetas ni títulos, que explica *encadenando líneas cortas* (cada una hecho/paso/consecuencia),
+permite conectores lógicos (`porque`, `entonces`, `por eso`) y ata la longitud a la pregunta.
+- **Prompts reescritos** (fuente en `output/`, paso APARTE: pegar en Supabase):
+  `Prompt-Asun-System.txt`, `PromptAsun-IrmaMax-Proyecto.txt`, `Prompt-Asun-musica.txt`,
+  `Prompt-Tito-System.txt`, `Cochi-Prompt.txt`. Se quitó toda la taxonomía de etiquetas y el
+  `[-> COCHI: brief]` (para compartir está R9). Cierres intactos: Asun comida (incluye
+  "¿gustas un caramelo?"), Tito Wheatley, Cochi TARS.
+- **Rename Tito**: la UI pasa de `TITO-7R`/`TITO 7R` a **TITO** en header, topbar, watermark,
+  `App.jsx`, `ApiKeyModal`, `Chat00`, `Descargas`, `R7FooterInputs`, `R9Drawer`, `AsunWatermark`,
+  `R7Desktop`. **Excepción**: el **título del watermark** dice **TITO Research**
+  (`TitoWatermark.jsx`). Identificadores de código siguen `Tito*`.
+- **Falta**: E2E en `npx tauri dev` con los prompts nuevos (probar que Asun/Tito/Cochi explican
+  en readout sin etiquetas y mantienen el cierre).
 
 ================================================================================

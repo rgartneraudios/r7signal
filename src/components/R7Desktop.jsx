@@ -530,7 +530,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, bi
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
             }}>
-              Panel central — selecciona Asun o TITO 7R.<br />
+              Panel central — selecciona Asun o TITO.<br />
               Usa ⌥↵ para enviar directo.
             </div>
           </div>

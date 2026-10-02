@@ -23,7 +23,7 @@ Si necesitas administrar archivos o generar código,<br />
 ese trabajo es de Cochi — cambia de panel y decile qué necesitás.<br />
 La función Proyecto activa un modo de planificación:<br />
 Asun entrevista la tarea y arma un plan segmentado<br />
-para que lo ejecuten Cochi, TITO-7R y el propio Asun en modo Standard.<br />
+para que lo ejecuten Cochi, TITO y el propio Asun en modo Standard.<br />
 Cuando necesites empezar de cero, usa el botón CLS al pie del Panel;<br />
 limpiará el chat por completo, sin dejar rastro.<br />
 A los 70.000 tokens aparecerá R7 para guardar tus avances.<br />

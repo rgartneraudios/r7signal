@@ -91,7 +91,7 @@ const R7FooterInputs = memo(forwardRef(function R7FooterInputs({
             placeholder={
               activeLeftPanel === 'asun' && !promptsReady.asun ? 'Conectando…' :
               activeLeftPanel === 'tito' && !promptsReady.tito ? 'Conectando…' :
-              'Asun / TITO 7R'
+              'Asun / TITO'
             }
             disabled={
               (activeLeftPanel === 'asun' && !promptsReady.asun) ||

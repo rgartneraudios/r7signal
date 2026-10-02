@@ -233,7 +233,7 @@ function WebApp() {
               <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.62rem', fontWeight:700, letterSpacing:'0.15em' }}>
                   <span style={{ color:'#FA61DB' }}>ASUN</span>
-                  <span style={{ color:'#E8C84A' }}>TITO 7R</span>
+                  <span style={{ color:'#E8C84A' }}>TITO</span>
                   <span style={{ color:'#CF444D' }}>COCHI</span>
                 </div>
                 <div style={{ height:'8px', background:'#09080A', borderRadius:'10px', position:'relative', boxShadow:'inset 0 2px 4px rgba(0,0,0,0.85)' }}>
@@ -262,7 +262,7 @@ function WebApp() {
             <div style={{ fontSize:'0.78rem', color:'#8A868B', lineHeight:1.7, letterSpacing:'0.03em' }}>
               <strong style={{ color:'#D4D8DC' }}>R7 Desktop</strong> es tu equipo de agentes local IA”{' '}
               <span style={{ color:'transparent', backgroundImage:'linear-gradient(135deg, #FA61DB, #DB7BB4)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text', display:'inline-block' }}>Asun</span> , LLM con potencia, genera con derechos comerciales,{' '}
-              <span style={{ color:'transparent', backgroundImage:'linear-gradient(135deg, #F5D27A, #CED2DB)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text', display:'inline-block' }}>TITO-7R</span> busca datos de la actualidad (Search),{' '}
+              <span style={{ color:'transparent', backgroundImage:'linear-gradient(135deg, #F5D27A, #CED2DB)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text', display:'inline-block' }}>TITO</span> busca datos de la actualidad (Search),{' '}
               <span style={{ color:'transparent', backgroundImage:'linear-gradient(135deg, #876EF5, #C0C0C0)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text', display:'inline-block' }}>Cochi</span> Modelos Flash LLM con potencia. Sin suscripción por modelo.
             </div>
           </div>
@@ -273,7 +273,7 @@ function WebApp() {
           <div style={{ fontSize:'1rem', letterSpacing:'0.4em', color:'#B4B8BB', fontWeight:600 }}>R7</div>
           <div style={{ fontSize:'2.5rem', letterSpacing:'0.12em', fontWeight:900, color:'#D4D8DC', lineHeight:'1.1', textShadow:'0 2px 4px rgba(0,0,0,0.5)', margin:'4px 0' }}>DESKTOP</div>
           <div style={{ width:'40px', height:'2px', background:'linear-gradient(90deg, #B4B8BB, transparent)', margin:'14px 0' }} />
-          <div style={{ fontSize:'0.8rem', letterSpacing:'0.3em', color:'#B4B8BB', fontWeight:700 }}>Asun Â· TITO 7R</div>
+          <div style={{ fontSize:'0.8rem', letterSpacing:'0.3em', color:'#B4B8BB', fontWeight:700 }}>Asun Â· TITO</div>
           <div style={{ fontSize:'1.1rem', letterSpacing:'0.4em', color:'#8A868B', fontWeight:500, marginTop:'2px' }}>Cochi</div>
         </div>
 

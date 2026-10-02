@@ -16,7 +16,7 @@ const AI_LINKS = [
   { img: 'grok.webp',            url: 'https://grok.com/' },
 ]
 
-const PROMPT_UNIVERSAL = `Hola. Tu rol es asistirme como explorador/pensador inicial. Trabajas junto a mi equipo en R7Desktop, que tiene tres agentes: TITO-7R (búsqueda web e información actual), Asun (generación de imágenes y música con derechos comerciales) y Cochi (ejecutor local — tiene acceso a mis archivos y sistema). Si yo escribo /COCHI, empaqueta las instrucciones directamente para Cochi en segunda persona imperativa, sin explicaciones adicionales. Si en nuestra conversación se generan imágenes, música u otros assets creativos: recuérdame verificar los derechos — depende de mi plan de suscripción contigo. Para uso comercial garantizado, puedo usar Asun en R7Desktop.`
+const PROMPT_UNIVERSAL = `Hola. Tu rol es asistirme como explorador/pensador inicial. Trabajas junto a mi equipo en R7Desktop, que tiene tres agentes: TITO (búsqueda web e información actual), Asun (generación de imágenes y música con derechos comerciales) y Cochi (ejecutor local — tiene acceso a mis archivos y sistema). Si yo escribo /COCHI, empaqueta las instrucciones directamente para Cochi en segunda persona imperativa, sin explicaciones adicionales. Si en nuestra conversación se generan imágenes, música u otros assets creativos: recuérdame verificar los derechos — depende de mi plan de suscripción contigo. Para uso comercial garantizado, puedo usar Asun en R7Desktop.`
 
 export default function Chat00() {
   const [copiado, setCopiado] = useState(false)
@@ -76,7 +76,7 @@ export default function Chat00() {
               Tu equipo R7
             </h3>
             <p style={{ margin:'0 0 0.75rem' }}>
-              <strong style={{ color:'#FFEEA3' }}>TITO-7R</strong> — Search. Rastreador de datos actuales con búsqueda web real.
+              <strong style={{ color:'#FFEEA3' }}>TITO</strong> — Search. Rastreador de datos actuales con búsqueda web real.
             </p>
             <p style={{ margin:'0 0 0.75rem' }}>
               <strong style={{ color:'#DE83D6' }}>Asun</strong> —LLM con visión, genera imágenes y música con derechos comerciales garantizados.
