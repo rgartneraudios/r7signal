@@ -1,7 +1,7 @@
 import { readTextFile, writeTextFile, readDir, exists, mkdir, remove, stat, rename, copyFile } from '@tauri-apps/plugin-fs'
 import { Command } from '@tauri-apps/plugin-shell'
 import { writeR9File } from './r9Store.js'
-import { capturePath } from './snapshotStore.js'
+import { capturePath, captureWorkspace, reconcileWorkspace } from './snapshotStore.js'
 import { listPlans, loadPlan, savePlan, setBlockStatus, requestReplan, planBoardList, planToText, planProgress, PLAN_STATUS, PLAN_STATUSES, getBlock } from './planStore.js'
 
 // Tope de lectura de texto — evita meter megabytes al contexto del modelo.
@@ -1114,6 +1114,11 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       const { program, args: shellArgs } = buildShellInvocation(os, args.command)
       const cmd = Command.create(program, shellArgs, options)
 
+      // Shell revertible: estado del workspace ANTES del primer comando del turno
+      // (una sola captura) y reconciliación DESPUÉS para marcar lo creado.
+      const trackWorkspace = !!snapshot && !dryRun && !!workspaceRoot
+      if (trackWorkspace) await captureWorkspace(snapshot, workspaceRoot).catch(() => {})
+
       let stdout = ''
       let stderr = ''
       cmd.stdout.on('data', d => { stdout += d })
@@ -1123,6 +1128,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       try {
         child = await cmd.spawn()
       } catch (err) {
+        if (trackWorkspace) await reconcileWorkspace(snapshot, workspaceRoot).catch(() => {})
         return {
           modelResult: `ERROR al ejecutar comando: ${(err && err.message) || String(err) || 'falló spawn()'}\nCOMANDO: ${args.command}`,
           diff: null,
@@ -1156,6 +1162,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         error: result.error,
         timeoutMs,
       })
+      if (trackWorkspace) await reconcileWorkspace(snapshot, workspaceRoot).catch(() => {})
       return { modelResult, diff: null }
     }
 

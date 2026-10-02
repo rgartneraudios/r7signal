@@ -5,11 +5,14 @@
 import {
   beginTurn,
   capturePath,
+  captureWorkspace,
+  reconcileWorkspace,
   createTurnSnapshot,
   revertSnapshot,
   discardTurn,
   clearSessionSnapshots,
   summarizeSnapshot,
+  summarizeSnapshotAgainstDisk,
   latestSnapshotId,
   safeSessionId,
   parseTurnNumber,
@@ -19,6 +22,7 @@ import {
   MAX_BACKUP_BYTES,
   DEFAULT_SNAPSHOT_MAX_AGE_MS,
   DEFAULT_SNAPSHOT_KEEP_TURNS,
+  DEFAULT_WORKSPACE_IGNORE,
 } from '../src/lib/snapshotStore.js'
 
 let pass = 0
@@ -377,6 +381,147 @@ console.log('\n— pruneOldSnapshots: sin snapshots no lanza —')
   const res = await pruneOldSnapshots(opts(fake))
   check('removed vacío', res.removed, [])
   check('kept vacío', res.kept, [])
+}
+
+console.log('\n— shell revertible: modifica/borra/crea → revert completo —')
+{
+  const fake = makeFakeFs()
+  fake.dirs.add('C:/ws')
+  setText(fake, 'C:/ws/a.txt', 'A')
+  setText(fake, 'C:/ws/c.txt', 'C')
+  const snap = await beginTurn('sess-sh', opts(fake))
+  const cap = await captureWorkspace(snap, 'C:/ws', opts(fake))
+  check('captura 2 archivos', cap.captured, 2)
+  setText(fake, 'C:/ws/a.txt', 'A2')
+  fake.files.delete('C:/ws/c.txt')
+  setText(fake, 'C:/ws/b.txt', 'B')
+  const rec = await reconcileWorkspace(snap, 'C:/ws', opts(fake))
+  check('reconcile detecta 1 creado', rec.created, 1)
+  await revertSnapshot(snap.id, opts(fake))
+  check('restaura a', getText(fake, 'C:/ws/a.txt'), 'A')
+  check('restaura c', getText(fake, 'C:/ws/c.txt'), 'C')
+  check('elimina b', fake.files.has('C:/ws/b.txt'), false)
+}
+
+console.log('\n— shell revertible: ignora node_modules/.git/target/dist —')
+{
+  const fake = makeFakeFs()
+  fake.dirs.add('C:/ws'); fake.dirs.add('C:/ws/node_modules')
+  setText(fake, 'C:/ws/src.js', 'S')
+  setText(fake, 'C:/ws/node_modules/dep.js', 'D')
+  const snap = await beginTurn('sess-ig', opts(fake))
+  await captureWorkspace(snap, 'C:/ws', opts(fake))
+  check('node_modules NO capturado', snap.seen.has('C:/ws/node_modules/dep.js'), false)
+  check('src.js SÍ capturado', snap.seen.has('C:/ws/src.js'), true)
+  setText(fake, 'C:/ws/node_modules/nuevo.js', 'N')
+  setText(fake, 'C:/ws/generado.js', 'G')
+  const rec = await reconcileWorkspace(snap, 'C:/ws', opts(fake))
+  check('reconcile ignora node_modules', rec.created, 1)
+  check('ignore trae .git/target/dist/build', ['node_modules', '.git', 'target', 'dist', 'build'].every(n => DEFAULT_WORKSPACE_IGNORE.has(n)), true)
+}
+
+console.log('\n— shell revertible: una sola captura por turno —')
+{
+  const fake = makeFakeFs()
+  fake.dirs.add('C:/ws')
+  setText(fake, 'C:/ws/a', 'A')
+  const snap = await beginTurn('sess-once', opts(fake))
+  const c1 = await captureWorkspace(snap, 'C:/ws', opts(fake))
+  setText(fake, 'C:/ws/b', 'B')
+  const c2 = await captureWorkspace(snap, 'C:/ws', opts(fake))
+  check('primera captura 1', c1.captured, 1)
+  check('segunda captura skipped', c2.captured, 0)
+  const rec = await reconcileWorkspace(snap, 'C:/ws', opts(fake))
+  check('b marcado creado (no existente)', rec.created, 1)
+  await revertSnapshot(snap.id, opts(fake))
+  check('b eliminado', fake.files.has('C:/ws/b'), false)
+  check('a intacto', getText(fake, 'C:/ws/a'), 'A')
+}
+
+console.log('\n— shell revertible: directorio creado se elimina —')
+{
+  const fake = makeFakeFs()
+  fake.dirs.add('C:/ws')
+  const snap = await beginTurn('sess-dir', opts(fake))
+  await captureWorkspace(snap, 'C:/ws', opts(fake))
+  fake.dirs.add('C:/ws/out'); setText(fake, 'C:/ws/out/f.txt', 'F')
+  await reconcileWorkspace(snap, 'C:/ws', opts(fake))
+  await revertSnapshot(snap.id, opts(fake))
+  check('archivo creado eliminado', fake.files.has('C:/ws/out/f.txt'), false)
+  check('dir creado eliminado', fake.dirs.has('C:/ws/out'), false)
+}
+
+console.log('\n— shell revertible: reconcile sin captura previa no marca nada —')
+{
+  const fake = makeFakeFs()
+  fake.dirs.add('C:/ws'); setText(fake, 'C:/ws/a', 'A')
+  const snap = await beginTurn('sess-nocap', opts(fake))
+  const rec = await reconcileWorkspace(snap, 'C:/ws', opts(fake))
+  check('skipped', rec.skipped, true)
+  check('sin entries', snap.entries.length, 0)
+}
+
+console.log('\n— shell revertible: archivo grande en workspace → truncated —')
+{
+  const fake = makeFakeFs()
+  fake.dirs.add('C:/ws')
+  fake.files.set('C:/ws/big.bin', new Uint8Array(MAX_BACKUP_BYTES + 1))
+  setText(fake, 'C:/ws/ok.txt', 'OK')
+  const snap = await beginTurn('sess-bigws', opts(fake))
+  const cap = await captureWorkspace(snap, 'C:/ws', opts(fake))
+  check('truncated', cap.truncated, true)
+  check('big.bin unrevertible', summarizeSnapshot(snap).unrevertible.includes('C:/ws/big.bin'), true)
+  check('ok.txt capturado', snap.seen.has('C:/ws/ok.txt'), true)
+}
+
+console.log('\n— summarizeSnapshotAgainstDisk: solo lista lo que cambió —')
+{
+  const fake = makeFakeFs()
+  fake.dirs.add('C:/ws')
+  setText(fake, 'C:/ws/a.txt', 'A')
+  setText(fake, 'C:/ws/b.txt', 'B')
+  setText(fake, 'C:/ws/c.txt', 'C')
+  const snap = await beginTurn('sess-diff', opts(fake))
+  await captureWorkspace(snap, 'C:/ws', opts(fake))
+  setText(fake, 'C:/ws/a.txt', 'A2')          // modificado
+  fake.files.delete('C:/ws/c.txt')             // borrado
+  setText(fake, 'C:/ws/d.txt', 'D')            // creado
+  await reconcileWorkspace(snap, 'C:/ws', opts(fake))
+  const info = await summarizeSnapshotAgainstDisk(snap, opts(fake))
+  check('solo 3 rutas cambiaron', info.count, 3)
+  check('no lista b.txt (intacto)', info.paths.includes('C:/ws/b.txt'), false)
+  check('lista a.txt', info.paths.includes('C:/ws/a.txt'), true)
+  check('lista c.txt (borrado)', info.paths.includes('C:/ws/c.txt'), true)
+  check('lista d.txt (creado)', info.paths.includes('C:/ws/d.txt'), true)
+}
+
+console.log('\n— summarizeSnapshotAgainstDisk: sin cambios → 0 —')
+{
+  const fake = makeFakeFs()
+  fake.dirs.add('C:/ws')
+  setText(fake, 'C:/ws/a.txt', 'A')
+  setText(fake, 'C:/ws/b.txt', 'B')
+  const snap = await beginTurn('sess-nodiff', opts(fake))
+  await captureWorkspace(snap, 'C:/ws', opts(fake))
+  const info = await summarizeSnapshotAgainstDisk(snap, opts(fake))
+  check('count 0', info.count, 0)
+  check('sin rutas', info.paths, [])
+}
+
+console.log('\n— revert: no reescribe archivos sin cambios —')
+{
+  const fake = makeFakeFs()
+  fake.dirs.add('C:/ws')
+  setText(fake, 'C:/ws/a.txt', 'A')
+  setText(fake, 'C:/ws/b.txt', 'B')
+  const snap = await beginTurn('sess-nowrite', opts(fake))
+  await captureWorkspace(snap, 'C:/ws', opts(fake))
+  setText(fake, 'C:/ws/a.txt', 'A2')
+  await reconcileWorkspace(snap, 'C:/ws', opts(fake))
+  const res = await revertSnapshot(snap.id, opts(fake))
+  const restored = res.results.filter(r => r.action === 'restore_file').map(r => r.path)
+  check('solo restaura a.txt', restored, ['C:/ws/a.txt'])
+  check('b intacto', getText(fake, 'C:/ws/b.txt'), 'B')
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

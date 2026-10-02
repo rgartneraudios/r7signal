@@ -7,7 +7,11 @@
 //   · Snapshot PROPIO en AppLocalData (no git en el workspace del usuario).
 //   · Uno por TURNO (no por tool call): `Snapshots/<sessionId>/turn-<n>/`.
 //   · Backups en BYTES (binario-safe) con topes de tamaño.
-//   · run_command queda FUERA de alcance (efectos arbitrarios no rastreables).
+//   · run_command (shell revertible): ANTES del primer comando del turno se
+//     captura el workspace completo (ignorando deps/artefactos), y DESPUÉS de
+//     cada comando se reconcilian las rutas nuevas para borrarlas en el revert.
+//     Los artefactos ignorados (node_modules/.git/target/dist/build/…) no se
+//     rastrean: se regeneran corriendo el gate.
 //
 // Módulo con `fs`/`baseDir` inyectables (igual que sessionStore/r9Store) para
 // poder correr el harness headless con un fs falso.
@@ -27,6 +31,18 @@ export const MAX_TOTAL_BYTES = 50 * 1024 * 1024   // 50MB por turno
 // sesión (así undo/regenerate siguen teniendo su snapshot aunque estén vencidos).
 export const DEFAULT_SNAPSHOT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000 // 30 días
 export const DEFAULT_SNAPSHOT_KEEP_TURNS = 20
+
+// Directorios que el shell suele escribir y NO se rastrean en el snapshot del
+// workspace: dependencias y artefactos de build/caché, regenerables corriendo
+// el gate. node_modules/.git/target/dist/build son los de la regla de oro.
+export const DEFAULT_WORKSPACE_IGNORE = new Set([
+  'node_modules', '.git', 'target', 'dist', 'build', 'coverage',
+  '.next', '.turbo', '.cache', '.vite', '.svelte-kit', '.nuxt',
+])
+
+// Tope de entradas del walk del workspace (evita recorrer árboles enormes).
+export const DEFAULT_WORKSPACE_MAX_ENTRIES = 5000
+const WORKSPACE_MAX_DEPTH = 20
 
 const defaultFs = {
   readFile, writeFile, readTextFile, writeTextFile, readDir, mkdir, remove, exists, stat,
@@ -75,6 +91,7 @@ export function createTurnSnapshot(sessionId, turn) {
     bytes: 0,
     truncated: false,
     seen: new Set(),
+    workspaceCaptured: false,
   }
 }
 
@@ -179,6 +196,107 @@ async function captureEntry(snapshot, path, opts) {
   return true
 }
 
+// ─── Shell revertible: captura/reconciliación del workspace ──────────────────
+// run_command escribe rutas ARBITRARIAS, así que no se puede capturar "la ruta
+// antes de mutarla" como con las tools de archivo. Estrategia: antes del PRIMER
+// comando del turno se captura el workspace completo (una sola vez), y después
+// de cada comando se reconcilian las rutas NUEVAS como creadas. El revert queda
+// así: restaura lo modificado/borrado y elimina lo creado por el shell.
+function ignoreSetFrom(opts) {
+  if (opts?.ignore instanceof Set) return opts.ignore
+  if (Array.isArray(opts?.ignore)) return new Set(opts.ignore)
+  return DEFAULT_WORKSPACE_IGNORE
+}
+
+function isIgnoredEntry(name, ignore) {
+  return ignore.has(String(name ?? ''))
+}
+
+// Captura el estado ANTERIOR del workspace antes del primer run_command del turno.
+// Idempotente por turno (`workspaceCaptured`). No captura la raíz (revertirla
+// borraría el workspace). Devuelve { captured }.
+export async function captureWorkspace(snapshot, root, opts = {}) {
+  if (!snapshot || !root || snapshot.workspaceCaptured) return { captured: 0, skipped: true }
+  const fs = fsFrom(opts)
+  const ignore = ignoreSetFrom(opts)
+  const maxEntries = Number.isFinite(opts.maxEntries) ? opts.maxEntries : DEFAULT_WORKSPACE_MAX_ENTRIES
+  const state = { count: 0, maxEntries }
+
+  let top = []
+  try { top = await fs.readDir(root) } catch {
+    snapshot.workspaceCaptured = true
+    return { captured: 0, skipped: true }
+  }
+  for (const entry of top) {
+    if (state.count >= maxEntries) { snapshot.truncated = true; break }
+    if (isIgnoredEntry(entry?.name, ignore)) continue
+    await captureWorkspaceEntry(snapshot, joinPath(root, entry.name), ignore, opts, state, 0)
+  }
+  snapshot.workspaceCaptured = true
+  if (state.count > 0) await persistManifest(snapshot, opts)
+  return { captured: state.count, truncated: !!snapshot.truncated }
+}
+
+async function captureWorkspaceEntry(snapshot, path, ignore, opts, state, depth) {
+  if (state.count >= state.maxEntries || depth > WORKSPACE_MAX_DEPTH) return
+  const key = normalizeKey(path)
+  if (snapshot.seen.has(key)) return
+  const fs = fsFrom(opts)
+  let info = null
+  try { info = await fs.stat(path) } catch {}
+  if (!info) return
+
+  if (info.isDirectory) {
+    snapshot.seen.add(key)
+    snapshot.entries.push({ path, kind: 'dir', existed: true, backup: null })
+    state.count++
+    let children = []
+    try { children = await fs.readDir(path) } catch { children = [] }
+    for (const child of children) {
+      if (state.count >= state.maxEntries) { snapshot.truncated = true; break }
+      if (isIgnoredEntry(child?.name, ignore)) continue
+      await captureWorkspaceEntry(snapshot, joinPath(path, child.name), ignore, opts, state, depth + 1)
+    }
+    return
+  }
+
+  await captureEntry(snapshot, path, opts)
+  state.count++
+}
+
+// Reconciliación DESPUÉS de un run_command: toda ruta del workspace ausente del
+// snapshot original se marca como creada (existed:false) para que el revert la
+// borre. Idempotente (usa `seen`). Devuelve { created }.
+export async function reconcileWorkspace(snapshot, root, opts = {}) {
+  if (!snapshot || !root || !snapshot.workspaceCaptured) return { created: 0, skipped: true }
+  const fs = fsFrom(opts)
+  const ignore = ignoreSetFrom(opts)
+  const maxEntries = Number.isFinite(opts.maxEntries) ? opts.maxEntries : DEFAULT_WORKSPACE_MAX_ENTRIES
+  const created = []
+
+  const walk = async (dir, depth) => {
+    if (depth > WORKSPACE_MAX_DEPTH || created.length >= maxEntries) return
+    let children = []
+    try { children = await fs.readDir(dir) } catch { return }
+    for (const entry of children) {
+      if (created.length >= maxEntries) { snapshot.truncated = true; break }
+      if (isIgnoredEntry(entry?.name, ignore)) continue
+      const full = joinPath(dir, entry.name)
+      const key = normalizeKey(full)
+      if (!snapshot.seen.has(key)) {
+        snapshot.seen.add(key)
+        snapshot.entries.push({ path: full, kind: entry.isDirectory ? 'dir' : 'file', existed: false, backup: null })
+        created.push(full)
+      }
+      if (entry.isDirectory) await walk(full, depth + 1)
+    }
+  }
+
+  await walk(root, 0)
+  if (created.length) await persistManifest(snapshot, opts)
+  return { created: created.length }
+}
+
 // ─── Revert ──────────────────────────────────────────────────────────────────
 async function loadManifest(id, opts) {
   const fs = fsFrom(opts)
@@ -212,6 +330,63 @@ export function summarizeSnapshot(snapshot) {
   }
 }
 
+function bytesEqual(a, b) {
+  if (a === b) return true
+  if (!a || !b || a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
+}
+
+// Resumen que compara contra el disco y solo cuenta entradas que realmente
+// cambiaron respecto al estado previo. Evita listar archivos sin cambios
+// cuando una shell capturó todo el workspace.
+export async function summarizeSnapshotAgainstDisk(snapshot, opts = {}) {
+  const entries = snapshot?.entries ?? []
+  if (entries.length === 0) {
+    return { count: 0, paths: [], truncated: !!snapshot?.truncated, unrevertible: [] }
+  }
+  const fs = fsFrom(opts)
+  const baseDir = baseDirFrom(opts)
+  const changed = new Set()
+  const unrevertible = new Set()
+
+  for (const entry of entries) {
+    if (entry.unrevertible) {
+      unrevertible.add(entry.path)
+      continue
+    }
+    const existsNow = await safeExists(fs, entry.path)
+    if (!entry.existed) {
+      if (existsNow) changed.add(entry.path)
+      continue
+    }
+    if (entry.kind === 'dir') {
+      if (!existsNow) changed.add(entry.path)
+      continue
+    }
+    if (!entry.backup) {
+      changed.add(entry.path)
+      continue
+    }
+    if (!existsNow) {
+      changed.add(entry.path)
+      continue
+    }
+    let current = null
+    let backup = null
+    try { current = await fs.readFile(entry.path) } catch {}
+    try { backup = await fs.readFile(`${snapshotDir(snapshot.id)}/${entry.backup}`, { baseDir }) } catch {}
+    if (!backup || !bytesEqual(current, backup)) changed.add(entry.path)
+  }
+
+  return {
+    count: changed.size,
+    paths: [...changed],
+    truncated: !!snapshot?.truncated,
+    unrevertible: [...unrevertible],
+  }
+}
+
 // Restaura el estado anterior del turno. Se procesa en orden INVERSO a la
 // captura (LIFO) para que los hijos se restauren antes que sus directorios.
 // Devuelve { reverted, results } y borra el snapshot al terminar.
@@ -234,6 +409,11 @@ export async function revertSnapshot(id, opts = {}) {
           }
         } else if (entry.backup) {
           const bytes = await fs.readFile(`${snapshotDir(manifest.id)}/${entry.backup}`, { baseDir })
+          if (currently) {
+            let current = null
+            try { current = await fs.readFile(entry.path) } catch {}
+            if (bytesEqual(current, bytes)) continue
+          }
           await ensureParent(fs, entry.path)
           await fs.writeFile(entry.path, bytes)
           results.push({ path: entry.path, action: 'restore_file' })

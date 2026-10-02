@@ -12,7 +12,7 @@ import { buildWheelMessages, commitR7Turn, buildTurnPair } from '../lib/r7Wheel.
 import { COCHI_AGENT_PROMPT } from '../lib/cochiAgentPrompt.js'
 import { needsFullAccess, touchesBoard, isAtomicMutation, USER_ANSWER_PREFIX, isToolError, commandRan } from '../lib/cochiGuards.js'
 import { newMessageId } from '../lib/sessionStore.js'
-import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshot } from '../lib/snapshotStore.js'
+import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshotAgainstDisk } from '../lib/snapshotStore.js'
 import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider } from '../lib/subagent.js'
 import { extractR3Visible } from '../lib/parseR1R2R3.js'
 import { auditLog } from '../lib/cochiAudit.js'
@@ -512,25 +512,22 @@ export function useCochiTaskLoop({
     const snap = snapshotRef.current
     snapshotRef.current = null
     const ranCommand = lastTurnHadCommandRef.current
-    const commandWarning = () => notes.push({
-      role: 'assistant',
-      content: '⚠️ Este turno ejecutó run_command: sus efectos NO se pueden revertir.',
-    })
+    const ignoredArtifactsNote = 'ℹ️ Este turno ejecutó run_command. Los cambios en archivos del workspace entran al revert; los artefactos en node_modules/.git/target/dist/build/… NO se rastrean (se regeneran).'
     if (!snap) {
-      if (ranCommand) commandWarning()
+      if (ranCommand) notes.push({ role: 'assistant', content: ignoredArtifactsNote })
       return notes
     }
-    const info = summarizeSnapshot(snap)
+    const info = await summarizeSnapshotAgainstDisk(snap)
     if (info.count === 0) {
       await discardTurn(snap)
-      if (ranCommand) commandWarning()
+      if (ranCommand) notes.push({ role: 'assistant', content: ignoredArtifactsNote })
       return notes
     }
     const list = info.paths.slice(0, 12).map(p => `• ${p}`).join('\n')
     const more = info.paths.length > 12 ? `\n… y ${info.paths.length - 12} más` : ''
     const warn = info.unrevertible.length ? `\n\n⚠️ ${info.unrevertible.length} archivo(s) eran demasiado grandes y NO se podrán restaurar.` : ''
-    const cmdWarn = ranCommand ? '\n\n⚠️ Este turno ejecutó run_command: sus efectos NO se pueden revertir.' : ''
-    const ok = await nativeConfirm(`Este turno modificó ${info.count} archivo(s):\n${list}${more}${warn}${cmdWarn}\n\n¿Revertir los archivos a su estado anterior?`)
+    const cmdNote = ranCommand ? `\n\n${ignoredArtifactsNote}` : ''
+    const ok = await nativeConfirm(`Este turno modificó ${info.count} archivo(s):\n${list}${more}${warn}${cmdNote}\n\n¿Revertir los archivos a su estado anterior?`)
     if (!ok) { await discardTurn(snap); return notes }
     try {
       const res = await revertSnapshot(snap.id)

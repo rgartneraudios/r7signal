@@ -30,14 +30,18 @@ tools + permisos + snapshots + tablero + R7/R9 estén completos y estables como 
 desarrollo del propio R7Signal.
 
 **Estado (06/10)**: loop único ✅ · tools ✅ · permisos ✅ · tablero ✅ · R7/R9 ✅ · snapshots de
-archivos ✅ · shell revertible ⏳ · reinicio de la app Rust (requiere humano) ⏳. Falta cerrar el
-shell revertible para el visto bueno.
+archivos ✅ · **shell revertible ✅** (harness `cochiSnapshots` 91/91; falta E2E real) · reinicio de
+la app Rust (requiere humano) ⏳.
 
-### Gaps para el visto bueno (06/10) — ~85% listo
+### Gaps para el visto bueno (06/10) — shell revertible cerrado
 
-1. **Shell revertible (bloqueante)**: `run_command` no entra en los snapshots → correr gates
-   (`npm test`/`lint`/`build`, `cargo`) o `npm install` toca archivos sin undo. Necesita diff del
-   workspace antes/después ignorando `node_modules`/`.git`/`target`/`dist`. Es el trabajo largo.
+1. **Shell revertible (CERRADO)**: `run_command` ya entra en el snapshot del turno. Antes del
+   primer comando se captura el workspace completo (ignorando `node_modules`/`.git`/`target`/
+   `dist`/`build`/`coverage`/caches) y después de cada comando se reconcilian las rutas nuevas
+   como creadas (`captureWorkspace`/`reconcileWorkspace` en `snapshotStore.js`). El revert
+   restaura lo modificado/borrado y elimina lo creado; los artefactos ignorados se regeneran.
+   `summarizeSnapshotAgainstDisk` compara contra disco para listar SÓLO lo que cambió, y el revert
+   no reescribe archivos cuyo contenido ya coincide con el backup.
 2. **Reinicio de la app Rust (estructural, no se arregla)**: el frontend tiene HMR, pero tocar
    `src-tauri/` exige recompilar y reiniciar el proceso anfitrión; Cochi no puede reiniciarse solo.
    Ese E2E lo hace Signor Roberto (o una instancia dev aparte).
@@ -211,16 +215,18 @@ usuario). El costo de las búsquedas web (server tool) va **aparte** de los toke
   (`src-tauri/src/fetch.rs`), que resuelve el DNS, rechaza IPs internas (privadas/loopback/link-local/
   CGNAT/etc.), **fija la IP validada** con `resolve_to_addrs` (anti DNS-rebinding) y sigue las
   redirecciones a mano revalidando cada salto. Tests `cargo test` en `fetch::tests`.
-- **Snapshots**: `run_command` está FUERA de alcance (sólo aviso). Undo/Regenerate conversación;
-  Regenerate avisa si el turno tocó archivos/música.
+- **Snapshots**: las mutaciones de archivo y **los efectos de `run_command` dentro del workspace**
+  entran al snapshot del turno (`captureWorkspace`/`reconcileWorkspace`); los artefactos en dirs
+  ignorados (`node_modules`/`.git`/`target`/`dist`/`build`/…) no se rastrean (se regeneran).
+  Undo/Regenerate conversación; Regenerate avisa si el turno tocó archivos/música.
 - **TYPO de archivo**: `read_file` detecta el nombre mal escrito y lee el archivo más parecido
   (`findClosestPath` + `TYPO RESUELTO`, `cochiTools.js`). Implementado.
 
 ## Deuda técnica / pendientes
 
-- **Shell revertible (bloqueante para auto-hospedar)**: `run_command` queda FUERA de los snapshots
-  (sólo aviso). Es lo que falta para que Cochi pueda correr los gates (`npm test`/`lint`/`build`,
-  `cargo`) y deshacer sin miedo desde dentro de R7Signal.
+- **Shell revertible**: cerrado (06/10). `run_command` captura el workspace antes del primer
+  comando y reconcilia lo creado después; el revert cubre modificar/borrar/crear dentro del
+  workspace (y no reescribe lo que quedó igual). Falta sólo el E2E real (rebuild Tauri).
 
 ### Opcional / features futuras
 
