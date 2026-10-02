@@ -29,6 +29,26 @@ entonces OpenCode sigue siendo el entorno de desarrollo. Condición de madurez: 
 tools + permisos + snapshots + tablero + R7/R9 estén completos y estables como para auto-hospedar el
 desarrollo del propio R7Signal.
 
+**Estado (06/10)**: loop único ✅ · tools ✅ · permisos ✅ · tablero ✅ · R7/R9 ✅ · snapshots de
+archivos ✅ · shell revertible ⏳ · reinicio de la app Rust (requiere humano) ⏳. Falta cerrar el
+shell revertible para el visto bueno.
+
+### Gaps para el visto bueno (06/10) — ~85% listo
+
+1. **Shell revertible (bloqueante)**: `run_command` no entra en los snapshots → correr gates
+   (`npm test`/`lint`/`build`, `cargo`) o `npm install` toca archivos sin undo. Necesita diff del
+   workspace antes/después ignorando `node_modules`/`.git`/`target`/`dist`. Es el trabajo largo.
+2. **Reinicio de la app Rust (estructural, no se arregla)**: el frontend tiene HMR, pero tocar
+   `src-tauri/` exige recompilar y reiniciar el proceso anfitrión; Cochi no puede reiniciarse solo.
+   Ese E2E lo hace Signor Roberto (o una instancia dev aparte).
+3. **Reglas de permisos del dev**: allow-list por defecto para comandos no destructivos
+   (`npm test`/`lint`/`build`, `git status`/`diff`, `cargo check`) y confirmación para el resto.
+4. **Robustez del editor**: `replace_in_file` (`cochiTools.js:998`) ya marca texto ausente/ambiguo,
+   soporta `replaceAll` y snapshotea; falta normalizar CRLF/LF al comparar, y que `walkDir`
+   (`cochiTools.js:363`) salte también `target`/`dist`/`build`.
+5. **Git**: sin tool dedicado; `run_command` alcanza. Regla vigente: commit/push sólo si el usuario
+   lo pide.
+
 ## Comandos
 
 ```bash
@@ -198,15 +218,17 @@ usuario). El costo de las búsquedas web (server tool) va **aparte** de los toke
 
 ## Deuda técnica / pendientes
 
-- **Shell revertible**: `run_command` fuera de los snapshots (sólo aviso). No crítico.
-- **Vocabulario R1/R2** (opcional): `commitR7Turn` escribe `R1:`/`R2:` y `isMemoryMessage` los
-  reconoce. Renombrar si se quiere desacoplar el prompt de esas etiquetas.
-- **Tito Etapa 2/3**: probar motores `parallel`/`perplexity`/`firecrawl` (matriz A/B en español) y
-  un lector `read_url` (Jina Reader gratis o Firecrawl `/scrape`). Idea: `authority.json` por tema
-  (handles de X + dominios + subreddits) alimentando `allowed_*`.
+- **Shell revertible (bloqueante para auto-hospedar)**: `run_command` queda FUERA de los snapshots
+  (sólo aviso). Es lo que falta para que Cochi pueda correr los gates (`npm test`/`lint`/`build`,
+  `cargo`) y deshacer sin miedo desde dentro de R7Signal.
+
+### Opcional / features futuras
+
+- **Vocabulario R1/R2**: `commitR7Turn` escribe `R1:`/`R2:`; renombrar si se quiere desacoplar.
+- **Tito Etapa 2/3**: probar motores `parallel`/`perplexity`/`firecrawl` (matriz A/B en español) +
+  `read_url` (Jina Reader o Firecrawl `/scrape`) + `authority.json` por tema.
 - **Modo Asun Proyecto**: revisar E2E (alineado en repo, sin probar).
-- **Prompt `task` remoto**: la excepción `TYPO RESUELTO` la aplica el sistema; pegar en Supabase es
-  opcional.
+- **Prompt `task` remoto**: pegar la excepción `TYPO RESUELTO` en Supabase es opcional.
 
 ## Historial compactado (cerrado — no rehacer)
 
