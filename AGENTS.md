@@ -826,9 +826,15 @@ Revisado `cochiLanes.js` (`buildTaskFinish`/`buildFinishMessages`) y `useCochiTa
   **MOTHER AI × El Oráculo** (readout en MAYÚSCULAS + remate cálido con galletas). Prompts
   fuente: `output/Prompt-Asun-System.txt`, `output/Prompt-Tito-System.txt` (**paso APARTE:
   pegar en Supabase**). El modo Asun Proyecto quedó alineado en el repo, pendiente de E2E.
-- **⚠ Deuda de seguridad**: el prompt real de Cochi **sigue en el historial de git** (commit
-  `036b2fb`, repo público `github.com/rgartneraudios/r7signal`). Borrarlo del HEAD NO lo oculta.
-  Si se quiere purgar: `git filter-repo`/BFG + force-push (disruptivo). Pendiente de decisión.
+- **HECHO 05/10 — PURGA DE PROMPTS EN EL HISTORIAL DE GIT**: los prompts de los 3 agentes
+  (Cochi TARS, Tito, Asun, planning/task/compaction) y todo `output/*.txt` fueron eliminados del
+  historial con `git filter-branch --tree-filter` + script Node (redacción a `[REDACTED PROMPT]`)
+  y force-push a `origin/main` (`2f4faca` → `c58462c`). El árbol de HEAD quedó idéntico (lint 0/0,
+  `npm test` 16/16). **Se conservan** los prompts funcionales de HEAD: fallback mínimo de
+  `cochiAgentPrompt.js`, música (`generar-musica`), imagen (`generar-asset`) y subagente.
+  Backup: `%TEMP%\opencode\r7signal-purge-backup` (bundle + copia de `.git`). Ojo: GitHub puede
+  conservar los commits viejos por SHA un tiempo (y en forks/PRs); para borrado total, pedirlo a
+  GitHub Support.
 
 ### HECHO 01/10-quater — saludo de Asun caro: causa raíz y fix (pin visión)
 Signor Roberto reportó que un **saludo** en Asun (`deepseek/deepseek-v4-flash-vision-exp`, sesión
