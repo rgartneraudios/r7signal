@@ -45,6 +45,21 @@ export const TitoMessageList = memo(function TitoMessageList({ messages, lastAss
           }}
         >→ Enviar a Cochi</button>
       )}
+      {/* Etapa 1: citas reales del server tool web_search (no las que invente el modelo). */}
+      {msg.role === 'assistant' && Array.isArray(msg.sources) && msg.sources.length > 0 && (
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #D1C49022', display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span style={{ color: '#8A7A3A', fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.08em', fontFamily: "'Space Grotesk', sans-serif" }}>FUENTES</span>
+          {msg.sources.map((s, i) => (
+            <a
+              key={i}
+              href={s.url}
+              onClick={(e) => openExternal(e, s.url)}
+              title={s.url}
+              style={{ color: LINK_COLOR, fontSize: '0.7rem', textDecoration: 'underline', cursor: 'pointer', wordBreak: 'break-all' }}
+            >{s.title || s.url}</a>
+          ))}
+        </div>
+      )}
       {msg.role === 'assistant' && msg.id === lastAssistantId && !streaming && (
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button

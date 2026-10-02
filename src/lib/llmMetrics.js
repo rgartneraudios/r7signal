@@ -80,7 +80,32 @@ export function normalizeUsage(usage) {
   const cachedTokens = details.cached_tokens ?? u.cached_tokens ?? u.prompt_cache_hit_tokens ?? 0
   const cacheWriteTokens = details.cache_write_tokens ?? u.prompt_cache_miss_tokens ?? 0
   const reasoningTokens = u.completion_tokens_details?.reasoning_tokens ?? 0
-  return { promptTokens, completionTokens, totalTokens, cachedTokens, cacheWriteTokens, reasoningTokens }
+  // Server tools (`openrouter:web_search`): nº de búsquedas del turno. OpenRouter
+  // lo expone como `server_tool_use.web_search_requests` (y variantes más viejas
+  // con `server_tool_use_details`). El costo de búsqueda va aparte de los tokens.
+  const webSearchRequests = u.server_tool_use?.web_search_requests
+    ?? u.server_tool_use_details?.web_search_requests
+    ?? 0
+  return { promptTokens, completionTokens, totalTokens, cachedTokens, cacheWriteTokens, reasoningTokens, webSearchRequests }
+}
+
+// Citas del server tool de búsqueda: normaliza `annotations` (url_citation) a
+// [{url,title}] deduplicado por URL y en orden de aparición. Sirve tanto para el
+// stream (`delta.annotations`) como para la respuesta completa
+// (`message.annotations`). Puro.
+export function extractUrlCitations(annotations) {
+  const list = Array.isArray(annotations) ? annotations : []
+  const seen = new Set()
+  const out = []
+  for (const a of list) {
+    if (!a || a.type !== 'url_citation') continue
+    const c = a.url_citation || {}
+    const url = String(c.url || '').trim()
+    if (!url || seen.has(url)) continue
+    seen.add(url)
+    out.push({ url, title: String(c.title || '').trim() })
+  }
+  return out
 }
 
 // Costo con descuento de caché + cuánto se ahorró respecto de la tarifa plena.

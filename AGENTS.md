@@ -26,6 +26,15 @@ global. Los prompts de sistema viven en **Supabase** (`agent_prompts`), no en el
 `src/lib/cochiAgentPrompt.js` ya NO contiene el prompt real: es un fallback genérico mínimo
 por si Supabase falta o trae el contrato viejo (R1/R2/R3, ya jubilado).
 
+## Decisión: migrar el desarrollo a R7Signal (04/10)
+
+**Decisión (Signor Roberto, 04/10):** Cochi dejará OpenCode y trabajará **desde dentro de
+R7Signal** cuando esté cómodo con **todas** las herramientas del sistema. No es automático:
+el cambio lo propone Cochi **cuando lo considere** y recién ahí se consulta a Signor Roberto;
+hasta ese momento OpenCode sigue siendo el entorno de desarrollo. Condición de madurez: que el
+loop único + tools + permisos + snapshots + tablero + R7/R9 estén completos y estables como para
+auto-hospedar el desarrollo del propio R7Signal.
+
 ## Comandos
 
 ```bash
@@ -980,5 +989,61 @@ permite conectores lógicos (`porque`, `entonces`, `por eso`) y ata la longitud 
   (`TitoWatermark.jsx`). Identificadores de código siguen `Tito*`.
 - **Falta**: E2E en `npx tauri dev` con los prompts nuevos (probar que Asun/Tito/Cochi explican
   en readout sin etiquetas y mantienen el cierre).
+
+### HECHO 04/10-bis — Tito · Etapa 1 de búsqueda (citas reales + afinado del server tool)
+Motivo (Signor Roberto): los resultados de Tito salían pobres (páginas amarillas/directorios) y
+con links raros. Diagnóstico: (a) `llmClient` sólo acumulaba `delta.content` y **descartaba
+`annotations`** (citas `url_citation`), así que la UI no tenía fuentes reales; (b) el server tool
+iba sin afinar (Exa `auto` devuelve agregadores, no fuentes primarias).
+- `llmClient.js`: `streamOnce`/`completeOnce` acumulan y devuelven `annotations` (via
+  `delta.annotations` del stream y `message.annotations` de la respuesta completa).
+- `llmMetrics.js`: `normalizeUsage` expone `webSearchRequests` (`server_tool_use`, con fallback a
+  `server_tool_use_details`). Nuevo **`extractUrlCitations`** (puro): deduplica/ordena
+  `url_citation` → `[{url,title}]`.
+- `TitoPanel.jsx`: `WEB_SEARCH_TOOL` afina `max_total_results`/`max_characters` y agrega
+  `excluded_domains` (`SEARCH_JUNK_DOMAINS`: directorios/agregadores). Guarda `sources` y
+  `searches` en el mensaje assistant y los manda a la status bar.
+- `TitoMessageList.jsx`: bloque **FUENTES** con las citas reales (clickeables).
+- `TitoStatusBar.jsx`: chip `🔎 N búsquedas` (el costo de búsqueda va aparte de los tokens).
+- Harness `cochiLlmMetrics`: +10 checks (`webSearchRequests` + `extractUrlCitations`).
+- Gates: **lint 0/0 · `npm test` 16/16 · `npm run build` OK**.
+- **Falta**: (a) E2E en `npx tauri dev`; (b) prompts (paso APARTE en Supabase) para preferir
+  fuente primaria y no volcar URLs; (c) **Etapa 2** (probar motores `parallel`/`perplexity`/
+  `firecrawl` vía el mismo server tool, con matriz A/B de calidad en español) y **Etapa 3** (tool
+  lector `read_url`: Jina Reader gratis o Firecrawl `/scrape`) para que Tito lea la fuente
+  primaria, no sólo el snippet.
+
+### ANÁLISIS 04/10 — "wrapper curado" de X/Reddit/autoridades (Etapa 2/3)
+Signor Roberto preguntó si existe un wrapper curado que devuelva publicaciones de gente con
+autoridad (CEOs/labs), no influencers. No hay un producto único off-the-shelf de "feed de
+autoridades", pero el concepto se puede implementar con piezas existentes:
+- **X/Twitter**: el server tool de OpenRouter soporta `x_search` con `allowed_x_handles` (máx 20)
+  y rango de fechas, **sólo en modelos SpaceXAI/Grok** (búsqueda nativa). Es, literalmente, un
+  wrapper curado: Tito (modo Grok) buscaría sólo en una lista de handles. Costo de X search ~$5
+  por 1.000 posts (aparte de tokens).
+- **Reddit**: sin tool nativo. Se acota con `allowed_domains: ['reddit.com']` (Exa/Parallel) o
+  filtrando subreddits por path (`reddit.com/r/LocalLLaMA`); la "autoridad" es el subreddit, no el
+  usuario.
+- **Web autoritativa**: `allowed_domains` con fuentes primarias (blogs oficiales de labs,
+  documentación), que es el mismo mecanismo del bloqueo de basura de la Etapa 1.
+- **Brave Search API** tiene **Goggles** (reranking/filtrado de resultados por dominio,
+  compartibles) — lo más cercano a un "filtro curado" como producto; requiere tool propio.
+- Idea (barata y es el diferencial): un `authority.json` por tema con handles de X + dominios +
+  subreddits, alimentando `allowed_*`. Para "¿salió Gemini 4?": blog oficial + `@GoogleDeepMind`/
+  `@demishassabis` en X + recencia, en vez de una query genérica.
+
+### HECHO 04/10-ter — Etapa 1 medida + fix de costo del server tool
+Test real (Signor Roberto, "herboristerías en Oviedo"): las citas YA se muestran (bloque FUENTES
+con links reales) y sirven. Dos hallazgos:
+- **El costo NO son tokens**: `cost $0.01425` ≈ **2 búsquedas Exa × $0.007** (~98%); el input
+  (prompt 7.572, cached 3.328) pesa ~$0.00004. El único botón real de costo es `max_uses`
+  ($0.007 por búsqueda). Se bajó de 3 → **2** (`TitoPanel`). `max_results` no cambia la tarifa.
+- **Se va de boca / doble cierre**: causa = **prompt**, no código. El ejemplo de voz narraba la
+  búsqueda ("busqueda web completa…") y "LENGTH = as many lines as needed" invitaba al ensayo.
+  Fix en la fuente `output/Prompt-Tito-System.txt` (paso APARTE: pegar en Supabase): 1 línea de
+  estado + hallazgos + **1** cierre (nunca narrar la búsqueda; el cierre va al final y EXACTO una
+  vez; si las fuentes son directorios → "cifra no oficial", sin censo inventado).
+- Gates: **lint 0/0 · `npm test` 16/16 · `npm run build` OK**.
+- **Pendiente**: re-medir E2E con el prompt nuevo pegado en Supabase.
 
 ================================================================================

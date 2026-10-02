@@ -10,6 +10,7 @@ import {
   buildReasoningConfig,
   extractReasoningDelta,
   normalizeUsage,
+  extractUrlCitations,
   costBreakdown,
   resolveStoredModel,
 } from '../src/lib/llmMetrics.js'
@@ -73,17 +74,39 @@ check('usage completo', normalizeUsage({
   total_tokens: 1200,
   prompt_tokens_details: { cached_tokens: 700, cache_write_tokens: 300 },
   completion_tokens_details: { reasoning_tokens: 50 },
-}), { promptTokens: 1000, completionTokens: 200, totalTokens: 1200, cachedTokens: 700, cacheWriteTokens: 300, reasoningTokens: 50 })
-check('usage vacío → ceros', normalizeUsage(), { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 })
-check('total derivado si falta', normalizeUsage({ prompt_tokens: 3, completion_tokens: 4 }), { promptTokens: 3, completionTokens: 4, totalTokens: 7, cachedTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 })
+}), { promptTokens: 1000, completionTokens: 200, totalTokens: 1200, cachedTokens: 700, cacheWriteTokens: 300, reasoningTokens: 50, webSearchRequests: 0 })
+check('usage vacío → ceros', normalizeUsage(), { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, webSearchRequests: 0 })
+check('total derivado si falta', normalizeUsage({ prompt_tokens: 3, completion_tokens: 4 }), { promptTokens: 3, completionTokens: 4, totalTokens: 7, cachedTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, webSearchRequests: 0 })
 check('fallback campo nativo DeepSeek (prompt_cache_hit/miss)',
   normalizeUsage({ prompt_tokens: 5000, prompt_cache_hit_tokens: 4800, prompt_cache_miss_tokens: 200 }),
-  { promptTokens: 5000, completionTokens: 0, totalTokens: 5000, cachedTokens: 4800, cacheWriteTokens: 200, reasoningTokens: 0 })
+  { promptTokens: 5000, completionTokens: 0, totalTokens: 5000, cachedTokens: 4800, cacheWriteTokens: 200, reasoningTokens: 0, webSearchRequests: 0 })
 check('fallback cached_tokens top-level',
   normalizeUsage({ prompt_tokens: 1000, cached_tokens: 640 }),
-  { promptTokens: 1000, completionTokens: 0, totalTokens: 1000, cachedTokens: 640, cacheWriteTokens: 0, reasoningTokens: 0 })
+  { promptTokens: 1000, completionTokens: 0, totalTokens: 1000, cachedTokens: 640, cacheWriteTokens: 0, reasoningTokens: 0, webSearchRequests: 0 })
 check('prompt_tokens_details gana sobre top-level',
   normalizeUsage({ prompt_tokens: 1000, cached_tokens: 1, prompt_tokens_details: { cached_tokens: 900 } }).cachedTokens, 900)
+check('server_tool_use.web_search_requests',
+  normalizeUsage({ prompt_tokens: 10, server_tool_use: { web_search_requests: 2 } }).webSearchRequests, 2)
+check('server_tool_use_details.web_search_requests (variante vieja)',
+  normalizeUsage({ prompt_tokens: 10, server_tool_use_details: { web_search_requests: 3 } }).webSearchRequests, 3)
+check('sin server tool → 0 búsquedas',
+  normalizeUsage({ prompt_tokens: 10 }).webSearchRequests, 0)
+
+console.log('— extractUrlCitations (citas del server tool web_search) —')
+const CITE = (url, title) => ({ type: 'url_citation', url_citation: { url, title } })
+check('normaliza url/title en orden', extractUrlCitations([CITE('https://a.com', 'A'), CITE('https://b.com', 'B')]),
+  [{ url: 'https://a.com', title: 'A' }, { url: 'https://b.com', title: 'B' }])
+check('deduplica por URL', extractUrlCitations([CITE('https://a.com', 'A'), CITE('https://a.com', 'A2')]),
+  [{ url: 'https://a.com', title: 'A' }])
+check('ignora anotaciones que no son url_citation', extractUrlCitations([{ type: 'other' }, CITE('https://a.com', 'A')]),
+  [{ url: 'https://a.com', title: 'A' }])
+check('ignora URL vacía', extractUrlCitations([CITE('', 'X'), CITE('https://a.com', 'A')]),
+  [{ url: 'https://a.com', title: 'A' }])
+check('título ausente → cadena vacía', extractUrlCitations([{ type: 'url_citation', url_citation: { url: 'https://a.com' } }]),
+  [{ url: 'https://a.com', title: '' }])
+check('entrada no-array → []', extractUrlCitations(null), [])
+check('recorta espacios en url/title', extractUrlCitations([CITE('  https://a.com  ', '  A  ')]),
+  [{ url: 'https://a.com', title: 'A' }])
 
 console.log('— costo con descuento de caché (DeepSeek cache-read ~0.147x) —')
 // ~deepseek/deepseek-flash-latest: input 0.0198/M, cached 0.00291/M.

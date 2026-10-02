@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import { calculateCost, billableTokens } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
-import { normalizeUsage } from '../lib/llmMetrics.js'
+import { normalizeUsage, extractUrlCitations } from '../lib/llmMetrics.js'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { extractR3Visible } from '../lib/parseR1R2R3.js'
 import { makeStreamingDisplayExtractor } from '../lib/cochiContext.js'
@@ -24,9 +24,26 @@ import TitoStatusBar from './TitoStatusBar.jsx'
 // `openrouter:web_search` (el modelo decide si/cuántas veces buscar; motor Exa,
 // ~$0.007 por búsqueda). `max_uses` capa el costo por turno.
 const TITO_MODEL = '~deepseek/deepseek-v4-flash-latest'
+
+// Etapa 1 (04/10): saca de los resultados agregadores/directorios de bajo valor
+// (las "páginas amarillas" que reportó Signor Roberto). `excluded_domains` es un
+// parámetro del server tool: no cuesta tokens y se edita acá sin tocar nada más.
+const SEARCH_JUNK_DOMAINS = [
+  'pinterest.com', 'pinterest.es', 'quora.com',
+  'slideshare.net', 'scribd.com',
+  'yellowpages.com', 'yelp.com', 'tripadvisor.com',
+  'paginasamarillas.es', 'paginasamarillas.com.ar', 'cylex.es', 'einforma.com',
+]
+
 const WEB_SEARCH_TOOL = [{
   type: 'openrouter:web_search',
-  parameters: { max_results: 5, max_uses: 3 },
+  parameters: {
+    max_results: 5,
+    max_total_results: 12,
+    max_uses: 2,
+    max_characters: 4000,
+    excluded_domains: SEARCH_JUNK_DOMAINS,
+  },
 }]
 
 function TitoPanel({ 
@@ -164,6 +181,7 @@ function TitoPanel({
       // El server tool `openrouter:web_search` viaja siempre; el modelo decide si
       // busca (0–N veces, tope en `max_uses`). Un saludo no dispara búsqueda.
       const extractStream = makeStreamingDisplayExtractor()
+      let searches = 0
       const result = await streamChat({
         provider: resolveProvider(TITO_MODEL),
         stream: true,
@@ -175,11 +193,14 @@ function TitoPanel({
         onDelta: (partial) => liveRef.current?.push(extractStream(partial)),
         onUsage: (usage) => {
           const u = normalizeUsage(usage)
+          // El usage puede repetirse en varios eventos; el conteo de búsquedas
+          // es acumulativo del turno, así que nos quedamos con el mayor.
+          if (u.webSearchRequests > searches) searches = u.webSearchRequests
           const billable = billableTokens(TITO_MODEL, u)
           const cost = calculateCost(TITO_MODEL, u.promptTokens, u.completionTokens, 'token', u.cachedTokens)
           setTokens(prev => prev + billable)
           if (typeof onUsage === 'function') {
-            onUsage({ source: 'tito', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost })
+            onUsage({ source: 'tito', inputTokens: u.promptTokens, outputTokens: u.completionTokens, billable, cost, webSearchRequests: u.webSearchRequests })
           }
         },
       })
@@ -187,10 +208,13 @@ function TitoPanel({
       const fullText = result.content
       const finalDisplay = stripTitoOpening(extractR3Visible(fullText), { isFirstTurn, nombre: nombreAlternativo })
       const hasHandoff = fullText.includes('[→ COCHI:')
+      // Citas reales del server tool (url_citation), deduplicadas. Reemplazan los
+      // links que el modelo pudiera inventar: la UI muestra "Fuentes".
+      const sources = extractUrlCitations(result.annotations)
       // Sella el turno en la rueda: R1/R2 los escribe el SISTEMA (cacheable).
       wheelRef.current = commitR7Turn(wheelRef.current, { pairs: [buildTurnPair(text, finalDisplay)] })
       liveRef.current?.clear()
-      setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: finalDisplay, hasHandoff }])
+      setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: finalDisplay, hasHandoff, sources, searches }])
       if (hasHandoff) {
         const briefMatch = fullText.match(/\[→ COCHI:\s*(.+?)\]/s)
         if (briefMatch) onHandoff?.(briefMatch[1].trim())
@@ -213,6 +237,8 @@ function TitoPanel({
   const isEmpty = messages.length === 0;
   // Bloque K3: los botones undo/regenerate cuelgan del último assistant.
   const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id;
+  // Etapa 1: nº de búsquedas del último turno (chip en la status bar).
+  const lastSearches = [...messages].reverse().find(m => m.role === 'assistant')?.searches || 0;
 
   return (
     <div className="tito-panel">
@@ -268,6 +294,7 @@ function TitoPanel({
       <TitoStatusBar
         modelLabel={TITO_MODEL}
         streaming={streaming}
+        searches={lastSearches}
         onClear={handleClear}
         onArchiveWithName={handleArchiveWithName}
         onCancel={handleCancel}

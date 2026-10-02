@@ -1,8 +1,14 @@
 // ─── Status bar de Tito ──────────────────────────────────────────────────────
-export default function TitoStatusBar({ modelLabel, streaming, onClear, onArchiveWithName, onCancel }) {
+export default function TitoStatusBar({ modelLabel, streaming, searches = 0, onClear, onArchiveWithName, onCancel }) {
   return (
     <div className="tito-status">
       <span>⚡ {modelLabel}</span>
+      {searches > 0 && (
+        <span
+          title={`${searches} búsqueda(s) web en el último turno (~$0.007 c/u, aparte de los tokens)`}
+          style={{ color: '#5FD3E0', fontSize: '0.65rem', fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif" }}
+        >🔎 {searches} búsqueda{searches > 1 ? 's' : ''}</span>
+      )}
       <div style={{ flex: 1 }} />
       <button
         onClick={onClear}

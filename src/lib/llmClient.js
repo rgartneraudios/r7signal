@@ -162,6 +162,7 @@ async function streamOnce({ provider, messages, tools, toolChoice, signal, sessi
       content,
       reasoning: reasoningText,
       toolCalls: message.tool_calls || [],
+      annotations: message.annotations || [],
       usage: data.usage || null,
       finishReason: data.choices?.[0]?.finish_reason || null,
       model: data.model || provider.model,
@@ -176,6 +177,7 @@ async function streamOnce({ provider, messages, tools, toolChoice, signal, sessi
   let finishReason = null
   let usage = null
   let receivedAny = false
+  const annotations = []
   const toolAcc = new Map()
 
   try {
@@ -217,6 +219,11 @@ async function streamOnce({ provider, messages, tools, toolChoice, signal, sessi
           if (onReasoning) onReasoning(reasoningText)
         }
 
+        // Citas del server tool web_search (url_citation): llegan como deltas.
+        if (Array.isArray(delta.annotations) && delta.annotations.length) {
+          annotations.push(...delta.annotations)
+        }
+
         if (Array.isArray(delta.tool_calls)) {
           receivedAny = true
           for (const tc of delta.tool_calls) {
@@ -244,7 +251,7 @@ async function streamOnce({ provider, messages, tools, toolChoice, signal, sessi
   }
 
   auditCache({ sessionId, model: provider.model, label: auditLabel, messages, usage, toolsChars: tools ? JSON.stringify(tools).length : 0 })
-  return { content, reasoning: reasoningText, toolCalls: normalizeToolCalls(toolAcc), usage, finishReason, model: provider.model }
+  return { content, reasoning: reasoningText, toolCalls: normalizeToolCalls(toolAcc), annotations, usage, finishReason, model: provider.model }
 }
 
 // ─── Respuesta completa (sin streaming) ───────────────────────────────────────
@@ -272,6 +279,7 @@ async function completeOnce({ provider, messages, tools, toolChoice, signal, ses
     content: message.content || '',
     reasoning: message.reasoning || '',
     toolCalls: message.tool_calls || [],
+    annotations: message.annotations || [],
     usage: data.usage || null,
     finishReason: choice.finish_reason || null,
     model: data.model || provider.model,
