@@ -1,5 +1,34 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { isHmrProtected } from './plugins/hmrProtect.js'
+
+function cochiHmrGuard() {
+  let turnActive = false
+  const deferred = new Set()
+  return {
+    name: 'cochi-hmr-guard',
+    apply: 'serve',
+    configureServer(server) {
+      server.ws.on('cochi:turn', ({ active } = {}) => {
+        turnActive = !!active
+        if (!turnActive && deferred.size) {
+          const count = deferred.size
+          deferred.clear()
+          server.ws.send({ type: 'custom', event: 'cochi:hmr-pending', data: { count } })
+        }
+      })
+    },
+    hotUpdate: {
+      order: 'post',
+      handler(options) {
+        if (!turnActive) return
+        if (!isHmrProtected(options.file, options.server?.config?.root)) return
+        deferred.add(options.file)
+        return []
+      },
+    },
+  }
+}
 
 // Bloque V (performance): partimos el bundle monolítico (~1.3 MB) en chunks
 // separados por librería, para que el arranque cargue/compile por capas y el
@@ -24,7 +53,7 @@ const chunkFor = (id) => {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), cochiHmrGuard()],
   build: {
     chunkSizeWarningLimit: 800,
     // En Tauri los assets son locales (sin waterfall de red), así que el
