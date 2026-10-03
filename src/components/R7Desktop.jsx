@@ -374,7 +374,7 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, bi
           display: flex;
           flex-direction: column;
           gap: 14px;
-          background: rgba(9, 9, 42, 0.25);
+          background: rgba(30, 15, 32, 0.25);
         }
         .tito-watermark {
           display: flex;
