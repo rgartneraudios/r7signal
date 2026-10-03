@@ -242,16 +242,26 @@ usuario). El costo de las búsquedas web (server tool) va **aparte** de los toke
 
 ### Opcional / features futuras
 
-- **Asun: `walkDir` propio** (`asunTools.js:59`): no saltea `target`/`dist`/`build`/`coverage`
-  como el de Cochi. Misma clase de fix, fuera del scope de #4.
 - **Vocabulario R1/R2**: `commitR7Turn` escribe `R1:`/`R2:`; renombrar si se quiere desacoplar.
-- **Tito Etapa 2/3**: probar motores `parallel`/`perplexity`/`firecrawl` (matriz A/B en español) +
-  `read_url` (Jina Reader o Firecrawl `/scrape`) + `authority.json` por tema.
+- **Tito Etapa 2/3**: DESCARTADO (07/10). Tito queda como está (server tool `web_search` +
+  citas); no probar motores `parallel`/`perplexity`/`firecrawl` ni `read_url`/`authority.json`.
 - **Modo Asun Proyecto**: revisar E2E (alineado en repo, sin probar).
 - **Prompt `task` remoto**: pegar la excepción `TYPO RESUELTO` en Supabase es opcional.
+- **Auto-hospedaje: HMR sobre el propio loop** (07/10). Editar un módulo que forma parte del loop
+  en ejecución (`cochiTools.js`/`useCochiTaskLoop.js`) dispara HMR de Vite y puede cortar el turno.
+  `src-tauri/` ya lo cubre el reinicio. Falta decidir un guard (pausar HMR durante el turno o
+  excluir esos módulos) antes de dejar que Cochi se edite a sí mismo en caliente.
 
 ## Historial compactado (cerrado — no rehacer)
 
+- **Piloto de auto-hospedaje (07/10)**: el Cochi de la app, con workspace = raíz del repo y permiso
+  `full`, hizo un cambio real de punta a punta (pendiente Asun `walkDir`) aislado del loop:
+  `read_file` → edit → harness nuevo → `run_command` (gate). Gate verificado afuera: **17/17
+  harness**, lint 0/0, build OK. La tarea: `shouldSkipEntry(name)` en `asunTools.js` reusando
+  `DEFAULT_WORKSPACE_IGNORE` de `snapshotStore.js`, + `harness/asunTools.harness.mjs`. El walkDir de
+  Asun queda alineado con el de Cochi (salta ocultos + `node_modules`/`.git`/`target`/`dist`/
+  `build`/`coverage`/caches). Sin cortes de HMR (módulo fuera del loop). **Deuda Asun walkDir:
+  CERRADA.**
 - **E2E reales 06/10**: shell revertible (crear/borrar con `run_command` → Undo deja el workspace
   intacto), editor CRLF (`replace_in_file` conserva los saltos CRLF) y reinicio Rust (`tauri dev`
   recompila/reinicia solo).

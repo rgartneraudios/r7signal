@@ -10,6 +10,7 @@ import {
 } from '@tauri-apps/plugin-fs'
 import { writeR9File } from './r9Store.js'
 import { makePlan, savePlan, planProgress } from './planStore.js'
+import { DEFAULT_WORKSPACE_IGNORE } from './snapshotStore.js'
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
 
@@ -56,13 +57,21 @@ async function checkSizeOrThrow(filePath, maxBytes, label) {
   }
 }
 
+// Entradas que walkDir NUNCA recorre: ocultas (.) + dependencias/artefactos de
+// build/caché (DEFAULT_WORKSPACE_IGNORE: node_modules/.git/target/dist/build/…).
+// Pura y testeable, alineada con isSkippedWalkEntry de Cochi (Cochito).
+export function shouldSkipEntry(name) {
+  const n = String(name ?? '')
+  return n.startsWith('.') || DEFAULT_WORKSPACE_IGNORE.has(n)
+}
+
 async function walkDir(dir, filePattern, results = [], depth = 0, maxFiles = 200) {
   if (depth > 8 || results.length >= maxFiles) return results
   try {
     const entries = await readDir(dir)
     for (const entry of entries) {
       if (results.length >= maxFiles) break
-      if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === '.git') continue
+      if (shouldSkipEntry(entry.name)) continue
       const fullPath = `${dir}/${entry.name}`.replace(/\\/g, '/')
       if (entry.isDirectory) {
         await walkDir(fullPath, filePattern, results, depth + 1, maxFiles)
