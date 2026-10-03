@@ -387,7 +387,7 @@ function CochiDesktop({
         flex: 1, display: 'flex', flexDirection: 'column',
         minHeight: 0, overflow: 'hidden', position: 'relative',
         padding: '12px 14px 10px',
-        background: 'rgba(42, 12, 46, 0.15)',
+        background: 'rgba(9, 9, 42, 0.25)',
       }}>
         <div className="leather-grid" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.7 }} />
 

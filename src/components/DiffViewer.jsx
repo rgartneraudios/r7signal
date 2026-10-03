@@ -46,7 +46,7 @@ export default function DiffViewer({ diff }) {
 
   return (
     <div style={{
-      background: '#0A0C10',
+      background: '#1F1E1D',
       border: '1px solid #2A2830',
       borderLeft: '2px solid #6B9EC4',
       borderRadius: 8,
@@ -59,7 +59,7 @@ export default function DiffViewer({ diff }) {
     }}>
       <div style={{
         padding: '6px 12px',
-        background: '#14131A',
+        background: '#262524',
         borderBottom: '1px solid #2A2830',
         color: '#8A868B',
         fontSize: '0.7rem',
@@ -78,7 +78,7 @@ export default function DiffViewer({ diff }) {
           const textColor = h.type === 'same' ? '#8A868B' : '#D4D8DC'
           return (
             <div key={idx} style={{ display: 'flex', background: bg, padding: '0 8px', borderLeft: `2px solid ${borderColor}` }}>
-              <span style={{ width: 40, textAlign: 'right', color: '#4A4A55', marginRight: 10, userSelect: 'none', flexShrink: 0 }}>{h.lineNo}</span>
+              <span style={{ width: 40, textAlign: 'right', color: '#8C857E', marginRight: 10, userSelect: 'none', flexShrink: 0 }}>{h.lineNo}</span>
               <span style={{ width: 12, color: markerColor, flexShrink: 0 }}>{marker}</span>
               <span style={{ color: textColor, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{h.text || ' '}</span>
             </div>
