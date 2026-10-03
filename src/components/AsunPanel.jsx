@@ -115,6 +115,8 @@ function AsunPanel({
     onSessionConsumed,
     onReset: () => { setMessages([]); setTokens(0); setTokenWarningDismissed(false) },
     onResume: () => { setMessages([]); setTokens(0); setTokenWarningDismissed(false); setPromptMusica(null); setAttachedFile(null) },
+    // Restaura la conversación visible tras un reload (HMR/Ctrl+R) o reapertura.
+    onRestore: (msgs) => setMessages(msgs),
     onResetUsage,
     onError: (msg) => setMessages(prev => [...prev, { rol: 'asistente', contenido: msg, id: newMessageId('asun'), streaming: false }]),
   })

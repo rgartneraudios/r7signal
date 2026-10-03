@@ -21,20 +21,21 @@ se compacta a 70k con el botón del banner y **no viaja** en el prompt (lo que v
 `── Turno N ──`, cacheables). **R9** es el almacén persistente global. `src/lib/cochiAgentPrompt.js`
 ya NO contiene el prompt real: es un fallback genérico mínimo por si Supabase falta.
 
-## Decisión: migrar el desarrollo a R7Signal (04/10)
+## Decisión: desarrollo de R7Signal desde opencode (08/10)
 
-Cochi dejará OpenCode y trabajará **desde dentro de R7Signal** cuando esté cómodo con **todas** las
-herramientas. No es automático: lo propone Cochi y recién ahí se consulta a Signor Roberto; hasta
-entonces OpenCode sigue siendo el entorno de desarrollo. Condición de madurez: que el loop único +
-tools + permisos + snapshots + tablero + R7/R9 estén completos y estables como para auto-hospedar el
-desarrollo del propio R7Signal.
+**Se jubiló la migración del auto-hospedaje (04/10): Cochi NO se auto-hospeda.** Los cambios de
+R7Signal se hacen desde **opencode**; R7Signal se usa para **otras apps** (workspace = proyecto del
+usuario). Motivo: el guard de HMR pausaba el hot-update de `src/` durante el turno y pedía Ctrl+R
+para aplicar los cambios, que recarga la app y el workspace — más fricción que valor. El guard se
+**eliminó** (`cochiHmrGuard` de `vite.config.js`, `plugins/hmrProtect.js`, `src/lib/hmrGuard.js` y
+`harness/cochiHmrGuard.harness.mjs`); el HMR de Vite queda normal. Con la persistencia de la sesión
+activa (08/10) la conversación ya sobrevive a un reload, pero el auto-hospedaje no se persigue.
 
 **Estado (07/10)**: loop único ✅ · tools ✅ · permisos ✅ · tablero ✅ · R7/R9 ✅ · snapshots de
 archivos ✅ · **shell revertible ✅** (harness `cochiSnapshots` 91/91 + E2E real 06/10) · **reinicio
-de la app Rust ✅** (E2E dev 06/10: `tauri dev` recompila/reinicia solo; en release lo hace el humano)
-· **HMR del loop ✅** (guard `cochiHmrGuard`, 07/10: pausa HMR durante el turno).
+de la app Rust ✅** (E2E dev 06/10: `tauri dev` recompila/reinicia solo; en release lo hace el humano).
 
-### Gaps para el visto bueno (06/10) — shell revertible + reinicio + permisos dev + editor cerrados
+### Gaps históricos del auto-hospedaje (06/10) — todos CERRADOS
 
 1. **Shell revertible (CERRADO)**: `run_command` ya entra en el snapshot del turno. Antes del
    primer comando se captura el workspace completo (ignorando `node_modules`/`.git`/`target`/
@@ -99,6 +100,9 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
     (exit code SIEMPRE). La coaching de tools vive en las descriptions de cada tool.
   - `r7Wheel.js` / `r9Store.js` — rueda R7 (por agente) y almacén global R9.
   - `sessionStore.js` / `planStore.js` / `snapshotStore.js` — sesiones / planes / snapshots.
+    `sessionStore` persiste `{wheel, messages}` (la conversación visible R3 se guarda **sólo** para
+    repintar tras un reload/reapertura; nunca viaja al modelo) + el puntero de sesión activa en
+    `SessionState/active-<agente>.json`.
   - `memoriesStore.js` — `Memories.txt` global (HOT), lo escribe sólo el usuario.
   - `agentScope.js` — carpeta segura por agente (`R7/<agente>/`).
   - `llmClient.js` / `llmMetrics.js` / `modelPrices.js` — fetch/SSE común, capacidades, reasoning,
@@ -107,10 +111,6 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
   - `subagent.js` — mini-loop aislado (hereda capacidad del workspace) → brief.
   - `promptLoader.js` — carga prompts de Supabase (cache por agente) + `interpolatePrompt`.
   - `cochiPermissions.js` — allow/deny + `isBlockedUrl` (SSRF, 1ª capa JS).
-  - `hmrGuard.js` — runtime cliente de la pausa de HMR (eventos `cochi:turn`/`cochi:hmr-pending`).
-    El predicado `isHmrProtected` vive en `plugins/hmrProtect.js`, **NO** en `src/`: todo módulo de
-    `src/` importado por `vite.config.js` se vuelve config-dependency y su edición reinicia el
-    server (saltándose el guard).
 - `src-tauri/src/fetch.rs` — comando `fetch_url_guarded` de `web_fetch` (SSRF real: DNS + IP fijada
   + redirecciones revalidadas).
 - `src/components/` — UI. `CochiDesktop.jsx` es el orquestador; Asun/Tito espejan la estructura.
@@ -179,10 +179,14 @@ La caché está atada a **modelo + endpoint**. Cada modelo va pineado a proveedo
 
 El pin desactiva el sticky de OpenRouter, pero el proveedor fijo mantiene su caché de prefijo.
 
-## Sesión: FRÍA por defecto + HOT=Memories + rueda por-agente
+## Sesión: FRÍA por defecto (nueva) + restauración de la activa + HOT=Memories + rueda por-agente
 
-- **Todas las sesiones arrancan FRÍAS**: `useWheelSession` no auto-carga ruedas viejas. Las
-  anteriores se incorporan sólo si el usuario las carga desde **Sesiones** (R9).
+- **Sesión nueva = FRÍA**: `useWheelSession` no auto-carga ruedas viejas al abrir. Las anteriores
+  se incorporan sólo si el usuario las carga desde **Sesiones** (R9). Excepción (08/10): la sesión
+  **ACTIVA** (la que quedó abierta) se retoma al arrancar —mensajes visibles + rueda— usando el
+  puntero `SessionState/active-<agente>.json`, para que un reload de HMR/Ctrl+R o reabrir la app no
+  caiga al watermark ni corte la continuidad. CLS/archivar/compactar limpian el puntero (vuelve frío).
+  Los `messages` persistidos son R3 UI-only: se guardan para repintar, **nunca** viajan al modelo.
 - **Toggle FRÍA/HOT** centrado en el header (`SessionModeToggle`). FRÍA = azul reina `#4169E1`
   (default); HOT = rojo `#C0392B`. HOT inyecta `Memories.txt` global como `system` estable
   (`[USER MEMORIES]`, tras el prompt base y antes de los briefs). Sirve a los 3 agentes.
@@ -222,7 +226,7 @@ usuario). El costo de las búsquedas web (server tool) va **aparte** de los toke
   cwd = raíz del workspace.
 - **Transparencia (Mica/Acrylic)**: ventana Tauri `transparent: true` con `windowEffects: micaDark`
   (Win11); fallback **Acrylic** tintado (`Color(15,14,17,180)`) en `src-tauri/src/lib.rs` para Win10
-  build 17763-21999. Webview transparente; lienzo de los 3 chats en `rgba(42,12,46,0.15)`.
+  build 17763-21999. Webview transparente; lienzo de los 3 chats en `rgba(9, 9, 42, 0.25)`.
   Headers/footers `rgba(9,8,10,0.5)`. Sólo Windows.
 - **SSRF (cerrado, 06/10)**: dos capas. `isBlockedUrl` (`cochiPermissions.js`) filtra por globs +
   IP literal en JS; el fetch real de `web_fetch` va por el comando Rust `fetch_url_guarded`
@@ -253,31 +257,26 @@ usuario). El costo de las búsquedas web (server tool) va **aparte** de los toke
   citas); no probar motores `parallel`/`perplexity`/`firecrawl` ni `read_url`/`authority.json`.
 - **Modo Asun Proyecto**: revisar E2E (alineado en repo, sin probar).
 - **Prompt `task` remoto**: pegar la excepción `TYPO RESUELTO` en Supabase es opcional.
-- **Auto-hospedaje: HMR sobre el propio loop** (CERRADO 07/10). Editar un módulo que forma parte del
-  loop en ejecución (`cochiTools.js`/`useCochiTaskLoop.js`) dispararía HMR de Vite y cortaría el
-  turno. Guard implementado: el plugin `cochiHmrGuard` (`vite.config.js`, `apply: 'serve'`) con la
-  lógica pura en `plugins/hmrProtect.js` (`isHmrProtected`) y el runtime cliente en
-  `src/lib/hmrGuard.js`. Mientras hay turno, `notifyTurnActive(true)` avisa por el websocket
-  (`cochi:turn`) y el hook `hotUpdate` devuelve `[]` para todo `src/**` (no se aplica HMR).
-  Al terminar (`notifyTurnActive(false)`), si hubo cambios pospuestos el server manda
-  `cochi:hmr-pending` y la UI avisa por chat: recarga manual (Ctrl+R), **sin recarga automática**
-  (los mensajes no se persisten, una recarga borra la charla). Fuera de turnos el HMR sigue normal.
-  El predicado NO debe vivir en `src/` (sería config-dependency y reiniciaría el server). Harness
-  `cochiHmrGuard` 13/13; E2E real 07/10: Cochi editó `cochiTools.js` y luego `hmrGuard.js` en pleno
-  turno → sin `hmr update` ni reinicio de server durante el turno, aviso en el chat y el turno no se
-  cortó.
+- **Auto-hospedaje y guard de HMR: ELIMINADOS (08/10)**: Cochi no se auto-hospeda; R7Signal se
+  desarrolla desde opencode y se usa para otras apps. El `cochiHmrGuard` (plugin, `plugins/hmrProtect.js`,
+  `src/lib/hmrGuard.js` y harness) se borró: el HMR de Vite vuelve a su comportamiento normal. Editar
+  un módulo del loop durante un turno ya no está protegido (se acepta; no se persigue el auto-hospedaje).
 
 ## Historial compactado (cerrado — no rehacer)
 
-- **Guard de HMR del auto-hospedaje (07/10)**: plugin `cochiHmrGuard` + `plugins/hmrProtect.js`
-  (predicado) + `src/lib/hmrGuard.js` (runtime cliente). Durante un turno se pausa el HMR de
-  `src/**` (el hook `hotUpdate` devuelve `[]`); al terminar, si hubo cambios, el server emite
-  `cochi:hmr-pending` y la UI pide recarga manual (Ctrl+R). El frontend tiene HMR pero la edición de
-  un módulo del loop ya no corta el turno. Harness `cochiHmrGuard` 13/13; gate 18/18 + lint 0/0 +
-  build OK. El predicado se movió de `src/` a `plugins/` porque, importado por `vite.config.js`,
-  editarlo reiniciaba el server (config-dependency) y se saltaba el guard. E2E real 07/10:
-  `cochiTools.js` y `hmrGuard.js` editados en pleno turno → sin `hmr update` ni reinicio, aviso en
-  el chat.
+- **Persistencia de la conversación (08/10)**: R3 se guarda por sesión para repintar tras un reload,
+  sin viajar nunca al modelo. `sessionStore` incluye `messages` en la sesión + helpers de puntero
+  `save/load/clearActiveSession` (`SessionState/active-<agente>.json`); `useWheelSession` retoma la
+  sesión activa al montar (`onRestore` en los 3 paneles: Cochi/Asun/Tito) y limpia el puntero al
+  CLS/archivar/compactar. `sanitizeMessages` clona por JSON y apaga `streaming` (nunca se persiste a
+  mitad de turno: el autosave salta mientras `busy`). Harness `cochiSessions` 63/63; gate 17/17 +
+  lint 0/0 + build OK. Resuelve que Ctrl+R cortara la charla y mostrara el watermark.
+- **Guard de HMR del auto-hospedaje (07/10) — ELIMINADO (08/10)**: plugin `cochiHmrGuard` +
+  `plugins/hmrProtect.js` (predicado) + `src/lib/hmrGuard.js` (runtime cliente). Durante un turno se
+  pausaba el HMR de `src/**`; al terminar, si hubo cambios, el server emitía `cochi:hmr-pending` y la
+  UI pedía recarga manual (Ctrl+R). Se borró junto con el auto-hospedaje (08/10): el HMR de Vite vuelve
+  a su comportamiento normal. Registro histórico: harness `cochiHmrGuard` 13/13; E2E real 07/10 con
+  `cochiTools.js`/`hmrGuard.js` editados en pleno turno.
 - **Piloto de auto-hospedaje (07/10)**: el Cochi de la app, con workspace = raíz del repo y permiso
   `full`, hizo un cambio real de punta a punta (pendiente Asun `walkDir`) aislado del loop:
   `read_file` → edit → harness nuevo → `run_command` (gate). Gate verificado afuera: **17/17

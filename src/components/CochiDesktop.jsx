@@ -138,6 +138,9 @@ function CochiDesktop({
       taskLoop.resetTurn()
       liveRef.current?.clear()
     },
+    // Restaura la conversación visible tras un reload (HMR/Ctrl+R) o reapertura.
+    // R3 sólo se repinta; nunca viaja al modelo.
+    onRestore: (msgs) => setMessages(msgs),
     onAfterArchive: async (closingSessionId) => {
       await taskLoop.discardSnapshot()
       await clearSessionSnapshots(closingSessionId)

@@ -15,7 +15,12 @@ import {
   listSessions,
   loadSession,
   deleteSession,
+  saveActiveSession,
+  loadActiveSession,
+  clearActiveSession,
+  sanitizeMessages,
   SESSIONS_DIR,
+  SESSION_STATE_DIR,
 } from '../src/lib/sessionStore.js'
 import { appendR7Pair, countR7Turns, popR7Turn } from '../src/lib/r7Wheel.js'
 
@@ -82,7 +87,7 @@ check('recorta a 60 + elipsis', suggestSessionName([{ role: 'user', content: lon
 check('fallback fecha/hora sin user', suggestSessionName([], new Date(2026, 8, 25, 21, 15)), 'Sesión 25/09 21:15')
 check('Asun rol/contenido', firstUserText([{ rol: 'asistente', contenido: 'x' }, { rol: 'usuario', contenido: 'hola' }]), 'hola')
 
-console.log('\n— makeSession: artefacto sin mensajes —')
+console.log('\n— makeSession: artefacto de contexto + conversación visible —')
 const s = makeSession('cochi', {
   sessionId: 'cochi-123',
   wheel: { r7: '── Turno 1 ──\nR1: a\nR2: b', lastTurn: null },
@@ -91,9 +96,19 @@ const s = makeSession('cochi', {
 check('id = sessionId', s.id, 'cochi-123')
 check('agent', s.agent, 'cochi')
 check('name = primer user', s.name, 'primer pedido')
-check('NO persiste messages', 'messages' in s, false)
+check('persiste messages (para repintar)', s.messages.length, 2)
+check('messages conserva contenido', s.messages[1].content, 'R3')
+check('sin messages → array vacío', makeSession('cochi', {}).messages.length, 0)
 check('wheel snapshot', s.wheel.r7.startsWith('── Turno 1'), true)
 check('lastTurn snapshot', s.wheel.lastTurn, null)
+check('sanitizeMessages clona (no muta el original)', (() => {
+  const orig = [{ role: 'user', content: 'x', tmp: undefined }]
+  const copy = sanitizeMessages(orig)
+  copy[0].content = 'y'
+  return orig[0].content === 'x' && !('tmp' in copy[0])
+})(), true)
+check('sanitizeMessages no-array → []', sanitizeMessages(null).length, 0)
+check('sanitizeMessages apaga streaming', sanitizeMessages([{ rol: 'asistente', contenido: 'x', streaming: true }])[0].streaming, false)
 const s2 = touchSession(s)
 check('touchSession actualiza updatedAt', s2.updatedAt >= s.updatedAt, true)
 check('makeSession sin sessionId genera id', makeSession('tito', {}).id.startsWith('tito-'), true)
@@ -186,8 +201,32 @@ await saveSession(makeSession('cochi', { sessionId: 'cochi-ctx', name: 'Seed', w
 const ctx = await loadSession('cochi-ctx', { fs: fake, baseDir: ROOT })
 check('contexto: wheel.r7 intacto', ctx.wheel.r7, wheelSnap.r7)
 check('contexto: wheel.lastTurn intacto', ctx.wheel.lastTurn, wheelSnap.lastTurn)
-check('contexto: no hay messages en el artefacto', 'messages' in ctx, false)
+check('contexto: sin messages → array vacío', Array.isArray(ctx.messages) && ctx.messages.length, 0)
 check('contexto: name', ctx.name, 'Seed')
+
+console.log('\n— round-trip de messages vía saveSession/loadSession —')
+const fakeMsg = makeFakeFs()
+const ROOTMSG = 'ROOT_MSG'
+await saveSession(makeSession('cochi', {
+  sessionId: 'cochi-rt', messages: [{ role: 'user', content: 'hola' }, { role: 'assistant', content: 'qué tal' }],
+}), { fs: fakeMsg, baseDir: ROOTMSG })
+const rt = await loadSession('cochi-rt', { fs: fakeMsg, baseDir: ROOTMSG })
+check('round-trip: user', rt.messages[0].content, 'hola')
+check('round-trip: assistant', rt.messages[1].content, 'qué tal')
+
+console.log('\n— puntero de sesión activa (SessionState/active-<agent>.json) —')
+const fakeActive = makeFakeFs()
+const ROOTA = 'ROOT_ACTIVE'
+check('sin puntero → null', await loadActiveSession('cochi', { fs: fakeActive, baseDir: ROOTA }), null)
+await saveActiveSession('cochi', 'cochi-live', { fs: fakeActive, baseDir: ROOTA })
+check('escribe puntero en SessionState', fakeActive.files.has(`${SESSION_STATE_DIR}/active-cochi.json`), true)
+check('loadActiveSession devuelve el id', await loadActiveSession('cochi', { fs: fakeActive, baseDir: ROOTA }), 'cochi-live')
+check('puntero por agente (tito aislado)', await loadActiveSession('tito', { fs: fakeActive, baseDir: ROOTA }), null)
+check('listSessions NO incluye el puntero', (await listSessions({ agent: 'cochi', fs: fakeActive, baseDir: ROOTA })).length, 0)
+await clearActiveSession('cochi', { fs: fakeActive, baseDir: ROOTA })
+check('clearActiveSession borra', await loadActiveSession('cochi', { fs: fakeActive, baseDir: ROOTA }), null)
+await saveActiveSession('', 'x', { fs: fakeActive, baseDir: ROOTA })
+check('saveActiveSession sin agent no-op', fakeActive.files.has(`${SESSION_STATE_DIR}/active-.json`), false)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

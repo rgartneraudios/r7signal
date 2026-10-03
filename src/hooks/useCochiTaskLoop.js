@@ -16,7 +16,6 @@ import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshotAgainstDisk } 
 import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagentProvider } from '../lib/subagent.js'
 import { extractR3Visible } from '../lib/parseR1R2R3.js'
 import { auditLog } from '../lib/cochiAudit.js'
-import { notifyTurnActive, onHmrPending } from '../lib/hmrGuard.js'
 
 const ASK_CANCELLED = 'Cancelado por el usuario.'
 const MAX_ITER = 25
@@ -68,20 +67,6 @@ export function useCochiTaskLoop({
   const snapshotRef = useRef(null)
 
   const permissionRules = normalizeRules(preferences?.permissions)
-
-  const pushMessageRef = useRef(pushMessage)
-  pushMessageRef.current = pushMessage
-
-  useEffect(() => {
-    return onHmrPending((data) => {
-      const count = Number(data?.count) || 0
-      if (count <= 0) return
-      pushMessageRef.current?.({
-        role: 'assistant',
-        content: `🔄 HMR en pausa: ${count} archivo(s) de \`src/\` cambiaron durante el turno y no se aplicaron. Recargá la app (Ctrl+R) cuando quieras aplicarlos.`,
-      })
-    })
-  }, [])
 
   useEffect(() => { setAskInput(''); setAskChecks([]) }, [pendingQuestion])
 
@@ -188,7 +173,6 @@ export function useCochiTaskLoop({
     const cochiSessionId = sessionIdRef.current
 
     setLoading(true)
-    notifyTurnActive(true)
     setPlanStatus('executing')
     setActivity([])
     setSubagents([])
@@ -478,7 +462,6 @@ export function useCochiTaskLoop({
         pushMessage({ role: 'assistant', content: `❌ Error: ${err.message}` })
       }
     } finally {
-      notifyTurnActive(false)
       setLoading(false)
       setPlanStatus('idle')
       setActivity([])

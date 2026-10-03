@@ -1,8 +1,10 @@
 // ─── SESIONES = ARTEFACTOS DE CONTEXTO (Bloque X1) ───────────────────────────
-// Una sesión YA NO es una conversación: es un ARTEFACTO DE CONTEXTO con nombre.
+// Una sesión es un ARTEFACTO DE CONTEXTO con nombre + la conversación visible.
 // La pieza que une todo: el artefacto ES el R7. Sesión = snapshot de la rueda.
-// Se persiste SÓLO { id, agent, name, createdAt, updatedAt, wheel:{r7,lastTurn} }.
-// NO se persisten mensajes (R3 es UI-only y nunca viaja al modelo, D1 de L4).
+// Se persiste { id, agent, name, createdAt, updatedAt, wheel:{r7,lastTurn},
+// messages }. Los `messages` (R3 visible) se guardan SÓLO para repintar la UI
+// tras un reload/reapertura; NUNCA viajan al modelo (lo que viaja son los briefs
+// R7). El puntero a la sesión activa vive en AppLocalData/SessionState/active-<agent>.json.
 //
 // Un JSON por sesión en AppLocalData/Sessions/<id>.json.
 //
@@ -13,6 +15,7 @@ import { writeTextFile, readTextFile, readDir, mkdir, remove, BaseDirectory } fr
 import { popR7Turn } from './r7Wheel.js'
 
 export const SESSIONS_DIR = 'Sessions'
+export const SESSION_STATE_DIR = 'SessionState'
 
 const defaultFs = { writeTextFile, readTextFile, readDir, mkdir, remove }
 
@@ -63,7 +66,9 @@ export function suggestSessionName(messages, when = new Date()) {
 }
 
 // ─── Registro de sesión ──────────────────────────────────────────────────────
-// `messages` se usa SOLO para sugerir el nombre (primer user); NO se persiste.
+// `messages` se usa para sugerir el nombre (primer user) Y se persiste para
+// repintar la UI. Se clona por JSON para garantizar serialización (descarta
+// undefined/funciones y campos transitorios no serializables).
 export function makeSession(agent, { sessionId, name, wheel, messages } = {}) {
   const now = new Date().toISOString()
   return {
@@ -76,6 +81,18 @@ export function makeSession(agent, { sessionId, name, wheel, messages } = {}) {
       r7: wheel?.r7 || '',
       lastTurn: wheel?.lastTurn ?? null,
     },
+    messages: sanitizeMessages(messages),
+  }
+}
+
+export function sanitizeMessages(messages) {
+  if (!Array.isArray(messages)) return []
+  try {
+    return JSON.parse(JSON.stringify(messages)).map(m =>
+      m && typeof m === 'object' && 'streaming' in m ? { ...m, streaming: false } : m
+    )
+  } catch {
+    return []
   }
 }
 
@@ -215,4 +232,41 @@ export async function deleteSession(id, opts = {}) {
   } catch {
     return false
   }
+}
+
+// ─── Puntero a la sesión ACTIVA (por agente) ─────────────────────────────────
+// Permite que un reload (HMR/Ctrl+R) o una reapertura retomen la conversación
+// en curso en vez de caer al watermark. Vive aparte de Sessions/ para no
+// contaminar listSessions. CLS/archivar/compactar lo limpian (arranque frío).
+function activePointerPath(agent) {
+  return `${SESSION_STATE_DIR}/active-${agent}.json`
+}
+
+export async function saveActiveSession(agent, sessionId, opts = {}) {
+  const fs = fsFrom(opts)
+  const baseDir = baseDirFrom(opts)
+  if (!agent || !sessionId) return
+  await fs.mkdir(SESSION_STATE_DIR, { baseDir, recursive: true })
+  await fs.writeTextFile(activePointerPath(agent), JSON.stringify({ sessionId }), { baseDir })
+}
+
+export async function loadActiveSession(agent, opts = {}) {
+  const fs = fsFrom(opts)
+  const baseDir = baseDirFrom(opts)
+  if (!agent) return null
+  try {
+    const raw = await fs.readTextFile(activePointerPath(agent), { baseDir })
+    return JSON.parse(raw)?.sessionId || null
+  } catch {
+    return null
+  }
+}
+
+export async function clearActiveSession(agent, opts = {}) {
+  const fs = fsFrom(opts)
+  const baseDir = baseDirFrom(opts)
+  if (!agent) return
+  try {
+    await fs.remove(activePointerPath(agent), { baseDir })
+  } catch {}
 }

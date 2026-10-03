@@ -13,7 +13,7 @@
 //   · onAfterArchive(closingSessionId) → limpieza propia (p.ej. snapshots Cochi)
 //   · onError(msg)  → pintar el fallo de archivado con el shape del panel
 import { useEffect, useRef } from 'react'
-import { makeSession, saveSession, loadSession, undoLastTurn, suggestSessionName } from '../lib/sessionStore.js'
+import { makeSession, saveSession, loadSession, saveActiveSession, loadActiveSession, clearActiveSession, undoLastTurn, suggestSessionName } from '../lib/sessionStore.js'
 import { createWheelState, flushWheel, compactWheel } from '../lib/r7Wheel.js'
 import { writeR9File } from '../lib/r9Store.js'
 
@@ -30,6 +30,7 @@ export function useWheelSession({
   onSessionConsumed,
   onReset,
   onResume,
+  onRestore,
   onAfterArchive,
   onResetUsage,
   onError,
@@ -43,11 +44,33 @@ export function useWheelSession({
   // Espejo de `messages` (setState es async; el autosave necesita el estado final).
   useEffect(() => { messagesRef.current = messages }, [messages])
 
-  // Sesión FRÍA por defecto (01/10): al abrir SIEMPRE se arranca sin rueda. La
-  // continuidad ya no es automática; las sesiones anteriores se incorporan SÓLO
-  // si el usuario las carga desde la pestaña Sesiones (R9 compartida).
+  const onRestoreRef = useRef(onRestore)
+  onRestoreRef.current = onRestore
+
+  // Arranque: sesión FRÍA (sin rueda). Si existe un puntero a la sesión ACTIVA
+  // (reload de HMR/Ctrl+R o reapertura) se retoma esa conversación —mensajes +
+  // rueda— para no caer al watermark. Las demás sesiones se incorporan SÓLO
+  // desde la pestaña Sesiones (R9 compartida).
   useEffect(() => {
+    let alive = true
     wheelRef.current = createWheelState('')
+    ;(async () => {
+      try {
+        const activeId = await loadActiveSession(agent)
+        if (!alive || !activeId) return
+        if (sessionIdRef.current || messagesRef.current.some(isUserMsg)) return
+        const s = await loadSession(activeId)
+        if (!alive || !s || (s.agent && s.agent !== agent)) return
+        skipAutosaveRef.current = true
+        wheelRef.current = { r7: s.wheel?.r7 || '', lastTurn: s.wheel?.lastTurn ?? null }
+        sessionIdRef.current = s.id
+        sessionNameRef.current = s.name || null
+        if (Array.isArray(s.messages) && s.messages.length) onRestoreRef.current?.(s.messages)
+      } catch (err) {
+        console.error(`restore ${agent}:`, err)
+      }
+    })()
+    return () => { alive = false }
   }, [agent])
 
   // Autosave tras cerrar cada turno (KD5). Salta montaje/retomas y nunca guarda
@@ -64,6 +87,7 @@ export function useWheelSession({
     })
     sessionIdRef.current = session.id
     saveSession(session).catch(err => console.error(`autosave ${agent}:`, err))
+    saveActiveSession(agent, session.id).catch(err => console.error(`active ${agent}:`, err))
   }, [messages, busy, agent])
 
   // "Cargar como contexto": NO restaura la conversación; arranca en cero y
@@ -102,6 +126,7 @@ export function useWheelSession({
     })
     sessionIdRef.current = session.id
     saveSession(session).catch(err => console.error(`autosave ${agent}:`, err))
+    saveActiveSession(agent, session.id).catch(err => console.error(`active ${agent}:`, err))
   }
 
   // Al archivar/CLS, la rueda actual se promueve como chat_N nuevo DEL AGENTE
@@ -115,12 +140,14 @@ export function useWheelSession({
   }
 
   // Cierra la sesión actual: captura su id (para la limpieza del panel), resetea
-  // rueda/id y, opcionalmente, hereda el nombre a la próxima.
+  // rueda/id, limpia el puntero de sesión activa (arranque frío) y, opcionalmente,
+  // hereda el nombre a la próxima.
   async function closeCurrentSession({ inheritName = null } = {}) {
     const closingSessionId = sessionIdRef.current
     wheelRef.current = createWheelState('')
     sessionIdRef.current = null
     sessionNameRef.current = inheritName
+    await clearActiveSession(agent).catch(() => {})
     await onAfterArchive?.(closingSessionId)
   }
 
@@ -175,6 +202,7 @@ export function useWheelSession({
       wheelRef.current = createWheelState(compacted)
       sessionIdRef.current = null
       sessionNameRef.current = inheritedName
+      await clearActiveSession(agent).catch(() => {})
       await onAfterArchive?.(closingSessionId)
       onResetUsage?.(agent)
     } catch (err) {

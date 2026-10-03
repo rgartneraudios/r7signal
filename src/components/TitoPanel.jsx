@@ -78,6 +78,8 @@ function TitoPanel({
     // E2E 29/09: al cargar otra sesión como contexto, se aborta el turno en vuelo
     // para que no selle su R1/R2 en la rueda de la sesión entrante.
     onResume: () => { abortRef.current?.abort(); setMessages([]); setTokens(0); setTokenWarningDismissed(false) },
+    // Restaura la conversación visible tras un reload (HMR/Ctrl+R) o reapertura.
+    onRestore: (msgs) => setMessages(msgs),
     onResetUsage,
     onError: (msg) => setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: msg }]),
   })
