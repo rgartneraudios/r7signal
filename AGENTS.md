@@ -30,10 +30,10 @@ tools + permisos + snapshots + tablero + R7/R9 estén completos y estables como 
 desarrollo del propio R7Signal.
 
 **Estado (06/10)**: loop único ✅ · tools ✅ · permisos ✅ · tablero ✅ · R7/R9 ✅ · snapshots de
-archivos ✅ · **shell revertible ✅** (harness `cochiSnapshots` 91/91; falta E2E real) · reinicio de
-la app Rust (requiere humano) ⏳.
+archivos ✅ · **shell revertible ✅** (harness `cochiSnapshots` 91/91 + E2E real 06/10) · **reinicio
+de la app Rust ✅** (E2E dev 06/10: `tauri dev` recompila/reinicia solo; en release lo hace el humano).
 
-### Gaps para el visto bueno (06/10) — shell revertible + permisos dev + editor cerrados
+### Gaps para el visto bueno (06/10) — shell revertible + reinicio + permisos dev + editor cerrados
 
 1. **Shell revertible (CERRADO)**: `run_command` ya entra en el snapshot del turno. Antes del
    primer comando se captura el workspace completo (ignorando `node_modules`/`.git`/`target`/
@@ -41,10 +41,12 @@ la app Rust (requiere humano) ⏳.
    como creadas (`captureWorkspace`/`reconcileWorkspace` en `snapshotStore.js`). El revert
    restaura lo modificado/borrado y elimina lo creado; los artefactos ignorados se regeneran.
    `summarizeSnapshotAgainstDisk` compara contra disco para listar SÓLO lo que cambió, y el revert
-   no reescribe archivos cuyo contenido ya coincide con el backup.
-2. **Reinicio de la app Rust (estructural, no se arregla)**: el frontend tiene HMR, pero tocar
+   no reescribe archivos cuyo contenido ya coincide con el backup. **E2E real 06/10**: crear/borrar
+   con `run_command` → Undo deja el workspace intacto.
+2. **Reinicio de la app Rust (CERRADO — E2E dev 06/10)**: el frontend tiene HMR, pero tocar
    `src-tauri/` exige recompilar y reiniciar el proceso anfitrión; Cochi no puede reiniciarse solo.
-   Ese E2E lo hace Signor Roberto (o una instancia dev aparte).
+   Validado con `npx tauri dev`: el watcher ve el cambio en `src-tauri/`, recompila y reinicia la
+   app (corta el turno de Cochi); en release el reinicio es 100% humano.
 3. **Reglas de permisos del dev (CERRADO)**: `isSafeDevCommand` (`cochiPermissions.js`) auto-aprueba
    `npm test`, `npm run <test|lint|build|harness|typecheck>[:sufijo]`, `git status/diff/log/show/
    branch/rev-parse` y `cargo check/test/clippy/build/fmt`. Es una guarda **estructural** (parsea
@@ -55,7 +57,8 @@ la app Rust (requiere humano) ⏳.
    intenta el match exacto y, si falla, normaliza a LF y **restaura el EOL original** del archivo.
    `isSkippedWalkEntry` hace que `walkDir` saltee `node_modules`/`.git`/`target`/`dist`/`build`/
    `coverage`/ocultos (reusa `DEFAULT_WORKSPACE_IGNORE` de `snapshotStore.js`). Ambos puros con
-   harness (`cochiTools`).
+   harness (`cochiTools`). **E2E CRLF 06/10**: `replace_in_file` sobre un archivo CRLF conserva los
+   saltos (CR=3/LF=3 tras editar).
 5. **Git**: sin tool dedicado; `run_command` alcanza. Regla vigente: commit/push sólo si el usuario
    lo pide.
 
@@ -249,6 +252,9 @@ usuario). El costo de las búsquedas web (server tool) va **aparte** de los toke
 
 ## Historial compactado (cerrado — no rehacer)
 
+- **E2E reales 06/10**: shell revertible (crear/borrar con `run_command` → Undo deja el workspace
+  intacto), editor CRLF (`replace_in_file` conserva los saltos CRLF) y reinicio Rust (`tauri dev`
+  recompila/reinicia solo).
 - **Purga de prompts del historial de git (05/10)**: prompts de los 3 agentes (Cochi TARS, Tito,
   Asun, planning/task/compaction) y todo `output/*.txt` eliminados del historial con
   `git filter-branch --tree-filter` + script Node (redacción a `[REDACTED PROMPT]`) y force-push a
