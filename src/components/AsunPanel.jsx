@@ -662,7 +662,7 @@ function AsunPanel({
       />
 
       {/* ── Contenido ── */}
-      <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', position: 'relative', display: 'flex', flexDirection: 'column', background: 'rgba(1, 28, 44, 0.15)' }}>
+      <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', position: 'relative', display: 'flex', flexDirection: 'column', background: 'rgba(42, 12, 46, 0.15)' }}>
 
         {/* ── IMAGEN: wizard ── */}
         {category === 'imagen' && (

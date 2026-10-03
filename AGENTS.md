@@ -217,7 +217,7 @@ usuario). El costo de las búsquedas web (server tool) va **aparte** de los toke
   cwd = raíz del workspace.
 - **Transparencia (Mica/Acrylic)**: ventana Tauri `transparent: true` con `windowEffects: micaDark`
   (Win11); fallback **Acrylic** tintado (`Color(15,14,17,180)`) en `src-tauri/src/lib.rs` para Win10
-  build 17763-21999. Webview transparente; lienzo de los 3 chats en `rgba(1,28,44,0.15)`.
+  build 17763-21999. Webview transparente; lienzo de los 3 chats en `rgba(42,12,46,0.15)`.
   Headers/footers `rgba(9,8,10,0.5)`. Sólo Windows.
 - **SSRF (cerrado, 06/10)**: dos capas. `isBlockedUrl` (`cochiPermissions.js`) filtra por globs +
   IP literal en JS; el fetch real de `web_fetch` va por el comando Rust `fetch_url_guarded`
