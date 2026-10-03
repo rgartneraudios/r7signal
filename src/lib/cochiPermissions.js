@@ -153,11 +153,40 @@ export function textToRules(text) {
   return String(text ?? '').split('\n').map(s => s.trim()).filter(Boolean)
 }
 
+// ─── Allow-list por defecto para comandos de desarrollo ───────────────────────
+// Comandos NO destructivos que se auto-aprueban sin pedir confirmación:
+//   npm test · npm run <test|lint|build|harness|typecheck> ·
+//   git status/diff/log/show/branch/rev-parse · cargo check/test/clippy/build/fmt
+// Es una guarda ESTRUCTURAL (no un glob): se parsea el programa + subcomando y
+// se rechaza cualquier comando compuesto con metacaracteres de shell (; && || | < > ` $),
+// así algo como "git status && rm -rf /" NO se cuela por empezar con "git status".
+// Una regla deny del usuario gana por sobre esto (se evalúa antes).
+const SHELL_META = /[;&|<>`$\n]/
+const SAFE_NPM_SCRIPTS = /^(test|lint|build|harness|typecheck)(:[\w-]+)?$/
+const SAFE_GIT_SUBCOMMANDS = new Set(['status', 'diff', 'log', 'show', 'branch', 'rev-parse'])
+const SAFE_CARGO_SUBCOMMANDS = new Set(['check', 'test', 'clippy', 'build', 'fmt'])
+
+export function isSafeDevCommand(command) {
+  const cmd = String(command ?? '').trim()
+  if (!cmd || SHELL_META.test(cmd)) return false
+  const tokens = cmd.split(/\s+/)
+  const program = tokens[0]
+  const sub = tokens[1] || ''
+  if (program === 'npm') {
+    if (sub === 'test') return true
+    return sub === 'run' && SAFE_NPM_SCRIPTS.test(tokens[2] || '')
+  }
+  if (program === 'git') return SAFE_GIT_SUBCOMMANDS.has(sub)
+  if (program === 'cargo') return SAFE_CARGO_SUBCOMMANDS.has(sub)
+  return false
+}
+
 export function evaluatePermission(request, rules) {
   if (!request) return null
   if (request.url && isBlockedUrl(request.url)) return 'deny'
   const { allow, deny } = normalizeRules(rules)
   if (deny.some(r => ruleMatches(r, request))) return 'deny'
+  if (request.tool === 'run_command' && isSafeDevCommand(request.command)) return 'allow'
   if (allow.some(r => ruleMatches(r, request))) return 'allow'
   return null
 }

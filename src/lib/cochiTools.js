@@ -1,7 +1,7 @@
 import { readTextFile, writeTextFile, readDir, exists, mkdir, remove, stat, rename, copyFile } from '@tauri-apps/plugin-fs'
 import { Command } from '@tauri-apps/plugin-shell'
 import { writeR9File } from './r9Store.js'
-import { capturePath, captureWorkspace, reconcileWorkspace } from './snapshotStore.js'
+import { capturePath, captureWorkspace, reconcileWorkspace, DEFAULT_WORKSPACE_IGNORE } from './snapshotStore.js'
 import { listPlans, loadPlan, savePlan, setBlockStatus, requestReplan, planBoardList, planToText, planProgress, PLAN_STATUS, PLAN_STATUSES, getBlock } from './planStore.js'
 
 // Tope de lectura de texto — evita meter megabytes al contexto del modelo.
@@ -353,6 +353,14 @@ function buildFileMatcher(pattern, root) {
 }
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
+// Entradas que find_files/search_in_files NUNCA recorren: ocultas (.), dependencias
+// y artefactos de build/caché (DEFAULT_WORKSPACE_IGNORE: node_modules/.git/target/
+// dist/build/coverage/…). Evita listar miles de archivos generados. Puro y testeable.
+export function isSkippedWalkEntry(name) {
+  const n = String(name ?? '')
+  return n.startsWith('.') || DEFAULT_WORKSPACE_IGNORE.has(n)
+}
+
 async function walkDir(dirPath, matcher, results = [], depth = 0, maxResults = 500) {
   if (depth > 12 || results.length >= maxResults) return results
   try {
@@ -360,7 +368,7 @@ async function walkDir(dirPath, matcher, results = [], depth = 0, maxResults = 5
     const root = String(dirPath).replace(/\\/g, '/').replace(/\/+$/, '')
     for (const entry of entries) {
       if (results.length >= maxResults) break
-      if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === '.git') continue
+      if (isSkippedWalkEntry(entry.name)) continue
       const fullPath = root + '/' + entry.name
       if (entry.isDirectory) {
         await walkDir(fullPath, matcher, results, depth + 1, maxResults)
@@ -899,6 +907,40 @@ export const TOOL_ICONS = {
   request_replan:      'PLAN⚠',
 }
 
+// Reemplazo de texto tolerante a CRLF/LF. El modelo suele mandar oldText/newText
+// en LF aunque el archivo de Windows esté en CRLF; primero se intenta el match
+// EXACTO y, si falla, se reintenta normalizando ambos a LF y se restaura el fin
+// de línea original del archivo. Puro y testeable.
+// Devuelve { status: 'ok'|'not_found'|'ambiguous', updated, occurrences, count }.
+export function applyTextReplacement(original, oldText, newText, replaceAll = false) {
+  const src = String(original ?? '')
+  const countOccurrences = (text, needle) => (needle ? text.split(needle).length - 1 : 0)
+  const crlf = src.includes('\r\n')
+  let source = src
+  let oldT = String(oldText ?? '')
+  let newT = String(newText ?? '')
+  let occurrences = countOccurrences(source, oldT)
+  let normalizedEol = false
+  if (occurrences === 0 && oldT) {
+    const lfSource = src.replace(/\r\n/g, '\n')
+    const lfOld = oldT.replace(/\r\n/g, '\n')
+    const lfCount = countOccurrences(lfSource, lfOld)
+    if (lfCount > 0) {
+      occurrences = lfCount
+      normalizedEol = true
+      source = lfSource
+      oldT = lfOld
+      newT = newT.replace(/\r\n/g, '\n')
+    }
+  }
+  if (occurrences === 0) return { status: 'not_found', updated: src, occurrences: 0, count: 0 }
+  if (!replaceAll && occurrences > 1) return { status: 'ambiguous', updated: src, occurrences, count: 0 }
+  let updated = replaceAll ? source.split(oldT).join(newT) : source.replace(oldT, newT)
+  if (normalizedEol && crlf) updated = updated.replace(/\n/g, '\r\n')
+  if (updated === src) return { status: 'not_found', updated: src, occurrences, count: 0 }
+  return { status: 'ok', updated, occurrences, count: replaceAll ? occurrences : 1 }
+}
+
 // ─── Executors ────────────────────────────────────────────────────────────────
 export async function executeTool(name, args, permission = 'full', workspaceRoot = '', options = {}) {
   // dryRun: calcula el resultado y el diff de una edición SIN escribir en disco.
@@ -997,26 +1039,21 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
 
     case 'replace_in_file': {
       const original = await readTextFile(args.path)
-      const occurrences = original.split(args.oldText).length - 1
-      if (occurrences === 0) return { modelResult: `⚠️ Texto no encontrado en ${args.path}`, diff: null }
-      const doAll = args.replaceAll === true
-      if (!doAll && occurrences > 1) {
+      const result = applyTextReplacement(original, args.oldText, args.newText, args.replaceAll === true)
+      if (result.status === 'not_found') return { modelResult: `⚠️ Texto no encontrado en ${args.path}`, diff: null }
+      if (result.status === 'ambiguous') {
         return {
-          modelResult: `⚠️ El texto aparece ${occurrences} veces en ${args.path}. Añade más contexto para que sea único, o pasa replaceAll: true si querés reemplazar todas.`,
+          modelResult: `⚠️ El texto aparece ${result.occurrences} veces en ${args.path}. Añade más contexto para que sea único, o pasa replaceAll: true si querés reemplazar todas.`,
           diff: null,
         }
       }
-      const updated = doAll
-        ? original.split(args.oldText).join(args.newText)
-        : original.replace(args.oldText, args.newText)
-      if (updated === original) return { modelResult: `⚠️ Texto no encontrado en ${args.path}`, diff: null }
+      const updated = result.updated
       const diff = { path: args.path, before: original, after: updated }
       if (dryRun) return { modelResult: `(preview) editar ${args.path}`, diff }
       await snap(args.path)
       await writeTextFile(args.path, updated)
-      const count = doAll ? occurrences : 1
       return {
-        modelResult: `✅ ${count} reemplazo(s) en ${args.path}`,
+        modelResult: `✅ ${result.count} reemplazo(s) en ${args.path}`,
         diff,
       }
     }

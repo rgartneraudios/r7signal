@@ -33,7 +33,7 @@ desarrollo del propio R7Signal.
 archivos ✅ · **shell revertible ✅** (harness `cochiSnapshots` 91/91; falta E2E real) · reinicio de
 la app Rust (requiere humano) ⏳.
 
-### Gaps para el visto bueno (06/10) — shell revertible cerrado
+### Gaps para el visto bueno (06/10) — shell revertible + permisos dev + editor cerrados
 
 1. **Shell revertible (CERRADO)**: `run_command` ya entra en el snapshot del turno. Antes del
    primer comando se captura el workspace completo (ignorando `node_modules`/`.git`/`target`/
@@ -45,11 +45,17 @@ la app Rust (requiere humano) ⏳.
 2. **Reinicio de la app Rust (estructural, no se arregla)**: el frontend tiene HMR, pero tocar
    `src-tauri/` exige recompilar y reiniciar el proceso anfitrión; Cochi no puede reiniciarse solo.
    Ese E2E lo hace Signor Roberto (o una instancia dev aparte).
-3. **Reglas de permisos del dev**: allow-list por defecto para comandos no destructivos
-   (`npm test`/`lint`/`build`, `git status`/`diff`, `cargo check`) y confirmación para el resto.
-4. **Robustez del editor**: `replace_in_file` (`cochiTools.js:998`) ya marca texto ausente/ambiguo,
-   soporta `replaceAll` y snapshotea; falta normalizar CRLF/LF al comparar, y que `walkDir`
-   (`cochiTools.js:363`) salte también `target`/`dist`/`build`.
+3. **Reglas de permisos del dev (CERRADO)**: `isSafeDevCommand` (`cochiPermissions.js`) auto-aprueba
+   `npm test`, `npm run <test|lint|build|harness|typecheck>[:sufijo]`, `git status/diff/log/show/
+   branch/rev-parse` y `cargo check/test/clippy/build/fmt`. Es una guarda **estructural** (parsea
+   programa + subcomando y rechaza metacaracteres `; && || | < > \` $`), así `git status && rm -rf /`
+   NO se cuela. Una regla `deny` del usuario gana. `evaluatePermission` la aplica tras el deny y
+   antes del allow del usuario. El resto sigue pidiendo confirmación.
+4. **Robustez del editor (CERRADO)**: `applyTextReplacement` (`cochiTools.js`) tolera CRLF/LF:
+   intenta el match exacto y, si falla, normaliza a LF y **restaura el EOL original** del archivo.
+   `isSkippedWalkEntry` hace que `walkDir` saltee `node_modules`/`.git`/`target`/`dist`/`build`/
+   `coverage`/ocultos (reusa `DEFAULT_WORKSPACE_IGNORE` de `snapshotStore.js`). Ambos puros con
+   harness (`cochiTools`).
 5. **Git**: sin tool dedicado; `run_command` alcanza. Regla vigente: commit/push sólo si el usuario
    lo pide.
 
@@ -227,9 +233,14 @@ usuario). El costo de las búsquedas web (server tool) va **aparte** de los toke
 - **Shell revertible**: cerrado (06/10). `run_command` captura el workspace antes del primer
   comando y reconcilia lo creado después; el revert cubre modificar/borrar/crear dentro del
   workspace (y no reescribe lo que quedó igual). Falta sólo el E2E real (rebuild Tauri).
+- **Permisos dev + editor**: cerrados (06/10). `isSafeDevCommand` auto-aprueba el gate
+  (`npm`/`git`/`cargo` no destructivos) y `applyTextReplacement`/`isSkippedWalkEntry` cubren el
+  editor de Cochi. Harness `cochiPermissions` 49/49 y `cochiTools` 86/86.
 
 ### Opcional / features futuras
 
+- **Asun: `walkDir` propio** (`asunTools.js:59`): no saltea `target`/`dist`/`build`/`coverage`
+  como el de Cochi. Misma clase de fix, fuera del scope de #4.
 - **Vocabulario R1/R2**: `commitR7Turn` escribe `R1:`/`R2:`; renombrar si se quiere desacoplar.
 - **Tito Etapa 2/3**: probar motores `parallel`/`perplexity`/`firecrawl` (matriz A/B en español) +
   `read_url` (Jina Reader o Firecrawl `/scrape`) + `authority.json` por tema.

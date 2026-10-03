@@ -2,7 +2,7 @@
 // Ejecutar:  node harness/cochiTools.harness.mjs   (o npm run harness:tools)
 // El foco actual es resolveCommandCwd: run_command debe caer a la raíz del
 // workspace cuando el modelo no manda `cwd` (bug: corría en el cwd del proceso).
-import { resolveCommandCwd, buildShellInvocation, getToolsForPermission, formatRunCommandOutput } from '../src/lib/cochiTools.js'
+import { resolveCommandCwd, buildShellInvocation, getToolsForPermission, formatRunCommandOutput, applyTextReplacement, isSkippedWalkEntry } from '../src/lib/cochiTools.js'
 
 let pass = 0
 let fail = 0
@@ -113,6 +113,42 @@ check('sin output pero con code', formatRunCommandOutput({ code: 0 }), '(exit 0)
 check('exit code ausente no prefija', formatRunCommandOutput({ stdout: 'x', code: null }), 'x')
 check('timeout no prefija exit', formatRunCommandOutput({ timedOut: true, timeoutMs: 120000, stdout: 'a' }), '⏱️ Comando cancelado por timeout (120000ms).\nSTDOUT: a')
 check('error de ejecucion', formatRunCommandOutput({ error: 'spawn falló', stdout: 'a' }), 'ERROR: spawn falló\nSTDOUT: a')
+
+console.log('- #4a isSkippedWalkEntry: saltea dependencias y artefactos de build -')
+check('node_modules se saltea', isSkippedWalkEntry('node_modules'), true)
+check('.git se saltea', isSkippedWalkEntry('.git'), true)
+check('target se saltea', isSkippedWalkEntry('target'), true)
+check('dist se saltea', isSkippedWalkEntry('dist'), true)
+check('build se saltea', isSkippedWalkEntry('build'), true)
+check('coverage se saltea', isSkippedWalkEntry('coverage'), true)
+check('.env se saltea (oculto)', isSkippedWalkEntry('.env'), true)
+check('src NO se saltea', isSkippedWalkEntry('src'), false)
+check('index.jsx NO se saltea', isSkippedWalkEntry('index.jsx'), false)
+
+console.log('- #4b applyTextReplacement: tolera CRLF/LF sin romper el EOL del archivo -')
+{
+  const r1 = applyTextReplacement('hola\nmundo\n', 'mundo', 'cochi')
+  check('match exacto LF', [r1.status, r1.updated, r1.count], ['ok', 'hola\ncochi\n', 1])
+
+  const r2 = applyTextReplacement('hola\r\nmundo\r\n', 'hola\nmundo', 'adios\nmundo')
+  check('archivo CRLF + oldText LF matchea', r2.status, 'ok')
+  check('archivo CRLF conserva CRLF al escribir', r2.updated, 'adios\r\nmundo\r\n')
+
+  const r3 = applyTextReplacement('a\nb\n', 'zzz', 'x')
+  check('no encontrado', [r3.status, r3.occurrences], ['not_found', 0])
+
+  const r4 = applyTextReplacement('a\nb\na\nb\n', 'a\nb', 'x')
+  check('ambiguo sin replaceAll', r4.status, 'ambiguous')
+
+  const r5 = applyTextReplacement('a\nb\na\nb\n', 'a\nb', 'x', true)
+  check('replaceAll reemplaza todas', [r5.status, r5.updated, r5.count], ['ok', 'x\nx\n', 2])
+
+  const r6 = applyTextReplacement('solo\ntexto', '', 'x')
+  check('oldText vacio no matchea', r6.status, 'not_found')
+
+  const r7 = applyTextReplacement('hola\nmundo\n', 'mundo', 'mundo')
+  check('reemplazo sin cambio -> not_found', r7.status, 'not_found')
+}
 
 console.log(`\n${pass} PASS - ${fail} FAIL`)
 if (fail) process.exit(1)
