@@ -10,7 +10,7 @@ export default function AsunWatermark({ category, isIrmaMax }) {
     }}>
       <div className="watermark-brand" style={{ color: accent, fontSize: '1.5rem' }}>R7SIGNAL</div>
       <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
-      <div className="watermark-name" style={{ color: accent, fontSize: '1.9rem' }}>ASUN PANEL</div>
+      <div className="watermark-name" style={{ color: accent, fontSize: '1.9rem' }}>ASUN</div>
       <div className="watermark-sub" style={{ color: accent, fontSize: '0.8rem' }}>
         {category === 'llm'
           ? <>Asun es un agente diseñado para conversar, generar imágenes y música.<br />

@@ -4,7 +4,7 @@ export default function TitoWatermark() {
     <div className="tito-watermark">
       <div className="watermark-brand" style={{ fontSize: '1.5rem' }}>R7SIGNAL</div>
       <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
-      <div className="watermark-name" style={{ fontSize: '1.9rem' }}>TITO REREARCH</div>
+      <div className="watermark-name" style={{ fontSize: '1.9rem' }}>TITO</div>
       <div className="watermark-sub" style={{ fontSize: '0.8rem' }}>TITO es la unidad de búsqueda y telemetría de R7Signal,<br />
 con búsqueda web real integrada.<br />
 Una sola pestaña: no hay selectores de nivel.<br />

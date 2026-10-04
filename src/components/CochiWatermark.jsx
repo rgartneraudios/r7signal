@@ -8,7 +8,7 @@ export default function CochiWatermark({ isTerminator }) {
     }}>
       <div className="watermark-brand" style={{ color: accent, fontSize: '1.5rem' }}>R7SIGNAL</div>
       <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
-      <div className="watermark-name" style={{ color: accent, fontSize: '1.9rem' }}>COCHI DESKTOP</div>
+      <div className="watermark-name" style={{ color: accent, fontSize: '1.9rem' }}>COCHI</div>
       <div className="watermark-sub" style={{ color: accent, fontSize: '0.8rem' }}>
       Cochi es un agente diseñado para administrar tus archivos y tu código.<br />
 Tiene dos selectores pensados para equilibrar <br />
