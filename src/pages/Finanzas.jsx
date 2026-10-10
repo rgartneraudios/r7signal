@@ -5,18 +5,18 @@ import { COLORS, rgba } from '../components/toolPalette'
 import { Field, ResultBox, Panel } from '../components/ToolUI'
 import { parseAmount } from '../lib/calculadora'
 import {
-  CURRENCIES, CURRENCY_CODES, COIN_IDS,
-  frankfurterLatestUrl, parseFrankfurterRates,
+  CURRENCIES, COIN_IDS,
+  erApiLatestUrl, parseErApiRates,
   convertCurrency,
   coingeckoMarketsUrl, parseCoingeckoMarkets,
-  financeProxyUrl,
-  formatCurrency, formatCompact, formatPercent,
+  INDICES, financeProxyUrl, indexQuotesBySymbol,
+  formatCurrency, formatCompact, formatPercent, formatNumber,
 } from '../lib/finanzas'
 
 const GREEN = '#5FD08A'
 const RED = '#E0736F'
 
-const POPULAR_RATES = ['EUR', 'BRL', 'MXN', 'GBP', 'JPY', 'CHF']
+const POPULAR_RATES = ['ARS', 'BRL', 'MXN', 'CLP', 'EUR', 'GBP']
 
 function StatusNote({ status, error, ok }) {
   if (status === 'loading') {
@@ -69,12 +69,11 @@ function DivisasPanel() {
 
   useEffect(() => {
     let alive = true
-    const targets = CURRENCY_CODES.filter(c => c !== from)
-    fetch(frankfurterLatestUrl(from, targets))
+    fetch(erApiLatestUrl(from))
       .then(r => r.json())
       .then(data => {
         if (!alive) return
-        setRates(parseFrankfurterRates(data))
+        setRates(parseErApiRates(data))
         setStatus('ok')
       })
       .catch(() => {
@@ -90,7 +89,7 @@ function DivisasPanel() {
   const popular = POPULAR_RATES.filter(c => c !== from && rates[c] !== undefined)
 
   return (
-    <Panel title="Divisas" subtitle="tipos de cambio · frankfurter (ECB)">
+    <Panel title="Divisas" subtitle="tipos de cambio · exchangerate-api">
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gap: 12, alignItems: 'end' }}>
         <Field label="Monto">
           <input className="calc-num" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" inputMode="decimal" />
@@ -109,7 +108,7 @@ function DivisasPanel() {
         </Field>
       </div>
 
-      <StatusNote status={status} error="Cotización no disponible." ok="Actualizado vía ECB" />
+      <StatusNote status={status} error="Cotización no disponible." ok="Actualizado · exchangerate-api" />
 
       {popular.length > 0 && (
         <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
@@ -210,17 +209,9 @@ function CriptoPanel() {
   )
 }
 
-const PLANNED_INDICES = [
-  { name: 'S&P 500', ticker: 'SPX' },
-  { name: 'Nasdaq 100', ticker: 'NDX' },
-  { name: 'Dow Jones', ticker: 'DJI' },
-  { name: 'Oro', ticker: 'XAU' },
-  { name: 'Petróleo WTI', ticker: 'WTI' },
-  { name: 'Euro / Dólar', ticker: 'EURUSD' },
-]
-
 function IndicesPanel() {
-  const [proxyOk, setProxyOk] = useState(false)
+  const [quotes, setQuotes] = useState({})
+  const [status, setStatus] = useState('loading')
   const proxy = financeProxyUrl(import.meta.env.VITE_SUPABASE_URL)
 
   useEffect(() => {
@@ -228,27 +219,53 @@ function IndicesPanel() {
     let alive = true
     fetch(proxy)
       .then(r => { if (!r.ok) throw new Error('proxy'); return r.json() })
-      .then(() => { if (alive) setProxyOk(true) })
-      .catch(() => { if (alive) setProxyOk(false) })
+      .then(data => {
+        if (!alive) return
+        setQuotes(indexQuotesBySymbol(data))
+        setStatus('ok')
+      })
+      .catch(() => {
+        if (!alive) return
+        setQuotes({})
+        setStatus('error')
+      })
     return () => { alive = false }
   }, [proxy])
 
+  const ok = status === 'ok' && Object.keys(quotes).length > 0
+  const pending = !proxy || status === 'error'
+
   return (
-    <Panel title="Índices y materias primas" subtitle="vía proxy Supabase · próximamente">
-      <div style={{ fontSize: '0.78rem', color: THEME.textMed, lineHeight: 1.5, marginBottom: 12 }}>
-        Requiere la edge function <span style={{ color: COLORS.neonCyan }}>finance-proxy</span> en Supabase
-        (guarda la API key y evita CORS). El frontend ya está listo para consumirla.
-      </div>
+    <Panel title="Índices y materias primas" subtitle="mercado en vivo · Yahoo Finance">
+      {!ok && (
+        <div style={{ fontSize: '0.78rem', color: THEME.textMed, lineHeight: 1.5, marginBottom: 12 }}>
+          {pending
+            ? <>Requiere la edge function <span style={{ color: COLORS.neonCyan }}>finance-proxy</span> en Supabase. El frontend ya está listo para consumirla.</>
+            : 'Consultando el proxy…'}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-        {PLANNED_INDICES.map(i => (
-          <div key={i.ticker} style={RATE_CHIP}>
-            <div style={{ fontSize: '0.56rem', letterSpacing: '0.16em', color: THEME.textMed, fontWeight: 700 }}>{i.ticker}</div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: COLORS.silverBright, marginTop: 3 }}>{i.name}</div>
-          </div>
-        ))}
+        {INDICES.map(i => {
+          const q = quotes[i.symbol]
+          const up = (q?.changePercent ?? 0) >= 0
+          return (
+            <div key={i.ticker} style={RATE_CHIP}>
+              <div style={{ fontSize: '0.56rem', letterSpacing: '0.16em', color: THEME.textMed, fontWeight: 700 }}>{i.ticker}</div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: COLORS.silverBright, marginTop: 3 }}>{i.name}</div>
+              <div style={{ fontSize: '1rem', fontWeight: 800, color: COLORS.goldBright, marginTop: 4, fontFamily: "'Space Grotesk',sans-serif" }}>
+                {q && q.price !== null ? formatNumber(q.price, 2) : '—'}
+              </div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 800, color: q ? (up ? GREEN : RED) : THEME.textLow, marginTop: 2 }}>
+                {q ? formatPercent(q.changePercent) : 'sin datos'}
+              </div>
+            </div>
+          )
+        })}
       </div>
-      <Note color={proxyOk ? GREEN : THEME.textLow}>
-        {proxyOk ? 'Proxy disponible' : 'Pendiente de configurar'}
+
+      <Note color={ok ? GREEN : THEME.textLow}>
+        {ok ? 'Datos en vivo' : pending ? 'Pendiente de configurar' : 'Conectando…'}
       </Note>
     </Panel>
   )

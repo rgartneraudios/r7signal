@@ -2,11 +2,11 @@
 // Ejecutar:  node harness/finanzas.harness.mjs
 import {
   CURRENCIES, CURRENCY_CODES, COINS, COIN_IDS,
-  frankfurterLatestUrl, parseFrankfurterRate, parseFrankfurterRates,
+  erApiLatestUrl, parseErApiRates, erApiRate,
   convertCurrency,
   coingeckoMarketsUrl, parseCoingeckoMarkets,
-  financeProxyUrl,
-  formatCurrency, formatCompact, formatPercent,
+  INDICES, INDEX_SYMBOLS, financeProxyUrl, parseFinanceProxy, indexQuotesBySymbol,
+  formatCurrency, formatCompact, formatPercent, formatNumber,
 } from '../src/lib/finanzas.js'
 
 let pass = 0
@@ -21,16 +21,17 @@ function check(label, actual, expected) {
 console.log('— listas —')
 check('hay divisas', CURRENCIES.length >= 10, true)
 check('códigos incluyen USD/EUR/BRL', ['USD', 'EUR', 'BRL'].every(c => CURRENCY_CODES.includes(c)), true)
+check('códigos incluyen LATAM', ['ARS', 'CLP', 'COP', 'UYU', 'PEN'].every(c => CURRENCY_CODES.includes(c)), true)
 check('hay coins', COINS.length >= 5, true)
 check('coin ids incluyen bitcoin', COIN_IDS.includes('bitcoin'), true)
 
-console.log('— frankfurter —')
-check('URL una divisa', frankfurterLatestUrl('USD', 'EUR'), 'https://api.frankfurter.app/latest?from=USD&to=EUR')
-check('URL varias', frankfurterLatestUrl('USD', ['EUR', 'ARS']), 'https://api.frankfurter.app/latest?from=USD&to=EUR,ARS')
-check('parse rate', parseFrankfurterRate({ rates: { EUR: 0.92 } }, 'EUR'), 0.92)
-check('parse rate ausente → null', parseFrankfurterRate({ rates: {} }, 'EUR'), null)
-check('parse data null → null', parseFrankfurterRate(null, 'EUR'), null)
-check('parse rates', parseFrankfurterRates({ rates: { EUR: 0.92, ARS: 1000 } }), { EUR: 0.92, ARS: 1000 })
+console.log('— exchangerate-api —')
+check('URL base', erApiLatestUrl('USD'), 'https://open.er-api.com/v6/latest/USD')
+check('parse rates', parseErApiRates({ result: 'success', rates: { EUR: 0.92, ARS: 1515.8 } }), { EUR: 0.92, ARS: 1515.8 })
+check('parse data null → {}', parseErApiRates(null), {})
+check('parse sin rates → {}', parseErApiRates({ result: 'error' }), {})
+check('rate', erApiRate({ rates: { EUR: 0.92 } }, 'EUR'), 0.92)
+check('rate ausente → null', erApiRate({ rates: {} }, 'EUR'), null)
 
 console.log('— convertCurrency —')
 check('100 USD a EUR @0,92', convertCurrency(100, 0.92), 92)
@@ -50,10 +51,29 @@ check('parse markets price', parsed[0].price, 60000)
 check('parse markets change', parsed[0].change24h, 1.5)
 check('parse markets no-array → []', parseCoingeckoMarkets(null), [])
 
+console.log('— índices —')
+check('hay índices', INDICES.length, 6)
+check('símbolos de índices', INDEX_SYMBOLS, ['^GSPC', '^NDX', '^DJI', 'GC=F', 'CL=F', 'EURUSD=X'])
+check('índice tiene nombre+ticker+symbol', Boolean(INDICES[0].name && INDICES[0].ticker && INDICES[0].symbol), true)
+
 console.log('— proxy —')
-check('proxy url', financeProxyUrl('https://abc.supabase.co'), 'https://abc.supabase.co/functions/v1/finance-proxy')
-check('proxy url con barra', financeProxyUrl('https://abc.supabase.co/'), 'https://abc.supabase.co/functions/v1/finance-proxy')
 check('proxy sin base → null', financeProxyUrl(''), null)
+check('proxy con barra', financeProxyUrl('https://abc.supabase.co/', ['AAPL', 'MSFT']),
+  'https://abc.supabase.co/functions/v1/finance-proxy?symbols=AAPL,MSFT')
+check('proxy codifica símbolos', financeProxyUrl('https://abc.supabase.co', ['^GSPC']),
+  'https://abc.supabase.co/functions/v1/finance-proxy?symbols=%5EGSPC')
+check('proxy default incluye todos',
+  financeProxyUrl('https://abc.supabase.co').startsWith('https://abc.supabase.co/functions/v1/finance-proxy?symbols='), true)
+const proxyParsed = parseFinanceProxy({ quotes: [
+  { symbol: '^GSPC', price: 7811.54, change: 46.18, changePercent: 0.595, currency: 'USD' },
+  { symbol: 'GC=F', price: null },
+] })
+check('parse proxy len', proxyParsed.length, 2)
+check('parse proxy price', proxyParsed[0].price, 7811.54)
+check('parse proxy changePercent', proxyParsed[0].changePercent, 0.595)
+check('parse proxy price null', proxyParsed[1].price, null)
+check('parse proxy no-array → []', parseFinanceProxy(null), [])
+check('indexQuotesBySymbol', Object.keys(indexQuotesBySymbol({ quotes: [{ symbol: '^NDX', price: 1 }] })), ['^NDX'])
 
 console.log('— formato —')
 check('formatCompact miles', formatCompact(1500), '1.5K')
@@ -62,6 +82,8 @@ check('formatPercent positivo', formatPercent(1.5), '+1.50%')
 check('formatPercent negativo', formatPercent(-2.345), '-2.35%')
 check('formatPercent null → vacío', formatPercent(null), '')
 check('formatCurrency null → vacío', formatCurrency(null, 'USD'), '')
+check('formatNumber miles', formatNumber(7811.54, 2), '7,811.54')
+check('formatNumber null → vacío', formatNumber(null), '')
 
 console.log(`\n[finanzas] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)
