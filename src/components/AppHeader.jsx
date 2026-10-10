@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { THEME } from '../theme'
 import { WEATHER } from '../constants'
 import { WEB_TABS } from '../lib/webRoutes'
+import MoonWidget from './MoonWidget'
 
 function useRealTimeClock() {
   const [time, setTime] = useState(new Date())
@@ -30,11 +31,14 @@ function Tab({ tab, active, onNavigate }) {
     borderRadius: 10,
     transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
     background: highlighted ? '#1B1A1E' : '#141316',
-    border: `1px solid ${highlighted ? THEME.celeste35 : '#1F1E22'}`,
-    color: highlighted ? THEME.textHigh : THEME.textMed,
-    boxShadow: highlighted
-      ? `inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 16px rgba(0,0,0,0.7), 0 0 14px ${THEME.celeste15}`
-      : 'inset 0 1px 0 rgba(255,255,255,0.02), 0 4px 12px rgba(0,0,0,0.55)',
+    border: `1px solid ${active ? THEME.celeste : highlighted ? THEME.celeste35 : '#1F1E22'}`,
+    color: active ? '#EAF6FF' : highlighted ? THEME.textHigh : THEME.textMed,
+    boxShadow: active
+      ? `inset 0 0 16px ${THEME.celeste25}, 0 0 18px ${THEME.celeste60}, 0 0 40px ${THEME.celeste40}, 0 6px 16px rgba(0,0,0,0.7)`
+      : highlighted
+        ? `inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 16px rgba(0,0,0,0.7), 0 0 14px ${THEME.celeste15}`
+        : 'inset 0 1px 0 rgba(255,255,255,0.02), 0 4px 12px rgba(0,0,0,0.55)',
+    textShadow: active ? `0 0 10px ${THEME.celeste60}` : 'none',
     transform: hover ? 'translateY(-1px)' : 'translateY(0)',
     whiteSpace: 'nowrap',
   }
@@ -113,21 +117,24 @@ export default function AppHeader({ activeRoute = '/', onNavigate }) {
         ))}
       </nav>
 
-      <div style={{ display:'flex', flexDirection:'column', gap:2, alignItems:'flex-end', minWidth:200 }}>
-        <div style={{
-          fontFamily:"'Chakra Petch',sans-serif", fontSize:'1.8rem', fontWeight:500,
-          letterSpacing:'0.08em', lineHeight:1.1, color:'transparent',
-          backgroundImage:GRADIENT,
-          WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
-          backgroundClip:'text',
-        }}>
-          {WEATHER.emoji} {WEATHER.temp}
-        </div>
-        <div style={{
-          fontSize:'0.75rem', fontWeight:300, letterSpacing:'0.15em',
-          color:THEME.textLow, marginTop:0,
-        }}>
-          {WEATHER.city}
+      <div style={{ display:'flex', flexDirection:'row', alignItems:'center', gap:22, minWidth:200, justifyContent:'flex-end' }}>
+        <MoonWidget />
+        <div style={{ display:'flex', flexDirection:'column', gap:2, alignItems:'flex-end' }}>
+          <div style={{
+            fontFamily:"'Chakra Petch',sans-serif", fontSize:'1.8rem', fontWeight:500,
+            letterSpacing:'0.08em', lineHeight:1.1, color:'transparent',
+            backgroundImage:GRADIENT,
+            WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
+            backgroundClip:'text',
+          }}>
+            {WEATHER.emoji} {WEATHER.temp}
+          </div>
+          <div style={{
+            fontSize:'0.75rem', fontWeight:300, letterSpacing:'0.15em',
+            color:THEME.textLow, marginTop:0,
+          }}>
+            {WEATHER.city}
+          </div>
         </div>
       </div>
 
