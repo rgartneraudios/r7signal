@@ -82,18 +82,81 @@ export function parseCoingeckoMarkets(data) {
   }))
 }
 
-export const INDICES = [
-  { name: 'S&P 500', ticker: 'SPX', symbol: '^GSPC' },
-  { name: 'Nasdaq 100', ticker: 'NDX', symbol: '^NDX' },
-  { name: 'Dow Jones', ticker: 'DJI', symbol: '^DJI' },
-  { name: 'Oro', ticker: 'XAU', symbol: 'GC=F' },
-  { name: 'Petróleo WTI', ticker: 'WTI', symbol: 'CL=F' },
-  { name: 'Euro / Dólar', ticker: 'EURUSD', symbol: 'EURUSD=X' },
+export const MARKET_GROUPS = [
+  {
+    title: 'Índices · EE.UU.',
+    items: [
+      { name: 'S&P 500', ticker: 'SPX', symbol: '^GSPC' },
+      { name: 'Nasdaq', ticker: 'IXIC', symbol: '^IXIC' },
+      { name: 'Dow Jones', ticker: 'DJI', symbol: '^DJI' },
+      { name: 'Russell 2000', ticker: 'RUT', symbol: '^RUT' },
+    ],
+  },
+  {
+    title: 'Índices · América',
+    items: [
+      { name: 'Bovespa', ticker: 'BVSP', symbol: '^BVSP' },
+      { name: 'Merval', ticker: 'MERV', symbol: '^MERV' },
+      { name: 'IPC México', ticker: 'MXX', symbol: '^MXX' },
+    ],
+  },
+  {
+    title: 'Índices · Europa',
+    items: [
+      { name: 'FTSE 100', ticker: 'FTSE', symbol: '^FTSE' },
+      { name: 'DAX', ticker: 'GDAXI', symbol: '^GDAXI' },
+      { name: 'CAC 40', ticker: 'FCHI', symbol: '^FCHI' },
+    ],
+  },
+  {
+    title: 'Índices · Asia',
+    items: [
+      { name: 'Nikkei 225', ticker: 'N225', symbol: '^N225' },
+      { name: 'Hang Seng', ticker: 'HSI', symbol: '^HSI' },
+      { name: 'Shanghai', ticker: 'SSEC', symbol: '000001.SS' },
+    ],
+  },
+  {
+    title: 'Materias primas',
+    items: [
+      { name: 'Oro', ticker: 'XAU', symbol: 'GC=F' },
+      { name: 'Plata', ticker: 'XAG', symbol: 'SI=F', decimals: 3 },
+      { name: 'Platino', ticker: 'XPT', symbol: 'PL=F' },
+      { name: 'Cobre', ticker: 'HG', symbol: 'HG=F', decimals: 3 },
+      { name: 'Petróleo WTI', ticker: 'WTI', symbol: 'CL=F' },
+      { name: 'Petróleo Brent', ticker: 'BRENT', symbol: 'BZ=F' },
+      { name: 'Gas natural', ticker: 'NG', symbol: 'NG=F', decimals: 3 },
+    ],
+  },
+  {
+    title: 'Divisas',
+    items: [
+      { name: 'Euro / Dólar', ticker: 'EURUSD', symbol: 'EURUSD=X', decimals: 4 },
+      { name: 'Libra / Dólar', ticker: 'GBPUSD', symbol: 'GBPUSD=X', decimals: 4 },
+      { name: 'Dólar / Yen', ticker: 'USDJPY', symbol: 'USDJPY=X', decimals: 3 },
+      { name: 'Dólar / Peso arg.', ticker: 'USDARS', symbol: 'USDARS=X', decimals: 2 },
+      { name: 'Dólar / Real', ticker: 'USDBRL', symbol: 'USDBRL=X', decimals: 3 },
+      { name: 'Dólar / Peso mex.', ticker: 'USDMXN', symbol: 'USDMXN=X', decimals: 3 },
+    ],
+  },
+  {
+    title: 'Acciones destacadas',
+    items: [
+      { name: 'Apple', ticker: 'AAPL', symbol: 'AAPL' },
+      { name: 'Microsoft', ticker: 'MSFT', symbol: 'MSFT' },
+      { name: 'Alphabet', ticker: 'GOOGL', symbol: 'GOOGL' },
+      { name: 'Amazon', ticker: 'AMZN', symbol: 'AMZN' },
+      { name: 'NVIDIA', ticker: 'NVDA', symbol: 'NVDA' },
+      { name: 'Tesla', ticker: 'TSLA', symbol: 'TSLA' },
+      { name: 'Meta', ticker: 'META', symbol: 'META' },
+    ],
+  },
 ]
 
-export const INDEX_SYMBOLS = INDICES.map(i => i.symbol)
+export const MARKET_ITEMS = MARKET_GROUPS.flatMap(g => g.items)
+export const MARKET_SYMBOLS = MARKET_ITEMS.map(i => i.symbol)
 
-export function financeProxyUrl(baseUrl, symbols = INDEX_SYMBOLS) {
+export function financeProxyUrl(baseUrl, symbols = MARKET_SYMBOLS) {
   if (!baseUrl) return null
   const root = String(baseUrl).replace(/\/+$/, '')
   const list = Array.isArray(symbols) ? symbols.join(',') : symbols

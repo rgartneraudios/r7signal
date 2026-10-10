@@ -5,7 +5,7 @@ import {
   erApiLatestUrl, parseErApiRates, erApiRate,
   convertCurrency,
   coingeckoMarketsUrl, parseCoingeckoMarkets,
-  INDICES, INDEX_SYMBOLS, financeProxyUrl, financeProxyHeaders, parseFinanceProxy, indexQuotesBySymbol,
+  MARKET_GROUPS, MARKET_ITEMS, MARKET_SYMBOLS, financeProxyUrl, financeProxyHeaders, parseFinanceProxy, indexQuotesBySymbol,
   formatCurrency, formatCompact, formatPercent, formatNumber,
 } from '../src/lib/finanzas.js'
 
@@ -51,10 +51,15 @@ check('parse markets price', parsed[0].price, 60000)
 check('parse markets change', parsed[0].change24h, 1.5)
 check('parse markets no-array → []', parseCoingeckoMarkets(null), [])
 
-console.log('— índices —')
-check('hay índices', INDICES.length, 6)
-check('símbolos de índices', INDEX_SYMBOLS, ['^GSPC', '^NDX', '^DJI', 'GC=F', 'CL=F', 'EURUSD=X'])
-check('índice tiene nombre+ticker+symbol', Boolean(INDICES[0].name && INDICES[0].ticker && INDICES[0].symbol), true)
+console.log('— mercados —')
+check('hay grupos', MARKET_GROUPS.length >= 5, true)
+check('total instrumentos', MARKET_SYMBOLS.length, 33)
+check('incluye oro y plata', ['GC=F', 'SI=F'].every(s => MARKET_SYMBOLS.includes(s)), true)
+check('incluye índices de Asia', ['^N225', '^HSI', '000001.SS'].every(s => MARKET_SYMBOLS.includes(s)), true)
+check('incluye acciones', ['AAPL', 'MSFT', 'GOOGL'].every(s => MARKET_SYMBOLS.includes(s)), true)
+check('incluye divisas', MARKET_SYMBOLS.includes('USDARS=X'), true)
+check('instrumento tiene nombre+ticker+symbol', Boolean(MARKET_ITEMS[0].name && MARKET_ITEMS[0].ticker && MARKET_ITEMS[0].symbol), true)
+check('sin símbolos duplicados', new Set(MARKET_SYMBOLS).size, MARKET_SYMBOLS.length)
 
 console.log('— proxy —')
 check('proxy sin base → null', financeProxyUrl(''), null)

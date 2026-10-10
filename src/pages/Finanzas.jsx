@@ -9,7 +9,7 @@ import {
   erApiLatestUrl, parseErApiRates,
   convertCurrency,
   coingeckoMarketsUrl, parseCoingeckoMarkets,
-  INDICES, financeProxyUrl, financeProxyHeaders, indexQuotesBySymbol,
+  MARKET_GROUPS, MARKET_SYMBOLS, financeProxyUrl, financeProxyHeaders, indexQuotesBySymbol,
   formatCurrency, formatCompact, formatPercent, formatNumber,
 } from '../lib/finanzas'
 
@@ -209,7 +209,24 @@ function CriptoPanel() {
   )
 }
 
-function IndicesPanel() {
+function QuoteChip({ item, quote }) {
+  const has = quote && quote.price !== null
+  const up = (quote?.changePercent ?? 0) >= 0
+  return (
+    <div style={RATE_CHIP}>
+      <div style={{ fontSize: '0.56rem', letterSpacing: '0.16em', color: THEME.textMed, fontWeight: 700 }}>{item.ticker}</div>
+      <div style={{ fontSize: '0.8rem', fontWeight: 800, color: COLORS.silverBright, marginTop: 3 }}>{item.name}</div>
+      <div style={{ fontSize: '1rem', fontWeight: 800, color: COLORS.goldBright, marginTop: 4, fontFamily: "'Space Grotesk',sans-serif" }}>
+        {has ? formatNumber(quote.price, item.decimals ?? 2) : '—'}
+      </div>
+      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: quote ? (up ? GREEN : RED) : THEME.textLow, marginTop: 2 }}>
+        {quote ? formatPercent(quote.changePercent) : 'sin datos'}
+      </div>
+    </div>
+  )
+}
+
+function MarketsPanel() {
   const [quotes, setQuotes] = useState({})
   const [status, setStatus] = useState('loading')
   const proxy = financeProxyUrl(import.meta.env.VITE_SUPABASE_URL)
@@ -232,42 +249,29 @@ function IndicesPanel() {
     return () => { alive = false }
   }, [proxy])
 
-  const ok = status === 'ok' && Object.keys(quotes).length > 0
+  const loaded = Object.keys(quotes).length
+  const ok = status === 'ok' && loaded > 0
   const pending = !proxy || status === 'error'
 
   return (
-    <Panel title="Índices y materias primas" subtitle="mercado en vivo · Yahoo Finance">
-      {!ok && (
-        <div style={{ fontSize: '0.78rem', color: THEME.textMed, lineHeight: 1.5, marginBottom: 12 }}>
-          {pending
-            ? <>Requiere la edge function <span style={{ color: COLORS.neonCyan }}>finance-proxy</span> en Supabase. El frontend ya está listo para consumirla.</>
-            : 'Consultando el proxy…'}
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-        {INDICES.map(i => {
-          const q = quotes[i.symbol]
-          const up = (q?.changePercent ?? 0) >= 0
-          return (
-            <div key={i.ticker} style={RATE_CHIP}>
-              <div style={{ fontSize: '0.56rem', letterSpacing: '0.16em', color: THEME.textMed, fontWeight: 700 }}>{i.ticker}</div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: COLORS.silverBright, marginTop: 3 }}>{i.name}</div>
-              <div style={{ fontSize: '1rem', fontWeight: 800, color: COLORS.goldBright, marginTop: 4, fontFamily: "'Space Grotesk',sans-serif" }}>
-                {q && q.price !== null ? formatNumber(q.price, 2) : '—'}
-              </div>
-              <div style={{ fontSize: '0.72rem', fontWeight: 800, color: q ? (up ? GREEN : RED) : THEME.textLow, marginTop: 2 }}>
-                {q ? formatPercent(q.changePercent) : 'sin datos'}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
+    <>
+      {MARKET_GROUPS.map(group => (
+        <Panel key={group.title} title={group.title} subtitle="Yahoo Finance">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {group.items.map(item => (
+              <QuoteChip key={item.ticker} item={item} quote={quotes[item.symbol]} />
+            ))}
+          </div>
+        </Panel>
+      ))}
       <Note color={ok ? GREEN : THEME.textLow}>
-        {ok ? 'Datos en vivo' : pending ? 'Pendiente de configurar' : 'Conectando…'}
+        {ok
+          ? `Mercados en vivo · ${loaded}/${MARKET_SYMBOLS.length}`
+          : pending
+            ? 'Pendiente de configurar (finance-proxy)'
+            : 'Conectando…'}
       </Note>
-    </Panel>
+    </>
   )
 }
 
@@ -285,7 +289,7 @@ export default function Finanzas() {
       </div>
       <DivisasPanel />
       <CriptoPanel />
-      <IndicesPanel />
+      <MarketsPanel />
     </ToolPage>
   )
 }

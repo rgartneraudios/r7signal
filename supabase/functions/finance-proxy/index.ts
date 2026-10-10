@@ -5,11 +5,17 @@ const corsHeaders = {
 }
 
 const ALLOWED = new Set([
-  '^GSPC', '^NDX', '^DJI', 'GC=F', 'CL=F', 'EURUSD=X',
+  '^GSPC', '^IXIC', '^DJI', '^RUT',
+  '^BVSP', '^MERV', '^MXX',
+  '^FTSE', '^GDAXI', '^FCHI',
+  '^N225', '^HSI', '000001.SS',
+  'GC=F', 'SI=F', 'PL=F', 'HG=F', 'CL=F', 'BZ=F', 'NG=F',
+  'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDARS=X', 'USDBRL=X', 'USDMXN=X',
+  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META',
 ])
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-const CACHE_MS = 60000
+const CACHE_MS = 120000
 
 let cache: { at: number; quotes: unknown[] } | null = null
 
