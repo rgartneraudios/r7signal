@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { THEME } from '../theme'
 import { WEATHER } from '../constants'
-import { useAuth } from '../context/AuthContext'
+import { WEB_TABS } from '../lib/webRoutes'
 
 function useRealTimeClock() {
   const [time, setTime] = useState(new Date())
@@ -12,8 +12,61 @@ function useRealTimeClock() {
   return time
 }
 
-export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
-  const { user } = useAuth()
+const GRADIENT = 'linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)'
+
+function Tab({ tab, active, onNavigate }) {
+  const [hover, setHover] = useState(false)
+  const highlighted = active || hover
+
+  const base = {
+    fontFamily: "'Space Grotesk',sans-serif",
+    fontSize: '0.8rem',
+    fontWeight: 700,
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase',
+    textDecoration: 'none',
+    cursor: 'pointer',
+    padding: '10px 20px',
+    borderRadius: 10,
+    transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
+    background: highlighted ? '#1B1A1E' : '#141316',
+    border: `1px solid ${highlighted ? THEME.celeste35 : '#1F1E22'}`,
+    color: highlighted ? THEME.textHigh : THEME.textMed,
+    boxShadow: highlighted
+      ? `inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 16px rgba(0,0,0,0.7), 0 0 14px ${THEME.celeste15}`
+      : 'inset 0 1px 0 rgba(255,255,255,0.02), 0 4px 12px rgba(0,0,0,0.55)',
+    transform: hover ? 'translateY(-1px)' : 'translateY(0)',
+    whiteSpace: 'nowrap',
+  }
+
+  if (tab.external) {
+    return (
+      <a
+        href={tab.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={base}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+      >
+        {tab.label}
+      </a>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => onNavigate(tab.path)}
+      style={base}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      {tab.label}
+    </button>
+  )
+}
+
+export default function AppHeader({ activeRoute = '/', onNavigate }) {
   const time = useRealTimeClock()
   const pad = n => String(n).padStart(2, '0')
   const formattedTime = `${pad(time.getHours())}:${pad(time.getMinutes())}:${pad(time.getSeconds())}`
@@ -22,11 +75,11 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
   return (
     <div style={{ position:'fixed', top:24, left:32, right:32, zIndex:50, display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
 
-      <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+      <div style={{ display:'flex', flexDirection:'column', gap:0, minWidth:200 }}>
         <div style={{
           fontFamily:"'Chakra Petch',sans-serif", fontSize:'2.8rem', fontWeight:700,
           letterSpacing:'0.08em', lineHeight:1, color:'transparent',
-          backgroundImage:'linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)',
+          backgroundImage:GRADIENT,
           WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
           backgroundClip:'text',
         }}>
@@ -35,78 +88,36 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
         <div style={{
           fontSize:'0.9rem', fontWeight:300, letterSpacing:'0.08em',
           marginTop:4, textTransform:'capitalize', color:'transparent',
-          backgroundImage:'linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)',
+          backgroundImage:GRADIENT,
           WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
           backgroundClip:'text',
         }}>
           {formattedDate}
         </div>
-
-        <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:18 }}>
-          {volverAMenus && (
-            <button onClick={volverAMenus} style={{
-              background:'transparent',
-              border:`1px solid ${THEME.borderSubtle}`,
-              borderRadius:24,
-              padding:'10px 24px',
-              color:THEME.textMed,
-              fontSize:'0.85rem',
-              letterSpacing:'0.2em',
-              cursor:'pointer',
-              fontFamily:"'Space Grotesk',sans-serif",
-              fontWeight:700,
-              textTransform:'uppercase',
-              transition:'all 0.3s ease',
-              width:'fit-content',
-            }}
-              onMouseEnter={e => {
-                e.currentTarget.style.color = THEME.textHigh
-                e.currentTarget.style.borderColor = THEME.celeste35
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.color = THEME.textMed
-                e.currentTarget.style.borderColor = THEME.borderSubtle
-              }}
-            >
-              ◀ Salir
-            </button>
-          )}
-          {onVolver && (
-            <button onClick={onVolver} style={{
-              background:'transparent',
-              border:`1px solid ${THEME.borderSubtle}`,
-              borderRadius:24,
-              padding:'10px 24px',
-              color:THEME.textMed,
-              fontSize:'0.85rem',
-              letterSpacing:'0.2em',
-              cursor:'pointer',
-              fontFamily:"'Space Grotesk',sans-serif",
-              fontWeight:700,
-              textTransform:'uppercase',
-              transition:'all 0.3s ease',
-              width:'fit-content',
-            }}
-              onMouseEnter={e => {
-                e.currentTarget.style.color = THEME.textHigh
-                e.currentTarget.style.borderColor = THEME.celeste35
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.color = THEME.textMed
-                e.currentTarget.style.borderColor = THEME.borderSubtle
-              }}
-            >
-              ◀ Volver
-            </button>
-          )}
-        </div>
       </div>
 
-      <div style={{ display:'flex', flexDirection:'column', gap:2, alignItems:'flex-end' }}>
+      <nav style={{
+        position:'absolute', left:'50%', top:6, transform:'translateX(-50%)',
+        display:'flex', gap:10, alignItems:'center', padding:'6px',
+        background:'rgba(15,14,17,0.55)', border:`1px solid ${THEME.borderSubtle}`,
+        borderRadius:16, backdropFilter:'blur(12px)',
+        boxShadow:'0 12px 40px rgba(0,0,0,0.55)',
+      }}>
+        {WEB_TABS.map(tab => (
+          <Tab
+            key={tab.key}
+            tab={tab}
+            active={!tab.external && tab.path === activeRoute}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </nav>
+
+      <div style={{ display:'flex', flexDirection:'column', gap:2, alignItems:'flex-end', minWidth:200 }}>
         <div style={{
           fontFamily:"'Chakra Petch',sans-serif", fontSize:'1.8rem', fontWeight:500,
           letterSpacing:'0.08em', lineHeight:1.1, color:'transparent',
-          backgroundImage:'linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)',
+          backgroundImage:GRADIENT,
           WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
           backgroundClip:'text',
         }}>
@@ -118,32 +129,6 @@ export default function AppHeader({ onLoginClick, volverAMenus, onVolver }) {
         }}>
           {WEATHER.city}
         </div>
-        <button onClick={onLoginClick} style={{
-          marginTop:6,
-          background:'transparent',
-          border:'2px solid transparent',
-          borderRadius:20, padding:'6px 18px',
-          backgroundImage:'linear-gradient(#141316, #141316), linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)',
-          backgroundOrigin:'border-box',
-          backgroundClip:'padding-box, border-box',
-          color:'#D4D8DC', fontSize:'0.75rem', letterSpacing:'0.15em',
-          cursor:'pointer', fontFamily:"'Space Grotesk',sans-serif", fontWeight:700,
-          textTransform:'uppercase', transition:'all 0.25s',
-          WebkitBackgroundClip:'padding-box, border-box',
-          boxShadow:'0 0 12px rgba(107,158,196,0.15), 0 0 24px rgba(232,200,74,0.1)',
-          width:'fit-content',
-        }}
-          onMouseEnter={e=>{
-            e.currentTarget.style.boxShadow='0 0 20px rgba(107,158,196,0.3), 0 0 40px rgba(232,200,74,0.2)';
-            e.currentTarget.style.backgroundImage='linear-gradient(#1B1A1E, #1B1A1E), linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)';
-          }}
-          onMouseLeave={e=>{
-            e.currentTarget.style.boxShadow='0 0 12px rgba(107,158,196,0.15), 0 0 24px rgba(232,200,74,0.1)';
-            e.currentTarget.style.backgroundImage='linear-gradient(#141316, #141316), linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)';
-          }}
-        >
-          {user ? `👤 ${user.initials}` : '🔐 Acceso'}
-        </button>
       </div>
 
     </div>
