@@ -100,6 +100,11 @@ export function financeProxyUrl(baseUrl, symbols = INDEX_SYMBOLS) {
   return `${root}/functions/v1/finance-proxy?symbols=${encodeURI(list)}`
 }
 
+export function financeProxyHeaders(anonKey) {
+  if (!anonKey) return {}
+  return { apikey: anonKey, Authorization: `Bearer ${anonKey}` }
+}
+
 export function parseFinanceProxy(data) {
   if (!data || !Array.isArray(data.quotes)) return []
   return data.quotes.map(q => ({

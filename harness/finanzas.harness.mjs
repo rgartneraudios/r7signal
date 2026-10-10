@@ -5,7 +5,7 @@ import {
   erApiLatestUrl, parseErApiRates, erApiRate,
   convertCurrency,
   coingeckoMarketsUrl, parseCoingeckoMarkets,
-  INDICES, INDEX_SYMBOLS, financeProxyUrl, parseFinanceProxy, indexQuotesBySymbol,
+  INDICES, INDEX_SYMBOLS, financeProxyUrl, financeProxyHeaders, parseFinanceProxy, indexQuotesBySymbol,
   formatCurrency, formatCompact, formatPercent, formatNumber,
 } from '../src/lib/finanzas.js'
 
@@ -64,6 +64,8 @@ check('proxy codifica símbolos', financeProxyUrl('https://abc.supabase.co', ['^
   'https://abc.supabase.co/functions/v1/finance-proxy?symbols=%5EGSPC')
 check('proxy default incluye todos',
   financeProxyUrl('https://abc.supabase.co').startsWith('https://abc.supabase.co/functions/v1/finance-proxy?symbols='), true)
+check('proxy headers con key', financeProxyHeaders('abc'), { apikey: 'abc', Authorization: 'Bearer abc' })
+check('proxy headers sin key → {}', financeProxyHeaders(''), {})
 const proxyParsed = parseFinanceProxy({ quotes: [
   { symbol: '^GSPC', price: 7811.54, change: 46.18, changePercent: 0.595, currency: 'USD' },
   { symbol: 'GC=F', price: null },

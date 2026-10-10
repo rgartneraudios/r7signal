@@ -9,7 +9,7 @@ import {
   erApiLatestUrl, parseErApiRates,
   convertCurrency,
   coingeckoMarketsUrl, parseCoingeckoMarkets,
-  INDICES, financeProxyUrl, indexQuotesBySymbol,
+  INDICES, financeProxyUrl, financeProxyHeaders, indexQuotesBySymbol,
   formatCurrency, formatCompact, formatPercent, formatNumber,
 } from '../lib/finanzas'
 
@@ -217,7 +217,7 @@ function IndicesPanel() {
   useEffect(() => {
     if (!proxy) return
     let alive = true
-    fetch(proxy)
+    fetch(proxy, { headers: financeProxyHeaders(import.meta.env.VITE_SUPABASE_ANON_KEY) })
       .then(r => { if (!r.ok) throw new Error('proxy'); return r.json() })
       .then(data => {
         if (!alive) return
