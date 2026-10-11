@@ -4,7 +4,7 @@ export const TICKS_PER_QUARTER = 480
 
 export const MIDI_CHANNELS = {
   pad: 0, melody: 1, bass: 2,
-  kick: 9, snare: 9, hat: 9, crash: 9,
+  kick: 9, snare: 9, hat: 9, splash: 9,
 }
 
 export function variableLengthQuantity(value) {

@@ -32,7 +32,7 @@ console.log('— constantes —')
 check('ticks/quarter 480', TICKS_PER_QUARTER, 480)
 check('canal pad 0', MIDI_CHANNELS.pad, 0)
 check('canal drum 9', MIDI_CHANNELS.kick, 9)
-check('crash en canal 9', MIDI_CHANNELS.crash, 9)
+check('splash en canal 9', MIDI_CHANNELS.splash, 9)
 
 console.log('— variableLengthQuantity —')
 check('0', variableLengthQuantity(0), [0])
@@ -83,9 +83,9 @@ file = [...buildMidiFile(p)]
 check('bombo (canal 9) on 36', findSeq(file, [0x99, 36, 100]) > 0, true)
 check('bombo off', findSeq(file, [0x89, 36, 0]) > 0, true)
 
-p = addBlock(createPattern(), 'crash', 0, 1)
+p = addBlock(createPattern(), 'splash', 0, 1)
 file = [...buildMidiFile(p)]
-check('platillo on 49 (canal 9)', findSeq(file, [0x99, 49, 100]) > 0, true)
+check('splash on 55 (canal 9)', findSeq(file, [0x99, 55, 100]) > 0, true)
 
 p = addBlock(createPattern(), 'bass', 4, 2)
 file = [...buildMidiFile(p)]

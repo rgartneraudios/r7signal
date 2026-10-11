@@ -20,15 +20,15 @@ export const CHORD_TYPES = [
 export const CHORD_GROUPS = ['Triadas', 'Séptimas', 'Extensiones']
 
 export const PERC_VOICES = [
-  { key: 'kick', label: 'Bombo', midi: 36 },
-  { key: 'snare', label: 'Caja', midi: 38 },
+  { key: 'splash', label: 'Splash', midi: 55 },
   { key: 'hat', label: 'Hi-Hat', midi: 42 },
-  { key: 'crash', label: 'Platillo', midi: 49 },
+  { key: 'snare', label: 'Snare', midi: 38 },
+  { key: 'kick', label: 'Kick', midi: 36 },
 ]
 
 export const DEFAULT_MIX = {
   pad: -15, melody: -9, bass: -7,
-  kick: -3, snare: -10, hat: -16, crash: -13,
+  splash: -13, hat: -16, snare: -10, kick: -3,
 }
 export const MIX_MIN = -40
 export const MIX_MAX = 6
@@ -37,10 +37,10 @@ export const CHANNELS = [
   { key: 'pad', label: 'PAD', color: '#C8B6E8', kind: 'chord' },
   { key: 'melody', label: 'MELODY', color: '#7FD4FF', kind: 'note' },
   { key: 'bass', label: 'BASS', color: '#E8C84A', kind: 'note' },
-  { key: 'kick', label: 'BOMBO', color: '#E0A9B8', kind: 'perc', voice: 'kick' },
-  { key: 'snare', label: 'CAJA', color: '#E8A0A0', kind: 'perc', voice: 'snare' },
+  { key: 'splash', label: 'SPLASH', color: '#B6E8C8', kind: 'perc', voice: 'splash' },
   { key: 'hat', label: 'HI-HAT', color: '#A9C7E0', kind: 'perc', voice: 'hat' },
-  { key: 'crash', label: 'PLATILLO', color: '#B6E8C8', kind: 'perc', voice: 'crash' },
+  { key: 'snare', label: 'SNARE', color: '#E8A0A0', kind: 'perc', voice: 'snare' },
+  { key: 'kick', label: 'KICK', color: '#E0A9B8', kind: 'perc', voice: 'kick' },
 ]
 
 export const CHANNEL_KEYS = CHANNELS.map(c => c.key)
@@ -114,7 +114,7 @@ export function percMidi(voiceKey) {
 
 export function percLabel(voiceKey) {
   const voice = PERC_VOICES.find(v => v.key === voiceKey)
-  return voice ? voice.label : 'Bombo'
+  return voice ? voice.label : 'Kick'
 }
 
 export function channelDef(key) {
@@ -167,7 +167,7 @@ export function createPattern({
     padChord: padChord || { root: 'C', type: 'maj' },
     mix: { ...DEFAULT_MIX, ...(mix || {}) },
     channels: {
-      pad: [], melody: [], bass: [], kick: [], snare: [], hat: [], crash: [],
+      pad: [], melody: [], bass: [], splash: [], hat: [], snare: [], kick: [],
       ...(channels || {}),
     },
   }
