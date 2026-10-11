@@ -1,6 +1,6 @@
 // Harness del router mínimo de la web: normalizePath + routeForKey (puros).
 // Ejecutar:  node harness/webRoutes.harness.mjs
-import { normalizePath, routeForKey, WEB_ROUTES, WEB_TABS } from '../src/lib/webRoutes.js'
+import { normalizePath, routeForKey, WEB_ROUTES, WEB_TABS, ACCESS_IA_URL } from '../src/lib/webRoutes.js'
 
 let pass = 0
 let fail = 0
@@ -38,11 +38,14 @@ check('incluye /finanzas', WEB_ROUTES.includes('/finanzas'), true)
 check('incluye /prompts', WEB_ROUTES.includes('/prompts'), true)
 
 console.log('— WEB_TABS —')
-check('7 pestañas', WEB_TABS.length, 7)
-check('keys', WEB_TABS.map(t => t.key), ['r7signal', 'bro7vision', 'calculadora', 'finanzas', 'prompts', 'musica', 'digitales'])
+check('8 pestañas', WEB_TABS.length, 8)
+check('keys', WEB_TABS.map(t => t.key), ['r7signal', 'bro7vision', 'calculadora', 'finanzas', 'prompts', 'accessia', 'musica', 'digitales'])
 check('prompts es interna', WEB_TABS.find(t => t.key === 'prompts').path, '/prompts')
 check('prompts sin external', Boolean(WEB_TABS.find(t => t.key === 'prompts').external), false)
 check('bro7vision es externa', WEB_TABS.find(t => t.key === 'bro7vision').external, true)
+check('accessia es externa', WEB_TABS.find(t => t.key === 'accessia').external, true)
+check('accessia apunta a EasySocialMandai', WEB_TABS.find(t => t.key === 'accessia').href, ACCESS_IA_URL)
+check('accessia sin path interno', Boolean(WEB_TABS.find(t => t.key === 'accessia').path), false)
 
 console.log(`\n[webRoutes] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)

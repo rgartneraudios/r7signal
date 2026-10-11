@@ -1,4 +1,5 @@
 export const BRO7VISION_URL = 'https://www.bro7vision.com'
+export const ACCESS_IA_URL = 'https://sites.google.com/view/easysocialmandai'
 
 export const WEB_TABS = [
   { key: 'r7signal',    label: 'R7Signal',    path: '/' },
@@ -6,6 +7,7 @@ export const WEB_TABS = [
   { key: 'calculadora', label: 'Calculadora', path: '/calculadora' },
   { key: 'finanzas',    label: 'Finanzas',    path: '/finanzas' },
   { key: 'prompts',     label: 'Prompts IA',  path: '/prompts' },
+  { key: 'accessia',    label: 'Access IA',   href: ACCESS_IA_URL, external: true },
   { key: 'musica',      label: 'Música',      path: '/musica' },
   { key: 'digitales',   label: 'Digitales',   path: '/digitales', placeholder: true },
 ]
