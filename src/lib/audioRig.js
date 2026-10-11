@@ -14,17 +14,19 @@ export function createRig(mix = DEFAULT_MIX) {
   limiter.toDestination()
   const out = new Tone.Gain(0.9).connect(limiter)
 
-  const reverb = new Tone.Freeverb({ roomSize: 0.72, dampening: 3200, wet: 0.32 }).connect(out)
+  const reverb = new Tone.Freeverb({ roomSize: 0.72, dampening: 3000, wet: 1 }).connect(out)
 
-  const padFilter = new Tone.Filter({ type: 'lowpass', frequency: 2600, Q: 0.7 })
-  const padChorus = new Tone.Chorus({ frequency: 0.6, delayTime: 4.5, depth: 0.6, spread: 180, wet: 0.4 }).start()
-  padFilter.connect(padChorus)
-  padChorus.connect(out)
-  padChorus.connect(reverb)
+  const padFilter = new Tone.Filter({ type: 'lowpass', frequency: 2200, Q: 0.8 })
+  padFilter.connect(out)
+  const padSend = new Tone.Gain(0.42)
+  padFilter.connect(padSend)
+  padSend.connect(reverb)
+  const padLfo = new Tone.LFO({ frequency: 0.07, min: 1300, max: 3200, phase: 90 }).start()
+  padLfo.connect(padFilter.frequency)
   const pad = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 12,
-    oscillator: { type: 'fatsawtooth', count: 3, spread: 28 },
-    envelope: { attack: 0.7, decay: 0.4, sustain: 0.7, release: 2.6 },
+    maxPolyphony: 16,
+    oscillator: { type: 'sawtooth' },
+    envelope: { attack: 0.25, decay: 0.5, sustain: 0.72, release: 1.8 },
   }).connect(padFilter)
 
   const melody = new Tone.Synth({
@@ -47,7 +49,7 @@ export function createRig(mix = DEFAULT_MIX) {
   const snare = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.2, sustain: 0 } }).connect(snareFilter)
   const hatFilter = new Tone.Filter(7000, 'highpass').connect(out)
   const hat = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.05, sustain: 0 } }).connect(hatFilter)
-  const crash = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.002, decay: 1.4, sustain: 0 } }).connect(hatFilter)
+  const splash = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.002, decay: 1.4, sustain: 0 } }).connect(hatFilter)
 
   const click = new Tone.Synth({
     oscillator: { type: 'square' },
@@ -55,14 +57,14 @@ export function createRig(mix = DEFAULT_MIX) {
     volume: -14,
   }).connect(out)
 
-  const channelNodes = { pad, melody, bass, kick, snare, hat, crash }
+  const channelNodes = { pad, melody, bass, kick, snare, hat, splash }
   const nodes = [
-    limiter, out, reverb, padFilter, padChorus, pad, melody, melodySend, bass,
-    kick, snareFilter, snare, hatFilter, hat, crash, click,
+    limiter, out, reverb, padFilter, padLfo, padSend, pad, melody, melodySend, bass,
+    kick, snareFilter, snare, hatFilter, hat, splash, click,
   ]
 
   const rig = {
-    out, pad, melody, bass, kick, snare, hat, crash, click, channelNodes,
+    out, pad, melody, bass, kick, snare, hat, splash, click, channelNodes,
     dispose() {
       for (const node of nodes) {
         try { node.dispose() } catch { /* ya liberado */ }
@@ -78,7 +80,7 @@ export function triggerPerc(rig, voice, time) {
     case 'kick': rig.kick.triggerAttackRelease('C1', 0.3, time, 0.95); break
     case 'snare': rig.snare.triggerAttackRelease('16n', time, 0.9); break
     case 'hat': rig.hat.triggerAttackRelease('32n', time, 0.7); break
-    case 'crash': rig.crash.triggerAttackRelease('2n', time, 0.8); break
+    case 'splash': rig.splash.triggerAttackRelease('2n', time, 0.8); break
     default: break
   }
 }
