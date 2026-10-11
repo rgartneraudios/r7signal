@@ -5,7 +5,7 @@ export const WEB_TABS = [
   { key: 'bro7vision',  label: 'Bro7Vision',  href: BRO7VISION_URL, external: true },
   { key: 'calculadora', label: 'Calculadora', path: '/calculadora' },
   { key: 'finanzas',    label: 'Finanzas',    path: '/finanzas' },
-  { key: 'musica',      label: 'Música',      path: '/musica', placeholder: true },
+  { key: 'musica',      label: 'Música',      path: '/musica' },
   { key: 'digitales',   label: 'Digitales',   path: '/digitales', placeholder: true },
 ]
 
