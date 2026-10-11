@@ -1,6 +1,6 @@
 // Harness del router mínimo de la web: normalizePath + routeForKey (puros).
 // Ejecutar:  node harness/webRoutes.harness.mjs
-import { normalizePath, routeForKey, WEB_ROUTES } from '../src/lib/webRoutes.js'
+import { normalizePath, routeForKey, WEB_ROUTES, WEB_TABS } from '../src/lib/webRoutes.js'
 
 let pass = 0
 let fail = 0
@@ -25,15 +25,24 @@ console.log('— routeForKey —')
 check('raíz', routeForKey('/'), '/')
 check('calculadora', routeForKey('/calculadora'), '/calculadora')
 check('finanzas', routeForKey('/finanzas'), '/finanzas')
+check('prompts', routeForKey('/prompts'), '/prompts')
 check('musica', routeForKey('/musica/'), '/musica')
 check('digitales con query', routeForKey('/digitales?a=1'), '/digitales')
 check('ruta desconocida → /', routeForKey('/no-existe'), '/')
 check('ruta anidada → /', routeForKey('/calculadora/extra'), '/')
 
 console.log('— WEB_ROUTES —')
-check('incluye las 5 rutas', WEB_ROUTES.length, 5)
+check('incluye las 6 rutas', WEB_ROUTES.length, 6)
 check('incluye /', WEB_ROUTES.includes('/'), true)
 check('incluye /finanzas', WEB_ROUTES.includes('/finanzas'), true)
+check('incluye /prompts', WEB_ROUTES.includes('/prompts'), true)
+
+console.log('— WEB_TABS —')
+check('7 pestañas', WEB_TABS.length, 7)
+check('keys', WEB_TABS.map(t => t.key), ['r7signal', 'bro7vision', 'calculadora', 'finanzas', 'prompts', 'musica', 'digitales'])
+check('prompts es interna', WEB_TABS.find(t => t.key === 'prompts').path, '/prompts')
+check('prompts sin external', Boolean(WEB_TABS.find(t => t.key === 'prompts').external), false)
+check('bro7vision es externa', WEB_TABS.find(t => t.key === 'bro7vision').external, true)
 
 console.log(`\n[webRoutes] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)

@@ -15,19 +15,19 @@ function useRealTimeClock() {
 
 const GRADIENT = 'linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)'
 
-function Tab({ tab, active, onNavigate }) {
+function Tab({ tab, active, onNavigate, compact }) {
   const [hover, setHover] = useState(false)
   const highlighted = active || hover
 
   const base = {
     fontFamily: "'Space Grotesk',sans-serif",
-    fontSize: '0.8rem',
+    fontSize: compact ? '0.72rem' : '0.8rem',
     fontWeight: 700,
-    letterSpacing: '0.14em',
+    letterSpacing: compact ? '0.1em' : '0.14em',
     textTransform: 'uppercase',
     textDecoration: 'none',
     cursor: 'pointer',
-    padding: '10px 20px',
+    padding: compact ? '10px 13px' : '10px 20px',
     borderRadius: 10,
     transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
     background: highlighted ? '#1B1A1E' : '#141316',
@@ -113,6 +113,7 @@ export default function AppHeader({ activeRoute = '/', onNavigate }) {
             tab={tab}
             active={!tab.external && tab.path === activeRoute}
             onNavigate={onNavigate}
+            compact={WEB_TABS.length > 6}
           />
         ))}
       </nav>

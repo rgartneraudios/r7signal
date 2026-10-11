@@ -5,11 +5,12 @@ export const WEB_TABS = [
   { key: 'bro7vision',  label: 'Bro7Vision',  href: BRO7VISION_URL, external: true },
   { key: 'calculadora', label: 'Calculadora', path: '/calculadora' },
   { key: 'finanzas',    label: 'Finanzas',    path: '/finanzas' },
+  { key: 'prompts',     label: 'Prompts IA',  path: '/prompts' },
   { key: 'musica',      label: 'Música',      path: '/musica' },
   { key: 'digitales',   label: 'Digitales',   path: '/digitales', placeholder: true },
 ]
 
-export const WEB_ROUTES = ['/', '/calculadora', '/finanzas', '/musica', '/digitales']
+export const WEB_ROUTES = ['/', '/calculadora', '/finanzas', '/prompts', '/musica', '/digitales']
 
 export function normalizePath(pathname) {
   if (!pathname) return '/'

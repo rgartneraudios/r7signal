@@ -1,10 +1,11 @@
-﻿import { useWebRoute } from './hooks/useWebRoute'
+import { useWebRoute } from './hooks/useWebRoute'
 import AppHeader from './components/AppHeader'
 import Footer from './components/Footer'
 import R7Desktop from './components/R7Desktop'
 import Home from './pages/Home'
 import Calculadora from './pages/Calculadora'
 import Finanzas from './pages/Finanzas'
+import PromptsIA from './pages/PromptsIA'
 import Musica from './pages/Musica'
 import Digitales from './pages/Digitales'
 
@@ -19,6 +20,7 @@ function WebApp() {
   let page = <Home />
   if (route === '/calculadora') page = <Calculadora />
   else if (route === '/finanzas') page = <Finanzas />
+  else if (route === '/prompts') page = <PromptsIA />
   else if (route === '/musica') page = <Musica />
   else if (route === '/digitales') page = <Digitales />
 
