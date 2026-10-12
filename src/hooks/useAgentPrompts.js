@@ -1,20 +1,15 @@
-// ─── Prompts remotos por agente (loader de Supabase) ──────────────────────────
-// Los 3 paneles cargan su prompt (system/planning/music/project) al montar y
-// marcan `promptsError` si no hay conexión. Centralizado aquí: misma lógica,
-// mismo contrato con `onPromptsReady(agent)`.
-import { useEffect, useState } from 'react'
+// ─── Prompts por agente (S8: viven en el código, sin carga remota) ────────────
+// La variante (EN/ES) sale de `chat_language`, así que el panel sólo pasa la
+// preferencia; `onPromptsReady(agent)` se mantiene como aviso de montaje.
+import { useEffect } from 'react'
 import { loadAgentPrompt } from '../lib/promptLoader.js'
 
-export function useAgentPrompts(agent, onPromptsReady) {
-  const [remotePrompts, setRemotePrompts] = useState(null)
-  const [promptsError, setPromptsError] = useState(false)
+export function useAgentPrompts(agent, onPromptsReady, chatLanguage) {
+  const remotePrompts = loadAgentPrompt(agent, chatLanguage)
 
   useEffect(() => {
-    loadAgentPrompt(agent).then(p => {
-      if (p) { setRemotePrompts(p); onPromptsReady?.(agent) }
-      else setPromptsError(true)
-    })
+    onPromptsReady?.(agent)
   }, [agent, onPromptsReady])
 
-  return { remotePrompts, promptsError }
+  return { remotePrompts }
 }

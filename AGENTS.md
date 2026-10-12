@@ -2,8 +2,8 @@
 
 Guía de trabajo para agentes de código en este repo. Es la **única** fuente de decisiones (el viejo
 `output/Analisis-Cochi.txt` fue jubilado el 29/09). Si una decisión de diseño cambia, actualizá acá.
-Los prompts de sistema viven en **Supabase** (`agent_prompts`), no en el repo (purga de historial
-05/10); el plan Open Source los baja al código en S8.
+Los prompts de sistema viven **en el código** (`src/lib/prompts/`, S8); la purga de historial del
+05/10 los borró de git y S8 los repuso versionados, en EN con variante ES.
 
 ## Qué es esto
 
@@ -17,8 +17,8 @@ App de escritorio (Tauri 2 + React 18 + Vite) con tres agentes LLM y una "rueda"
 
 La rueda **R7** es un **almacén local** de contexto (pares R1/R2 que escribe el SISTEMA por turno);
 se compacta a 70k con el botón del banner y **no viaja** en el prompt (lo que viaja son los briefs
-`── Turno N ──`, cacheables). **R9** es el almacén persistente global. `src/lib/cochiAgentPrompt.js`
-ya NO contiene el prompt real: es un fallback genérico mínimo por si Supabase falta.
+`── Turno N ──`, cacheables). **R9** es el almacén persistente global. Los prompts de los 3 agentes
+viven **en el código** (`src/lib/prompts/`, S8): Supabase ya no está en el camino crítico.
 
 ## Decisión vigente: no hay auto-hospedaje (08/10)
 
@@ -42,6 +42,11 @@ BYOK (la key nunca entra al repo; regla `VITE_` = público), Supabase fuera del 
 **S7 CERRADA**: `LICENSE` (MIT + autoría declarada), `CONTRIBUTING.md` (gates + harness + commits en
 español) y `README.md` real (setup BYOK, notas de seguridad de `cochi-full-access`, "How this was
 built" con la asistencia de IA y "Trademark": MIT no cede nombre ni logo).
+**S8 CERRADA**: los 5 prompts (`cochi/system`, `asun/system|music|project`, `tito/system`) salieron de
+`agent_prompts` a `src/lib/prompts/` con **variante EN y ES**; `promptLoader.js` ya no hace fetch,
+`useAgentPrompts` es síncrono y `cochiAgentPrompt.js` se borró (ya no hay fallback). La variante se
+elige con `chat_language`: ES es el **texto de producción byte a byte** (congelado por hash en el
+harness), EN es la variante nueva con los samples de registro en inglés.
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
@@ -73,17 +78,20 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
   (`'Signor Roberto'`/`'Maravilla'`) pasaron a genéricos. La **marca** sí se queda: `HTTP-Referer`
   `r7signal.com`, `Footer`, watermarks `RGartner by R7Signal`, `@Bro7vision` y la autoría en `docs/` —
   el README la declara (S7).
-- **Prompts**: la edge function `supabase/functions/get-agent-prompts/` lee `agent_prompts` (filtra
-  `agent_id` + `is_active`) y devuelve `{prompt_key: content}`. Cochi usa `system`; Asun
-  (`system`/`project`/`music`) y Tito (`system`) siguen activos. Si `system` de Cochi falta o trae el
-  viejo contrato R1/R2/R3, cae al fallback mínimo de `cochiAgentPrompt.js`. Las claves `planning`/`task`
-  de Cochi quedaron **sin uso** (borrables en Supabase, paso APARTE).
+- **Prompts (S8):** viven en `src/lib/prompts/` — `cochi.js`, `asun.js`, `tito.js` (claves `system`,
+  `music`, `project`) con `en` y `es`; `index.js` resuelve la variante por `chat_language`
+  (`normalizePromptLanguage`: `es`/`esp`/`spa` → `es`, el resto → `en`). El **ES es el texto de
+  producción de Supabase, byte a byte**, congelado por hash en `harness/prompts.harness.mjs`; el **EN**
+  es la variante nueva (mismo cuerpo, samples de registro en inglés). `promptLoader.js` ya **no hace
+  fetch** y `cochiAgentPrompt.js` se borró: no hay fallback. La edge function
+  `supabase/functions/get-agent-prompts/` y la tabla `agent_prompts` quedan como **legacy** (nadie las
+  lee desde la app); las claves `planning`/`task` siguen sin uso.
 
 ## Arquitectura (dónde tocar)
 
 - `src/lib/` — lógica pura, testeable con harness. Es donde vive el grueso.
-  - `cochiAgentPrompt.js` — fallback **mínimo** del agente Cochi (placeholder, sin IP). El prompt real
-    vive SÓLO en Supabase. `interpolatePrompt` reemplaza `{{nombreAlternativo}}`/`{{chatLanguage}}`.
+  - `prompts/` — los 5 prompts de sistema en código (EN + ES) y el registro por agente; `promptLoader.js`
+    los sirve sin red y expone `interpolatePrompt` (`{{nombreAlternativo}}`/`{{chatLanguage}}`).
   - `cochiGuards.js` — guardas/intención del loop único: `needsRunCommand`/`needsFullAccess` (Guard Full
     Access), `touchesBoard` (scope `full` vs `task`), `isAtomicMutation` (scope `edit`),
     `USER_ANSWER_PREFIX` (ask_user), `isToolError`/`commandRan`.
@@ -104,7 +112,7 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
     costos, `billableTokens`, `extractUrlCitations`.
   - `cacheAudit.js` — `providerRouting` (pin por modelo) + log `[cache:audit]`.
   - `subagent.js` — mini-loop aislado (hereda capacidad del workspace) → brief.
-  - `promptLoader.js` — carga prompts de Supabase (cache por agente) + `interpolatePrompt`.
+  - `promptLoader.js` — sirve los prompts de código (S8) + `interpolatePrompt`.
   - `cochiPermissions.js` — allow/deny + `isBlockedUrl` (SSRF, 1ª capa JS).
 - `src-tauri/src/fetch.rs` — comando `fetch_url_guarded` de `web_fetch` (SSRF real: DNS + IP fijada +
   redirecciones revalidadas).
@@ -124,8 +132,10 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
 - Toda lógica no-UI nueva debe ser **pura e inyectable** y tener harness en `harness/`.
 - Commits: en español, prefijo (`Cochi: ...`, `Refactor ...`, `Fix ...`), explicando causa raíz y qué
   harness/gate cambió. **Push sólo si el usuario lo pide o si la sesión lo declara.**
-- **Prompts**: editar el prompt en Supabase es un paso APARTE. Cambiar el repo NO actualiza producción.
-  Texto fuente en `output/*.txt` (gitignored) y se pega a mano en Supabase.
+- **Prompts (S8)**: `src/lib/prompts/` es la fuente de verdad. Cambiar un prompt es un cambio de código
+  (entra al bundle) y **rompe la caché de prefijo** de la próxima sesión: probar 1 turno real por
+  agente afectado y, si se toca el ES, actualizar el hash congelado del harness. El ES NO se reescribe
+  sin el autor: es su voz.
 - Idempotencia/rendimiento: no re-renderizar por token (usar `streamThrottle`).
 - **Permisos dev**: `isSafeDevCommand` (`cochiPermissions.js`) auto-aprueba `npm test`,
   `npm run <test|lint|build|harness|typecheck>[:sufijo]`, `git status/diff/log/show/branch/rev-parse` y
@@ -236,7 +246,8 @@ El costo de las búsquedas web (server tool) va **aparte** de los tokens.
 
 - **Vocabulario R1/R2**: `commitR7Turn` escribe `R1:`/`R2:`; renombrar si se quiere desacoplar.
 - **Modo Asun Proyecto**: revisar E2E (alineado en repo, sin probar).
-- **Prompt `task` remoto**: pegar la excepción `TYPO RESOLVED` en Supabase es opcional.
+- **Prompts legacy en Supabase**: la edge function `get-agent-prompts/` y la tabla `agent_prompts` ya no
+  se leen (S8); se pueden borrar en un paso APARTE. Las claves `planning`/`task` tampoco se usan.
 - **Tito Etapa 2/3**: DESCARTADO (07/10). Tito queda como está (server tool `web_search` + citas); no
   probar motores `parallel`/`perplexity`/`firecrawl` ni `read_url`/`authority.json`.
 

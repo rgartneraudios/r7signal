@@ -13,7 +13,9 @@ escrita, `VITE_SUPABASE_SERVICE_KEY` purgada del `.env` (era el MISMO valor que
 `AGENTS.md`. S6: purga de identidad (10 archivos de `supabase/.temp/` destrackeados + gitignore,
 `DEFAULT_USER_ID` fuera de las 2 edge functions, avatar `media.r7signal.com` y clima `Oviedo` fuera del
 hub, defaults de nombre genéricos).
-**Próxima sesión: S8 — prompts al código (arranque de la Fase 3).**
+**Fase 3 (desacople de Supabase) ABIERTA: S8 CERRADA** — los 5 prompts salieron de `agent_prompts` a
+`src/lib/prompts/` con variante EN + ES; `promptLoader.js` ya no hace fetch.
+**Próxima sesión: S9 — Supabase opcional (cliente que devuelve `null` sin `.env`).**
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -47,7 +49,8 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   (`AppLocalData`). Nunca en el repo, nunca en el bundle, nunca en Supabase.
 - **Regla `VITE_`:** toda variable con prefijo `VITE_` se inyecta en el bundle compilado.
   Es pública por definición. Ningún secreto lleva ese prefijo.
-- **Prompts al código**, en inglés, con el español conservado como variante. Paso previo: exportarlos de Supabase.
+- **Prompts al código**, en inglés, con el español conservado como variante. **Hecho en S8**:
+  `src/lib/prompts/` con `{en, es}` y el ES congelado byte a byte desde el export de Supabase.
 - **Supabase fuera del camino crítico.** Opcional para el que lo quiera. La app corre sin Supabase.
 - **Sin free tier con la key del autor.** Nada de proxy propio en v0.1.
 
@@ -303,9 +306,33 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   pendientes de la sesión de defaults junto a D5 (hallazgos de S5/S6/S6-bis, sin cambios).
 
 ### Fase 3 — Desacople de Supabase
-- [ ] **S8. Prompts al código.** Exportar desde `agent_prompts` en Supabase → `src/lib/prompts/` (EN + ES),
-  reescribir `promptLoader.js` sin fetch. Conservar `interpolatePrompt`. Verificar `AGENTS.md`.
-  Prueba obligatoria: 1 turno real por agente.
+- [x] **S8. Prompts al código — CERRADA (5 prompts + registro + harness).** Los 5 prompts vivos de
+  `agent_prompts` (cochi/system 3.196 B, asun/system 4.531 B, asun/music 1.856 B, asun/project 5.048 B,
+  tito/system 4.949 B) se exportaron a **`src/lib/prompts/`**: `cochi.js`, `asun.js` y `tito.js` con
+  `{ en, es }` + `index.js` (registro + `normalizePromptLanguage`: `es`/`esp`/`spa` → `es`, resto → `en`).
+  El **ES es el texto de producción byte a byte** (sale del export, no se retipeó: hash congelado en el
+  harness); el **EN es la variante nueva** — mismo cuerpo e instrucciones, samples de registro, cierres
+  de comida y ejemplos traducidos. La variante la elige `chat_language` (preferencia del usuario), así
+  que el usuario en español recibe exactamente el prompt que ya tenía.
+  `promptLoader.js` **sin fetch** (sync) conservando `interpolatePrompt` (`{{nombreAlternativo}}`/
+  `{{chatLanguage}}`); `useAgentPrompts` pasa a síncrono (sin `promptsError`, imposible de fallar) y los
+  3 paneles pierden la rama muerta de "sin conexión"/"cargando"; `cochiAgentPrompt.js` **borrado** (el
+  fallback mínimo ya no tiene sentido: el prompt real vive en el repo) y con él el guard
+  `isLegacyContract` de `useCochiTaskLoop`. La rueda sigue con su encabezado `── Turno N ──`: los
+  prompts lo citan literal, no se renombró el formato.
+  Harness nuevo `prompts.harness.mjs` (75 checks): normalización de idioma, claves por agente, EN≠ES,
+  placeholders en ambas variantes, marcadores de sección en ambas, EN sin `¿`/`¡`, **hash congelado del
+  ES** y contrato de `interpolatePrompt`.
+  **Prueba obligatoria (regla 7): 1 turno real por agente** contra OpenRouter con el prompt ya en
+  código — Cochi ES (`Saludo recibido. / Sin novedades en el perimetro... Alex.`), Cochi EN
+  (`Greeting acknowledged. / Nothing new on the perimeter... Alex.`), Tito ES (`usuario Alex. sistema en
+  linea. ¿cual es la solicitud?` + cierre Wheatley) y Asun ES (`accediendo Alex. / ... / ¿gustas una
+  chocolatina?`): los 4 en personaje, el EN copiando el sample inglés.
+  **Hallazgos:** (a) la tabla `agent_prompts` y la edge function `get-agent-prompts/` quedan **legacy**
+  (nadie las lee): borrarlas es un paso APARTE, igual que en S8 lo fue editarlas; (b) el default
+  `chat_language: 'Español'` (S3) ya no es inocuo: ahora decide la variante del prompt (sigue siendo
+  decisión del autor, no traducción); (c) `supabase/functions/finance-proxy/` y la migración
+  `20260627_descontar_credito.sql` siguen sin documentar (hallazgo de S3, sin cambios).
 - [ ] **S9. Supabase opcional.** Hoy `src/supabaseClient.js` hace `createClient(undefined, undefined)` y
   revienta sin `.env`. Guardar para que devuelva `null` sin env. `PreferencesModal` → `local_config.json`.
 - [ ] **S10. Estilos de imagen a JSON local** (hoy tabla `estilos_imagen_public`).
@@ -349,7 +376,9 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 
 ## 6. Riesgos conocidos
 
-- **Prompt de sistema:** editar un prompt cambia comportamiento y caché. Probar 1 turno real por agente tras S8.
+- **Prompt de sistema (post-S8):** viven en `src/lib/prompts/` (entran al bundle). Editar uno cambia
+  comportamiento y **rompe la caché de prefijo** de la próxima sesión: probar 1 turno real por agente
+  afectado y actualizar el hash congelado del harness si se toca el ES.
 - **Historial de git:** GitHub puede conservar blobs viejos por SHA. Si hay dudas, squash (D4).
 - **`cochi-full-access`:** la capability permite spawn de `powershell`/`bash` con scope a `$HOME`. Es diseño,
   no bug, pero se documenta en el README ANTES de abrir o lo reportan como vulnerabilidad.
@@ -375,6 +404,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S6 | Purga de identidad: `supabase/.temp/` + su duplicado anidado fuera del índice y a `.gitignore` (`**/.temp/`) — project-ref, pooler-url y org id dejan de viajar; `DEFAULT_USER_ID` (UUID de auth del autor) fuera de `generar-asset`/`generar-musica`, donde era código muerto (cero cambio de comportamiento); `src/constants.js` borrado (`EDITORS` sin imports + avatar `media.r7signal.com`, y `WEATHER` `Oviedo`/`18°C` falsos) con `AppHeader.jsx` limpio; defaults de nombre genéricos (`'user'`, `e.g. Alex`/`e.g. Boss`, fixture `Alex`/`Alex Rivera`, 3 comentarios a "el autor"). Marca del proyecto y autoría (`HTTP-Referer`, Footer, watermarks, @Bro7vision, `docs/`) intactas a propósito: S7 las declara. Hallazgos: clima a **S6-bis** (widget real con Open-Meteo), `.temp/*` sigue en el historial (S16/gitleaks), project-ref horneado por `VITE_SUPABASE_URL` (S9), muertas de S5 y `chat_language` a la sesión de defaults. | lint 0/0 · build OK · test 27/27 | `4065d1e` |
 | S6-bis | Widget de clima del hub web: `src/lib/weather.js` (cliente puro e inyectable sobre Open-Meteo — geocoding + forecast, sin key y con CORS abierto, compatible BYOK: URLs, parseo, 28 códigos WMO, `fetchWeather` con errores por código y persistencia de ciudad), `WeatherWidget.jsx` (estados idle/carga/listo/error/offline, ciudad editable y persistida en `localStorage` `r7signal.weather.city`, refresh 15 min, `Retry`) y `AppHeader.jsx` (lo monta junto a `MoonWidget`). Sin default de ciudad: estado vacío `Set city`, cero datos falsos (el `Oviedo`/`18°C` de S6 no vuelve). Tauri omitido por construcción (AppHeader sólo vive en la rama web de `App.jsx`). `react-hooks/set-state-in-effect` obligó a derivar el estado en vez de setear dentro del efecto. E2E real contra API viva: `Oviedo, Principality of Asturias, Spain · 18°C · Clear sky`. Hallazgos: `HUD.jsx` muerto (candidato a borrado junto a D5) y locale `es-ES` de `AppHeader` a S4-ter; el build exige escalar permiso en el sandbox (`spawn EPERM` de esbuild). | lint 0/0 · build OK · test 28/28 | `bc5ce6f` |
 | S7 | LICENSE + CONTRIBUTING + README real: `LICENSE` MIT (copyright `2026 R. Gartner (R7Signal)`), `CONTRIBUTING.md` en inglés (setup, 3 gates, harness obligatorio para lógica pura, commits en español, prompts en Supabase hasta S8) y `README.md` reescrito completo — el anterior describía el feed de `r7signal.com`, no la app. El README cubre: qué es y los 3 agentes, la rueda R7 (prefijo append-only, pin de proveedor, compactación a 70k sin modelo), requisitos, `npm install` → `npx tauri dev` → cargar key, BYOK multi-proveedor, la regla `VITE_`, Supabase opcional, comandos, notas de seguridad (`cochi-full-access` con scope a `$HOME` documentado antes de abrir, 2 capas de SSRF, key en texto plano, SmartScreen sin firma), **How this was built** (dirección humana de R. Gartner / R7Signal + asistencia de Claude Sonnet y DeepSeek Flash 4.0/4.1) y **Trademark** (MIT no cede nombre ni logo). Cero lógica: sólo docs. El README describe el mecanismo y no promete cifras de ahorro: la tabla IN/OUT es S19. Hallazgos de S5/S6/S6-bis (variables muertas, `HUD.jsx`, `chat_language`) siguen en la sesión de defaults junto a D5. | lint 0/0 · build OK · test 28/28 | `d64beed` |
+| S8 | Prompts al código (arranque Fase 3): los 5 prompts de `agent_prompts` pasaron a `src/lib/prompts/` (`cochi.js`, `asun.js`, `tito.js` + `index.js`) con variante **EN + ES** elegida por `chat_language`. El ES es el **texto de producción byte a byte** (generado desde el export de Supabase y congelado por hash en el harness); el EN es la variante nueva (mismo cuerpo, samples de registro/cierres traducidos). `promptLoader.js` sin fetch (sync, conserva `interpolatePrompt`), `useAgentPrompts` síncrono (los 3 paneles pierden la rama muerta de carga/error), `cochiAgentPrompt.js` **borrado** + guard `isLegacyContract` fuera. La rueda NO cambia: los prompts citan literal `── Turno N ──`. Harness nuevo `prompts.harness.mjs` (75 checks). Prueba de la regla 7: **1 turno real por agente** contra OpenRouter con el prompt ya en código (Cochi ES y EN, Tito ES, Asun ES), los 4 en personaje. Hallazgo: `agent_prompts` + edge function `get-agent-prompts/` quedan **legacy**, borrarlas es paso APARTE. | lint 0/0 · build OK · test 29/29 | `pendiente` |
 
 ---
 

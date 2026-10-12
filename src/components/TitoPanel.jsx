@@ -93,7 +93,7 @@ function TitoPanel({
   }
 
   // Prompts remotos + selección R9 (compartidos).
-  const { remotePrompts, promptsError } = useAgentPrompts('tito', onPromptsReady)
+  const { remotePrompts } = useAgentPrompts('tito', onPromptsReady, chatLanguage)
   const { r9Btn, handleSelectionMouseUp, handleConfirmR9 } = useR9Selection(chatContainerRef, 'tito')
 
   // Bloque K3 + P: undo/regenerate con identidad estable (no invalidan el memo).
@@ -138,14 +138,6 @@ function TitoPanel({
 
   const sendMessage = async (text) => {
     if (streaming) return;
-    if (!remotePrompts) {
-      const msg = promptsError
-        ? '⛔ No connection to R7Signal. Check your network and try again.'
-        : '⏳ Configuration still loading. Wait a moment.'
-      setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: msg }])
-      return
-    }
-
     // Estado vacío: sin API key local no se dispara ningún fetch.
     if (!getOpenRouterKey()) {
       setMessages(prev => [...prev, {

@@ -64,10 +64,12 @@ open an issue marked as a security report before anything else.
 
 ## Prompts
 
-The system prompts for the three agents live in Supabase today, not in this repository;
-`src/lib/cochiAgentPrompt.js` is only a minimal fallback. Editing the prompt files here does not
-change the running app. Moving the prompts into versioned code is planned work; until then, treat
-prompt changes as configuration changes, not code changes.
+The system prompts for the three agents are versioned code: `src/lib/prompts/cochi.js`, `asun.js` and
+`tito.js`, each with an `en` and an `es` variant resolved by the user's `chat_language` preference
+(`src/lib/prompts/index.js`). The Spanish variant is the frozen production text, byte for byte, and
+`harness/prompts.harness.mjs` pins its hash: if you touch it, update that hash in the same change and
+run one real turn per affected agent — a prompt edit changes behaviour and breaks the cached prefix of
+the next session. The English variant is the one to extend for new sample lines and closings.
 
 ## Commits and pull requests
 

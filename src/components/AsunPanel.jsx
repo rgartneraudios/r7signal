@@ -130,7 +130,7 @@ function AsunPanel({
   }
 
   // Prompts remotos + selección R9 (compartidos).
-  const { remotePrompts, promptsError } = useAgentPrompts('asun', onPromptsReady)
+  const { remotePrompts } = useAgentPrompts('asun', onPromptsReady, chatLanguage)
   const { r9Btn, handleSelectionMouseUp, handleConfirmR9 } = useR9Selection(chatContainerRef, 'asun')
 
   // ── Bloque K3: undo / regenerate ──────────────────────────────────────────
@@ -192,23 +192,6 @@ function AsunPanel({
   // ─── Send mensaje LLM / Música ─────────────────────────────────────────────
   async function sendMessage(text) {
     if (loading || !text) return
-
-    if (!remotePrompts) {
-      const errMsg = promptsError
-        ? '⛔ No connection to R7Signal. Check your network and try again.'
-        : '⏳ Configuration still loading. Wait a moment.'
-      setMessages(prev => [...prev, {
-        rol: 'asistente', contenido: errMsg, id: newMessageId('asun'), streaming: false
-      }])
-      return
-    }
-
-    if (projectMode && !remotePrompts.project) {
-      setMessages(prev => [...prev, {
-        rol: 'asistente', contenido: '⏳ Project mode is not configured on the server yet.', id: newMessageId('asun'), streaming: false
-      }])
-      return
-    }
 
     // Estado vacío: LLM y Música van directo a OpenRouter y necesitan la key
     // local. Imagen usa el edge function server-side, así que no la requiere.

@@ -29,13 +29,15 @@ the model answers with text (capped at 25 iterations).
 ## What is in here
 
 - `src/lib/` — the pure, harness-tested logic: the wheel, sessions, plans, snapshots, permissions,
-  the LLM client, token accounting and compaction.
+  the LLM client, token accounting and compaction. The agent prompts live in `src/lib/prompts/`
+  (English variant plus the Spanish one, picked with the `chat_language` preference).
 - `src/components/` — the React UI. `CochiDesktop.jsx` is the orchestrator.
 - `src-tauri/` — the Rust side: the window, the shell and filesystem wiring, and `fetch_url_guarded`,
   a real SSRF guard for `web_fetch` (DNS resolution, validated IP pinned against rebinding,
   revalidated redirects).
-- `harness/` — one `.mjs` per library, 28 suites in total, run by `npm test`. No network required.
-- `supabase/functions/` — optional edge functions. Supabase is outside the critical path.
+- `harness/` — one `.mjs` per library, 29 suites in total, run by `npm test`. No network required.
+- `supabase/functions/` — optional edge functions (the prompt loader is legacy since the prompts moved
+  into the code). Supabase is outside the critical path.
 
 ## Requirements
 
@@ -86,8 +88,8 @@ those values are public by definition — anyone who downloads the build can rea
 secret the `VITE_` prefix. Supabase's anon key is designed to be public (protected by row level
 security); the service role key is not, so it stays unprefixed and server-side only.
 
-Supabase is optional and outside the critical path: without it the app falls back to the local prompt
-and skips the cloud features.
+Supabase is optional and outside the critical path: the system prompts are versioned in the repository
+under `src/lib/prompts/`, and without Supabase the app simply skips the remaining cloud features.
 
 ## Gates
 

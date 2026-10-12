@@ -1,32 +1,11 @@
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+// ─── Prompts de los 3 agentes: viven en el código (S8), sin fetch ─────────────
+import { getAgentPrompts } from './prompts/index.js'
 
-const cache = {}
-
-export async function loadAgentPrompt(agentId) {
-  if (cache[agentId]) return cache[agentId]
-
-  try {
-    const res = await fetch(
-      `${SUPABASE_URL}/functions/v1/get-agent-prompts?agent=${agentId}`,
-      {
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        }
-      }
-    )
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    cache[agentId] = data
-    return data
-  } catch (err) {
-    console.warn(`[R7] promptLoader: failed for ${agentId}`, err.message)
-    return false
-  }
+export function loadAgentPrompt(agentId, chatLanguage) {
+  return getAgentPrompts(agentId, chatLanguage)
 }
 
 export function interpolatePrompt(template, vars = {}) {
+  if (typeof template !== 'string') return ''
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '')
 }

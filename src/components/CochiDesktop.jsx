@@ -150,9 +150,8 @@ function CochiDesktop({
   })
   const { wheelRef, messagesRef, sessionIdRef } = session
 
-  // Prompt remoto de Cochi (Supabase). Si no está o todavía es el viejo contrato
-  // R1/R2/R3, el loop cae al prompt local agentPrompt (cochiAgentPrompt.js).
-  const { remotePrompts } = useAgentPrompts('cochi', onPromptsReady)
+  // Prompt de Cochi (S8: versionado en el código; la variante sale de chat_language).
+  const { remotePrompts } = useAgentPrompts('cochi', onPromptsReady, preferences.chat_language)
 
   // Selección R9 (compartida).
   const { r9Btn, handleSelectionMouseUp, handleConfirmR9 } = useR9Selection(chatContainerRef, 'cochi')

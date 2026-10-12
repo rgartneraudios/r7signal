@@ -9,7 +9,6 @@ import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools, SUBAG
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
 import { buildSystemContext, READ_ONLY_TOOLS, makeStreamingDisplayExtractor } from '../lib/cochiContext.js'
 import { buildWheelMessages, commitR7Turn, buildTurnPair } from '../lib/r7Wheel.js'
-import { COCHI_AGENT_PROMPT } from '../lib/cochiAgentPrompt.js'
 import { needsFullAccess, touchesBoard, isAtomicMutation, USER_ANSWER_PREFIX, isToolError, commandRan } from '../lib/cochiGuards.js'
 import { newMessageId } from '../lib/sessionStore.js'
 import { beginTurn, revertSnapshot, discardTurn, summarizeSnapshotAgainstDisk } from '../lib/snapshotStore.js'
@@ -182,12 +181,7 @@ export function useCochiTaskLoop({
       ? 'full'
       : isAtomicMutation(originalMessageRef.current) ? 'edit' : 'task'
     const toolsForRequest = getToolsForPermission(workspace.permission, scope)
-    // Prompt remoto de Supabase si es el nuevo (agente con tools). Si falta o
-    // todavía trae el viejo contrato R1/R2/R3, se usa el fallback local.
-    const remoteSystem = remotePrompts?.system
-    const isLegacyContract = typeof remoteSystem === 'string' && /FORMAT_RULE|R1:|R2:|R3:/.test(remoteSystem)
-    const baseSystem = (remoteSystem && !isLegacyContract) ? remoteSystem : COCHI_AGENT_PROMPT
-    const systemPrompt = interpolatePrompt(baseSystem, { chatLanguage, nombreAlternativo })
+    const systemPrompt = interpolatePrompt(remotePrompts.system, { chatLanguage, nombreAlternativo })
 
     const apiMessages = buildWheelMessages({
       systemMessages: [
