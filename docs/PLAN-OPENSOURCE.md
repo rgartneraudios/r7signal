@@ -185,7 +185,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | --- | --- | --- | --- |
 | S1 | Watermarks de Cochi/TITO/Asun a inglés, incluida la rama música de Asun (texto visible de estado vacío). Cero lógica, sólo texto: no se tocó ningún handler ni estilo. | lint 0/0 · build OK · test 27/27 | `621be08` |
 | S2a | Headers de los 3 paneles a inglés: tooltip de modelo congelado (Cochi/Asun), placeholders `modelo`→`model`, tooltip del subagente, botones de categoría de Asun (IMAGE/MUSIC), submenú OCCIDENTE→WEST, PROYECTO→PROJECT. `TitoHeader.jsx` no tenía texto visible: no se tocó. Cero lógica. Hallazgo: S2 excedía el tope de 3 archivos (~14) → dividida en S2a–S2d. | lint 0/0 · build OK · test 27/27 | `aa8d6b8` |
-| S2b | Status bars de los 3 paneles a inglés: `Archive R7`, `CANCEL`, `(working...)`, tooltip de archivado, tooltip de coste estimado, chip `cached`, contador de búsquedas web (`search`/`searches`) con tooltip y tooltip `Attach file`. Cero lógica. CLS se mantiene como acrónimo (ya presente en los watermarks en inglés). Hallazgo: `subagent.js` ('trabajando…') va a S4 y `CochiActivityFeed.jsx` ya estaba en S2d. | lint 0/0 · build OK · test 27/27 | _pendiente_ |
+| S2b | Status bars de los 3 paneles a inglés: `Archive R7`, `CANCEL`, `(working...)`, tooltip de archivado, tooltip de coste estimado, chip `cached`, contador de búsquedas web (`search`/`searches`) con tooltip y tooltip `Attach file`. Cero lógica. CLS se mantiene como acrónimo (ya presente en los watermarks en inglés). Hallazgo: `subagent.js` ('trabajando…') va a S4 y `CochiActivityFeed.jsx` ya estaba en S2d. | lint 0/0 · build OK · test 27/27 | `dee2c66` |
 
 ---
 
