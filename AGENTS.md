@@ -149,17 +149,13 @@ ningún agente emite R1/R2/R3**; el par R1/R2 lo escribe el sistema con `buildTu
 
 ## Caché: pin de providers
 
-La caché está atada a **modelo + endpoint**. Cada modelo va pineado a proveedores que cachean
-(`providerRouting` en `cacheAudit.js`; `buildBody` lo manda como `body.provider`):
-
-- **DeepSeek no-visión** (`~deepseek/deepseek-v4-flash-latest`, `~deepseek/deepseek-flash-latest`,
-  `deepseek/deepseek-v4.1-flash`) → `order:['streamlake','parasail','alibaba']`, `allow_fallbacks:true`.
-  Medido: sin pin cached=0; con pin cached 4/4 (~6.7x más barato).
-- **Visión** (`xiaomi/mimo-v2.6-flash` MaríaBase) → `['deepinfra','gmicloud','novita','darkbloom']`
-  (Darkbloom primero dio cached=0; DeepInfra primero cachea ~95%).
-- `null` al resto (local/Ollama/LM Studio).
-
-El pin desactiva el sticky de OpenRouter, pero el proveedor fijo mantiene su caché de prefijo.
+La caché está atada a **modelo + endpoint**, y cada modelo va pineado a proveedores que cachean
+(`providerRouting` en `cacheAudit.js`; `buildBody` lo manda como `body.provider`). Hay **tres listas**
+—DeepSeek no-visión, DeepSeek visión y Xiaomi MiMo—: los `order` exactos y las mediciones que los
+justifican viven en `cacheAudit.js`, junto a cada constante. Acá queda sólo la regla: **sin pin** el
+ruteo balancea entre proveedores que reportan `cached=0` y la caché se pierde turno por turno; **con
+pin** se cae siempre en el mismo y su caché de prefijo queda caliente (~5-13x más barato según modelo).
+El pin desactiva el sticky de OpenRouter, pero eso no hace falta. `null` al resto (local/Ollama/LM Studio).
 
 ## Sesión: FRÍA por defecto + restauración de la activa + HOT=Memories
 
@@ -206,10 +202,10 @@ El costo de las búsquedas web (server tool) va **aparte** de los tokens.
 - **Windows/stdout**: el plugin de Tauri decodifica UTF-8 ESTRICTO; `run_command` usa
   `buildShellInvocation` con prologue UTF-8. Python NO es dependencia. `run_command` corre con
   cwd = raíz del workspace.
-- **Transparencia (Mica/Acrylic)**: ventana Tauri `transparent: true` con `windowEffects: micaDark`
-  (Win11); fallback **Acrylic** tintado (`Color(15,14,17,180)`) en `src-tauri/src/lib.rs` para Win10
-  build 17763-21999. Webview transparente; lienzo de los 3 chats en `rgba(30, 15, 32, 0.25)`.
-  Headers/footers `rgba(9,8,10,0.5)`. Sólo Windows.
+- **Transparencia (Mica/Acrylic)**: `transparent: true` + `windowEffects: micaDark` en Win11; en Win10
+  (build 17763-21999) cae a **Acrylic** tintado —`apply_backdrop_fallback` en `src-tauri/src/lib.rs`,
+  que ahí tiene los colores y el corte de build—. Los tintes del lienzo y del chrome viven en los
+  estilos de `CochiDesktop.jsx`/`R7Desktop.jsx`/`AsunPanel.jsx`. Sólo Windows.
 - **SSRF (cerrado, 06/10)**: dos capas. `isBlockedUrl` (`cochiPermissions.js`) filtra por globs + IP
   literal en JS; el fetch real de `web_fetch` va por el comando Rust `fetch_url_guarded`
   (`src-tauri/src/fetch.rs`), que resuelve el DNS, rechaza IPs internas (privadas/loopback/link-local/
