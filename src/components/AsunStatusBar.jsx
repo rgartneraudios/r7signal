@@ -41,7 +41,7 @@ export default function AsunStatusBar({
 
       {/* Attach button (only LLM) */}
       {category === 'llm' && (
-        <button onClick={onAttachFile} title="Adjuntar archivo"
+        <button onClick={onAttachFile} title="Attach file"
           style={{
             background: 'transparent', border: '1px solid #2F2D35', borderRadius: 4,
             padding: '1px 6px', cursor: 'pointer', fontSize: '0.8rem', lineHeight: 1.4,
@@ -91,11 +91,11 @@ export default function AsunStatusBar({
       <button
         onClick={onArchiveWithName}
         disabled={busy}
-        title="Archivar y definir próxima sesión"
+        title="Archive and define the next session"
         style={{ background: 'transparent', border: '1px solid #2E2440', borderRadius: 4, padding: '2px 8px', color: '#8A6AA0', fontSize: '0.65rem', fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.4 : 1, fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
         onMouseEnter={e => { if (!busy) { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' } }}
         onMouseLeave={e => { e.currentTarget.style.borderColor = '#2E2440'; e.currentTarget.style.color = '#8A6AA0' }}
-      >📥 Archivar R7</button>
+      >📥 Archive R7</button>
     </div>
   )
 }

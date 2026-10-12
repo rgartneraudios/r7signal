@@ -31,11 +31,11 @@ export default function CochiStatusBar({
           </span>
         )}
         {(cost > 0 || cachedTokens > 0) && (
-          <span title="Coste estimado (input cacheado con descuento)" style={{ color: '#5FD3E0', fontSize: '0.55rem' }}>
-            · {costStr}{cachedTokens > 0 ? ` · ⚡ ${cachedTokens.toLocaleString('es')} cacheados` : ''}
+          <span title="Estimated cost (cached input discounted)" style={{ color: '#5FD3E0', fontSize: '0.55rem' }}>
+            · {costStr}{cachedTokens > 0 ? ` · ⚡ ${cachedTokens.toLocaleString('es')} cached` : ''}
           </span>
         )}
-        {planStatus === 'executing' && <span style={{ color: '#8A868B', fontSize: '0.65rem', marginLeft: 4 }}>(trabajando...)</span>}
+        {planStatus === 'executing' && <span style={{ color: '#8A868B', fontSize: '0.65rem', marginLeft: 4 }}>(working...)</span>}
       </div>
 
       <div style={{ flex: 1 }} />
@@ -52,11 +52,11 @@ export default function CochiStatusBar({
       <button
         onClick={onArchiveWithName}
         disabled={busy}
-        title="Archivar y definir próxima sesión"
+        title="Archive and define the next session"
         style={{ background: 'transparent', border: '1px solid #3A2A20', borderRadius: 4, padding: '2px 8px', color: '#B07A4A', fontSize: '0.65rem', fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.4 : 1, fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
         onMouseEnter={e => { if (!busy) { e.currentTarget.style.borderColor = '#E8762A'; e.currentTarget.style.color = '#E8762A' } }}
         onMouseLeave={e => { e.currentTarget.style.borderColor = '#3A2A20'; e.currentTarget.style.color = '#B07A4A' }}
-      >📥 Archivar R7</button>
+      >📥 Archive R7</button>
 
       {/* Cancelar (solo cuando loading) */}
       {loading && (
@@ -65,7 +65,7 @@ export default function CochiStatusBar({
           style={{ background: 'rgba(106,122,138,0.15)', border: '1px solid #6A7A8A', borderRadius: 5, padding: '4px 12px', color: '#C0C0C0', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(106,122,138,0.3)'; e.currentTarget.style.borderColor = '#6A7A8A' }}
           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(106,122,138,0.15)'; e.currentTarget.style.borderColor = '#6A7A8A' }}
-        >■ CANCELAR</button>
+        >■ CANCEL</button>
       )}
     </div>
   )
