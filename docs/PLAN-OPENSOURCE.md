@@ -4,7 +4,10 @@ Documento vivo. Se lee AL INICIO de cada sesión y se actualiza AL CIERRE.
 La meta: publicar la app de escritorio (Tauri + React) para que la comunidad —y en
 especial el equipo de DeepSeek— la use, la critique y la mejore en ahorro de tokens.
 
-Estado: Fase 0 cerrada (4/4). Fase 1 iniciada — S1 ejecutada.
+Estado: Fase 0 cerrada (4/4). Fase 1 en curso — S1 y S2a cerradas; S2 quedó DIVIDIDA
+(su alcance real era ~14 archivos y la regla 1 topa en 3).
+**Próxima sesión: S2b — status bars de los 3 paneles**
+(`CochiStatusBar.jsx`, `TitoStatusBar.jsx`, `AsunStatusBar.jsx`). Un objetivo, 3 archivos.
 
 ---
 
@@ -76,6 +79,27 @@ Estado: Fase 0 cerrada (4/4). Fase 1 iniciada — S1 ejecutada.
 - [x] **S1. Watermarks a inglés.** `CochiWatermark.jsx`, `TitoWatermark.jsx`, `AsunWatermark.jsx`.
   Cero lógica, sólo texto. Commit: `Cochi: watermarks de los 3 agentes a inglés`.
 - [ ] **S2. UI visible de los 3 paneles.** Headers, status bars, footers, topbar, botones.
+  **DIVIDIDA (S2a–S2d) al abrir la sesión:** el alcance real era ~14 archivos y la regla 1
+  topa en 3. Hallazgo aparte: `ProjectPlanView.jsx` dice "activá PROYECTO" y el botón de
+  `AsunHeader.jsx` ya dice PROJECT — se alinea en S2c/S2d.
+  - [x] **S2a. Headers de los 3 paneles.** `CochiHeader.jsx` (tooltip de modelo congelado,
+    placeholders `modelo`→`model`, tooltip del modelo del subagente) y `AsunHeader.jsx`
+    (IMAGEN/MÚSICA→IMAGE/MUSIC, OCCIDENTE→WEST, PROYECTO→PROJECT + tooltip).
+    `TitoHeader.jsx` **no tenía texto visible** a traducir (su única etiqueta ya estaba en
+    inglés): no se tocó. Commit `aa8d6b8`.
+  - [ ] **S2b. Status bars de los 3 paneles.** `CochiStatusBar.jsx`, `TitoStatusBar.jsx`,
+    `AsunStatusBar.jsx`: CLS, "Archivar R7", CANCELAR, tooltips de archivado, contador de
+    búsquedas web, "Coste estimado", "Adjuntar archivo", "(trabajando…)".
+  - [ ] **S2c. Topbar + botones y mensajes de panel.** `R7TopBar.jsx`/`AppHeader.jsx` +
+    `CochiDesktop.jsx`, `TitoPanel.jsx`, `AsunPanel.jsx` (estados de error, avisos de API key
+    faltante, `window.confirm` de borrado y de operaciones destructivas).
+  - [ ] **S2d. Footers y flujos de UI.** `R7FooterInputs.jsx`, `AsunMusicFooter.jsx`,
+    `PromptImagenFlow.jsx`, `AsunImagenFlow.jsx`, `SidebarPanel.jsx`, `Descargas.jsx`,
+    los `Sequencer*`, `CochiPermissionPanel.jsx`, `CochiMessageList.jsx`/`TitoMessageList.jsx`/
+    `AsunMessageList.jsx` (tooltips de undo/regenerate), `SubagentView.jsx`,
+    `CochiActivityFeed.jsx`, `DiffViewer.jsx`, `ProjectPlanView.jsx`.
+    Es el bloque grande: **probablemente se parta otra vez** (el wizard de imagen y el
+    secuenciador tienen decenas de cadenas cada uno).
 - [ ] **S3. Modales.** `PreferencesModal`, `ApiKeyModal`, `MemoriesModal`, `R9Drawer`, `SideDoors`, `SessionModeToggle`, `TokenWarningBanner`.
 - [ ] **S4. Textos de libs puras y mensajes de error.** Si cambia un assert de harness, se actualiza el harness en la misma sesión.
 
@@ -152,7 +176,8 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 
 | Sesión | Resultado | Gate | Commit |
 | --- | --- | --- | --- |
-| S1 | Watermarks de Cochi/TITO/Asun a inglés, incluida la rama música de Asun (texto visible de estado vacío). Cero lógica, sólo texto: no se tocó ningún handler ni estilo. | lint 0/0 · build OK · test 27/27 | (este commit) |
+| S1 | Watermarks de Cochi/TITO/Asun a inglés, incluida la rama música de Asun (texto visible de estado vacío). Cero lógica, sólo texto: no se tocó ningún handler ni estilo. | lint 0/0 · build OK · test 27/27 | `621be08` |
+| S2a | Headers de los 3 paneles a inglés: tooltip de modelo congelado (Cochi/Asun), placeholders `modelo`→`model`, tooltip del subagente, botones de categoría de Asun (IMAGE/MUSIC), submenú OCCIDENTE→WEST, PROYECTO→PROJECT. `TitoHeader.jsx` no tenía texto visible: no se tocó. Cero lógica. Hallazgo: S2 excedía el tope de 3 archivos (~14) → dividida en S2a–S2d. | lint 0/0 · build OK · test 27/27 | `aa8d6b8` |
 
 ---
 
