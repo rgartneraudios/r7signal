@@ -5,22 +5,22 @@ export default function TitoWatermark() {
       <div className="watermark-brand" style={{ fontSize: '1.5rem' }}>R7SIGNAL</div>
       <div className="watermark-divider" style={{ fontSize: '0.7rem' }}>────────────────</div>
       <div className="watermark-name" style={{ fontSize: '1.9rem' }}>TITO</div>
-      <div className="watermark-sub" style={{ fontSize: '0.8rem' }}>TITO es la unidad de búsqueda y telemetría de R7Signal,<br />
-con búsqueda web real integrada.<br />
-Una sola pestaña: no hay selectores de nivel.<br />
-TITO no administra archivos ni código — para eso está Cochi.<br />
-El botón CLS, al pie del Panel, limpia el chat<br />
-y reinicia la búsqueda desde cero.<br />
-A los 70.000 tokens aparece el botón Compactar contexto,<br />
-que resume los turnos viejos localmente (sin llamar al modelo).<br />
-Y si solo necesitás fragmentos puntuales <br />
-párrafos sueltos o pedazos de código, <br />
-R9 permite seleccionarlos con precisión.<br />
-El contenido de R7 y R9 se encuentra en el compartimento<br />
-junto a la rueda dentada.<br />
+      <div className="watermark-sub" style={{ fontSize: '0.8rem' }}>TITO is the search and telemetry unit of R7Signal,<br />
+with real web search integrated.<br />
+A single tab: there are no level selectors.<br />
+TITO does not manage files or code — that is Cochi's job.<br />
+The CLS button, at the foot of the Panel, clears the chat<br />
+and restarts the search from scratch.<br />
+At 70,000 tokens the Compact Context button appears,<br />
+summarizing old turns locally (without calling the model).<br />
+And if you only need specific fragments, <br />
+loose paragraphs or code snippets, <br />
+R9 lets you select them with precision.<br />
+The content of R7 and R9 lives in the compartment<br />
+next to the gear wheel.<br />
 <br />
-NOTA: TITO tiene incorporado un tono de personalidad específico vía prompt<br />
-que no es posible cambiar en esta versión.<br />
+NOTE: TITO has a specific personality tone built into its prompt<br />
+that cannot be changed in this version.<br />
 RGartner by R7Signal
       </div>
     </div>
