@@ -57,9 +57,13 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
 
 ## Setup / entorno
 
-- `.env` / `.env.local` (gitignored): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
-  `VITE_SUPABASE_SERVICE_KEY`, `OPENROUTER_API_KEY`, `VITE_R7_USER_ID`. El E2E de escritorio necesita
-  además una API key de OpenRouter cargada en la app.
+- Plantilla en **`.env.example`** (versionada); copiar a `.env` / `.env.local` (gitignored).
+  **Regla `VITE_` (S5):** Vite hornea toda variable con prefijo `VITE_` en el bundle → es pública.
+  Ningún secreto lleva ese prefijo. Públicas: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+  `VITE_STRICT`. Sin prefijo (nunca al bundle, dev/edge functions): `OPENROUTER_API_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY`. El E2E de escritorio necesita además una API key de OpenRouter cargada
+  en la app. `VITE_SUPABASE_SERVICE_KEY` se eliminó en S5 (mismo valor que `SUPABASE_SERVICE_ROLE_KEY`,
+  pero público por prefijo y sin uso en `src`); `VITE_R7_USER_ID` quedó sin uso en el código.
 - **Prompts**: la edge function `supabase/functions/get-agent-prompts/` lee `agent_prompts` (filtra
   `agent_id` + `is_active`) y devuelve `{prompt_key: content}`. Cochi usa `system`; Asun
   (`system`/`project`/`music`) y Tito (`system`) siguen activos. Si `system` de Cochi falta o trae el

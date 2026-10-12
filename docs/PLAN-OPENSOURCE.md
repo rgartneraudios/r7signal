@@ -4,14 +4,17 @@ Documento vivo. Se lee AL INICIO de cada sesión y se actualiza AL CIERRE.
 La meta: publicar la app de escritorio (Tauri + React) para que la comunidad —y en
 especial el equipo de DeepSeek— la use, la critique y la mejore en ahorro de tokens.
 
-Estado: Fase 0 cerrada (4/4). **Fase 1 (idioma) CERRADA** — S1, S2 (S2a–S2d), S3, S4 y S4-bis.
+Estado: Fase 0 cerrada (4/4) y **Fase 1 (idioma) CERRADA** — S1, S2 (S2a–S2d), S3, S4 y S4-bis.
 La UI visible de los 3 paneles, sus flujos, sus modales, las libs puras y los tool results que ve el
 modelo ya nacen en inglés.
-**Próxima sesión: S5 — higiene de secretos** (`.env.example`, borrar `VITE_SUPABASE_SERVICE_KEY`,
-documentar la regla `VITE_` en el README). Hallazgo que pide sesión propia (**S4-ter**, candidata): el
-contenido del hub (`finanzas.js`, `financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`), el texto truncado
-de `DiffViewer.jsx` y el locale de fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y
-`CochiStatusBar`).
+**Fase 2 (limpieza) en curso: S5 CERRADA** — `.env.example` versionado con la regla `VITE_` escrita,
+`VITE_SUPABASE_SERVICE_KEY` purgada del `.env` (era el MISMO valor que `SUPABASE_SERVICE_ROLE_KEY`,
+pero público por el prefijo) y la regla documentada en `README.md` + `AGENTS.md`.
+**Próxima sesión: S6 — purga de identidad** (`supabase/.temp/*` incluye 9 archivos TRACKEADOS con ref
+de proyecto y pooler-url; hallazgo de S5, entra en S6).
+Hallazgo que pide sesión propia (**S4-ter**, candidata): el contenido del hub (`finanzas.js`,
+`financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`), el texto truncado de `DiffViewer.jsx` y el locale de
+fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
 
 ---
 
@@ -217,8 +220,23 @@ de `DiffViewer.jsx` y el locale de fecha/número (`es-ES` en `R9Drawer`, `es` en
   de `IDIOMAS`.
 
 ### Fase 2 — Limpieza e identidad
-- [ ] **S5. Higiene de secretos.** Crear `.env.example` con placeholders; borrar `VITE_SUPABASE_SERVICE_KEY`
-  del `.env` (declarada en AGENTS.md, sin uso en `src`); documentar la regla `VITE_` en el README.
+- [x] **S5. Higiene de secretos — CERRADA (2 archivos versionados + `.env` local).** Creado
+  `.env.example` (versionado; `git check-ignore` confirma que el patrón `.env` de `.gitignore` NO lo
+  captura) con placeholders y la regla `VITE_` escrita en la cabecera: lo público (`VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY`, `VITE_STRICT`) vs lo que nunca entra al bundle (`OPENROUTER_API_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY`). Purgada `VITE_SUPABASE_SERVICE_KEY` del `.env` local (no versionado):
+  **era el mismo valor que `SUPABASE_SERVICE_ROLE_KEY`** — se compararon los dos valores sin imprimirlos
+  y coinciden — así que el secreto queda **sólo** en la copia sin prefijo, fuera del bundle. La regla
+  `VITE_` quedó documentada en `README.md` (sección Environment) y en `AGENTS.md` (§ Setup), con la
+  aclaración de que Supabase es opcional y fuera del camino crítico. Cero lógica: sólo docs y config.
+  **Verificación de fuga:** `dist/` reconstruido con el `.env` ya purgado → 0 coincidencias de
+  `service_role` en los artefactos. `git log --all -- .env` vacío: el `.env` nunca entró al historial.
+  **Hallazgos (fuera del frente → sesión propia):** (a) `supabase/.temp/*` tiene **9 archivos trackeados**
+  (`project-ref`, `pooler-url`, `linked-project.json`…) — es S6, no se tocó acá; (b) `VITE_R7_USER_ID`
+  vive en `.env` y en `AGENTS.md` pero **ningún archivo del repo la lee** (`VITE_SHOW_STUDIO`, de
+  `.env.local`, tampoco): variables muertas, candidatas a la sesión de defaults junto a S6/D5;
+  (c) `src/components/ApiKeyModal.jsx:83` y `supabase/functions/generar-asset/index.ts:150` contienen
+  `sk-or-`/`service_role` sólo como placeholder y comentario — falsos positivos para gitleaks.
 - [ ] **S6. Purga de identidad.** `supabase/.temp/*` (ref de proyecto y pooler-url), `DEFAULT_USER_ID`
   en `generar-asset` y `generar-musica`, avatar `media.r7signal.com`, clima `Oviedo`, default `'Signor Roberto'`.
 - [ ] **S7. LICENSE + CONTRIBUTING + README real.** Archivo `LICENSE` con MIT (D1). Setup mínimo:
@@ -298,6 +316,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S3 | Modales a inglés (7 archivos, cero lógica): `PreferencesModal` (campos, errores, `Save`/`Cancel`), `ApiKeyModal` (primer arranque, aviso BYOK local, `Show`/`Hide`), `MemoriesModal` (`USER MEMORY`, hint, `+ Add`), `R9Drawer` (tabs `Sessions`/`Plans`/`R9 · Selections`, `SHARED MEMORY`, empties, confirm, `Load`, `View`), `SideDoors` (`SHORTCUTS`, `Data folder`, tooltips), `SessionModeToggle` (`CONTEXT`, `Cold session`/`Session Memories`) y `TokenWarningBanner` (70k + `Compact context`). Decisiones: `IDIOMAS` no se traduce (endónimos); `Base de datos`→`Data folder`. Hallazgos: `PERMISSION_RULE_HINT` (lib) a S4; default de datos `chat_language: 'Español'` NO tocado (es decisión del autor, altera idioma de respuesta y caché); locale `es-ES` de `R9Drawer` sigue a la sesión de locale; `finance-proxy` + migración `20260627_descontar_credito.sql` existen y no están documentados en `AGENTS.md`. | lint 0/0 · build OK · test 27/27 | `493da9e` |
 | S4 | Cierre de la Fase 1 (idioma): 9 archivos de libs puras y mensajes model-facing a inglés — wizard de imagen (`promptImagen`), acordes/grupos del secuenciador, tablero de planes + `statusLabel` + handoffs, subagente (`statusLabel`/label/errores), cabecera R9, `PERMISSION_RULE_HINT` + títulos de aprobación, pestañas del hub, errores de `useCochiTaskLoop` y las frases model-facing de `AsunPanel`. Cero lógica: sólo cadenas. 4 harness actualizados en la misma sesión (`promptImagen` 4 asserts, `sequencer` 1, `cochiPlans` 16, `cochiSubagent` 9). Hallazgo: los tool results model-facing de `cochiTools.js`/`asunTools.js`, el error de `llmClient.js` y el contenido del hub quedan para sesión propia. | lint 0/0 · build OK · test 27/27 | `9d12d2a` |
 | S4-bis | Cierre del idioma en libs: los tool results que ve el modelo pasan a inglés en `cochiTools.js` (~70 cadenas: `⛔ Blocked:`, `File too large`, `TYPO RESUELTO`→`TYPO RESOLVED`, truncados, `(no results)`, tablero de planes, `formatRunCommandOutput`, los 2 `reason` de `checkPathAccess`) y en `asunTools.js`; el error visible de API key de `llmClient.js`; el nombre por defecto de sesión de `sessionStore.js` (`Session …`) y el prompt + 2 errores de `useWheelSession.js`. Cero lógica: sólo cadenas. 3 harness actualizados en la misma sesión (`cochiTools` 2, `cochiGuards` 2, `cochiSessions` 1); `isToolError`/`commandRan` no cambiaron porque clasifican por prefijo agnóstico del idioma. Hallazgo: el hub, el texto truncado de `DiffViewer.jsx` y el locale de fecha/número pasan a **S4-ter**. | lint 0/0 · build OK · test 27/27 | `db8d28f` |
+| S5 | Higiene de secretos: `.env.example` versionado (placeholders + regla `VITE_` en la cabecera), `VITE_SUPABASE_SERVICE_KEY` purgada del `.env` local (era el MISMO valor que `SUPABASE_SERVICE_ROLE_KEY`: el secreto sobrevive sólo en la copia sin prefijo, fuera del bundle) y regla `VITE_` documentada en `README.md` y `AGENTS.md`. Cero lógica: docs y config. Verificación: `dist/` reconstruido sin coincidencias de `service_role`; `git log --all -- .env` vacío (nunca entró al historial). Hallazgos: `supabase/.temp/*` tiene 9 archivos TRACKEADOS → S6; `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` no las lee ningún archivo (variables muertas); los `sk-or-`/`service_role` de `ApiKeyModal`/`generar-asset` son placeholder y comentario. | lint 0/0 · build OK · test 27/27 | `<hash>` |
 
 ---
 
