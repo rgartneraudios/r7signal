@@ -82,10 +82,10 @@ export function formatRunCommandOutput({ stdout, stderr, code, timedOut, error, 
   const err = String(stderr ?? '').trim()
   if (timedOut) {
     const partial = [out && `STDOUT: ${out}`, err && `STDERR: ${err}`].filter(Boolean).join('\n')
-    return `⏱️ Comando cancelado por timeout (${timeoutMs}ms).${partial ? `\n${partial}` : ''}`
+    return `⏱️ Command cancelled by timeout (${timeoutMs}ms).${partial ? `\n${partial}` : ''}`
   }
   if (error) return `ERROR: ${error}${out ? `\nSTDOUT: ${out}` : ''}`
-  const body = err && !out ? `STDERR: ${err}` : err ? `${out}\nSTDERR: ${err}` : (out || '(sin output)')
+  const body = err && !out ? `STDERR: ${err}` : err ? `${out}\nSTDERR: ${err}` : (out || '(no output)')
   return code != null ? `(exit ${code})\n${body}` : body
 }
 
@@ -117,7 +117,7 @@ function truncateBytes(text, maxBytes) {
   const bytes = new TextEncoder().encode(text).length
   if (bytes <= maxBytes) return text
   const keepChars = Math.max(0, Math.floor(text.length * (maxBytes / bytes)) - 64)
-  return text.slice(0, keepChars) + `\n…[output truncado: ${bytes} bytes totales, máximo ${maxBytes}]`
+  return text.slice(0, keepChars) + `\n…[output truncated: ${bytes} total bytes, max ${maxBytes}]`
 }
 
 // ─── Estado de todowrite ──────────────────────────────────────────────────────
@@ -207,7 +207,7 @@ export async function findClosestPath(target, maxDist = 2) {
 
 async function notFoundSuffix(target) {
   const suggestions = await suggestClosestPaths(target)
-  return suggestions.length ? `\n¿Quisiste decir?: ${suggestions.join(' | ')}` : ''
+  return suggestions.length ? `\nDid you mean?: ${suggestions.join(' | ')}` : ''
 }
 
 // ─── OS detection ─────────────────────────────────────────────────────────────
@@ -277,10 +277,10 @@ export function isDeniedPath(target) {
 export function checkPathAccess(target, workspaceRoot) {
   if (!target) return { ok: true }
   if (isDeniedPath(target)) {
-    return { ok: false, reason: `ruta prohibida por deny-list: ${target}` }
+    return { ok: false, reason: `path forbidden by deny-list: ${target}` }
   }
   if (workspaceRoot && !isInsideWorkspace(target, workspaceRoot)) {
-    return { ok: false, reason: `ruta fuera del workspace activo: ${target}` }
+    return { ok: false, reason: `path outside the active workspace: ${target}` }
   }
   return { ok: true }
 }
@@ -956,20 +956,20 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
   const snap = async (p) => { if (snapshot && !dryRun && p) await capturePath(snapshot, p) }
 
   if (!canWrite && ['write_file', 'replace_in_file', 'append_to_file', 'create_dir', 'move_file', 'copy_file'].includes(name))
-    return { modelResult: '⛔ Bloqueado: permiso Solo Lectura. Cambia el nivel en Workspace.', diff: null }
+    return { modelResult: '⛔ Blocked: read-only permission. Change the level in Workspace.', diff: null }
   if (!canRun && (name === 'run_command' || name === 'delete_file' || name === 'delete_dir'))
-    return { modelResult: '⛔ Bloqueado: activa Full Access para operaciones destructivas (run_command, delete_file, delete_dir).', diff: null }
+    return { modelResult: '⛔ Blocked: enable Full Access for destructive operations (run_command, delete_file, delete_dir).', diff: null }
 
   // Sandbox: deny-list de rutas de sistema y containment dentro del workspace.
   for (const key of ['path', 'dirPath', 'fromPath', 'toPath', 'cwd']) {
     if (args?.[key]) {
       const access = checkPathAccess(args[key], workspaceRoot)
-      if (!access.ok) return { modelResult: `⛔ Bloqueado: ${access.reason}`, diff: null }
+      if (!access.ok) return { modelResult: `⛔ Blocked: ${access.reason}`, diff: null }
     }
   }
   if (name === 'run_command') {
     const denied = extractAbsolutePaths(args?.command).find(p => isDeniedPath(p))
-    if (denied) return { modelResult: `⛔ Bloqueado: comando referencia ruta prohibida por deny-list: ${denied}`, diff: null }
+    if (denied) return { modelResult: `⛔ Blocked: command references a path forbidden by deny-list: ${denied}`, diff: null }
   }
 
   switch (name) {
@@ -980,7 +980,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         if (fileStat.size > MAX_READ_BYTES) {
           const mb = (fileStat.size / (1024 * 1024)).toFixed(1)
           return {
-            modelResult: `⚠️ Archivo demasiado grande (${mb}MB, máximo 1MB). Usa get_file_info para ver el tamaño y read_file_chunk con un rango de líneas, o divide la tarea.`,
+            modelResult: `⚠️ File too large (${mb}MB, max 1MB). Use get_file_info for the size and read_file_chunk with a line range, or split the task.`,
             diff: null,
           }
         }
@@ -994,7 +994,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         if (best) {
           try {
             const content = await readTextFile(best)
-            return { modelResult: `⚠️ La ruta "${args.path}" no existe. TYPO RESUELTO: el sistema leyó automáticamente el archivo más parecido → "${best}"\n\n${content}`, diff: null }
+            return { modelResult: `⚠️ Path "${args.path}" does not exist. TYPO RESOLVED: the system read the closest matching file automatically → "${best}"\n\n${content}`, diff: null }
           } catch {}
         }
         return { modelResult: `ERROR: ${err.message}${await notFoundSuffix(args.path)}`, diff: null }
@@ -1015,7 +1015,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       const end   = Math.min(requestedEnd, start + MAX_CHUNK_LINES, lines.length)
       const chunk = lines.slice(start, end)
       const truncNote = (lines.length > end && (args.endLine == null || args.endLine > end))
-        ? `\n[Truncado a ${MAX_CHUNK_LINES} líneas — pide otro rango con startLine=${end + 1} para continuar]`
+        ? `\n[Truncated to ${MAX_CHUNK_LINES} lines — request another range with startLine=${end + 1} to continue]`
         : ''
       return { modelResult: `Lines ${start + 1}–${end} of ${lines.length}:\n` + chunk.join('\n') + truncNote, diff: null }
     }
@@ -1027,12 +1027,12 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       const fileExisted = await pathExistsCochi(args.path)
       const before = fileExisted ? await readTextFile(args.path).catch(() => null) : null
       const diff = { path: args.path, before, after: args.content }
-      if (dryRun) return { modelResult: `(preview) escribir ${args.path}`, diff }
+      if (dryRun) return { modelResult: `(preview) write ${args.path}`, diff }
       await snap(args.path)
       if (dir && !(await exists(dir))) await mkdir(dir, { recursive: true })
       await writeTextFile(args.path, args.content)
       return {
-        modelResult: `✅ Escrito: ${args.path}`,
+        modelResult: `✅ Written: ${args.path}`,
         diff,
       }
     }
@@ -1040,20 +1040,20 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
     case 'replace_in_file': {
       const original = await readTextFile(args.path)
       const result = applyTextReplacement(original, args.oldText, args.newText, args.replaceAll === true)
-      if (result.status === 'not_found') return { modelResult: `⚠️ Texto no encontrado en ${args.path}`, diff: null }
+      if (result.status === 'not_found') return { modelResult: `⚠️ Text not found in ${args.path}`, diff: null }
       if (result.status === 'ambiguous') {
         return {
-          modelResult: `⚠️ El texto aparece ${result.occurrences} veces en ${args.path}. Añade más contexto para que sea único, o pasa replaceAll: true si querés reemplazar todas.`,
+          modelResult: `⚠️ The text appears ${result.occurrences} times in ${args.path}. Add more context to make it unique, or pass replaceAll: true to replace them all.`,
           diff: null,
         }
       }
       const updated = result.updated
       const diff = { path: args.path, before: original, after: updated }
-      if (dryRun) return { modelResult: `(preview) editar ${args.path}`, diff }
+      if (dryRun) return { modelResult: `(preview) edit ${args.path}`, diff }
       await snap(args.path)
       await writeTextFile(args.path, updated)
       return {
-        modelResult: `✅ ${result.count} reemplazo(s) en ${args.path}`,
+        modelResult: `✅ ${result.count} replacement(s) in ${args.path}`,
         diff,
       }
     }
@@ -1063,11 +1063,11 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       try { current = await readTextFile(args.path) } catch {}
       const after = current + args.content
       const diff = { path: args.path, before: current, after }
-      if (dryRun) return { modelResult: `(preview) añadir a ${args.path}`, diff }
+      if (dryRun) return { modelResult: `(preview) append to ${args.path}`, diff }
       await snap(args.path)
       await writeTextFile(args.path, after)
       return {
-        modelResult: `✅ Contenido añadido a ${args.path}`,
+        modelResult: `✅ Content appended to ${args.path}`,
         diff,
       }
     }
@@ -1075,7 +1075,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
     case 'list_dir': {
       const entries = await readDir(args.path)
       return {
-        modelResult: entries.map(e => `${e.isDirectory ? '[DIR] ' : '[FILE]'} ${e.name}`).join('\n') || '(vacío)',
+        modelResult: entries.map(e => `${e.isDirectory ? '[DIR] ' : '[FILE]'} ${e.name}`).join('\n') || '(empty)',
         diff: null,
       }
     }
@@ -1084,8 +1084,8 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       const max = Math.min(Math.max(Number(args.maxResults) || 200, 1), 2000)
       const matcher = buildFileMatcher(args.namePattern, args.dirPath)
       const matches = await walkDir(args.dirPath, matcher, [], 0, max)
-      if (matches.length === 0) return { modelResult: '(sin resultados)', diff: null }
-      const capNote = matches.length >= max ? `\n[Alcanzado el límite de ${max} resultados — refina el patrón para acotar más]` : ''
+      if (matches.length === 0) return { modelResult: '(no results)', diff: null }
+      const capNote = matches.length >= max ? `\n[Reached the ${max}-result limit — refine the pattern to narrow it down]` : ''
       return { modelResult: matches.join('\n') + capNote, diff: null }
     }
 
@@ -1095,7 +1095,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       let re = null
       if (useRegex) {
         try { re = new RegExp(args.pattern, caseSensitive ? '' : 'i') }
-        catch (err) { return { modelResult: `⚠️ Regex inválida: ${err.message}`, diff: null } }
+        catch (err) { return { modelResult: `⚠️ Invalid regex: ${err.message}`, diff: null } }
       }
       const patternLow = String(args.pattern).toLowerCase()
       const matcher    = buildFileMatcher(args.filePattern || '*', args.dirPath)
@@ -1114,8 +1114,8 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
           }
         } catch {}
       }
-      if (results.length === 0) return { modelResult: '(sin resultados)', diff: null }
-      const note = results.length === 50 ? '\n[Máx. 50 resultados — refina con filePattern o regex si necesitas más precisión]' : ''
+      if (results.length === 0) return { modelResult: '(no results)', diff: null }
+      const note = results.length === 50 ? '\n[Max 50 results — refine with filePattern or regex if you need more precision]' : ''
       return { modelResult: results.join('\n') + note, diff: null }
     }
 
@@ -1132,12 +1132,12 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
 
     case 'file_exists': {
       const result = await exists(args.path)
-      return { modelResult: result ? `✅ Existe: ${args.path}` : `❌ No existe: ${args.path}${await notFoundSuffix(args.path)}`, diff: null }
+      return { modelResult: result ? `✅ Exists: ${args.path}` : `❌ Does not exist: ${args.path}${await notFoundSuffix(args.path)}`, diff: null }
     }
 
     case 'save_to_r9': {
       const entry = await writeR9File('r9', args.content, { source: 'cochi', label: args.label })
-      return { modelResult: `✅ Guardado en R9: ${entry.fileName}`, diff: null }
+      return { modelResult: `✅ Saved to R9: ${entry.fileName}`, diff: null }
     }
 
     case 'run_command': {
@@ -1167,7 +1167,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       } catch (err) {
         if (trackWorkspace) await reconcileWorkspace(snapshot, workspaceRoot).catch(() => {})
         return {
-          modelResult: `ERROR al ejecutar comando: ${(err && err.message) || String(err) || 'falló spawn()'}\nCOMANDO: ${args.command}`,
+          modelResult: `ERROR running command: ${(err && err.message) || String(err) || 'spawn() failed'}\nCOMMAND: ${args.command}`,
           diff: null,
         }
       }
@@ -1206,10 +1206,10 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
     case 'todowrite': {
       const todos = normalizeTodos(args.todos)
       if (todos.length === 0) {
-        return { modelResult: '⚠️ La lista de tareas está vacía. Envía al menos una tarea con content y status.', diff: null, todos: [] }
+        return { modelResult: '⚠️ The task list is empty. Send at least one task with content and status.', diff: null, todos: [] }
       }
       return {
-        modelResult: `Lista de tareas actualizada (${todos.length}):\n${formatTodos(todos)}`,
+        modelResult: `Task list updated (${todos.length}):\n${formatTodos(todos)}`,
         diff: null,
         todos,
       }
@@ -1218,46 +1218,46 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
     case 'web_fetch': {
       const url = String(args.url || '').trim()
       if (!/^https?:\/\//i.test(url)) {
-        return { modelResult: '⛔ URL inválida: solo se admite http(s)://', diff: null }
+        return { modelResult: '⛔ Invalid URL: only http(s):// is allowed', diff: null }
       }
       const maxBytes = Math.min(Math.max(Number(args.maxBytes) || MAX_FETCH_BYTES, 1024), MAX_READ_BYTES)
       const timeoutMs = Math.min(Math.max(Number(args.timeoutMs) || DEFAULT_FETCH_TIMEOUT, 1000), MAX_FETCH_TIMEOUT)
       try {
         const res = await guardedWebFetch(url, { maxBytes, timeoutMs })
         if (res.status < 200 || res.status >= 300) {
-          return { modelResult: `⚠️ HTTP ${res.status} al leer ${url}`, diff: null }
+          return { modelResult: `⚠️ HTTP ${res.status} reading ${url}`, diff: null }
         }
         const raw = res.body || ''
         const isJson = /json/i.test(res.contentType) || /^\s*[[{]/.test(raw)
         const body = isJson ? raw : htmlToText(raw)
         const truncated = truncateBytes(body, maxBytes)
-        const redirected = res.finalUrl && res.finalUrl !== url ? ` (redirigido a ${res.finalUrl})` : ''
+        const redirected = res.finalUrl && res.finalUrl !== url ? ` (redirected to ${res.finalUrl})` : ''
         return {
-          modelResult: `${url}${redirected}\n[HTTP ${res.status} · ${res.contentType || 'sin content-type'} · ${isJson ? 'json' : 'html→texto'}]\n\n${truncated}`,
+          modelResult: `${url}${redirected}\n[HTTP ${res.status} · ${res.contentType || 'no content-type'} · ${isJson ? 'json' : 'html→text'}]\n\n${truncated}`,
           diff: null,
         }
       } catch (err) {
-        if (err?.name === 'AbortError') return { modelResult: `⏱️ Timeout (${timeoutMs}ms) al leer ${url}`, diff: null }
+        if (err?.name === 'AbortError') return { modelResult: `⏱️ Timeout (${timeoutMs}ms) reading ${url}`, diff: null }
         const message = typeof err === 'string' ? err : err?.message || String(err)
         return { modelResult: message, diff: null }
       }
     }
 
     case 'ask_user':
-      return { modelResult: '⚠️ ask_user debe resolverse en el loop de Cochi (pausa y espera respuesta).', diff: null }
+      return { modelResult: '⚠️ ask_user must be resolved by the Cochi loop (it pauses and waits for the answer).', diff: null }
 
     case 'spawn_agent':
-      return { modelResult: '⚠️ spawn_agent debe resolverse en el loop de Cochi (turno headless del subagente).', diff: null }
+      return { modelResult: '⚠️ spawn_agent must be resolved by the Cochi loop (headless subagent turn).', diff: null }
 
     // ── Bloque E3: tablero del plan de proyecto ──────────────────────────────
     case 'list_project_plans': {
       try {
         const plans = planBoardList(await listPlans())
-        if (plans.length === 0) return { modelResult: 'El tablero de planes está vacío (todavía no hay proyectos de Asun).', diff: null }
-        const lines = plans.map(p => `· ${p.title} [${p.id}] — ${p.done}/${p.total} bloques (${p.percent}%)`)
-        return { modelResult: `Planes en el tablero (${plans.length}):\n${lines.join('\n')}`, diff: null }
+        if (plans.length === 0) return { modelResult: 'The plan board is empty (no Asun projects yet).', diff: null }
+        const lines = plans.map(p => `· ${p.title} [${p.id}] — ${p.done}/${p.total} blocks (${p.percent}%)`)
+        return { modelResult: `Board plans (${plans.length}):\n${lines.join('\n')}`, diff: null }
       } catch (err) {
-        return { modelResult: `ERROR al listar planes: ${err.message}`, diff: null }
+        return { modelResult: `ERROR listing plans: ${err.message}`, diff: null }
       }
     }
 
@@ -1265,10 +1265,10 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       try {
         let plan = args.planId ? await loadPlan(args.planId) : null
         if (!plan) plan = (await listPlans())[0] || null
-        if (!plan) return { modelResult: 'No hay plan para leer (tablero vacío o planId inexistente).', diff: null }
+        if (!plan) return { modelResult: 'No plan to read (empty board or unknown planId).', diff: null }
         return { modelResult: planToText(plan), diff: null }
       } catch (err) {
-        return { modelResult: `ERROR al leer el plan: ${err.message}`, diff: null }
+        return { modelResult: `ERROR reading the plan: ${err.message}`, diff: null }
       }
     }
 
@@ -1276,21 +1276,21 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       try {
         let plan = args.planId ? await loadPlan(args.planId) : null
         if (!plan) plan = (await listPlans())[0] || null
-        if (!plan) return { modelResult: 'No hay plan para actualizar.', diff: null }
+        if (!plan) return { modelResult: 'No plan to update.', diff: null }
         const blockId = String(args.blockId ?? '').trim()
         if (!getBlock(plan, blockId)) {
-          return { modelResult: `El bloque "${blockId}" no existe en "${plan.title}". Bloques: ${plan.blocks.map(b => b.id).join(', ')}.`, diff: null }
+          return { modelResult: `Block "${blockId}" does not exist in "${plan.title}". Blocks: ${plan.blocks.map(b => b.id).join(', ')}.`, diff: null }
         }
         const status = String(args.status ?? '').trim().toLowerCase()
         if (status === PLAN_STATUS.DONE && !String(args.evidence ?? '').trim()) {
-          return { modelResult: '⛔ Para marcar un bloque como "done" aportá `evidence` (cómo lo verificaste).', diff: null }
+          return { modelResult: '⛔ To mark a block as "done" provide `evidence` (how you verified it).', diff: null }
         }
         const updated = setBlockStatus(plan, blockId, status, { author: 'cochi', note: args.evidence })
         await savePlan(updated)
         const prog = planProgress(updated)
-        return { modelResult: `✅ Bloque ${blockId} → ${status}. Avance del plan: ${prog.done}/${prog.total} (${prog.percent}%).`, diff: null }
+        return { modelResult: `✅ Block ${blockId} → ${status}. Plan progress: ${prog.done}/${prog.total} (${prog.percent}%).`, diff: null }
       } catch (err) {
-        return { modelResult: `ERROR al actualizar el bloque: ${err.message}`, diff: null }
+        return { modelResult: `ERROR updating the block: ${err.message}`, diff: null }
       }
     }
 
@@ -1298,83 +1298,83 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       try {
         let plan = args.planId ? await loadPlan(args.planId) : null
         if (!plan) plan = (await listPlans())[0] || null
-        if (!plan) return { modelResult: 'No hay plan para proponer un re-plan.', diff: null }
+        if (!plan) return { modelResult: 'No plan to propose a re-plan for.', diff: null }
         const blockId = String(args.blockId ?? '').trim()
         if (!getBlock(plan, blockId)) {
-          return { modelResult: `El bloque "${blockId}" no existe en "${plan.title}". Bloques: ${plan.blocks.map(b => b.id).join(', ')}.`, diff: null }
+          return { modelResult: `Block "${blockId}" does not exist in "${plan.title}". Blocks: ${plan.blocks.map(b => b.id).join(', ')}.`, diff: null }
         }
         const reason = String(args.reason ?? '').trim()
         const proposal = String(args.proposal ?? '').trim()
         if (!reason || !proposal) {
-          return { modelResult: '⛔ Para proponer un re-plan aportá `reason` (qué está mal) y `proposal` (cómo corregirlo).', diff: null }
+          return { modelResult: '⛔ To propose a re-plan provide `reason` (what is wrong) and `proposal` (how to fix it).', diff: null }
         }
         const updated = requestReplan(plan, blockId, { reason, proposal, author: 'cochi' })
         await savePlan(updated)
-        return { modelResult: `⚠️ Re-plan registrado para el bloque ${blockId}. Queda PENDIENTE de decisión del usuario (aprobarlo o pedir a Asun que amende). No te desvíes: esperá la resolución.`, diff: null }
+        return { modelResult: `⚠️ Re-plan registered for block ${blockId}. It stays PENDING the user decision (approve it, or ask Asun to amend it). Do not deviate: wait for the resolution.`, diff: null }
       } catch (err) {
-        return { modelResult: `ERROR al registrar el re-plan: ${err.message}`, diff: null }
+        return { modelResult: `ERROR registering the re-plan: ${err.message}`, diff: null }
       }
     }
 
     case 'delete_file': {
       const existed = await pathExistsCochi(args.path)
-      if (!existed) return { modelResult: `⚠️ No existe: ${args.path}${await notFoundSuffix(args.path)}`, diff: null }
+      if (!existed) return { modelResult: `⚠️ Does not exist: ${args.path}${await notFoundSuffix(args.path)}`, diff: null }
       await snap(args.path)
       await remove(args.path)
-      return { modelResult: `🗑️ Eliminado: ${args.path}`, diff: null }
+      return { modelResult: `🗑️ Deleted: ${args.path}`, diff: null }
     }
 
     case 'delete_dir': {
       const existed = await pathExistsCochi(args.path)
-      if (!existed) return { modelResult: `⚠️ No existe: ${args.path}${await notFoundSuffix(args.path)}`, diff: null }
+      if (!existed) return { modelResult: `⚠️ Does not exist: ${args.path}${await notFoundSuffix(args.path)}`, diff: null }
       const info = await stat(args.path).catch(() => null)
-      if (info && !info.isDirectory) return { modelResult: `⛔ No es un directorio: ${args.path} (usá delete_file)`, diff: null }
+      if (info && !info.isDirectory) return { modelResult: `⛔ Not a directory: ${args.path} (use delete_file)`, diff: null }
       await snap(args.path)
       await remove(args.path, { recursive: true })
-      return { modelResult: `🗑️ Carpeta eliminada: ${args.path}`, diff: null }
+      return { modelResult: `🗑️ Folder deleted: ${args.path}`, diff: null }
     }
 
     case 'create_dir': {
       if (await pathExistsCochi(args.path)) {
         const info = await stat(args.path).catch(() => null)
-        if (info?.isDirectory) return { modelResult: `ℹ️ Ya existe el directorio: ${args.path}`, diff: null }
-        return { modelResult: `⛔ Ya existe un archivo en esa ruta: ${args.path}`, diff: null }
+        if (info?.isDirectory) return { modelResult: `ℹ️ Directory already exists: ${args.path}`, diff: null }
+        return { modelResult: `⛔ A file already exists at that path: ${args.path}`, diff: null }
       }
       await snap(args.path)
       await mkdir(args.path, { recursive: true })
-      return { modelResult: `✅ Directorio creado: ${args.path}`, diff: null }
+      return { modelResult: `✅ Directory created: ${args.path}`, diff: null }
     }
 
     case 'move_file': {
-      if (!(await pathExistsCochi(args.fromPath))) return { modelResult: `⚠️ No existe: ${args.fromPath}${await notFoundSuffix(args.fromPath)}`, diff: null }
+      if (!(await pathExistsCochi(args.fromPath))) return { modelResult: `⚠️ Does not exist: ${args.fromPath}${await notFoundSuffix(args.fromPath)}`, diff: null }
       const destExists = await pathExistsCochi(args.toPath)
       if (destExists && args.overwrite !== true) {
-        return { modelResult: `⚠️ El destino ya existe: ${args.toPath}. Pasa overwrite: true para reemplazarlo.`, diff: null }
+        return { modelResult: `⚠️ The destination already exists: ${args.toPath}. Pass overwrite: true to replace it.`, diff: null }
       }
       await snap(args.fromPath)
       await snap(args.toPath)
       await ensureParentDir(args.toPath)
       if (destExists) await remove(args.toPath, { recursive: true }).catch(() => {})
       await rename(args.fromPath, args.toPath)
-      return { modelResult: `✅ Movido: ${args.fromPath} → ${args.toPath}`, diff: null }
+      return { modelResult: `✅ Moved: ${args.fromPath} → ${args.toPath}`, diff: null }
     }
 
     case 'copy_file': {
       const info = await stat(args.fromPath).catch(() => null)
-      if (!info) return { modelResult: `⚠️ No existe: ${args.fromPath}${await notFoundSuffix(args.fromPath)}`, diff: null }
+      if (!info) return { modelResult: `⚠️ Does not exist: ${args.fromPath}${await notFoundSuffix(args.fromPath)}`, diff: null }
       const destExists = await pathExistsCochi(args.toPath)
       if (destExists && args.overwrite !== true) {
-        return { modelResult: `⚠️ El destino ya existe: ${args.toPath}. Pasa overwrite: true para reemplazarlo.`, diff: null }
+        return { modelResult: `⚠️ The destination already exists: ${args.toPath}. Pass overwrite: true to replace it.`, diff: null }
       }
       await snap(args.toPath)
       await ensureParentDir(args.toPath)
       if (destExists) await remove(args.toPath, { recursive: true }).catch(() => {})
       if (info.isDirectory) await copyDirRecursive(args.fromPath, args.toPath)
       else await copyFile(args.fromPath, args.toPath)
-      return { modelResult: `✅ Copiado: ${args.fromPath} → ${args.toPath}`, diff: null }
+      return { modelResult: `✅ Copied: ${args.fromPath} → ${args.toPath}`, diff: null }
     }
 
     default:
-      return { modelResult: `Herramienta desconocida: ${name}`, diff: null }
+      return { modelResult: `Unknown tool: ${name}`, diff: null }
   }
 }

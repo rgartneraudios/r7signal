@@ -62,7 +62,7 @@ export function suggestSessionName(messages, when = new Date()) {
   const clean = firstUserText(messages)
   if (clean) return clean.length > 60 ? `${clean.slice(0, 60).trimEnd()}…` : clean
   const pad = n => String(n).padStart(2, '0')
-  return `Sesión ${pad(when.getDate())}/${pad(when.getMonth() + 1)} ${pad(when.getHours())}:${pad(when.getMinutes())}`
+  return `Session ${pad(when.getDate())}/${pad(when.getMonth() + 1)} ${pad(when.getHours())}:${pad(when.getMinutes())}`
 }
 
 // ─── Registro de sesión ──────────────────────────────────────────────────────

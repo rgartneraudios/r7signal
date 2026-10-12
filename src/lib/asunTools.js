@@ -25,7 +25,7 @@ function canWrite(workspace) {
 
 function resolvePath(workspace, relativePath) {
   const base = workspace?.path || ''
-  if (!base) throw new Error('No hay workspace activo')
+  if (!base) throw new Error('No active workspace')
   if (!relativePath || relativePath === '.' || relativePath === '') return base
   return `${base}/${relativePath}`.replace(/\\/g, '/')
 }
@@ -50,10 +50,10 @@ async function checkSizeOrThrow(filePath, maxBytes, label) {
     if (fileStat.size > maxBytes) {
       const mb = (fileStat.size / (1024 * 1024)).toFixed(1)
       const capMb = (maxBytes / (1024 * 1024)).toFixed(0)
-      throw new Error(`Archivo demasiado grande para ${label} (${mb}MB, máximo ${capMb}MB). Usa read_file_chunk con un rango de líneas si es texto, o divide la tarea.`)
+      throw new Error(`File too large for ${label} (${mb}MB, max ${capMb}MB). Use read_file_chunk with a line range if it is text, or split the task.`)
     }
   } catch (err) {
-    if (err.message.includes('demasiado grande')) throw err
+    if (err.message.includes('too large')) throw err
   }
 }
 
@@ -373,8 +373,8 @@ export async function executeTool(toolName, toolArgs, workspace) {
           }
         } catch {}
       }
-      if (results.length === 0) return '(sin resultados)'
-      const note = results.length === 50 ? '\n[Máx. 50 resultados — refina con filePattern si necesitas más precisión]' : ''
+      if (results.length === 0) return '(no results)'
+      const note = results.length === 50 ? '\n[Max 50 results — refine with filePattern if you need more precision]' : ''
       return results.join('\n') + note
     }
 
@@ -384,7 +384,7 @@ export async function executeTool(toolName, toolArgs, workspace) {
         const fileStat = await stat(filePath)
         const sizeKB = (fileStat.size / 1024).toFixed(1)
         if (fileStat.size > MAX_TEXT_BYTES) {
-          return JSON.stringify({ path: toolArgs.path, sizeBytes: fileStat.size, sizeKB, lines: null, warning: 'Archivo grande — usa read_file_chunk en vez de read_text_file' })
+          return JSON.stringify({ path: toolArgs.path, sizeBytes: fileStat.size, sizeKB, lines: null, warning: 'Large file — use read_file_chunk instead of read_text_file' })
         }
         const bytes = await readFile(filePath)
         const text  = new TextDecoder().decode(bytes)
@@ -407,14 +407,14 @@ export async function executeTool(toolName, toolArgs, workspace) {
       const end = Math.min(requestedEnd, start + MAX_CHUNK_LINES, lines.length)
       const chunk = lines.slice(start, end)
       const truncNote = (lines.length > end && (toolArgs.endLine == null || toolArgs.endLine > end))
-        ? `\n[Truncado a ${MAX_CHUNK_LINES} líneas — pide otro rango con startLine=${end + 1} para continuar]`
+        ? `\n[Truncated to ${MAX_CHUNK_LINES} lines — request another range with startLine=${end + 1} to continue]`
         : ''
       return `Lines ${start + 1}–${end} of ${lines.length}:\n` + chunk.join('\n') + truncNote
     }
 
     case 'save_to_r9': {
       const entry = await writeR9File('r9', toolArgs.content, { source: 'asun', label: toolArgs.label })
-      return `Guardado en R9: ${entry.fileName}`
+      return `Saved to R9: ${entry.fileName}`
     }
 
     case 'save_project_plan': {
@@ -436,35 +436,35 @@ export async function executeTool(toolName, toolArgs, workspace) {
     }
 
     case 'write_text_file': {
-      if (!canWrite(workspace)) throw new Error('Permiso insuficiente para escribir')
+      if (!canWrite(workspace)) throw new Error('Insufficient permission to write')
       const filePath = resolvePath(workspace, toolArgs.path)
       await writeTextFile(filePath, toolArgs.content)
-      return `Archivo escrito: ${toolArgs.path}`
+      return `File written: ${toolArgs.path}`
     }
 
     case 'create_dir': {
-      if (!canWrite(workspace)) throw new Error('Permiso insuficiente para crear carpeta')
+      if (!canWrite(workspace)) throw new Error('Insufficient permission to create folder')
       const dirPath = resolvePath(workspace, toolArgs.path)
       await mkdir(dirPath, { recursive: true })
-      return `Carpeta creada: ${toolArgs.path}`
+      return `Folder created: ${toolArgs.path}`
     }
 
     case 'move_file': {
-      if (!canWrite(workspace)) throw new Error('Permiso insuficiente para mover archivos')
+      if (!canWrite(workspace)) throw new Error('Insufficient permission to move files')
       const from = resolvePath(workspace, toolArgs.from)
       const to   = resolvePath(workspace, toolArgs.to)
       await rename(from, to)
-      return `Movido: ${toolArgs.from} → ${toolArgs.to}`
+      return `Moved: ${toolArgs.from} → ${toolArgs.to}`
     }
 
     case 'delete_file': {
-      if (!canWrite(workspace)) throw new Error('Permiso insuficiente para eliminar')
+      if (!canWrite(workspace)) throw new Error('Insufficient permission to delete')
       const filePath = resolvePath(workspace, toolArgs.path)
       await remove(filePath, { recursive: true })
-      return `Eliminado: ${toolArgs.path}`
+      return `Deleted: ${toolArgs.path}`
     }
 
     default:
-      throw new Error(`Tool desconocida: ${toolName}`)
+      throw new Error(`Unknown tool: ${toolName}`)
   }
 }

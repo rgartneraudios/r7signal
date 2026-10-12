@@ -51,7 +51,7 @@ export function resolveProvider(selectedModel, ctx = {}) {
   }
 
   if (!apiKey) {
-    const e = new Error('Falta tu API key de OpenRouter. Cargala desde el botón de la llave en la barra superior.')
+    const e = new Error('Missing your OpenRouter API key. Load it from the key button in the top bar.')
     e.noApiKey = true
     throw e
   }

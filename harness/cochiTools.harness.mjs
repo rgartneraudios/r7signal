@@ -109,9 +109,9 @@ check('exit 0 visible', formatRunCommandOutput({ stdout: 'SMOKE OK', code: 0 }),
 check('exit != 0 visible', formatRunCommandOutput({ stdout: 'boom', code: 3 }), '(exit 3)\nboom')
 check('stderr sin stdout', formatRunCommandOutput({ stderr: 'fallo', code: 1 }), '(exit 1)\nSTDERR: fallo')
 check('stdout + stderr', formatRunCommandOutput({ stdout: 'ok', stderr: 'warn', code: 0 }), '(exit 0)\nok\nSTDERR: warn')
-check('sin output pero con code', formatRunCommandOutput({ code: 0 }), '(exit 0)\n(sin output)')
+check('sin output pero con code', formatRunCommandOutput({ code: 0 }), '(exit 0)\n(no output)')
 check('exit code ausente no prefija', formatRunCommandOutput({ stdout: 'x', code: null }), 'x')
-check('timeout no prefija exit', formatRunCommandOutput({ timedOut: true, timeoutMs: 120000, stdout: 'a' }), '⏱️ Comando cancelado por timeout (120000ms).\nSTDOUT: a')
+check('timeout no prefija exit', formatRunCommandOutput({ timedOut: true, timeoutMs: 120000, stdout: 'a' }), '⏱️ Command cancelled by timeout (120000ms).\nSTDOUT: a')
 check('error de ejecucion', formatRunCommandOutput({ error: 'spawn falló', stdout: 'a' }), 'ERROR: spawn falló\nSTDOUT: a')
 
 console.log('- #4a isSkippedWalkEntry: saltea dependencias y artefactos de build -')

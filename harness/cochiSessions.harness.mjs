@@ -84,7 +84,7 @@ check('sugerido = primer user', suggestSessionName([
 ]), 'pedido real')
 const long = 'x'.repeat(80)
 check('recorta a 60 + elipsis', suggestSessionName([{ role: 'user', content: long }]).length, 61)
-check('fallback fecha/hora sin user', suggestSessionName([], new Date(2026, 8, 25, 21, 15)), 'Sesión 25/09 21:15')
+check('fallback fecha/hora sin user', suggestSessionName([], new Date(2026, 8, 25, 21, 15)), 'Session 25/09 21:15')
 check('Asun rol/contenido', firstUserText([{ rol: 'asistente', contenido: 'x' }, { rol: 'usuario', contenido: 'hola' }]), 'hola')
 
 console.log('\n— makeSession: artefacto de contexto + conversación visible —')

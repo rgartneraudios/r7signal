@@ -216,13 +216,14 @@ El costo de las búsquedas web (server tool) va **aparte** de los tokens.
   (`node_modules`/`.git`/`target`/`dist`/`build`/…) no se rastrean (se regeneran). Undo/Regenerate
   conversación; Regenerate avisa si el turno tocó archivos/música.
 - **TYPO de archivo**: `read_file` detecta el nombre mal escrito y lee el archivo más parecido
-  (`findClosestPath` + `TYPO RESUELTO`, `cochiTools.js`). Implementado.
+  (`findClosestPath` + `TYPO RESOLVED`, `cochiTools.js`). Implementado. **Idioma**: los tool results
+  que ve el modelo y los errores visibles de las libs nacen en inglés (cerrado en S4/S4-bis del plan).
 
 ## Pendientes / opcional
 
 - **Vocabulario R1/R2**: `commitR7Turn` escribe `R1:`/`R2:`; renombrar si se quiere desacoplar.
 - **Modo Asun Proyecto**: revisar E2E (alineado en repo, sin probar).
-- **Prompt `task` remoto**: pegar la excepción `TYPO RESUELTO` en Supabase es opcional.
+- **Prompt `task` remoto**: pegar la excepción `TYPO RESOLVED` en Supabase es opcional.
 - **Tito Etapa 2/3**: DESCARTADO (07/10). Tito queda como está (server tool `web_search` + citas); no
   probar motores `parallel`/`perplexity`/`firecrawl` ni `read_url`/`authority.json`.
 

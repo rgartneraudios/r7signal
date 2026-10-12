@@ -78,8 +78,8 @@ check('isToolError ignora salida normal', isToolError('hola'), false)
 
 console.log('- commandRan: sólo cuenta si el comando CORRIÓ -')
 check('comando con salida normal -> corrió', commandRan('run_command', 'exit 0 · stdout…'), true)
-check('comando bloqueado por permiso -> NO corrió', commandRan('run_command', '⛔ Bloqueado: activa Full Access para operaciones destructivas (run_command, delete_file, delete_dir).'), false)
-check('comando denegado por deny-list -> NO corrió', commandRan('run_command', '⛔ Bloqueado: comando referencia ruta prohibida por deny-list: C:\\x'), false)
+check('comando bloqueado por permiso -> NO corrió', commandRan('run_command', '⛔ Blocked: enable Full Access for destructive operations (run_command, delete_file, delete_dir).'), false)
+check('comando denegado por deny-list -> NO corrió', commandRan('run_command', '⛔ Blocked: command references a path forbidden by deny-list: C:\\x'), false)
 check('comando con error de ejecución -> NO corrió', commandRan('run_command', 'ERROR: spawn failed'), false)
 check('otra tool (read_file) -> NO cuenta', commandRan('read_file', 'contenido'), false)
 

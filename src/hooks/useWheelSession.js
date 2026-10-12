@@ -167,7 +167,7 @@ export function useWheelSession({
       await closeCurrentSession({ inheritName: inheritedName || null })
       onResetUsage?.(agent)
     } catch (err) {
-      onError?.(`⚠️ No se pudo archivar la sesión R7: ${err.message}`)
+      onError?.(`⚠️ Could not archive the R7 session: ${err.message}`)
     }
   }
 
@@ -176,7 +176,7 @@ export function useWheelSession({
     if (busy) return
     if (!messagesRef.current.some(isUserMsg)) return
     const suggested = sessionNameRef.current || suggestSessionName(messagesRef.current)
-    const input = window.prompt('Nombre de la sesión (artefacto R7). La próxima sesión heredará el nombre:', suggested)
+    const input = window.prompt('Session name (R7 artifact). The next session will inherit the name:', suggested)
     if (input === null) return
     const name = input.trim() || suggested
     sessionNameRef.current = name
@@ -206,7 +206,7 @@ export function useWheelSession({
       await onAfterArchive?.(closingSessionId)
       onResetUsage?.(agent)
     } catch (err) {
-      onError?.(`⚠️ No se pudo compactar la sesión: ${err.message}`)
+      onError?.(`⚠️ Could not compact the session: ${err.message}`)
     }
   }
 

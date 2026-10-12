@@ -4,12 +4,14 @@ Documento vivo. Se lee AL INICIO de cada sesión y se actualiza AL CIERRE.
 La meta: publicar la app de escritorio (Tauri + React) para que la comunidad —y en
 especial el equipo de DeepSeek— la use, la critique y la mejore en ahorro de tokens.
 
-Estado: Fase 0 cerrada (4/4). **Fase 1 (idioma) CERRADA** — S1, S2 (S2a–S2d), S3 y S4.
-La UI visible de los 3 paneles, sus flujos, sus modales y las libs puras ya nacen en inglés.
+Estado: Fase 0 cerrada (4/4). **Fase 1 (idioma) CERRADA** — S1, S2 (S2a–S2d), S3, S4 y S4-bis.
+La UI visible de los 3 paneles, sus flujos, sus modales, las libs puras y los tool results que ve el
+modelo ya nacen en inglés.
 **Próxima sesión: S5 — higiene de secretos** (`.env.example`, borrar `VITE_SUPABASE_SERVICE_KEY`,
-documentar la regla `VITE_` en el README). Hallazgos que piden sesión propia (S4-bis candidata): los
-tool results model-facing en español de `cochiTools.js` y `asunTools.js`, el error de `llmClient.js`
-y el contenido del hub (`finanzas.js`, `financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`).
+documentar la regla `VITE_` en el README). Hallazgo que pide sesión propia (**S4-ter**, candidata): el
+contenido del hub (`finanzas.js`, `financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`), el texto truncado
+de `DiffViewer.jsx` y el locale de fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y
+`CochiStatusBar`).
 
 ---
 
@@ -191,6 +193,28 @@ y el contenido del hub (`finanzas.js`, `financiero.js`, `Finanzas.jsx`, `PromoRa
   (`finanzas.js`, `financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`) con su locale de fecha/número;
   (d) `AsunImagenFlow.jsx` conserva un mapa con claves en español para los estilos que llegan de
   Supabase (cae al `|| est.nombre`), ligado a S10.
+  **(a) y (b) se cierran en S4-bis.**
+- [x] **S4-bis. Cadenas model-facing y errores de libs — CERRADA (5 archivos + 3 harness).** Cero
+  lógica: sólo cadenas. `cochiTools.js` (los tool results que ve el modelo: `⛔ Blocked:`,
+  `⚠️ File too large`, `TYPO RESUELTO`→`TYPO RESOLVED`, truncados de salida y de líneas,
+  `(no results)`, `(empty)`, los 6 del tablero de planes, `Does not exist`, `Unknown tool`,
+  `(no output)` y timeout de `formatRunCommandOutput`, y los 2 `reason` de `checkPathAccess`),
+  `asunTools.js` (tamaño+truncado, `Permiso insuficiente`→`Insufficient permission`, R9, escritura/
+  carpeta/movido/borrado, `Unknown tool`), `llmClient.js` (error visible de API key),
+  `sessionStore.js` (nombre por defecto de sesión: `Sesión …`→`Session …`) y `useWheelSession.js`
+  (prompt de nombre de sesión + errores de archivar y compactar).
+  Harness actualizados en la misma sesión: `cochiTools` (2 asserts), `cochiGuards` (2 inputs de
+  `commandRan`) y `cochiSessions` (1 assert del nombre por defecto).
+  `isToolError`/`commandRan` (`cochiGuards.js`) **no** se tocaron: clasifican por prefijo
+  `ERROR:`/`⛔`/`❌`, que es agnóstico del idioma. Los regex de saludo de `cochiGuards.js`
+  (`hola|hey|gracias…`) tampoco: son detección de input, no texto visible.
+  **Hallazgos (fuera del frente → S4-ter):** (a) el hub sigue en español (`finanzas.js`,
+  `financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`, con `Visítanos!`); (b) `DiffViewer.jsx` conserva
+  `… N líneas más, truncado` (texto visible de un componente, no de una lib); (c) el mapa de
+  `AsunImagenFlow.jsx:221` con claves en español para los estilos de Supabase sigue atado a S10;
+  (d) los `console.error` de `SideDoors.jsx` (`… falló:`) son dev-facing, no visibles al usuario.
+  Fuera de alcance por decisión del autor: el default `chat_language: 'Español'` (S3) y los endónimos
+  de `IDIOMAS`.
 
 ### Fase 2 — Limpieza e identidad
 - [ ] **S5. Higiene de secretos.** Crear `.env.example` con placeholders; borrar `VITE_SUPABASE_SERVICE_KEY`
@@ -273,6 +297,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S2d | Cierre de S2: 18 archivos de footers y flujos a inglés (wizards de imagen y prompt, secuenciador completo, message lists, permission panel, subagentes, feed de actividad, diff viewer, tablero de plan, sidebar y descargas del hub). Cero lógica: sólo cadenas. Hallazgos a S4: `promptImagen.js` (con su assert de harness), `sequencer.js`, `planStore.statusLabel`, `subagent.statusLabel`, `r9Store` y los tool results model-facing. Fuera de S2: hub (`Home.jsx`, `webRoutes.js`, locale de fecha). **Fase 1 (idioma) del camino crítico: sólo falta S3 (modales) y S4 (libs).** | lint 0/0 · build OK · test 27/27 | `5cb2711` |
 | S3 | Modales a inglés (7 archivos, cero lógica): `PreferencesModal` (campos, errores, `Save`/`Cancel`), `ApiKeyModal` (primer arranque, aviso BYOK local, `Show`/`Hide`), `MemoriesModal` (`USER MEMORY`, hint, `+ Add`), `R9Drawer` (tabs `Sessions`/`Plans`/`R9 · Selections`, `SHARED MEMORY`, empties, confirm, `Load`, `View`), `SideDoors` (`SHORTCUTS`, `Data folder`, tooltips), `SessionModeToggle` (`CONTEXT`, `Cold session`/`Session Memories`) y `TokenWarningBanner` (70k + `Compact context`). Decisiones: `IDIOMAS` no se traduce (endónimos); `Base de datos`→`Data folder`. Hallazgos: `PERMISSION_RULE_HINT` (lib) a S4; default de datos `chat_language: 'Español'` NO tocado (es decisión del autor, altera idioma de respuesta y caché); locale `es-ES` de `R9Drawer` sigue a la sesión de locale; `finance-proxy` + migración `20260627_descontar_credito.sql` existen y no están documentados en `AGENTS.md`. | lint 0/0 · build OK · test 27/27 | `493da9e` |
 | S4 | Cierre de la Fase 1 (idioma): 9 archivos de libs puras y mensajes model-facing a inglés — wizard de imagen (`promptImagen`), acordes/grupos del secuenciador, tablero de planes + `statusLabel` + handoffs, subagente (`statusLabel`/label/errores), cabecera R9, `PERMISSION_RULE_HINT` + títulos de aprobación, pestañas del hub, errores de `useCochiTaskLoop` y las frases model-facing de `AsunPanel`. Cero lógica: sólo cadenas. 4 harness actualizados en la misma sesión (`promptImagen` 4 asserts, `sequencer` 1, `cochiPlans` 16, `cochiSubagent` 9). Hallazgo: los tool results model-facing de `cochiTools.js`/`asunTools.js`, el error de `llmClient.js` y el contenido del hub quedan para sesión propia. | lint 0/0 · build OK · test 27/27 | `9d12d2a` |
+| S4-bis | Cierre del idioma en libs: los tool results que ve el modelo pasan a inglés en `cochiTools.js` (~70 cadenas: `⛔ Blocked:`, `File too large`, `TYPO RESUELTO`→`TYPO RESOLVED`, truncados, `(no results)`, tablero de planes, `formatRunCommandOutput`, los 2 `reason` de `checkPathAccess`) y en `asunTools.js`; el error visible de API key de `llmClient.js`; el nombre por defecto de sesión de `sessionStore.js` (`Session …`) y el prompt + 2 errores de `useWheelSession.js`. Cero lógica: sólo cadenas. 3 harness actualizados en la misma sesión (`cochiTools` 2, `cochiGuards` 2, `cochiSessions` 1); `isToolError`/`commandRan` no cambiaron porque clasifican por prefijo agnóstico del idioma. Hallazgo: el hub, el texto truncado de `DiffViewer.jsx` y el locale de fecha/número pasan a **S4-ter**. | lint 0/0 · build OK · test 27/27 | `<hash>` |
 
 ---
 
