@@ -7,13 +7,13 @@ especial el equipo de DeepSeek— la use, la critique y la mejore en ahorro de t
 Estado: Fase 0 cerrada (4/4) y **Fase 1 (idioma) CERRADA** — S1, S2 (S2a–S2d), S3, S4 y S4-bis.
 La UI visible de los 3 paneles, sus flujos, sus modales, las libs puras y los tool results que ve el
 modelo ya nacen en inglés.
-**Fase 2 (limpieza) en curso: S5, S6 y S6-bis CERRADAS** — S5: `.env.example` versionado con la regla `VITE_`
+**Fase 2 (limpieza) CERRADA (S5, S6, S6-bis, S7)** — S5: `.env.example` versionado con la regla `VITE_`
 escrita, `VITE_SUPABASE_SERVICE_KEY` purgada del `.env` (era el MISMO valor que
 `SUPABASE_SERVICE_ROLE_KEY`, pero público por el prefijo), regla documentada en `README.md` +
 `AGENTS.md`. S6: purga de identidad (10 archivos de `supabase/.temp/` destrackeados + gitignore,
 `DEFAULT_USER_ID` fuera de las 2 edge functions, avatar `media.r7signal.com` y clima `Oviedo` fuera del
 hub, defaults de nombre genéricos).
-**Próxima sesión: S7 — LICENSE + CONTRIBUTING + README real.**
+**Próxima sesión: S8 — prompts al código (arranque de la Fase 3).**
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -287,13 +287,20 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   (2) el locale de fecha del propio `AppHeader` sigue en `es-ES` → S4-ter; (3) el build de Vite **no
   corre** en el sandbox confinado de la sesión (`spawn EPERM` de esbuild por stdio con pipe): el gate
   se verificó escalando el permiso, no cambiando el comando.
-- [ ] **S7. LICENSE + CONTRIBUTING + README real.** Archivo `LICENSE` con MIT (D1). Setup mínimo:
-  `npm install` → cargar key → `npx tauri dev`. Sección **"How this was built"**: dirección humana
-  (R. Gartner / R7Signal) + asistencia de IA (Claude Sonnet y DeepSeek Flash 4.0/4.1), declarada sin
-  vueltas. Es parte del valor del proyecto, no una letra chica.
-  **Marca:** MIT no cede el nombre ni el logo. Se agrega una sección corta "Trademark" aclarando que
-  "R7Signal" y "R7 Desktop" son del autor y que un fork no puede presentarse como la app oficial.
-  Esa es la protección real contra quedar afuera, más que la licencia.
+- [x] **S7. LICENSE + CONTRIBUTING + README real — CERRADA (3 archivos).** `LICENSE` con MIT (D1),
+  copyright `2026 R. Gartner (R7Signal)`; `CONTRIBUTING.md` (inglés, texto visible nuevo → regla 8)
+  con el setup, los 3 gates, la regla de harness para lógica pura, la convención de commits en español
+  y el aviso de que los prompts viven en Supabase hasta S8; `README.md` reescrito de punta a punta (el
+  anterior describía el *feed* de `r7signal.com`, no la app): qué es, los 3 agentes, qué hace distinta
+  la rueda R7, requisitos, `npm install` → `npx tauri dev` → cargar la key, BYOK multi-proveedor
+  (OpenRouter / DeepSeek directo / Ollama / LM Studio), la regla `VITE_` conservada de S5, Supabase
+  opcional, comandos, notas de seguridad (`cochi-full-access` documentado ANTES de abrir, las 2 capas
+  de SSRF, key en texto plano, SmartScreen sin firma) y las secciones **How this was built** y
+  **Trademark**. Cero lógica: sólo docs.
+  **Claims:** el README describe el mecanismo y NO promete cifras de ahorro — la tabla IN/OUT es S19.
+  **Hallazgo:** `src/constants.js` ya no existe, pero `AppHeader.jsx` no tiene texto en español propio
+  (cerrado en S6); `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO`, `HUD.jsx` y `chat_language: 'Español'` siguen
+  pendientes de la sesión de defaults junto a D5 (hallazgos de S5/S6/S6-bis, sin cambios).
 
 ### Fase 3 — Desacople de Supabase
 - [ ] **S8. Prompts al código.** Exportar desde `agent_prompts` en Supabase → `src/lib/prompts/` (EN + ES),
@@ -367,6 +374,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S5 | Higiene de secretos: `.env.example` versionado (placeholders + regla `VITE_` en la cabecera), `VITE_SUPABASE_SERVICE_KEY` purgada del `.env` local (era el MISMO valor que `SUPABASE_SERVICE_ROLE_KEY`: el secreto sobrevive sólo en la copia sin prefijo, fuera del bundle) y regla `VITE_` documentada en `README.md` y `AGENTS.md`. Cero lógica: docs y config. Verificación: `dist/` reconstruido sin coincidencias de `service_role`; `git log --all -- .env` vacío (nunca entró al historial). Hallazgos: `supabase/.temp/*` tiene 9 archivos TRACKEADOS → S6; `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` no las lee ningún archivo (variables muertas); los `sk-or-`/`service_role` de `ApiKeyModal`/`generar-asset` son placeholder y comentario. | lint 0/0 · build OK · test 27/27 | `9a77f79` |
 | S6 | Purga de identidad: `supabase/.temp/` + su duplicado anidado fuera del índice y a `.gitignore` (`**/.temp/`) — project-ref, pooler-url y org id dejan de viajar; `DEFAULT_USER_ID` (UUID de auth del autor) fuera de `generar-asset`/`generar-musica`, donde era código muerto (cero cambio de comportamiento); `src/constants.js` borrado (`EDITORS` sin imports + avatar `media.r7signal.com`, y `WEATHER` `Oviedo`/`18°C` falsos) con `AppHeader.jsx` limpio; defaults de nombre genéricos (`'user'`, `e.g. Alex`/`e.g. Boss`, fixture `Alex`/`Alex Rivera`, 3 comentarios a "el autor"). Marca del proyecto y autoría (`HTTP-Referer`, Footer, watermarks, @Bro7vision, `docs/`) intactas a propósito: S7 las declara. Hallazgos: clima a **S6-bis** (widget real con Open-Meteo), `.temp/*` sigue en el historial (S16/gitleaks), project-ref horneado por `VITE_SUPABASE_URL` (S9), muertas de S5 y `chat_language` a la sesión de defaults. | lint 0/0 · build OK · test 27/27 | `4065d1e` |
 | S6-bis | Widget de clima del hub web: `src/lib/weather.js` (cliente puro e inyectable sobre Open-Meteo — geocoding + forecast, sin key y con CORS abierto, compatible BYOK: URLs, parseo, 28 códigos WMO, `fetchWeather` con errores por código y persistencia de ciudad), `WeatherWidget.jsx` (estados idle/carga/listo/error/offline, ciudad editable y persistida en `localStorage` `r7signal.weather.city`, refresh 15 min, `Retry`) y `AppHeader.jsx` (lo monta junto a `MoonWidget`). Sin default de ciudad: estado vacío `Set city`, cero datos falsos (el `Oviedo`/`18°C` de S6 no vuelve). Tauri omitido por construcción (AppHeader sólo vive en la rama web de `App.jsx`). `react-hooks/set-state-in-effect` obligó a derivar el estado en vez de setear dentro del efecto. E2E real contra API viva: `Oviedo, Principality of Asturias, Spain · 18°C · Clear sky`. Hallazgos: `HUD.jsx` muerto (candidato a borrado junto a D5) y locale `es-ES` de `AppHeader` a S4-ter; el build exige escalar permiso en el sandbox (`spawn EPERM` de esbuild). | lint 0/0 · build OK · test 28/28 | `bc5ce6f` |
+| S7 | LICENSE + CONTRIBUTING + README real: `LICENSE` MIT (copyright `2026 R. Gartner (R7Signal)`), `CONTRIBUTING.md` en inglés (setup, 3 gates, harness obligatorio para lógica pura, commits en español, prompts en Supabase hasta S8) y `README.md` reescrito completo — el anterior describía el feed de `r7signal.com`, no la app. El README cubre: qué es y los 3 agentes, la rueda R7 (prefijo append-only, pin de proveedor, compactación a 70k sin modelo), requisitos, `npm install` → `npx tauri dev` → cargar key, BYOK multi-proveedor, la regla `VITE_`, Supabase opcional, comandos, notas de seguridad (`cochi-full-access` con scope a `$HOME` documentado antes de abrir, 2 capas de SSRF, key en texto plano, SmartScreen sin firma), **How this was built** (dirección humana de R. Gartner / R7Signal + asistencia de Claude Sonnet y DeepSeek Flash 4.0/4.1) y **Trademark** (MIT no cede nombre ni logo). Cero lógica: sólo docs. El README describe el mecanismo y no promete cifras de ahorro: la tabla IN/OUT es S19. Hallazgos de S5/S6/S6-bis (variables muertas, `HUD.jsx`, `chat_language`) siguen en la sesión de defaults junto a D5. | lint 0/0 · build OK · test 28/28 | `—` |
 
 ---
 

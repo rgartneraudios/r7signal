@@ -39,6 +39,9 @@ cierre). El plan completo, las decisiones tomadas/pendientes y la bitácora vive
 `docs/PLAN-OPENSOURCE.md`; **leerlo al abrir sesión y actualizarlo al cerrar**. Si el alcance no cabe en
 3 archivos: **CORTAR**, anotar el hallazgo y cerrar con lo hecho. Resumen: repo único (sin espejo),
 BYOK (la key nunca entra al repo; regla `VITE_` = público), Supabase fuera del camino crítico, MIT.
+**S7 CERRADA**: `LICENSE` (MIT + autoría declarada), `CONTRIBUTING.md` (gates + harness + commits en
+español) y `README.md` real (setup BYOK, notas de seguridad de `cochi-full-access`, "How this was
+built" con la asistencia de IA y "Trademark": MIT no cede nombre ni logo).
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
