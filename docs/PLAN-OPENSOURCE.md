@@ -7,17 +7,16 @@ especial el equipo de DeepSeek— la use, la critique y la mejore en ahorro de t
 Estado: Fase 0 cerrada (4/4) y **Fase 1 (idioma) CERRADA** — S1, S2 (S2a–S2d), S3, S4 y S4-bis.
 La UI visible de los 3 paneles, sus flujos, sus modales, las libs puras y los tool results que ve el
 modelo ya nacen en inglés.
-**Fase 2 (limpieza) en curso: S5 y S6 CERRADAS** — S5: `.env.example` versionado con la regla `VITE_`
+**Fase 2 (limpieza) en curso: S5, S6 y S6-bis CERRADAS** — S5: `.env.example` versionado con la regla `VITE_`
 escrita, `VITE_SUPABASE_SERVICE_KEY` purgada del `.env` (era el MISMO valor que
 `SUPABASE_SERVICE_ROLE_KEY`, pero público por el prefijo), regla documentada en `README.md` +
 `AGENTS.md`. S6: purga de identidad (10 archivos de `supabase/.temp/` destrackeados + gitignore,
 `DEFAULT_USER_ID` fuera de las 2 edge functions, avatar `media.r7signal.com` y clima `Oviedo` fuera del
 hub, defaults de nombre genéricos).
 **Próxima sesión: S7 — LICENSE + CONTRIBUTING + README real.**
-Hallazgo que pide sesión propia (**S6-bis**, candidata): el badge de clima del hub (Web) se pidió como
-**widget funcional con API pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). S6
-sacó el hardcode `Oviedo`/`18°C` falso, así que el widget vuelve como frente funcional propio (fetch +
-estados + harness): no cabe en una sesión de purga. Necesario en Web; en Tauri no hace falta.
+Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
+pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
++ `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
 Hallazgo que pide sesión propia (**S4-ter**, candidata): el contenido del hub (`finanzas.js`,
 `financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`), el texto truncado de `DiffViewer.jsx` y el locale de
 fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
@@ -264,13 +263,30 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   project-ref en el bundle (`dist/`, no versionado) — es público por diseño de S5 y queda atado a S9
   (Supabase opcional); (4) `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` (muertas, hallazgo de S5) y el default
   `chat_language: 'Español'` siguen pendientes de la sesión de defaults junto a D5.
-- [ ] **S6-bis. Widget de clima y ciudad (Web) — candidata.** Restituir el badge de clima del hub como
-  widget real: **API pública sin key** (Open-Meteo geocoding + forecast; CORS abierto, sin registro) —
-  encaja con BYOK porque no hay secreto que guardar. Ciudad elegible por el usuario (persistida), con
-  estados de carga/error/offline y **sin** caer a datos falsos. Habilitado en Web; en Tauri se omite
-  (decisión del autor). Frente funcional: cliente puro e inyectable en `src/lib/` + harness y un
-  componente de header (≤3 archivos). Alternativas evaluadas: wttr.in (sin key, formato texto) y
-  OpenWeather/WeatherAPI (exigen key → peor para BYOK). Va DESPUÉS de S7.
+- [x] **S6-bis. Widget de clima y ciudad (Web) — CERRADA (3 archivos + 1 harness).** El badge de clima
+  vuelve como **widget real**: `src/lib/weather.js` (cliente puro e inyectable: `buildGeocodeUrl`,
+  `buildForecastUrl`, `parseGeocode`, `parseForecast`, `describeWeatherCode` con los 28 códigos WMO,
+  `fetchWeather`, `formatTemperature`/`formatWeatherSummary` y `loadSavedCity`/`saveSavedCity`),
+  `src/components/WeatherWidget.jsx` (estados idle/carga/listo/error/offline, edición de ciudad
+  persistida en `localStorage` bajo `r7signal.weather.city`, auto-refresh 15 min, `Retry`) y
+  `src/components/AppHeader.jsx` (monta el widget junto a `MoonWidget`). **Cero datos falsos:** sin
+  ciudad guardada el widget muestra `Set city`; no hay default hardcodeado (el `Oviedo`/`18°C` que S6
+  purgó no vuelve). API: **Open-Meteo** (geocoding + forecast, sin key, CORS abierto, compatible con
+  BYOK); los errores salen como códigos (`NO_CITY`, `CITY_NOT_FOUND`, `NETWORK`, `HTTP_ERROR`,
+  `NO_DATA`) y el texto visible nace en inglés. **Tauri omitido por construcción**: `AppHeader` sólo se
+  renderiza en la rama web de `App.jsx` (`window.__TAURI_INTERNALS__` devuelve `R7Desktop` antes), así
+  que no hizo falta guard extra. Harness nuevo `weather.harness.mjs` (65 checks, 28/28 suites en verde).
+  **Nota de lint:** el primer intento hacía `setStatus` en el cuerpo del efecto y `react-hooks/set-state-in-effect`
+  lo rechazó → el estado del widget se **deriva** (nada de setState sincrónico dentro del efecto).
+  **Verificación E2E real:** `fetchWeather('Oviedo')` contra la API viva → `Oviedo, Principality of
+  Asturias, Spain · 18°C · Clear sky` (campos `current.temperature_2m`/`weather_code`/`wind_speed_10m`
+  confirmados contra la respuesta real, no supuestos).
+  **Hallazgos:** (1) `src/components/HUD.jsx` está **muerto** (nadie lo importa) y además recibe
+  `weather` con `emoji`/`city`/`temp` hardcodeados por prop: candidato a borrado en la sesión de
+  defaults junto a D5 (junto con `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` y `chat_language: 'Español'`);
+  (2) el locale de fecha del propio `AppHeader` sigue en `es-ES` → S4-ter; (3) el build de Vite **no
+  corre** en el sandbox confinado de la sesión (`spawn EPERM` de esbuild por stdio con pipe): el gate
+  se verificó escalando el permiso, no cambiando el comando.
 - [ ] **S7. LICENSE + CONTRIBUTING + README real.** Archivo `LICENSE` con MIT (D1). Setup mínimo:
   `npm install` → cargar key → `npx tauri dev`. Sección **"How this was built"**: dirección humana
   (R. Gartner / R7Signal) + asistencia de IA (Claude Sonnet y DeepSeek Flash 4.0/4.1), declarada sin
@@ -350,6 +366,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S4-bis | Cierre del idioma en libs: los tool results que ve el modelo pasan a inglés en `cochiTools.js` (~70 cadenas: `⛔ Blocked:`, `File too large`, `TYPO RESUELTO`→`TYPO RESOLVED`, truncados, `(no results)`, tablero de planes, `formatRunCommandOutput`, los 2 `reason` de `checkPathAccess`) y en `asunTools.js`; el error visible de API key de `llmClient.js`; el nombre por defecto de sesión de `sessionStore.js` (`Session …`) y el prompt + 2 errores de `useWheelSession.js`. Cero lógica: sólo cadenas. 3 harness actualizados en la misma sesión (`cochiTools` 2, `cochiGuards` 2, `cochiSessions` 1); `isToolError`/`commandRan` no cambiaron porque clasifican por prefijo agnóstico del idioma. Hallazgo: el hub, el texto truncado de `DiffViewer.jsx` y el locale de fecha/número pasan a **S4-ter**. | lint 0/0 · build OK · test 27/27 | `db8d28f` |
 | S5 | Higiene de secretos: `.env.example` versionado (placeholders + regla `VITE_` en la cabecera), `VITE_SUPABASE_SERVICE_KEY` purgada del `.env` local (era el MISMO valor que `SUPABASE_SERVICE_ROLE_KEY`: el secreto sobrevive sólo en la copia sin prefijo, fuera del bundle) y regla `VITE_` documentada en `README.md` y `AGENTS.md`. Cero lógica: docs y config. Verificación: `dist/` reconstruido sin coincidencias de `service_role`; `git log --all -- .env` vacío (nunca entró al historial). Hallazgos: `supabase/.temp/*` tiene 9 archivos TRACKEADOS → S6; `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` no las lee ningún archivo (variables muertas); los `sk-or-`/`service_role` de `ApiKeyModal`/`generar-asset` son placeholder y comentario. | lint 0/0 · build OK · test 27/27 | `9a77f79` |
 | S6 | Purga de identidad: `supabase/.temp/` + su duplicado anidado fuera del índice y a `.gitignore` (`**/.temp/`) — project-ref, pooler-url y org id dejan de viajar; `DEFAULT_USER_ID` (UUID de auth del autor) fuera de `generar-asset`/`generar-musica`, donde era código muerto (cero cambio de comportamiento); `src/constants.js` borrado (`EDITORS` sin imports + avatar `media.r7signal.com`, y `WEATHER` `Oviedo`/`18°C` falsos) con `AppHeader.jsx` limpio; defaults de nombre genéricos (`'user'`, `e.g. Alex`/`e.g. Boss`, fixture `Alex`/`Alex Rivera`, 3 comentarios a "el autor"). Marca del proyecto y autoría (`HTTP-Referer`, Footer, watermarks, @Bro7vision, `docs/`) intactas a propósito: S7 las declara. Hallazgos: clima a **S6-bis** (widget real con Open-Meteo), `.temp/*` sigue en el historial (S16/gitleaks), project-ref horneado por `VITE_SUPABASE_URL` (S9), muertas de S5 y `chat_language` a la sesión de defaults. | lint 0/0 · build OK · test 27/27 | `4065d1e` |
+| S6-bis | Widget de clima del hub web: `src/lib/weather.js` (cliente puro e inyectable sobre Open-Meteo — geocoding + forecast, sin key y con CORS abierto, compatible BYOK: URLs, parseo, 28 códigos WMO, `fetchWeather` con errores por código y persistencia de ciudad), `WeatherWidget.jsx` (estados idle/carga/listo/error/offline, ciudad editable y persistida en `localStorage` `r7signal.weather.city`, refresh 15 min, `Retry`) y `AppHeader.jsx` (lo monta junto a `MoonWidget`). Sin default de ciudad: estado vacío `Set city`, cero datos falsos (el `Oviedo`/`18°C` de S6 no vuelve). Tauri omitido por construcción (AppHeader sólo vive en la rama web de `App.jsx`). `react-hooks/set-state-in-effect` obligó a derivar el estado en vez de setear dentro del efecto. E2E real contra API viva: `Oviedo, Principality of Asturias, Spain · 18°C · Clear sky`. Hallazgos: `HUD.jsx` muerto (candidato a borrado junto a D5) y locale `es-ES` de `AppHeader` a S4-ter; el build exige escalar permiso en el sandbox (`spawn EPERM` de esbuild). | lint 0/0 · build OK · test 28/28 | PENDIENTE |
 
 ---
 

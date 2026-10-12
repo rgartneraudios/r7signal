@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { THEME } from '../theme'
 import { WEB_TABS } from '../lib/webRoutes'
 import MoonWidget from './MoonWidget'
+import WeatherWidget from './WeatherWidget'
 
 function useRealTimeClock() {
   const [time, setTime] = useState(new Date())
@@ -134,6 +135,7 @@ export default function AppHeader({ activeRoute = '/', onNavigate }) {
       </nav>
 
       <div style={{ display:'flex', flexDirection:'row', alignItems:'center', gap:22, minWidth:200, justifyContent:'flex-end' }}>
+        <WeatherWidget />
         <MoonWidget />
       </div>
 
