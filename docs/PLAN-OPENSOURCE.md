@@ -4,11 +4,11 @@ Documento vivo. Se lee AL INICIO de cada sesión y se actualiza AL CIERRE.
 La meta: publicar la app de escritorio (Tauri + React) para que la comunidad —y en
 especial el equipo de DeepSeek— la use, la critique y la mejore en ahorro de tokens.
 
-Estado: Fase 0 cerrada (4/4). Fase 1 en curso — **S1 y S2 CERRADAS** (S2a, S2b, S2c, S2c-bis y S2d).
-La UI visible de los 3 paneles y sus flujos ya nacen en inglés.
-**Próxima sesión: S3 — modales** (`PreferencesModal`, `ApiKeyModal`, `MemoriesModal`, `R9Drawer`,
-`SideDoors`, `SessionModeToggle`, `TokenWarningBanner`); después S4 con los textos de libs puras
-(la lista de hallazgos está en S2d).
+Estado: Fase 0 cerrada (4/4). Fase 1 en curso — **S1, S2 y S3 CERRADAS** (S2a, S2b, S2c, S2c-bis, S2d y S3).
+La UI visible de los 3 paneles, sus flujos y sus modales ya nacen en inglés.
+**Próxima sesión: S4 — textos de libs puras** (`promptImagen.js`, `sequencer.js`, `planStore.statusLabel`,
+`subagent.statusLabel`, `r9Store`, tool results model-facing y `PERMISSION_RULE_HINT`); la lista
+completa de hallazgos está en S2d y S3.
 
 ---
 
@@ -147,7 +147,29 @@ La UI visible de los 3 paneles y sus flujos ya nacen en inglés.
     (e) los tool results de `AsunPanel` y `useCochiTaskLoop` (model-facing).
     Fuera de S2 (queda para el hub, no son paneles): `Home.jsx`, `AppHeader`/`webRoutes.js`
     (etiquetas de pestaña) y el locale de fecha `es-ES`.
-- [ ] **S3. Modales.** `PreferencesModal`, `ApiKeyModal`, `MemoriesModal`, `R9Drawer`, `SideDoors`, `SessionModeToggle`, `TokenWarningBanner`.
+- [x] **S3. Modales — CERRADA (7 archivos).** `PreferencesModal.jsx` (título, etiquetas de los campos,
+  `Loading...`/`Saving...`, `Save`/`Cancel`, los 4 errores: sesión inactiva, carga, sin método de
+  guardado, guardado fallido), `ApiKeyModal.jsx` (título, texto de primer arranque y de actualización,
+  aviso de guardado local, `Show`/`Hide`, CTA a `openrouter.ai/keys`, los 3 errores), `MemoriesModal.jsx`
+  (`MEMORIES · USER MEMORY`, hint del formato telegrama, placeholder con `{{nombreAlternativo}}`,
+  `+ Add`, estado vacío, tooltip de borrado), `R9Drawer.jsx` (tabs `Sessions`/`Plans`/`R9 · Selections`,
+  `R9 · SHARED MEMORY`, `Loading…`/`Reading…`, empty states, confirm de borrado, `Load`, `👁 View`,
+  tooltip del nombre de sesión), `SideDoors.jsx` (`SHORTCUTS`, tooltips de las dos puertas,
+  `Data folder` + su tooltip), `SessionModeToggle.jsx` (`CONTEXT`, `Cold session`/`Session Memories`
+  y sus tooltips) y `TokenWarningBanner.jsx` (aviso de 70k + `Compact context`). Cero lógica: sólo
+  cadenas y títulos.
+  **Decisiones dentro de la sesión:** la lista `IDIOMAS` NO se traduce (son endónimos: `Español`,
+  `Français`, `日本語`…); `R9 · Selections` se prefiere a "Picks" por claridad; `Base de datos` →
+  `Data folder` (es la carpeta `AppLocalData`, no una DB).
+  **Hallazgos para S4 y decisiones pendientes:** (a) `PERMISSION_RULE_HINT` (lib pura) se pinta dentro
+  de `PreferencesModal` y sigue en español → S4; (b) el default de datos `chat_language: 'Español'`
+  (líneas 17 y 44) NO se tocó: no es texto de UI sino un valor que decide el idioma de respuesta del
+  agente — cambiarlo altera comportamiento y caché, así que es **decisión del autor**, no traducción
+  (candidato: sesión de defaults junto a S6/D5); (c) el locale `formatWhen` → `toLocaleString('es-ES')`
+  de `R9Drawer` sigue en pie: ya estaba anotado en S2c y va a la sesión propia de locale; (d) fuera del
+  repo, `supabase/functions/finance-proxy/` y `supabase/migrations/20260627_descontar_credito.sql`
+  existen y NO están documentados en `AGENTS.md` (ni en el plan): inventario pendiente.
+  Fuera de S3 (no son modales): `PromptImagenFlow`/`AsunImagenFlow` ya cerraron en S2d.
 - [ ] **S4. Textos de libs puras y mensajes de error.** Si cambia un assert de harness, se actualiza el harness en la misma sesión.
 
 ### Fase 2 — Limpieza e identidad
@@ -229,6 +251,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S2c | Topbar (`R7TopBar.jsx`) + mensajes y confirms de `TitoPanel.jsx`/`AsunPanel.jsx` a inglés. Cero lógica. Hallazgo: el alcance eran 4-5 archivos y la regla 1 topa en 3 → cortada; la mitad de Cochi (`CochiDesktop.jsx` + `useCochiTaskLoop.js`) pasa a **S2c-bis**, las cadenas model-facing de `AsunPanel` a **S4** y el locale numérico `es` (`R7TopBar`/`CochiStatusBar`/`R9Drawer`) a sesión propia. `AppHeader.jsx` sin cambios: su texto viene de `webRoutes.js`/`constants`. | lint 0/0 · build OK · test 27/27 | `7e68d79` |
 | S2c-bis | Mensajes y confirms de Cochi a inglés: `CochiDesktop.jsx` (borrado + brief del handoff) y `useCochiTaskLoop.js` (API key, activity feed, corte por tokens, bucle por repetición, `Done.`/`No response from the model.`, Full Access, nota de artefactos, confirm de revert). Cero lógica. Model-facing a S4. Regla 1 del plan relajada a promedio de archivos (decisión del autor). | lint 0/0 · build OK · test 27/27 | `5d3016d` |
 | S2d | Cierre de S2: 18 archivos de footers y flujos a inglés (wizards de imagen y prompt, secuenciador completo, message lists, permission panel, subagentes, feed de actividad, diff viewer, tablero de plan, sidebar y descargas del hub). Cero lógica: sólo cadenas. Hallazgos a S4: `promptImagen.js` (con su assert de harness), `sequencer.js`, `planStore.statusLabel`, `subagent.statusLabel`, `r9Store` y los tool results model-facing. Fuera de S2: hub (`Home.jsx`, `webRoutes.js`, locale de fecha). **Fase 1 (idioma) del camino crítico: sólo falta S3 (modales) y S4 (libs).** | lint 0/0 · build OK · test 27/27 | `5cb2711` |
+| S3 | Modales a inglés (7 archivos, cero lógica): `PreferencesModal` (campos, errores, `Save`/`Cancel`), `ApiKeyModal` (primer arranque, aviso BYOK local, `Show`/`Hide`), `MemoriesModal` (`USER MEMORY`, hint, `+ Add`), `R9Drawer` (tabs `Sessions`/`Plans`/`R9 · Selections`, `SHARED MEMORY`, empties, confirm, `Load`, `View`), `SideDoors` (`SHORTCUTS`, `Data folder`, tooltips), `SessionModeToggle` (`CONTEXT`, `Cold session`/`Session Memories`) y `TokenWarningBanner` (70k + `Compact context`). Decisiones: `IDIOMAS` no se traduce (endónimos); `Base de datos`→`Data folder`. Hallazgos: `PERMISSION_RULE_HINT` (lib) a S4; default de datos `chat_language: 'Español'` NO tocado (es decisión del autor, altera idioma de respuesta y caché); locale `es-ES` de `R9Drawer` sigue a la sesión de locale; `finance-proxy` + migración `20260627_descontar_credito.sql` existen y no están documentados en `AGENTS.md`. | lint 0/0 · build OK · test 27/27 | _pendiente_ |
 
 ---
 

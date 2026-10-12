@@ -29,7 +29,7 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
     async function fetchPrefs() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        setError('Sesión no activa.')
+        setError('No active session.')
         setLoading(false)
         return
       }
@@ -46,7 +46,7 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
         setLmStudioEndpoint(data.lmStudioEndpoint || 'http://localhost:1234')
         setLmStudioModel(data.lmStudioModel || 'local-model')
       }
-      if (error) setError('Error cargando preferencias.')
+      if (error) setError('Failed to load preferences.')
       setLoading(false)
     }
     fetchPrefs()
@@ -63,13 +63,13 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
       return
     }
     if (!supabase) {
-      setError('No hay método de guardado disponible.')
+      setError('No save method available.')
       setSaving(false)
       return
     }
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-      setError('Sesión no activa.')
+      setError('No active session.')
       setSaving(false)
       return
     }
@@ -85,7 +85,7 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
           lmStudioModel
         }, { onConflict: 'user_id' })
     if (error) {
-      setError('Error guardando. Intentá de nuevo.')
+      setError('Save failed. Try again.')
       setSaving(false)
     } else {
       window.location.reload()
@@ -141,34 +141,34 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div style={{ fontSize: '1rem', fontWeight: 700, color: THEME.textHigh, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            ⚙️ Preferencias
+            ⚙️ Preferences
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${THEME.borderSubtle}`, borderRadius: 8, width: 30, height: 30, color: THEME.textMed, cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
         </div>
 
         {loading ? (
-          <div style={{ color: THEME.textLow, fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>Cargando...</div>
+          <div style={{ color: THEME.textLow, fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>Loading...</div>
         ) : (
           <>
-            <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Nombre principal</div>
+            <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Main name</div>
             <input
               type="text"
               value={nombreUsuario}
               onChange={e => setNombreUsuario(e.target.value)}
-              placeholder="Ej: Signor Roberto"
+              placeholder="e.g. Signor Roberto"
               style={inputStyle}
             />
 
-            <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Nombre alternativo</div>
+            <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Alternate name</div>
             <input
               type="text"
               value={nombreAlternativo}
               onChange={e => setNombreAlternativo(e.target.value)}
-              placeholder="Ej: Maravilla"
+              placeholder="e.g. Maravilla"
               style={inputStyle}
             />
 
-            <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Idioma de respuesta</div>
+            <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Reply language</div>
             <select
               value={chatLanguage}
               onChange={e => setChatLanguage(e.target.value)}
@@ -185,7 +185,7 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
 
             <div style={{ height: 1, background: '#201F23', margin: '8px 0 16px' }} />
 
-            <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>IA Local</div>
+            <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Local AI</div>
 
             <div style={{ fontSize: '0.65rem', color: '#6B9EC4', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>Ollama Endpoint</div>
             <input
@@ -218,10 +218,10 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
               <>
                 <div style={{ height: 1, background: '#201F23', margin: '4px 0 16px' }} />
 
-                <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Permisos de Cochi</div>
+                <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Cochi permissions</div>
                 <div style={{ fontSize: '0.62rem', color: '#6B9EC4', lineHeight: 1.4, marginBottom: 10 }}>{PERMISSION_RULE_HINT}</div>
 
-                <div style={{ fontSize: '0.65rem', color: '#B0F527', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>Reglas ALLOW</div>
+                <div style={{ fontSize: '0.65rem', color: '#B0F527', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>ALLOW rules</div>
                 <textarea
                   value={allowRules}
                   onChange={e => setAllowRules(e.target.value)}
@@ -230,7 +230,7 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
                   style={areaStyle}
                 />
 
-                <div style={{ fontSize: '0.65rem', color: '#FF4466', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>Reglas DENY</div>
+                <div style={{ fontSize: '0.65rem', color: '#FF4466', letterSpacing: '0.1em', fontWeight: 600, marginBottom: 4 }}>DENY rules</div>
                 <textarea
                   value={denyRules}
                   onChange={e => setDenyRules(e.target.value)}
@@ -251,13 +251,13 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
                 disabled={saving}
                 style={{ flex: 1, background: THEME.celeste10, border: `1px solid ${THEME.celeste35}`, borderRadius: 8, padding: '10px 0', color: THEME.celeste, fontSize: '0.8rem', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}
               >
-                {saving ? 'Guardando...' : 'Guardar'}
+                {saving ? 'Saving...' : 'Save'}
               </button>
               <button
                 onClick={onClose}
                 style={{ flex: 1, background: 'transparent', border: `1px solid ${THEME.borderSubtle}`, borderRadius: 8, padding: '10px 0', color: THEME.textMed, fontSize: '0.8rem', cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}
               >
-                Cancelar
+                Cancel
               </button>
             </div>
           </>

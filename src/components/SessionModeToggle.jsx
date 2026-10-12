@@ -39,22 +39,22 @@ export default function SessionModeToggle({ mode = 'cold', onChange, disabled = 
       <span style={{
         fontFamily: "'Orbitron', sans-serif", fontSize: '0.55rem',
         letterSpacing: '0.22em', fontWeight: 700, color: '#6B7075',
-      }}>CONTEXTO</span>
+      }}>CONTEXT</span>
       <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 11, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.07)' }}>
         <button
           type="button"
           disabled={disabled}
           onClick={() => onChange?.('cold')}
-          title="Sesión fría: arranca sin memoria acumulada"
+          title="Cold session: starts with no accumulated memory"
           style={seg(cold, COLD, { cursor: disabled ? 'not-allowed' : 'pointer' })}
-        >🐧 Sesión FRÍA</button>
+        >🐧 Cold session</button>
         <button
           type="button"
           disabled={disabled}
           onClick={() => onChange?.('hot')}
-          title="Sesión Memories: inyecta el archivo global Memories (contexto general del usuario)"
+          title="Session Memories: injects the global Memories file (general user context)"
           style={seg(!cold, MEM, { cursor: disabled ? 'not-allowed' : 'pointer' })}
-        >🕯️ Sesión Memories</button>
+        >🕯️ Session Memories</button>
       </div>
     </div>
   )

@@ -4,9 +4,9 @@ import { listSessions, deleteSession, renameSession } from '../lib/sessionStore.
 import ProjectPlanView from './ProjectPlanView.jsx'
 
 const TABS = [
-  { key: 'sessions', label: 'Sesiones', accent: '#6B9EC4' },
-  { key: 'plans', label: 'Planes', accent: '#E0A85F' },
-  { key: 'r9', label: 'R9 · Selecciones', accent: '#C8A2D8' },
+  { key: 'sessions', label: 'Sessions', accent: '#6B9EC4' },
+  { key: 'plans', label: 'Plans', accent: '#E0A85F' },
+  { key: 'r9', label: 'R9 · Selections', accent: '#C8A2D8' },
 ]
 
 const AGENT_ACCENT = { cochi: '#CF444D', asun: '#C8A2D8', tito: '#E8C84A' }
@@ -77,7 +77,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
   }
 
   async function handleDeleteSession(session) {
-    if (!window.confirm(`¿Borrar la sesión "${session.name}"?`)) return
+    if (!window.confirm(`Delete session "${session.name}"?`)) return
     const ok = await deleteSession(session.id)
     if (ok) setSessions(prev => prev.filter(s => s.id !== session.id))
   }
@@ -131,7 +131,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
           <span style={{
             fontFamily: "'Orbitron', sans-serif", fontSize: '0.75rem',
             letterSpacing: '0.2em', fontWeight: 700, color: '#D4D8DC',
-          }}>R9 · MEMORIA COMPARTIDA</span>
+          }}>R9 · SHARED MEMORY</span>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', color: '#9BA3A8',
             fontSize: '1.2rem', cursor: 'pointer', padding: 4,
@@ -158,13 +158,13 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
         <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {loading && (
             <div style={{ color: '#6B7075', fontSize: '0.8rem', textAlign: 'center', marginTop: 30 }}>
-              Cargando…
+              Loading…
             </div>
           )}
           {!loading && tab !== 'plans' && (tab === 'sessions' ? sessions.length === 0 : list.length === 0) && (
             <div style={{ color: '#6B7075', fontSize: '0.8rem', textAlign: 'center', marginTop: 30 }}>
-              {tab === 'r9' ? 'Sin selecciones guardadas todavía.'
-                : 'Sin sesiones guardadas todavía.'}
+              {tab === 'r9' ? 'No saved selections yet.'
+                : 'No saved sessions yet.'}
             </div>
           )}
           {tab === 'plans' && (
@@ -187,7 +187,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
                   textTransform: 'uppercase', color: AGENT_ACCENT[session.agent] || '#9BA3A8',
                 }}>{AGENT_LABEL[session.agent] || session.agent}</span>
                 <span style={{ flex: 1 }} />
-                <button onClick={() => handleOpenSession(session)} style={miniBtnStyle(activeAccent)}>Cargar</button>
+                <button onClick={() => handleOpenSession(session)} style={miniBtnStyle(activeAccent)}>Load</button>
                 <button
                   onClick={() => handleDeleteSession(session)}
                   style={{ background: 'transparent', border: '1px solid #CF444D55', borderRadius: 5, padding: '3px 7px', color: '#CF444D', fontSize: '0.62rem', fontWeight: 700, cursor: 'pointer' }}
@@ -203,7 +203,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
                 }}
                 onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                 spellCheck={false}
-                title="Nombre de la sesión (artefacto de contexto)"
+                title="Session name (context artifact)"
                 style={{
                   width: '100%', boxSizing: 'border-box',
                   background: 'transparent', border: '1px solid transparent',
@@ -232,7 +232,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
                   color: '#D4D8DC', letterSpacing: '0.02em',
                 }}>{file.name}</span>
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <button onClick={() => handleView(file)} style={miniBtnStyle(activeAccent)}>👁 Ver</button>
+                  <button onClick={() => handleView(file)} style={miniBtnStyle(activeAccent)}>👁 View</button>
                   <button onClick={() => handleInsert(file, 'asun')} style={miniBtnStyle('#C8A2D8')}>→ Asun</button>
                   <button onClick={() => handleInsert(file, 'cochi')} style={miniBtnStyle('#CF444D')}>→ Cochi</button>
                 </div>
@@ -243,7 +243,7 @@ export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenS
                   fontFamily: "'JetBrains Mono', monospace", fontSize: '0.7rem',
                   color: '#9BA3A8', whiteSpace: 'pre-wrap', lineHeight: 1.5,
                 }}>
-                  {contentCache[file.path] ?? 'Leyendo…'}
+                  {contentCache[file.path] ?? 'Reading…'}
                 </div>
               )}
             </div>

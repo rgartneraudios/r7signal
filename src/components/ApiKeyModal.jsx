@@ -14,8 +14,8 @@ export default function ApiKeyModal({ onClose, onSaved, required = false }) {
 
   async function handleSave() {
     const clean = key.trim()
-    if (!clean) { setError('Pegá tu API key para continuar.'); return }
-    if (clean.length < 20) { setError('Esa key parece demasiado corta. Revisala.'); return }
+    if (!clean) { setError('Paste your API key to continue.'); return }
+    if (clean.length < 20) { setError('That key looks too short. Check it.'); return }
 
     setSaving(true)
     setError(null)
@@ -24,7 +24,7 @@ export default function ApiKeyModal({ onClose, onSaved, required = false }) {
       onSaved?.(clean)
       onClose?.()
     } catch (err) {
-      setError(`No se pudo guardar la key: ${err.message}`)
+      setError(`Could not save the key: ${err.message}`)
       setSaving(false)
     }
   }
@@ -53,7 +53,7 @@ export default function ApiKeyModal({ onClose, onSaved, required = false }) {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <div style={{ fontSize: '1rem', fontWeight: 700, color: THEME.textHigh, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            API Key de OpenRouter
+            OpenRouter API Key
           </div>
           {!required && (
             <button
@@ -65,9 +65,9 @@ export default function ApiKeyModal({ onClose, onSaved, required = false }) {
 
         <div style={{ fontSize: '0.78rem', color: THEME.textMed, lineHeight: 1.6, marginBottom: 20 }}>
           {required
-            ? 'Es tu primer arranque y Asun, TITO y Cochi necesitan una key propia para funcionar.'
-            : 'Actualizá tu API key de OpenRouter.'}
-          {' '}Se guarda únicamente en esta computadora (nunca se sincroniza a la nube ni al navegador).
+            ? 'This is your first run: Asun, TITO and Cochi need their own key to work.'
+            : 'Update your OpenRouter API key.'}
+          {' '}It is stored only on this computer (never synced to the cloud or the browser).
         </div>
 
         <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>
@@ -98,14 +98,14 @@ export default function ApiKeyModal({ onClose, onSaved, required = false }) {
           <button
             onClick={() => setShow(v => !v)}
             style={{ background: 'transparent', border: `1px solid ${THEME.borderSubtle}`, borderRadius: 6, padding: '0 10px', color: THEME.textMed, cursor: 'pointer', fontSize: '0.7rem', fontFamily: "'Space Grotesk', sans-serif" }}
-          >{show ? 'Ocultar' : 'Ver'}</button>
+          >{show ? 'Hide' : 'Show'}</button>
         </div>
 
         <button
           onClick={openKeysPage}
           style={{ background: 'transparent', border: 'none', padding: 0, color: THEME.celeste, cursor: 'pointer', fontSize: '0.72rem', letterSpacing: '0.04em', marginBottom: 22, fontFamily: "'Space Grotesk', sans-serif" }}
         >
-          ¿No tenés una? Creala en openrouter.ai/keys →
+          Don't have one? Create it at openrouter.ai/keys →
         </button>
 
         {error && (
@@ -118,14 +118,14 @@ export default function ApiKeyModal({ onClose, onSaved, required = false }) {
             disabled={saving}
             style={{ flex: 1, background: THEME.celeste10, border: `1px solid ${THEME.celeste35}`, borderRadius: 8, padding: '10px 0', color: THEME.celeste, fontSize: '0.8rem', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}
           >
-            {saving ? 'Guardando...' : 'Guardar'}
+            {saving ? 'Saving...' : 'Save'}
           </button>
           {!required && (
             <button
               onClick={onClose}
               style={{ flex: 1, background: 'transparent', border: `1px solid ${THEME.borderSubtle}`, borderRadius: 8, padding: '10px 0', color: THEME.textMed, fontSize: '0.8rem', cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}
             >
-              Cancelar
+              Cancel
             </button>
           )}
         </div>

@@ -65,7 +65,7 @@ export default function MemoriesModal({ onClose }) {
           <span style={{
             fontFamily: "'Orbitron', sans-serif", fontSize: '0.75rem',
             letterSpacing: '0.18em', fontWeight: 700, color: PINK,
-          }}>MEMORIES · MEMORIA DEL USUARIO</span>
+          }}>MEMORIES · USER MEMORY</span>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', color: '#9BA3A8',
             fontSize: '1.2rem', cursor: 'pointer', padding: 4,
@@ -74,13 +74,13 @@ export default function MemoriesModal({ onClose }) {
 
         <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <span style={{ fontSize: '0.62rem', color: '#8A868B', letterSpacing: '0.08em' }}>
-            Escribí una memoria en formato telegrama (una frase). Se guarda global y la leen los tres agentes con la Sesión Hot.
+            Write a memory in telegram format (one sentence). It is stored globally and read by the three agents while Session Memories is on.
           </span>
           <textarea
             value={draft}
             onChange={e => setDraft(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAdd() }}
-            placeholder="{{nombreAlternativo}} buscó herboristerías."
+            placeholder="{{nombreAlternativo}} looked up herbal shops."
             rows={2}
             spellCheck={false}
             style={{
@@ -102,7 +102,7 @@ export default function MemoriesModal({ onClose }) {
                 fontWeight: 700, cursor: (busy || !draft.trim()) ? 'not-allowed' : 'pointer',
                 opacity: (busy || !draft.trim()) ? 0.5 : 1,
               }}
-            >+ Agregar</button>
+            >+ Add</button>
           </div>
         </div>
 
@@ -110,7 +110,7 @@ export default function MemoriesModal({ onClose }) {
           {error && <div style={{ color: '#CF444D', fontSize: '0.72rem' }}>⚠️ {error}</div>}
           {memories.length === 0 && !error && (
             <div style={{ color: '#6B7075', fontSize: '0.78rem', textAlign: 'center', marginTop: 20 }}>
-              Sin memorias todavía.
+              No memories yet.
             </div>
           )}
           {memories.map((m, i) => (
@@ -126,7 +126,7 @@ export default function MemoriesModal({ onClose }) {
               <button
                 onClick={() => handleRemove(i)}
                 disabled={busy}
-                title="Borrar esta memoria"
+                title="Delete this memory"
                 style={{
                   background: 'transparent', border: '1px solid #CF444D55', borderRadius: 5,
                   padding: '2px 7px', color: '#CF444D', fontSize: '0.62rem',

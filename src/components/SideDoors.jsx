@@ -61,7 +61,7 @@ export default function SideDoors({ onOpenMemories, onOpenR9 }) {
       {/* ── Gatillo puerta IZQUIERDA ── */}
       <button
         onClick={() => setLeftOpen(o => !o)}
-        title={leftOpen ? 'Cerrar accesos' : 'Memories y accesos'}
+        title={leftOpen ? 'Close shortcuts' : 'Memories & shortcuts'}
         className={`fixed top-1/2 -translate-y-1/2 z-[100] h-16 w-3 bg-black/50 backdrop-blur-md border border-white/15 rounded-r-lg flex items-center justify-center transition-all ${leftOpen ? 'left-64' : 'left-0'}`}
       >
         <span className="flex items-center gap-[2px]">
@@ -77,15 +77,15 @@ export default function SideDoors({ onOpenMemories, onOpenR9 }) {
       >
         <div className="px-4 pt-4 pb-3 border-b border-white/10">
           <div className="font-[Orbitron] text-[0.7rem] tracking-[0.18em] font-bold" style={{ color: CYAN }}>
-            ACCESOS
+            SHORTCUTS
           </div>
         </div>
         <div className="p-3 flex flex-col gap-2">
           <button style={doorBtn(PINK)} onClick={() => { setLeftOpen(false); onOpenMemories?.() }}>
             🕯️ Memories
           </button>
-          <button style={doorBtn(BORDEAU)} onClick={openDataFolder} title="Abrir la carpeta de datos en el Explorador">
-            🗄️ Base de datos
+          <button style={doorBtn(BORDEAU)} onClick={openDataFolder} title="Open the data folder in Explorer">
+            🗄️ Data folder
           </button>
           <div className="h-px bg-white/10 my-1" />
           <button
@@ -106,7 +106,7 @@ export default function SideDoors({ onOpenMemories, onOpenR9 }) {
       {/* ── Gatillo puerta DERECHA (abre R9 compartido) ── */}
       <button
         onClick={() => onOpenR9?.()}
-        title="R9 — Memoria compartida (Sesiones · Planes · R9)"
+        title="R9 — Shared memory (Sessions · Plans · R9)"
         className="fixed top-1/2 -translate-y-1/2 right-0 z-[100] h-16 w-3 bg-black/50 backdrop-blur-md border border-white/15 rounded-l-lg flex items-center justify-center transition-all"
       >
         <span className="flex items-center gap-[2px]">
