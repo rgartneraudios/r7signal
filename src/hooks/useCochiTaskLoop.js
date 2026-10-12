@@ -154,7 +154,7 @@ export function useCochiTaskLoop({
     if (usesOpenRouter && !getOpenRouterKey()) {
       pushMessage({
         role: 'assistant',
-        content: '🔑 Todavía no cargaste tu API key de OpenRouter. Usá el botón de la llave en la barra superior y pegala para poder trabajar.'
+        content: '🔑 You have not loaded your OpenRouter API key yet. Use the key button in the top bar and paste it to work.'
       })
       return
     }
@@ -214,7 +214,7 @@ export function useCochiTaskLoop({
       const permRequest = buildPermissionRequest(name, args)
       const permDecision = evaluatePermission(permRequest, permissionRules)
       if (permDecision === 'deny') {
-        pushActivity(icon, activityLabel, 'denegado por regla')
+        pushActivity(icon, activityLabel, 'denied by rule')
         return { content: '⛔ Bloqueado: una regla de permisos (deny) impide esta acción.' }
       }
       if (permRequest.guarded && permDecision !== 'allow' && !sessionAllowRef.current.has(permRequest.signature)) {
@@ -223,14 +223,14 @@ export function useCochiTaskLoop({
             const preview = await executeTool(name, args, workspace.permission, workspace.path, { dryRun: true })
             if (preview?.diff) permRequest.diff = preview.diff
             if (typeof preview?.modelResult === 'string' && preview.modelResult.startsWith('⛔')) {
-              pushActivity(icon, activityLabel, 'bloqueado')
+              pushActivity(icon, activityLabel, 'blocked')
               return { content: preview.modelResult }
             }
           } catch {}
         }
         const choice = await requestPermission(permRequest, controller.signal)
         if (choice === 'deny') {
-          pushActivity(icon, activityLabel, 'cancelado')
+          pushActivity(icon, activityLabel, 'cancelled')
           return { content: 'Cancelado por el usuario' }
         }
         if (choice === 'allow_session') sessionAllowRef.current.add(permRequest.signature)
@@ -275,7 +275,7 @@ export function useCochiTaskLoop({
       if (name === 'spawn_agent') {
         const task = String(args.task || '').trim()
         const subLabel = args.label ? String(args.label) : ''
-        pushActivity(TOOL_ICONS.spawn_agent || '🤖', 'spawn_agent', task.slice(0, 60) || 'sin tarea')
+        pushActivity(TOOL_ICONS.spawn_agent || '🤖', 'spawn_agent', task.slice(0, 60) || 'no task')
         if (!task) {
           return { role: 'tool', tool_call_id: toolCall.id, content: '⚠️ spawn_agent requiere "task".' }
         }
@@ -380,7 +380,7 @@ export function useCochiTaskLoop({
         if (streamed.finishReason === 'length') {
           pushMessage({
             role: 'assistant',
-            content: '⚠️ La respuesta del modelo se cortó por el límite de tokens. Probá con una instrucción más acotada.'
+            content: '⚠️ The model response was cut off by the token limit. Try a narrower instruction.'
           })
           break
         }
@@ -432,7 +432,7 @@ export function useCochiTaskLoop({
         if (maxRepeatCount >= REPEAT_ABORT_THRESHOLD) {
           pushMessage({
             role: 'assistant',
-            content: '⚠️ Cochi entró en un bucle repitiendo la misma llamada y se detuvo automáticamente. Intenta con instrucciones más específicas.'
+            content: '⚠️ Cochi fell into a loop repeating the same call and stopped automatically. Try more specific instructions.'
           })
           break
         } else if (maxRepeatCount >= REPEAT_WARN_THRESHOLD && !repeatWarned) {
@@ -448,10 +448,10 @@ export function useCochiTaskLoop({
 
       if (!finalContent) {
         finalContent = toolLog.length
-          ? (isToolError(toolLog[toolLog.length - 1]?.result) ? 'La última operación falló.' : 'Listo.')
+          ? (isToolError(toolLog[toolLog.length - 1]?.result) ? 'The last operation failed.' : 'Done.')
           : ''
       }
-      const display = extractR3Visible(finalContent) || 'Sin respuesta del modelo.'
+      const display = extractR3Visible(finalContent) || 'No response from the model.'
       pushMessage({ role: 'assistant', content: display, reasoning: finalReasoning.slice(0, 8000) || undefined })
       wheelRef.current = commitR7Turn(wheelRef.current, {
         pairs: [buildTurnPair(originalMessageRef.current, display)],
@@ -481,7 +481,7 @@ export function useCochiTaskLoop({
     if (needsFullAccess(sent, workspace.permission)) {
       pushMessage({
         role: 'assistant',
-        content: '⚡ Este pedido ejecuta un comando (`run_command`), que requiere **Full Access**. Cambiá el permiso del workspace (arriba a la derecha) a ⚡ Full Access y volvé a pedírmelo.',
+        content: '⚡ This request runs a command (`run_command`), which requires **Full Access**. Change the workspace permission (top right) to ⚡ Full Access and ask me again.',
       })
       return
     }
@@ -512,7 +512,7 @@ export function useCochiTaskLoop({
     const snap = snapshotRef.current
     snapshotRef.current = null
     const ranCommand = lastTurnHadCommandRef.current
-    const ignoredArtifactsNote = 'ℹ️ Este turno ejecutó run_command. Los cambios en archivos del workspace entran al revert; los artefactos en node_modules/.git/target/dist/build/… NO se rastrean (se regeneran).'
+    const ignoredArtifactsNote = 'ℹ️ This turn ran run_command. Changes to workspace files are covered by revert; artifacts under node_modules/.git/target/dist/build/… are NOT tracked (they get regenerated).'
     if (!snap) {
       if (ranCommand) notes.push({ role: 'assistant', content: ignoredArtifactsNote })
       return notes
@@ -524,19 +524,19 @@ export function useCochiTaskLoop({
       return notes
     }
     const list = info.paths.slice(0, 12).map(p => `• ${p}`).join('\n')
-    const more = info.paths.length > 12 ? `\n… y ${info.paths.length - 12} más` : ''
-    const warn = info.unrevertible.length ? `\n\n⚠️ ${info.unrevertible.length} archivo(s) eran demasiado grandes y NO se podrán restaurar.` : ''
+    const more = info.paths.length > 12 ? `\n… and ${info.paths.length - 12} more` : ''
+    const warn = info.unrevertible.length ? `\n\n⚠️ ${info.unrevertible.length} file(s) were too large and will NOT be restored.` : ''
     const cmdNote = ranCommand ? `\n\n${ignoredArtifactsNote}` : ''
-    const ok = await nativeConfirm(`Este turno modificó ${info.count} archivo(s):\n${list}${more}${warn}${cmdNote}\n\n¿Revertir los archivos a su estado anterior?`)
+    const ok = await nativeConfirm(`This turn modified ${info.count} file(s):\n${list}${more}${warn}${cmdNote}\n\nRevert the files to their previous state?`)
     if (!ok) { await discardTurn(snap); return notes }
     try {
       const res = await revertSnapshot(snap.id)
       const failed = (res.results || []).filter(r => r.action === 'error' || r.action === 'skip')
       if (failed.length) {
-        notes.push({ role: 'assistant', content: `⚠️ No se pudieron restaurar ${failed.length} archivo(s): ${failed.map(f => f.path).join(', ')}` })
+        notes.push({ role: 'assistant', content: `⚠️ Could not restore ${failed.length} file(s): ${failed.map(f => f.path).join(', ')}` })
       }
     } catch (err) {
-      notes.push({ role: 'assistant', content: `⚠️ Error al revertir archivos: ${err.message}` })
+      notes.push({ role: 'assistant', content: `⚠️ Error reverting files: ${err.message}` })
     }
     return notes
   }

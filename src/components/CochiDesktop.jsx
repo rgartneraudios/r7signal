@@ -291,12 +291,12 @@ function CochiDesktop({
     if (planStatus === 'executing') { onHandoffConsumed?.(); return }
     onHandoffConsumed?.()
     const briefText = [
-      `[CONTEXTO]`,
-      `Asun ha generado contenido de tipo "${handoff.type}" y lo envía a Cochi para ejecutar.`,
+      `[CONTEXT]`,
+      `Asun generated content of type "${handoff.type}" and sends it to Cochi to execute.`,
       ``,
-      `[INSTRUCCIÓN]`,
+      `[INSTRUCTION]`,
       handoff.brief,
-      handoff.type === 'image' ? `URL de imagen: ${handoff.content}` : `Contenido:\n${handoff.content}`,
+      handoff.type === 'image' ? `Image URL: ${handoff.content}` : `Content:\n${handoff.content}`,
     ].join('\n')
     taskLoop.handleSendText(briefText)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -312,7 +312,7 @@ function CochiDesktop({
   // K2: CLS/archivado (la rueda se promueve a global; la sesión nueva hereda el
   // nombre definido al archivar). El archivado no bloquea tareas en curso.
   async function handleClear() {
-    if (!window.confirm('¿Borrar toda la conversación?')) return
+    if (!window.confirm('Delete the whole conversation?')) return
     await session.clearSession()
   }
   const handleArchiveWithName = () => session.archiveWithName()

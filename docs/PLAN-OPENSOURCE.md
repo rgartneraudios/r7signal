@@ -13,7 +13,10 @@ Estado: Fase 0 cerrada (4/4). Fase 1 en curso — S1, S2a, S2b y S2c cerradas; S
 
 ## 1. Reglas de trabajo (sesiones cortas = cero alucinación)
 
-1. Una sesión = UN objetivo. Máximo 3 archivos tocados.
+1. Una sesión = UN objetivo. El tope de archivos es un **promedio de longitud**, no una regla dura:
+   3 es la referencia para una tarea media; una tarea corta (sólo cadenas, cero lógica) puede tocar
+   4-5 archivos y se procede igual. Lo que manda es que el frente siga siendo uno y la sesión no
+   crezca hasta volverse ingobernable (ahí sí: CORTAR, regla 5). Decisión del autor, 06/10.
 2. Prohibido mezclar frentes en una sesión (idioma + limpieza + desacople = tres sesiones).
 3. Cierre obligatorio de CADA sesión: `npm run lint` (0 errores / 0 warnings) + `npm run build` + `npm test` (verde).
    Si un gate falla, no hay commit: se arregla o se revierte.
@@ -111,9 +114,14 @@ Estado: Fase 0 cerrada (4/4). Fase 1 en curso — S1, S2a, S2b y S2c cerradas; S
     `CochiStatusBar.jsx` y `R9Drawer.jsx`: se alinea en una sesión propia (una decisión, 3 archivos);
     (c) `AppHeader.jsx` NO se tocó: no tiene texto propio en español — las etiquetas de pestaña viven
     en `src/lib/webRoutes.js` (S4), la fecha usa locale `es-ES` y `WEATHER.city` sale de `constants` (S6).
-  - [ ] **S2c-bis. Mensajes y confirms de Cochi.** `CochiDesktop.jsx` (`¿Borrar toda la
-    conversación?`, brief del handoff de Asun) + `src/hooks/useCochiTaskLoop.js` (aviso de API key,
-    nota de artefactos ignorados, confirm de revertir archivos del turno, error de revert).
+  - [x] **S2c-bis. Mensajes y confirms de Cochi.** `CochiDesktop.jsx` (`Delete the whole
+    conversation?`; brief del handoff de Asun a `[CONTEXT]`/`[INSTRUCTION]`, en inglés) +
+    `src/hooks/useCochiTaskLoop.js` (aviso de API key, etiquetas del activity feed
+    `denied by rule`/`blocked`/`cancelled`/`no task`, corte por tope de tokens, aviso de bucle por
+    repetición, `Done.`/`The last operation failed.`/`No response from the model.`, aviso de Full
+    Access, nota de artefactos ignorados, confirm de revert y errores de revert). Cero lógica.
+    Quedan model-facing para S4: `ASK_CANCELLED`, `'⛔ Bloqueado: ...'`, `'Cancelado por el usuario'`,
+    el `REPETITION_WARNING` y `'⚠️ spawn_agent requiere "task".'`.
   - [ ] **S2d. Footers y flujos de UI.** `R7FooterInputs.jsx`, `AsunMusicFooter.jsx`,
     `PromptImagenFlow.jsx`, `AsunImagenFlow.jsx`, `SidebarPanel.jsx`, `Descargas.jsx`,
     los `Sequencer*`, `CochiPermissionPanel.jsx`, `CochiMessageList.jsx`/`TitoMessageList.jsx`/
@@ -201,6 +209,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S2a | Headers de los 3 paneles a inglés: tooltip de modelo congelado (Cochi/Asun), placeholders `modelo`→`model`, tooltip del subagente, botones de categoría de Asun (IMAGE/MUSIC), submenú OCCIDENTE→WEST, PROYECTO→PROJECT. `TitoHeader.jsx` no tenía texto visible: no se tocó. Cero lógica. Hallazgo: S2 excedía el tope de 3 archivos (~14) → dividida en S2a–S2d. | lint 0/0 · build OK · test 27/27 | `aa8d6b8` |
 | S2b | Status bars de los 3 paneles a inglés: `Archive R7`, `CANCEL`, `(working...)`, tooltip de archivado, tooltip de coste estimado, chip `cached`, contador de búsquedas web (`search`/`searches`) con tooltip y tooltip `Attach file`. Cero lógica. CLS se mantiene como acrónimo (ya presente en los watermarks en inglés). Hallazgo: `subagent.js` ('trabajando…') va a S4 y `CochiActivityFeed.jsx` ya estaba en S2d. | lint 0/0 · build OK · test 27/27 | `dee2c66` |
 | S2c | Topbar (`R7TopBar.jsx`) + mensajes y confirms de `TitoPanel.jsx`/`AsunPanel.jsx` a inglés. Cero lógica. Hallazgo: el alcance eran 4-5 archivos y la regla 1 topa en 3 → cortada; la mitad de Cochi (`CochiDesktop.jsx` + `useCochiTaskLoop.js`) pasa a **S2c-bis**, las cadenas model-facing de `AsunPanel` a **S4** y el locale numérico `es` (`R7TopBar`/`CochiStatusBar`/`R9Drawer`) a sesión propia. `AppHeader.jsx` sin cambios: su texto viene de `webRoutes.js`/`constants`. | lint 0/0 · build OK · test 27/27 | `7e68d79` |
+| S2c-bis | Mensajes y confirms de Cochi a inglés: `CochiDesktop.jsx` (borrado + brief del handoff) y `useCochiTaskLoop.js` (API key, activity feed, corte por tokens, bucle por repetición, `Done.`/`No response from the model.`, Full Access, nota de artefactos, confirm de revert). Cero lógica. Model-facing a S4. Regla 1 del plan relajada a promedio de archivos (decisión del autor). | lint 0/0 · build OK · test 27/27 | cierre S2c-bis |
 
 ---
 
