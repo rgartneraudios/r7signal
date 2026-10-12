@@ -151,7 +151,7 @@ function CochiDesktop({
   const { wheelRef, messagesRef, sessionIdRef } = session
 
   // Prompt de Cochi (S8: versionado en el código; la variante sale de chat_language).
-  const { remotePrompts } = useAgentPrompts('cochi', onPromptsReady, preferences.chat_language)
+  const { remotePrompts } = useAgentPrompts('cochi', onPromptsReady, preferences?.chat_language)
 
   // Selección R9 (compartida).
   const { r9Btn, handleSelectionMouseUp, handleConfirmR9 } = useR9Selection(chatContainerRef, 'cochi')
