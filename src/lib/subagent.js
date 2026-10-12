@@ -180,8 +180,8 @@ export function normalizeBrief(raw) {
 // Texto que recibe el modelo padre como resultado de la tool spawn_agent. Es la
 // ÚNICA frontera de salida del subagente: sólo el brief cruza, nunca sus turnos.
 export function formatBriefResult(sub) {
-  if (!sub?.ok) return `⚠️ El subagente no devolvió un brief: ${sub?.error || 'motivo desconocido'}`
-  const head = sub.label ? `BRIEF DEL SUBAGENTE (${sub.label})` : 'BRIEF DEL SUBAGENTE'
+  if (!sub?.ok) return `⚠️ The subagent returned no brief: ${sub?.error || 'unknown reason'}`
+  const head = sub.label ? `SUBAGENT BRIEF (${sub.label})` : 'SUBAGENT BRIEF'
   return `${head}:\n${sub.brief}`
 }
 
@@ -208,8 +208,8 @@ export function describeSubagent(sub = {}) {
     running: status === 'running',
     ok: status === 'ok',
     failed: status === 'error',
-    statusLabel: status === 'running' ? 'trabajando…' : status === 'ok' ? 'completado' : 'falló',
-    label: sub.label || 'Subagente',
+    statusLabel: status === 'running' ? 'working…' : status === 'ok' ? 'done' : 'failed',
+    label: sub.label || 'Subagent',
     task: sub.task || '',
     tools,
     toolCount: tools.length,
@@ -274,10 +274,10 @@ export async function runSubagent(opts = {}) {
   const callModel = opts.callModel || streamChat
 
   const taskText = String(task ?? '').trim()
-  if (!taskText) return { ok: false, error: 'TASK vacía', depth }
-  if (!provider) return { ok: false, error: 'provider requerido', depth }
+  if (!taskText) return { ok: false, error: 'empty TASK', depth }
+  if (!provider) return { ok: false, error: 'provider required', depth }
   if (depth > MAX_SUBAGENT_DEPTH) {
-    return { ok: false, error: `profundidad máxima de subagentes (${MAX_SUBAGENT_DEPTH})`, depth }
+    return { ok: false, error: `maximum subagent depth (${MAX_SUBAGENT_DEPTH})`, depth }
   }
 
   // Rueda PROPIA del subagente: lista local que crece con sus turnos internos y
@@ -348,7 +348,7 @@ export async function runSubagent(opts = {}) {
         try { args = JSON.parse(call.function?.arguments || '{}') } catch {}
         let out
         try {
-          out = executeTool ? await executeTool(name, args) : `⚠️ tool ${name} no disponible en el subagente`
+          out = executeTool ? await executeTool(name, args) : `⚠️ tool ${name} not available inside a subagent`
         } catch (err) {
           out = `ERROR: ${err?.message || String(err)}`
         }
@@ -364,24 +364,24 @@ export async function runSubagent(opts = {}) {
       if (budgetExceeded) {
         return {
           ok: false,
-          error: `presupuesto del subagente agotado (${usageTotal.total_tokens} tok) sin un brief completo`,
+          error: `subagent budget exhausted (${usageTotal.total_tokens} tok) with no complete brief`,
           depth, steps, iterations, usage: lastUsage, usageTotal, model: lastModel,
         }
       }
       return {
         ok: false,
-        error: `el subagente agotó sus ${maxIterations} turnos internos sin devolver un brief`,
+        error: `the subagent used all its ${maxIterations} internal turns without returning a brief`,
         depth, steps, iterations, usage: lastUsage, usageTotal, model: lastModel,
       }
     }
 
     const brief = normalizeBrief(finalContent)
     if (!brief) {
-      return { ok: false, error: 'el subagente no devolvió texto', depth, steps, iterations, usage: lastUsage, usageTotal, model: lastModel }
+      return { ok: false, error: 'the subagent returned no text', depth, steps, iterations, usage: lastUsage, usageTotal, model: lastModel }
     }
     return { ok: true, brief, label, depth, steps, iterations, usage: lastUsage, usageTotal, model: lastModel }
   } catch (err) {
-    if (err?.name === 'AbortError') return { ok: false, error: 'cancelado', depth, steps, iterations, usageTotal }
+    if (err?.name === 'AbortError') return { ok: false, error: 'cancelled', depth, steps, iterations, usageTotal }
     return { ok: false, error: err?.message || String(err), depth, steps, iterations, usageTotal }
   }
 }

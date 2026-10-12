@@ -274,7 +274,7 @@ function AsunPanel({
         projectMode ? remotePrompts.project : remotePrompts.system,
         {
           chatLanguage: chatLanguage ?? 'Spanish',
-          nombreAlternativo: nombreAlternativo ?? 'sujeto de prueba',
+          nombreAlternativo: nombreAlternativo ?? 'test subject',
         }
       )
 
@@ -382,7 +382,7 @@ function AsunPanel({
                 ? { ...m, contenido: `✕ ${toolName} cancelled by the user` }
                 : m
             ))
-            apiMessages.push({ role: 'tool', tool_call_id: tc.id, content: 'Cancelado por el usuario' })
+            apiMessages.push({ role: 'tool', tool_call_id: tc.id, content: 'Cancelled by the user' })
             continue
           }
 
@@ -409,13 +409,13 @@ function AsunPanel({
             apiMessages.push({
               role: 'tool',
               tool_call_id: tc.id,
-              content: 'Imagen leída. Analiza la imagen adjunta en el siguiente mensaje.',
+              content: 'Image read. Analyze the attached image in the next message.',
             })
             apiMessages.push({
               role: 'user',
               content: [
                 { type: 'image_url', image_url: { url: `data:${imageData.mimeType};base64,${imageData.base64}` } },
-                { type: 'text', text: 'Esta es la imagen solicitada. Analízala y responde al usuario.' },
+                { type: 'text', text: 'This is the requested image. Analyze it and respond to the user.' },
               ],
             })
           } else {

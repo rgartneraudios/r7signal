@@ -81,9 +81,9 @@ export function normalizeStatus(status) {
 
 // ─── Etiqueta legible del estado (UI del tablero, Bloque E2) ──────────────────
 export const STATUS_LABEL = {
-  [PLAN_STATUS.PENDING]:     'Pendiente',
-  [PLAN_STATUS.IN_PROGRESS]: 'En curso',
-  [PLAN_STATUS.DONE]:        'Hecho',
+  [PLAN_STATUS.PENDING]:     'Pending',
+  [PLAN_STATUS.IN_PROGRESS]: 'In progress',
+  [PLAN_STATUS.DONE]:        'Done',
 }
 export function statusLabel(status) {
   return STATUS_LABEL[normalizeStatus(status)]
@@ -158,7 +158,7 @@ export function normalizePlan(raw = {}, { id, now, author = 'asun' } = {}) {
     })
   return {
     id:          str(id) || str(r.id) || newPlanId(),
-    title:       str(r.title ?? r.titulo ?? r.name ?? r.nombre) || 'Proyecto sin título',
+    title:       str(r.title ?? r.titulo ?? r.name ?? r.nombre) || 'Untitled project',
     description: str(r.description ?? r.descripcion),
     createdAt:   r.createdAt || when,
     updatedAt:   r.updatedAt || when,
@@ -239,7 +239,7 @@ export function resolveReplan(plan, blockId, resolution, { now, author = 'user',
   const status = normalizeReplanStatus(resolution)
   const finalStatus = status === REPLAN_STATUS.PENDING ? REPLAN_STATUS.DISMISSED : status
   const approved = finalStatus === REPLAN_STATUS.APPROVED
-  const noteText = str(note) || (approved && block.replan.proposal ? `Desviación aprobada: ${block.replan.proposal}` : '')
+  const noteText = str(note) || (approved && block.replan.proposal ? `Approved deviation: ${block.replan.proposal}` : '')
   const blocks = base.blocks.map(b => b.id === blockId
     ? {
         ...b,
@@ -283,17 +283,17 @@ export function planToHandoffText(plan, blockId) {
   const idx = plan.blocks.findIndex(b => b.id === block.id)
   const lines = [
     `[PLAN R7 · ${plan.id}] ${plan.title}`,
-    `Avance: ${prog.done}/${prog.total} bloques (${prog.percent}%)`,
-    `Ejecutá SÓLO el bloque ${block.id}. No avances al siguiente sin confirmación.`,
-    `Bloque ${block.id}: ${block.title}`,
+    `Progress: ${prog.done}/${prog.total} blocks (${prog.percent}%)`,
+    `Run ONLY block ${block.id}. Do not advance to the next one without confirmation.`,
+    `Block ${block.id}: ${block.title}`,
   ]
-  if (block.description) lines.push(`Qué hacer: ${block.description}`)
-  lines.push(`Criterio de hecho: ${block.evidence || '(sin definir)'}`)
+  if (block.description) lines.push(`What to do: ${block.description}`)
+  lines.push(`Done when: ${block.evidence || '(undefined)'}`)
   if (hasPendingReplan(block)) {
-    lines.push(`⚠ RE-PLAN PROPUESTO (pendiente de decisión humana; NO te desvíes en silencio): ${block.replan.reason}`)
-    if (block.replan.proposal) lines.push(`   Propuesta: ${block.replan.proposal}`)
+    lines.push(`⚠ RE-PLAN PROPOSED (pending human decision; do NOT deviate silently): ${block.replan.reason}`)
+    if (block.replan.proposal) lines.push(`   Proposal: ${block.replan.proposal}`)
   }
-  lines.push(`Plan completo: ${plan.blocks.map((b, i) => `${b.id}${i === idx ? '←' : ''} ${b.title}`).join(' · ')}`)
+  lines.push(`Full plan: ${plan.blocks.map((b, i) => `${b.id}${i === idx ? '←' : ''} ${b.title}`).join(' · ')}`)
   return lines.join('\n')
 }
 
@@ -309,7 +309,7 @@ export function planBlockHandoff(plan, blockId) {
     type:    'plan',
     planId:  plan.id,
     blockId: block.id,
-    brief:   `Ejecutá el bloque ${block.id} ("${block.title}") del plan "${plan.title}". Cumplí su criterio de verificación y no avances al siguiente bloque sin confirmación.`,
+    brief:   `Run block ${block.id} ("${block.title}") of plan "${plan.title}". Meet its verification criterion and do not advance to the next block without confirmation.`,
     content,
   }
 }
@@ -339,23 +339,23 @@ export function planToText(plan) {
   const pendingRep = pendingReplans(plan).length
   const lines = [
     `[PLAN R7 · ${plan.id}] ${plan.title}`,
-    `Avance: ${prog.done}/${prog.total} bloques (${prog.percent}%)`,
+    `Progress: ${prog.done}/${prog.total} blocks (${prog.percent}%)`,
   ]
-  if (pendingRep) lines.push(`⚠ Re-planes pendientes de decisión del usuario: ${pendingRep}`)
-  if (plan.description) lines.push(`Alcance: ${plan.description}`)
+  if (pendingRep) lines.push(`⚠ Re-plans pending user decision: ${pendingRep}`)
+  if (plan.description) lines.push(`Scope: ${plan.description}`)
   lines.push('')
   for (const b of plan.blocks) {
-    lines.push(`Bloque ${b.id} · ${statusLabel(b.status)} — ${b.title}`)
-    if (b.description) lines.push(`  Qué hacer: ${b.description}`)
-    lines.push(`  Criterio de hecho: ${b.evidence || '(sin definir)'}`)
+    lines.push(`Block ${b.id} · ${statusLabel(b.status)} — ${b.title}`)
+    if (b.description) lines.push(`  What to do: ${b.description}`)
+    lines.push(`  Done when: ${b.evidence || '(undefined)'}`)
     if (hasPendingReplan(b)) {
-      lines.push(`  ⚠ RE-PLAN PROPUESTO (${b.replan.requestedBy}): ${b.replan.reason}`)
-      if (b.replan.proposal) lines.push(`     Propuesta: ${b.replan.proposal}`)
+      lines.push(`  ⚠ RE-PLAN PROPOSED (${b.replan.requestedBy}): ${b.replan.reason}`)
+      if (b.replan.proposal) lines.push(`     Proposal: ${b.replan.proposal}`)
     } else if (b.replan?.status === REPLAN_STATUS.APPROVED) {
-      lines.push(`  ↘ Desviación APROBADA por el usuario: ${b.replan.proposal || b.replan.reason}`)
+      lines.push(`  ↘ Deviation APPROVED by the user: ${b.replan.proposal || b.replan.reason}`)
     }
     const last = b.evidenceLog?.[b.evidenceLog.length - 1]
-    if (last?.text) lines.push(`  Evidencia (${last.by}): ${last.text}`)
+    if (last?.text) lines.push(`  Evidence (${last.by}): ${last.text}`)
   }
   return lines.join('\n')
 }
@@ -369,7 +369,7 @@ export function planBoardHandoff(plan) {
     type:    'plan',
     planId:  plan.id,
     blockId: null,
-    brief:   `Leé el tablero del plan "${plan.title}" con read_project_plan (planId "${plan.id}") y preguntame qué bloque querés ejecutar o actualizar. Si hay más de un plan en el tablero, listalos primero con list_project_plans y usá ask_user para que yo elija.`,
+    brief:   `Read the plan board "${plan.title}" with read_project_plan (planId "${plan.id}") and ask me which block I want to run or update. If there is more than one plan on the board, list them first with list_project_plans and use ask_user so I can choose.`,
     content: planToText(plan),
   }
 }
@@ -382,19 +382,19 @@ export function planReplanAsunHandoff(plan, blockId) {
   const block = getBlock(plan, blockId)
   if (!block || !block.replan) return null
   const lines = [
-    `[RE-PLAN · ${plan.id}] Bloque ${block.id} de "${plan.title}"`,
-    `Definición actual: ${block.title}${block.description ? ` — ${block.description}` : ''}`,
-    `Criterio de hecho actual: ${block.evidence || '(sin definir)'}`,
-    `Cochi reportó un problema: ${block.replan.reason}`,
-    `Propuesta de Cochi: ${block.replan.proposal || '(sin propuesta)'}`,
+    `[RE-PLAN · ${plan.id}] Block ${block.id} of "${plan.title}"`,
+    `Current definition: ${block.title}${block.description ? ` — ${block.description}` : ''}`,
+    `Current done when: ${block.evidence || '(undefined)'}`,
+    `Cochi reported a problem: ${block.replan.reason}`,
+    `Cochi proposal: ${block.replan.proposal || '(no proposal)'}`,
     '',
-    `Amendá la DEFINICIÓN del bloque ${block.id} (title/description/evidence) con save_project_plan, pasando planId "${plan.id}" y SÓLO los bloques que cambian — el tablero conserva el estado del resto. No cambies el estado (eso es de Cochi).`,
+    `Amend the DEFINITION of block ${block.id} (title/description/evidence) with save_project_plan, passing planId "${plan.id}" and ONLY the blocks that change — the board keeps the state of the rest. Do not change the state (that is Cochi's).`,
   ]
   return {
     type:    'replan',
     planId:  plan.id,
     blockId: block.id,
-    brief:   `Amendá la definición del bloque ${block.id} de "${plan.title}" según el re-plan propuesto por Cochi.`,
+    brief:   `Amend the definition of block ${block.id} of "${plan.title}" per the re-plan proposed by Cochi.`,
     content: lines.join('\n'),
   }
 }

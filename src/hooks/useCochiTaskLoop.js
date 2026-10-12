@@ -17,7 +17,7 @@ import { runSubagent, formatBriefResult, subagentActivityDetail, resolveSubagent
 import { extractR3Visible } from '../lib/parseR1R2R3.js'
 import { auditLog } from '../lib/cochiAudit.js'
 
-const ASK_CANCELLED = 'Cancelado por el usuario.'
+const ASK_CANCELLED = 'Cancelled by the user.'
 const MAX_ITER = 25
 const REPEAT_WARN_THRESHOLD = 3
 const REPEAT_ABORT_THRESHOLD = 5
@@ -215,7 +215,7 @@ export function useCochiTaskLoop({
       const permDecision = evaluatePermission(permRequest, permissionRules)
       if (permDecision === 'deny') {
         pushActivity(icon, activityLabel, 'denied by rule')
-        return { content: '⛔ Bloqueado: una regla de permisos (deny) impide esta acción.' }
+        return { content: '⛔ Blocked: a permission rule (deny) blocks this action.' }
       }
       if (permRequest.guarded && permDecision !== 'allow' && !sessionAllowRef.current.has(permRequest.signature)) {
         if (permRequest.kind === 'edit') {
@@ -231,7 +231,7 @@ export function useCochiTaskLoop({
         const choice = await requestPermission(permRequest, controller.signal)
         if (choice === 'deny') {
           pushActivity(icon, activityLabel, 'cancelled')
-          return { content: 'Cancelado por el usuario' }
+          return { content: 'Cancelled by the user' }
         }
         if (choice === 'allow_session') sessionAllowRef.current.add(permRequest.signature)
       }
@@ -247,7 +247,7 @@ export function useCochiTaskLoop({
         diff = execResult.diff
         if (name === 'todowrite' && execResult.todos) {
           setTodos(execResult.todos)
-          shortLabel = `${execResult.todos.length} tarea(s)`
+          shortLabel = `${execResult.todos.length} task(s)`
         }
       } catch (err) { modelResult = `ERROR: ${err.message}` }
       if (commandRan(name, modelResult)) lastTurnHadCommandRef.current = true
@@ -264,7 +264,7 @@ export function useCochiTaskLoop({
       if (name === 'ask_user') {
         pushActivity(TOOL_ICONS.ask_user || '❓', 'ask_user', String(args.question || '').slice(0, 60))
         const answer = await askUser({
-          question: String(args.question || '¿Puedes aclararme algo?'),
+          question: String(args.question || 'Can you clarify something for me?'),
           options: Array.isArray(args.options) ? args.options.map(String) : [],
           multiple: args.multiple === true,
           header: args.header ? String(args.header) : '',
@@ -277,7 +277,7 @@ export function useCochiTaskLoop({
         const subLabel = args.label ? String(args.label) : ''
         pushActivity(TOOL_ICONS.spawn_agent || '🤖', 'spawn_agent', task.slice(0, 60) || 'no task')
         if (!task) {
-          return { role: 'tool', tool_call_id: toolCall.id, content: '⚠️ spawn_agent requiere "task".' }
+          return { role: 'tool', tool_call_id: toolCall.id, content: '⚠️ spawn_agent requires a "task".' }
         }
         const subId = newMessageId('sub')
         addSubagent({ id: subId, label: subLabel, task, status: 'running', tools: [], model: subagentProvider.model })
@@ -293,7 +293,7 @@ export function useCochiTaskLoop({
           tools: getSubagentTools(workspace.permission),
           executeTool: async (subName, subArgs) => {
             if (SUBAGENT_EXCLUDED_TOOLS.has(subName)) {
-              return `⛔ ${subName} no está disponible dentro de un subagente.`
+              return `⛔ ${subName} is not available inside a subagent.`
             }
             const res = await runAuthorizedTool(subName, subArgs, { activityLabel: `sub:${subName}` })
             return res.content
@@ -439,7 +439,7 @@ export function useCochiTaskLoop({
           repeatWarned = true
           apiMessages.push({
             role: 'system',
-            content: `⚠️ REPETITION_WARNING: Has llamado a "${maxRepeatSignature.split(':')[0]}" con argumentos casi idénticos ${maxRepeatCount} veces. No repitas la misma llamada: usa la información que ya tienes o termina con tu mejor respuesta.`
+            content: `⚠️ REPETITION_WARNING: You called "${maxRepeatSignature.split(':')[0]}" with nearly identical arguments ${maxRepeatCount} times. Do not repeat the same call: use the information you already have or finish with your best answer.`
           })
         }
       }

@@ -4,11 +4,12 @@ Documento vivo. Se lee AL INICIO de cada sesión y se actualiza AL CIERRE.
 La meta: publicar la app de escritorio (Tauri + React) para que la comunidad —y en
 especial el equipo de DeepSeek— la use, la critique y la mejore en ahorro de tokens.
 
-Estado: Fase 0 cerrada (4/4). Fase 1 en curso — **S1, S2 y S3 CERRADAS** (S2a, S2b, S2c, S2c-bis, S2d y S3).
-La UI visible de los 3 paneles, sus flujos y sus modales ya nacen en inglés.
-**Próxima sesión: S4 — textos de libs puras** (`promptImagen.js`, `sequencer.js`, `planStore.statusLabel`,
-`subagent.statusLabel`, `r9Store`, tool results model-facing y `PERMISSION_RULE_HINT`); la lista
-completa de hallazgos está en S2d y S3.
+Estado: Fase 0 cerrada (4/4). **Fase 1 (idioma) CERRADA** — S1, S2 (S2a–S2d), S3 y S4.
+La UI visible de los 3 paneles, sus flujos, sus modales y las libs puras ya nacen en inglés.
+**Próxima sesión: S5 — higiene de secretos** (`.env.example`, borrar `VITE_SUPABASE_SERVICE_KEY`,
+documentar la regla `VITE_` en el README). Hallazgos que piden sesión propia (S4-bis candidata): los
+tool results model-facing en español de `cochiTools.js` y `asunTools.js`, el error de `llmClient.js`
+y el contenido del hub (`finanzas.js`, `financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`).
 
 ---
 
@@ -170,7 +171,26 @@ completa de hallazgos está en S2d y S3.
   repo, `supabase/functions/finance-proxy/` y `supabase/migrations/20260627_descontar_credito.sql`
   existen y NO están documentados en `AGENTS.md` (ni en el plan): inventario pendiente.
   Fuera de S3 (no son modales): `PromptImagenFlow`/`AsunImagenFlow` ya cerraron en S2d.
-- [ ] **S4. Textos de libs puras y mensajes de error.** Si cambia un assert de harness, se actualiza el harness en la misma sesión.
+- [x] **S4. Textos de libs puras y mensajes de error — CERRADA (9 archivos + 4 harness).** Cero lógica:
+  sólo cadenas. `promptImagen.js` (nombres de estilo, 33 etiquetas de opción, 7 pasos, preguntas y
+  `PROMPT_MODULES`), `sequencer.js` (grupos `Triads`/`Sevenths`/`Extensions` y etiquetas de acorde),
+  `planStore.js` (`statusLabel`, fallback de título, `planToText`/handoffs y texto de re-plan),
+  `subagent.js` (`statusLabel`/`label`, `SUBAGENT BRIEF` y los 6 errores del mini-loop),
+  `r9Store.js` (`R9 · Selection | Source:` / `[Label:]`), `cochiPermissions.js`
+  (`PERMISSION_RULE_HINT` y los 8 títulos de aprobación), `webRoutes.js` (pestañas del hub), y los
+  model-facing de `useCochiTaskLoop.js` (`ASK_CANCELLED`, bloqueo por deny, pregunta de `ask_user`,
+  aviso de `spawn_agent`, tool no disponible en subagente, `REPETITION_WARNING`) y `AsunPanel.jsx`
+  (`sujeto de prueba`, cancelación por el usuario y las 2 frases de imagen leída).
+  Si cambia un assert de harness, se actualiza el harness en la misma sesión: `promptImagen` (4),
+  `sequencer` (1), `cochiPlans` (16) y `cochiSubagent` (9).
+  **Hallazgos (fuera del tope de la sesión → sesión propia):** (a) `cochiTools.js` conserva ~30 tool
+  results model-facing en español (`⛔ Bloqueado: …`, `La ruta … no existe`, `El texto aparece N veces`,
+  `⚠️ Archivo demasiado grande`, `(vacío)`, …) y `asunTools.js` otros tantos (`Archivo demasiado
+  grande…`, `[Máx. 50 resultados…]`, `[Truncado a N líneas…]`); (b) `llmClient.js` lanza el error
+  visible `'Falta tu API key de OpenRouter…'`; (c) el contenido del hub sigue en español
+  (`finanzas.js`, `financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`) con su locale de fecha/número;
+  (d) `AsunImagenFlow.jsx` conserva un mapa con claves en español para los estilos que llegan de
+  Supabase (cae al `|| est.nombre`), ligado a S10.
 
 ### Fase 2 — Limpieza e identidad
 - [ ] **S5. Higiene de secretos.** Crear `.env.example` con placeholders; borrar `VITE_SUPABASE_SERVICE_KEY`
@@ -252,6 +272,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S2c-bis | Mensajes y confirms de Cochi a inglés: `CochiDesktop.jsx` (borrado + brief del handoff) y `useCochiTaskLoop.js` (API key, activity feed, corte por tokens, bucle por repetición, `Done.`/`No response from the model.`, Full Access, nota de artefactos, confirm de revert). Cero lógica. Model-facing a S4. Regla 1 del plan relajada a promedio de archivos (decisión del autor). | lint 0/0 · build OK · test 27/27 | `5d3016d` |
 | S2d | Cierre de S2: 18 archivos de footers y flujos a inglés (wizards de imagen y prompt, secuenciador completo, message lists, permission panel, subagentes, feed de actividad, diff viewer, tablero de plan, sidebar y descargas del hub). Cero lógica: sólo cadenas. Hallazgos a S4: `promptImagen.js` (con su assert de harness), `sequencer.js`, `planStore.statusLabel`, `subagent.statusLabel`, `r9Store` y los tool results model-facing. Fuera de S2: hub (`Home.jsx`, `webRoutes.js`, locale de fecha). **Fase 1 (idioma) del camino crítico: sólo falta S3 (modales) y S4 (libs).** | lint 0/0 · build OK · test 27/27 | `5cb2711` |
 | S3 | Modales a inglés (7 archivos, cero lógica): `PreferencesModal` (campos, errores, `Save`/`Cancel`), `ApiKeyModal` (primer arranque, aviso BYOK local, `Show`/`Hide`), `MemoriesModal` (`USER MEMORY`, hint, `+ Add`), `R9Drawer` (tabs `Sessions`/`Plans`/`R9 · Selections`, `SHARED MEMORY`, empties, confirm, `Load`, `View`), `SideDoors` (`SHORTCUTS`, `Data folder`, tooltips), `SessionModeToggle` (`CONTEXT`, `Cold session`/`Session Memories`) y `TokenWarningBanner` (70k + `Compact context`). Decisiones: `IDIOMAS` no se traduce (endónimos); `Base de datos`→`Data folder`. Hallazgos: `PERMISSION_RULE_HINT` (lib) a S4; default de datos `chat_language: 'Español'` NO tocado (es decisión del autor, altera idioma de respuesta y caché); locale `es-ES` de `R9Drawer` sigue a la sesión de locale; `finance-proxy` + migración `20260627_descontar_credito.sql` existen y no están documentados en `AGENTS.md`. | lint 0/0 · build OK · test 27/27 | `493da9e` |
+| S4 | Cierre de la Fase 1 (idioma): 9 archivos de libs puras y mensajes model-facing a inglés — wizard de imagen (`promptImagen`), acordes/grupos del secuenciador, tablero de planes + `statusLabel` + handoffs, subagente (`statusLabel`/label/errores), cabecera R9, `PERMISSION_RULE_HINT` + títulos de aprobación, pestañas del hub, errores de `useCochiTaskLoop` y las frases model-facing de `AsunPanel`. Cero lógica: sólo cadenas. 4 harness actualizados en la misma sesión (`promptImagen` 4 asserts, `sequencer` 1, `cochiPlans` 16, `cochiSubagent` 9). Hallazgo: los tool results model-facing de `cochiTools.js`/`asunTools.js`, el error de `llmClient.js` y el contenido del hub quedan para sesión propia. | lint 0/0 · build OK · test 27/27 | `PENDIENTE` |
 
 ---
 

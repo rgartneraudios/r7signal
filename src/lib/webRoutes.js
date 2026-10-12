@@ -8,11 +8,11 @@ export const NEON_RED = '#FF2D2D'
 
 export const WEB_TABS = [
   { key: 'r7signal',    label: 'R7Signal',    path: '/' },
-  { key: 'calculadora', label: 'Calculadora', path: '/calculadora' },
-  { key: 'finanzas',    label: 'Finanzas',    path: '/finanzas' },
-  { key: 'prompts',     label: 'Prompts IA',  path: '/prompts' },
-  { key: 'musica',      label: 'Música',      path: '/musica' },
-  { key: 'digitales',   label: 'Digitales',   path: '/digitales', placeholder: true },
+  { key: 'calculadora', label: 'Calculator',  path: '/calculadora' },
+  { key: 'finanzas',    label: 'Finance',     path: '/finanzas' },
+  { key: 'prompts',     label: 'AI Prompts',  path: '/prompts' },
+  { key: 'musica',      label: 'Music',       path: '/musica' },
+  { key: 'digitales',   label: 'Digital',     path: '/digitales', placeholder: true },
   { key: 'bro7vision',  label: 'Bro7Vision',  href: BRO7VISION_URL, external: true, neon: NEON_FUCHSIA },
   { key: 'accessia',    label: 'Hub & AI',    href: HUB_AI_URL,     external: true, neon: NEON_BLUE },
   { key: 'youtube',     label: 'YouTube',     href: YOUTUBE_URL,    external: true, neon: NEON_RED },

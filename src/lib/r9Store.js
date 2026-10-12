@@ -48,7 +48,7 @@ export async function writeR9File(folder, content, meta = {}, opts = {}) {
   const filePath = `${dir}/${fileName}`
   const when = new Date().toLocaleString('es-ES')
   const header = folder === 'r9'
-    ? `[R9 · Selección | Origen: ${meta.source || 'user'} | ${when}]${meta.label ? `\n[Etiqueta: ${meta.label}]` : ''}\n${SEP}\n`
+    ? `[R9 · Selection | Source: ${meta.source || 'user'} | ${when}]${meta.label ? `\n[Label: ${meta.label}]` : ''}\n${SEP}\n`
     : buildR7Header(when)
   await writeTextFile(filePath, header + content, { baseDir })
   return { fileName, filePath, index: n }

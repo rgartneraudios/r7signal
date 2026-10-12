@@ -25,7 +25,7 @@ function check(label, actual, expected) {
 console.log('— catálogos —')
 check('12 notas', NOTE_NAMES.length, 12)
 check('14 acordes', CHORD_TYPES.length, 14)
-check('3 grupos', CHORD_GROUPS, ['Triadas', 'Séptimas', 'Extensiones'])
+check('3 grupos', CHORD_GROUPS, ['Triads', 'Sevenths', 'Extensions'])
 check('4 percusiones', PERC_VOICES.length, 4)
 check('7 canales', CHANNEL_KEYS, ['pad', 'melody', 'bass', 'splash', 'hat', 'snare', 'kick'])
 check('labels de canal', CHANNELS.map(c => c.label), ['PAD', 'MELODY', 'BASS', 'SPLASH', 'HI-HAT', 'SNARE', 'KICK'])

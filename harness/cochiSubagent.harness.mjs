@@ -96,8 +96,8 @@ check('quita preámbulo de narración', normalizeBrief('Let me read the file.\nB
 check('quita control signals + narración', normalizeBrief('Now I will answer. [STEP_COMPLETE: ok]\nLíneas: 114'), 'Líneas: 114')
 
 console.log('— formatBriefResult —')
-check('ok con label', formatBriefResult({ ok: true, brief: 'B', label: 'L' }), 'BRIEF DEL SUBAGENTE (L):\nB')
-check('ok sin label', formatBriefResult({ ok: true, brief: 'B' }), 'BRIEF DEL SUBAGENTE:\nB')
+check('ok con label', formatBriefResult({ ok: true, brief: 'B', label: 'L' }), 'SUBAGENT BRIEF (L):\nB')
+check('ok sin label', formatBriefResult({ ok: true, brief: 'B' }), 'SUBAGENT BRIEF:\nB')
 checkTrue('error controlado', formatBriefResult({ ok: false, error: 'boom' }).includes('boom'))
 
 console.log('— runSubagent (callModel inyectado) —')
@@ -127,7 +127,7 @@ check('onUsage reenviado', usageSeen, { prompt_tokens: 100, completion_tokens: 2
 const emptyCall = async () => ({ content: '   ', usage: null, model: 'x' })
 const empty = await runSubagent({ provider: fakeProvider, task: 't', callModel: emptyCall })
 check('brief vacío → ok false', empty.ok, false)
-checkTrue('error de brief vacío', empty.error.includes('texto'))
+checkTrue('error de brief vacío', empty.error.includes('text'))
 
 const throwCall = async () => { const e = new Error('API 500'); throw e }
 const threw = await runSubagent({ provider: fakeProvider, task: 't', callModel: throwCall })
@@ -136,7 +136,7 @@ check('mensaje de error propagado', threw.error, 'API 500')
 
 const abortCall = async () => { const e = new Error('x'); e.name = 'AbortError'; throw e }
 const aborted = await runSubagent({ provider: fakeProvider, task: 't', callModel: abortCall })
-check('abort → cancelado', aborted.error, 'cancelado')
+check('abort → cancelado', aborted.error, 'cancelled')
 
 check('task vacía → ok false', (await runSubagent({ provider: fakeProvider, task: '' })).ok, false)
 check('sin provider → ok false', (await runSubagent({ task: 't' })).ok, false)
@@ -245,7 +245,7 @@ const runaway = await runSubagent({
   },
 })
 check('runaway → ok false', runaway.ok, false)
-checkTrue('runaway avisa turnos internos', runaway.error.includes('turnos internos'))
+checkTrue('runaway avisa turnos internos', runaway.error.includes('internal turns'))
 check('runaway respeta maxIterations', runaway.iterations, 3)
 
 const resilient = await runSubagent({
@@ -271,11 +271,11 @@ check('detalle: robusto sin args', subagentActivityDetail(), '')
 
 const vRunning = describeSubagent({ label: 'L', task: 'tarea', status: 'running', tools: [{ name: 'read_file' }] })
 check('vista running: running true', vRunning.running, true)
-check('vista running: etiqueta', vRunning.statusLabel, 'trabajando…')
+check('vista running: etiqueta', vRunning.statusLabel, 'working…')
 check('vista running: label', vRunning.label, 'L')
 check('vista running: toolCount', vRunning.toolCount, 1)
 check('vista running: sin brief', vRunning.brief, '')
-check('vista error: falló', describeSubagent({ status: 'error', error: 'boom' }).statusLabel, 'falló')
+check('vista error: falló', describeSubagent({ status: 'error', error: 'boom' }).statusLabel, 'failed')
 check('vista error: failed', describeSubagent({ status: 'error' }).failed, true)
 check('vista error: expone error', describeSubagent({ status: 'error', error: 'boom' }).error, 'boom')
 const vOk = describeSubagent({ status: 'ok', brief: 'B', usageTotal: { total_tokens: 120, calls: 2 } })
@@ -283,9 +283,9 @@ check('vista ok: ok true', vOk.ok, true)
 check('vista ok: brief', vOk.brief, 'B')
 check('vista ok: tokens', vOk.totalTokens, 120)
 check('vista ok: llamadas', vOk.calls, 2)
-check('vista ok: label por defecto', vOk.label, 'Subagente')
+check('vista ok: label por defecto', vOk.label, 'Subagent')
 check('vista sin estado → running', describeSubagent({}).running, true)
-check('vista robusta sin args', describeSubagent().statusLabel, 'trabajando…')
+check('vista robusta sin args', describeSubagent().statusLabel, 'working…')
 check('vista tools no-array', describeSubagent({ tools: null }).toolCount, 0)
 
 console.log('— Fase 3.3d · límites: presupuesto + truncado de tool results —')
@@ -332,7 +332,7 @@ const budgeted = await runSubagent({
   },
 })
 check('presupuesto agotado → ok false', budgeted.ok, false)
-checkTrue('aviso de presupuesto', budgeted.error.includes('presupuesto'))
+checkTrue('aviso de presupuesto', budgeted.error.includes('budget'))
 check('corta al superar el tope (2 llamadas)', budgeted.iterations, 2)
 
 const partial = await runSubagent({

@@ -34,7 +34,7 @@ const EDIT_TOOLS = new Set(['write_file', 'replace_in_file', 'append_to_file'])
 const DESTRUCTIVE_TOOLS = new Set(['run_command', 'delete_file', 'delete_dir'])
 
 export const PERMISSION_RULE_HINT =
-  'Una regla por línea con formato tool:patrón (glob). Ej: run_command:npm * · delete_file:**/*.lock'
+  'One rule per line with tool:pattern format (glob). E.g. run_command:npm * · delete_file:**/*.lock'
 
 function normSlash(value) {
   return String(value ?? '').replace(/\\/g, '/').trim()
@@ -217,21 +217,21 @@ export function makeSignature(request) {
 function describe(name, args = {}) {
   switch (name) {
     case 'run_command':
-      return { title: 'EJECUTAR COMANDO', detail: `${args.command || ''}${args.cwd ? `\n(cwd: ${args.cwd})` : ''}` }
+      return { title: 'RUN COMMAND', detail: `${args.command || ''}${args.cwd ? `\n(cwd: ${args.cwd})` : ''}` }
     case 'delete_file':
-      return { title: 'BORRAR ARCHIVO/CARPETA', detail: String(args.path || '') }
+      return { title: 'DELETE FILE/FOLDER', detail: String(args.path || '') }
     case 'delete_dir':
-      return { title: 'BORRAR CARPETA', detail: String(args.path || '') }
+      return { title: 'DELETE FOLDER', detail: String(args.path || '') }
     case 'move_file':
-      return { title: 'MOVER / RENOMBRAR', detail: `${args.fromPath || ''}\n→ ${args.toPath || ''}` }
+      return { title: 'MOVE / RENAME', detail: `${args.fromPath || ''}\n→ ${args.toPath || ''}` }
     case 'copy_file':
-      return { title: 'COPIAR', detail: `${args.fromPath || ''}\n→ ${args.toPath || ''}` }
+      return { title: 'COPY', detail: `${args.fromPath || ''}\n→ ${args.toPath || ''}` }
     case 'write_file':
-      return { title: 'ESCRIBIR / SOBREESCRIBIR', detail: String(args.path || '') }
+      return { title: 'WRITE / OVERWRITE', detail: String(args.path || '') }
     case 'replace_in_file':
-      return { title: 'EDITAR ARCHIVO', detail: String(args.path || '') }
+      return { title: 'EDIT FILE', detail: String(args.path || '') }
     case 'append_to_file':
-      return { title: 'AÑADIR A ARCHIVO', detail: String(args.path || '') }
+      return { title: 'APPEND TO FILE', detail: String(args.path || '') }
     default:
       return { title: String(name || '').toUpperCase(), detail: String(args.path || args.fromPath || '') }
   }

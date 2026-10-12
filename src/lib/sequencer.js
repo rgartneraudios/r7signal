@@ -1,23 +1,23 @@
 export const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
 export const CHORD_TYPES = [
-  { group: 'Triadas', key: 'maj', label: 'Mayor', intervals: [0, 4, 7], suffix: '' },
-  { group: 'Triadas', key: 'min', label: 'Menor', intervals: [0, 3, 7], suffix: 'm' },
-  { group: 'Triadas', key: 'dim', label: 'Disminuido', intervals: [0, 3, 6], suffix: 'dim' },
-  { group: 'Triadas', key: 'aug', label: 'Aumentado', intervals: [0, 4, 8], suffix: 'aug' },
-  { group: 'Séptimas', key: 'maj7', label: 'Maj7', intervals: [0, 4, 7, 11], suffix: 'maj7' },
-  { group: 'Séptimas', key: 'm7', label: 'm7', intervals: [0, 3, 7, 10], suffix: 'm7' },
-  { group: 'Séptimas', key: '7', label: '7 (dominante)', intervals: [0, 4, 7, 10], suffix: '7' },
-  { group: 'Séptimas', key: 'm7b5', label: 'm7b5', intervals: [0, 3, 6, 10], suffix: 'm7b5' },
-  { group: 'Séptimas', key: 'dim7', label: 'dim7', intervals: [0, 3, 6, 9], suffix: 'dim7' },
-  { group: 'Extensiones', key: 'maj9', label: 'Maj9', intervals: [0, 4, 7, 11, 14], suffix: 'maj9' },
-  { group: 'Extensiones', key: 'm9', label: 'm9', intervals: [0, 3, 7, 10, 14], suffix: 'm9' },
-  { group: 'Extensiones', key: '9', label: '9', intervals: [0, 4, 7, 10, 14], suffix: '9' },
-  { group: 'Extensiones', key: '11', label: '11', intervals: [0, 4, 7, 10, 14, 17], suffix: '11' },
-  { group: 'Extensiones', key: '13', label: '13', intervals: [0, 4, 7, 10, 14, 17, 21], suffix: '13' },
+  { group: 'Triads', key: 'maj', label: 'Major', intervals: [0, 4, 7], suffix: '' },
+  { group: 'Triads', key: 'min', label: 'Minor', intervals: [0, 3, 7], suffix: 'm' },
+  { group: 'Triads', key: 'dim', label: 'Diminished', intervals: [0, 3, 6], suffix: 'dim' },
+  { group: 'Triads', key: 'aug', label: 'Augmented', intervals: [0, 4, 8], suffix: 'aug' },
+  { group: 'Sevenths', key: 'maj7', label: 'Maj7', intervals: [0, 4, 7, 11], suffix: 'maj7' },
+  { group: 'Sevenths', key: 'm7', label: 'm7', intervals: [0, 3, 7, 10], suffix: 'm7' },
+  { group: 'Sevenths', key: '7', label: '7 (dominant)', intervals: [0, 4, 7, 10], suffix: '7' },
+  { group: 'Sevenths', key: 'm7b5', label: 'm7b5', intervals: [0, 3, 6, 10], suffix: 'm7b5' },
+  { group: 'Sevenths', key: 'dim7', label: 'dim7', intervals: [0, 3, 6, 9], suffix: 'dim7' },
+  { group: 'Extensions', key: 'maj9', label: 'Maj9', intervals: [0, 4, 7, 11, 14], suffix: 'maj9' },
+  { group: 'Extensions', key: 'm9', label: 'm9', intervals: [0, 3, 7, 10, 14], suffix: 'm9' },
+  { group: 'Extensions', key: '9', label: '9', intervals: [0, 4, 7, 10, 14], suffix: '9' },
+  { group: 'Extensions', key: '11', label: '11', intervals: [0, 4, 7, 10, 14, 17], suffix: '11' },
+  { group: 'Extensions', key: '13', label: '13', intervals: [0, 4, 7, 10, 14, 17, 21], suffix: '13' },
 ]
 
-export const CHORD_GROUPS = ['Triadas', 'Séptimas', 'Extensiones']
+export const CHORD_GROUPS = ['Triads', 'Sevenths', 'Extensions']
 
 export const PERC_VOICES = [
   { key: 'splash', label: 'Splash', midi: 55 },
