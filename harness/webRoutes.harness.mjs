@@ -1,6 +1,6 @@
 // Harness del router mínimo de la web: normalizePath + routeForKey (puros).
 // Ejecutar:  node harness/webRoutes.harness.mjs
-import { normalizePath, routeForKey, WEB_ROUTES, WEB_TABS, ACCESS_IA_URL } from '../src/lib/webRoutes.js'
+import { normalizePath, routeForKey, WEB_ROUTES, WEB_TABS, HUB_AI_URL } from '../src/lib/webRoutes.js'
 
 let pass = 0
 let fail = 0
@@ -44,7 +44,7 @@ check('prompts es interna', WEB_TABS.find(t => t.key === 'prompts').path, '/prom
 check('prompts sin external', Boolean(WEB_TABS.find(t => t.key === 'prompts').external), false)
 check('bro7vision es externa', WEB_TABS.find(t => t.key === 'bro7vision').external, true)
 check('accessia es externa', WEB_TABS.find(t => t.key === 'accessia').external, true)
-check('accessia apunta a EasySocialMandai', WEB_TABS.find(t => t.key === 'accessia').href, ACCESS_IA_URL)
+check('accessia apunta a Hub & AI', WEB_TABS.find(t => t.key === 'accessia').href, HUB_AI_URL)
 check('accessia sin path interno', Boolean(WEB_TABS.find(t => t.key === 'accessia').path), false)
 
 console.log(`\n[webRoutes] ${pass}/${pass + fail} checks en verde`)
