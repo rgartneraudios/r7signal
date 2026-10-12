@@ -28,16 +28,16 @@ export default function AsunHeader({
             className={`asun-header-btn${category === cat ? ' active' : ''}`}
             onClick={() => onCategoryChange(cat)}
           >
-            {cat === 'llm' ? 'LLM' : cat === 'imagen' ? 'IMAGEN' : 'MÚSICA'}
+            {cat === 'llm' ? 'LLM' : cat === 'imagen' ? 'IMAGE' : 'MUSIC'}
           </button>
         ))}
         {category === 'llm' && isIrmaMax && (
           <button
             className={`asun-header-btn${projectMode ? ' active' : ''}`}
             onClick={onToggleProject}
-            title="Arquitecto Senior — entrevista y arma el plan segmentado"
+            title="Senior Architect — interviews you and builds the segmented plan"
           >
-            PROYECTO
+            PROJECT
           </button>
         )}
         <div style={{ flex: 1 }} />
@@ -51,7 +51,7 @@ export default function AsunHeader({
                       className={`asun-header-btn${selectedLLMModel === m.id ? ' active' : ''}`}
                       onClick={() => onSelectLLMModel(m.id)}
                       disabled={locked}
-                      title={locked ? 'Modelo congelado en esta sesión — usá CLS para cambiarlo' : undefined}
+                      title={locked ? 'Model frozen for this session — use CLS to change it' : undefined}
                       style={selectedLLMModel === m.id
                         ? { color: m.id === '~deepseek/deepseek-flash-latest' ? '#FA7A9A' : '#DF9CFF' }
                         : (locked ? { opacity: 0.4, cursor: 'not-allowed' } : undefined)}
@@ -65,7 +65,7 @@ export default function AsunHeader({
                     className={`asun-header-btn${submenu === s ? ' active' : ''}`}
                     onClick={() => onSubmenuChange(s)}
                   >
-                    {s === 'occidente' ? 'OCCIDENTE' : 'ASIA'}
+                    {s === 'occidente' ? 'WEST' : 'ASIA'}
                   </button>
                 ))
             }

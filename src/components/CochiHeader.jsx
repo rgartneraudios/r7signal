@@ -33,7 +33,7 @@ export default function CochiHeader({
               key={m.id}
               onClick={() => onSelectModel(m.id)}
               disabled={locked}
-              title={locked ? 'Modelo congelado en esta sesión — usá CLS para cambiarlo' : undefined}
+              title={locked ? 'Model frozen for this session — use CLS to change it' : undefined}
               style={{
                 padding: '3px 10px', borderRadius: 4, cursor: locked ? 'not-allowed' : 'pointer',
                 fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
@@ -63,7 +63,7 @@ export default function CochiHeader({
         <button
           onClick={() => onSelectModel('ollama')}
           disabled={modelLocked && selectedModel !== 'ollama'}
-          title={modelLocked && selectedModel !== 'ollama' ? 'Modelo congelado en esta sesión — usá CLS para cambiarlo' : undefined}
+          title={modelLocked && selectedModel !== 'ollama' ? 'Model frozen for this session — use CLS to change it' : undefined}
           style={{
             padding: '3px 10px', borderRadius: 4, cursor: (modelLocked && selectedModel !== 'ollama') ? 'not-allowed' : 'pointer',
             fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
@@ -80,7 +80,7 @@ export default function CochiHeader({
         <button
           onClick={() => onSelectModel('lmstudio')}
           disabled={modelLocked && selectedModel !== 'lmstudio'}
-          title={modelLocked && selectedModel !== 'lmstudio' ? 'Modelo congelado en esta sesión — usá CLS para cambiarlo' : undefined}
+          title={modelLocked && selectedModel !== 'lmstudio' ? 'Model frozen for this session — use CLS to change it' : undefined}
           style={{
             padding: '3px 10px', borderRadius: 4, cursor: (modelLocked && selectedModel !== 'lmstudio') ? 'not-allowed' : 'pointer',
             fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
@@ -100,7 +100,7 @@ export default function CochiHeader({
           <input
             value={ollamaModel}
             onChange={e => onOllamaModelChange(e.target.value)}
-            placeholder="modelo"
+            placeholder="model"
             disabled={modelLocked}
             style={{
               background: 'transparent', border: 'none', borderBottom: '1px solid #424045',
@@ -113,7 +113,7 @@ export default function CochiHeader({
           <input
             value={lmStudioModel}
             onChange={e => onLmStudioModelChange(e.target.value)}
-            placeholder="modelo"
+            placeholder="model"
             disabled={modelLocked}
             style={{
               background: 'transparent', border: 'none', borderBottom: '1px solid #424045',
@@ -137,7 +137,7 @@ export default function CochiHeader({
           value={subagentModel}
           onChange={e => onSubagentModelChange(e.target.value)}
           disabled={selectedModel === 'ollama' || selectedModel === 'lmstudio'}
-          title="Modelo del subagente (spawn_agent)"
+          title="Subagent model (spawn_agent)"
           style={{
             background: '#1a1a20', borderRadius: 4, cursor: 'pointer',
             fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
