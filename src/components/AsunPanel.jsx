@@ -150,7 +150,7 @@ function AsunPanel({
     if (loading || generating) return
     const userText = lastUserText(messagesRef.current)
     if (!userText) return
-    if (lastTurnMutatedRef.current && !window.confirm('Este turno tocó archivos o generó música. Regenerar puede repetir esa acción. ¿Continuar?')) return
+    if (lastTurnMutatedRef.current && !window.confirm('This turn touched files or generated music. Regenerating may repeat that action. Continue?')) return
     applyUndo()
     await sendMessage(userText)
   })
@@ -158,7 +158,7 @@ function AsunPanel({
   // K2: CLS/archivado (la rueda se promueve a global; la sesión nueva hereda el
   // nombre definido al archivar). No bloquea tareas en curso.
   async function handleClear() {
-    if (!window.confirm('¿Borrar toda la conversación?')) return
+    if (!window.confirm('Delete the whole conversation?')) return
     await session.clearSession()
   }
   const handleArchiveWithName = () => session.archiveWithName()
@@ -195,8 +195,8 @@ function AsunPanel({
 
     if (!remotePrompts) {
       const errMsg = promptsError
-        ? '⛔ Sin conexión a R7Signal. Verifica tu red e intenta de nuevo.'
-        : '⏳ Configuración aún cargando. Espera un momento.'
+        ? '⛔ No connection to R7Signal. Check your network and try again.'
+        : '⏳ Configuration still loading. Wait a moment.'
       setMessages(prev => [...prev, {
         rol: 'asistente', contenido: errMsg, id: newMessageId('asun'), streaming: false
       }])
@@ -205,7 +205,7 @@ function AsunPanel({
 
     if (projectMode && !remotePrompts.project) {
       setMessages(prev => [...prev, {
-        rol: 'asistente', contenido: '⏳ Modo Proyecto aún no configurado en el servidor.', id: newMessageId('asun'), streaming: false
+        rol: 'asistente', contenido: '⏳ Project mode is not configured on the server yet.', id: newMessageId('asun'), streaming: false
       }])
       return
     }
@@ -215,7 +215,7 @@ function AsunPanel({
     if (category !== 'imagen' && !getOpenRouterKey()) {
       setMessages(prev => [...prev, {
         rol: 'asistente',
-        contenido: '🔑 Todavía no cargaste tu API key de OpenRouter. Usá el botón de la llave en la barra superior y pegala para poder conversar.',
+        contenido: '🔑 You have not loaded your OpenRouter API key yet. Use the key button in the top bar and paste it to chat.',
         id: newMessageId('asun'), streaming: false
       }])
       return
@@ -370,16 +370,16 @@ function AsunPanel({
           // ── Guardrail: operaciones destructivas requieren confirmación ────
           let blocked = false
           if (toolName === 'delete_file') {
-            blocked = !window.confirm(`Asun quiere ELIMINAR:\n${toolArgs.path}\n\n¿Confirmás?`)
+            blocked = !window.confirm(`Asun wants to DELETE:\n${toolArgs.path}\n\nConfirm?`)
           } else if (toolName === 'write_text_file' && await pathExists(workspace, toolArgs.path)) {
-            blocked = !window.confirm(`Asun quiere SOBREESCRIBIR:\n${toolArgs.path}\n\n¿Confirmás?`)
+            blocked = !window.confirm(`Asun wants to OVERWRITE:\n${toolArgs.path}\n\nConfirm?`)
           } else if (toolName === 'move_file' && await pathExists(workspace, toolArgs.to)) {
-            blocked = !window.confirm(`Asun quiere MOVER Y SOBREESCRIBIR:\n${toolArgs.from} → ${toolArgs.to}\n\n¿Confirmás?`)
+            blocked = !window.confirm(`Asun wants to MOVE AND OVERWRITE:\n${toolArgs.from} → ${toolArgs.to}\n\nConfirm?`)
           }
           if (blocked) {
             setMessages(prev => prev.map(m =>
               m.id === placeholderId
-                ? { ...m, contenido: `✕ ${toolName} cancelado por el usuario` }
+                ? { ...m, contenido: `✕ ${toolName} cancelled by the user` }
                 : m
             ))
             apiMessages.push({ role: 'tool', tool_call_id: tc.id, content: 'Cancelado por el usuario' })
@@ -472,7 +472,7 @@ function AsunPanel({
     const selected = await open({
       multiple: false,
       filters: [{
-        name: 'Archivos',
+        name: 'Files',
         extensions: ['txt', 'md', 'png', 'jpg', 'jpeg', 'webp']
       }]
     })
@@ -498,7 +498,7 @@ function AsunPanel({
     if (!promptMusica || generating) return
     lastTurnMutatedRef.current = true // Bloque K3
     setGenerating(true)
-    setMessages(prev => [...prev, { rol: 'usuario', contenido: '🎵 Generar canción', id: newMessageId('asun') }])
+    setMessages(prev => [...prev, { rol: 'usuario', contenido: '🎵 Generate song', id: newMessageId('asun') }])
     try {
       const { data: authData } = await supabase.auth.getUser()
       const res = await fetch(`${SUPABASE_URL}/functions/v1/generar-musica`, {
@@ -511,7 +511,7 @@ function AsunPanel({
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error al generar música')
+      if (!res.ok) throw new Error(data.error || 'Error generating music')
 
       let finalUrl = data.audio_url
       if (!finalUrl && data.audio_base64) {
@@ -524,7 +524,7 @@ function AsunPanel({
       if (finalUrl) {
         setMessages(prev => [...prev, {
           rol: 'asistente', id: newMessageId('asun'),
-          contenido: 'Aquí tienes tu canción:',
+          contenido: 'Here is your song:',
           audioUrl: finalUrl,
         }])
         const songCost = calculateCost('google/lyria-3-pro-preview', 0, 0, 'song')
@@ -700,7 +700,7 @@ function AsunPanel({
                 <div className="asun-msg-bubble asistente" style={{ padding: '14px 18px' }}>
                   <div className="asun-spinner" style={{ verticalAlign: 'middle', marginRight: 8 }} />
                   <span style={{ color: '#4A4850', fontSize: '0.85rem' }}>
-                    {generating ? 'Generando música con Lyria...' : 'Asun escribiendo...'}
+                    {generating ? 'Generating music with Lyria...' : 'Asun writing...'}
                   </span>
                 </div>
               </div>

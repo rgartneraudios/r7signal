@@ -4,10 +4,10 @@ Documento vivo. Se lee AL INICIO de cada sesión y se actualiza AL CIERRE.
 La meta: publicar la app de escritorio (Tauri + React) para que la comunidad —y en
 especial el equipo de DeepSeek— la use, la critique y la mejore en ahorro de tokens.
 
-Estado: Fase 0 cerrada (4/4). Fase 1 en curso — S1, S2a y S2b cerradas; S2 quedó DIVIDIDA
+Estado: Fase 0 cerrada (4/4). Fase 1 en curso — S1, S2a, S2b y S2c cerradas; S2 quedó DIVIDIDA
 (su alcance real era ~14 archivos y la regla 1 topa en 3).
-**Próxima sesión: S2c — topbar + botones y mensajes de panel**
-(`R7TopBar.jsx`/`AppHeader.jsx` + `CochiDesktop.jsx`, `TitoPanel.jsx`, `AsunPanel.jsx`).
+**Próxima sesión: S2c-bis — mensajes y confirms de Cochi**
+(`CochiDesktop.jsx` + `src/hooks/useCochiTaskLoop.js`: la mitad de S2c que no entró en el tope).
 
 ---
 
@@ -97,9 +97,23 @@ Estado: Fase 0 cerrada (4/4). Fase 1 en curso — S1, S2a y S2b cerradas; S2 que
     watermarks en inglés. Hallazgo (fuera del tope de 3 archivos): `subagent.js`
     (`statusLabel` 'trabajando…') queda para S4 y `CochiActivityFeed.jsx`
     ('🔄 Cochi trabajando…') ya está listado en S2d.
-  - [ ] **S2c. Topbar + botones y mensajes de panel.** `R7TopBar.jsx`/`AppHeader.jsx` +
-    `CochiDesktop.jsx`, `TitoPanel.jsx`, `AsunPanel.jsx` (estados de error, avisos de API key
-    faltante, `window.confirm` de borrado y de operaciones destructivas).
+  - [x] **S2c. Topbar + mensajes de panel (Tito/Asun).** `R7TopBar.jsx` (título del diálogo de
+    carpeta, `Read`/`R + Write`/`Write`/`No permissions`/`No workspace`, menú `FOLDER`/`PERMISSIONS`,
+    `Select folder`, tooltips de la llave y `Preferences`), `TitoPanel.jsx` y `AsunPanel.jsx`
+    (confirmaciones de borrado y de regenerate, error de prompts, aviso de API key faltante,
+    modo Proyecto sin configurar, guardrail destructivo de Asun, filtro `Files` del adjunto,
+    `Generate song`, `Here is your song`, `Generating music with Lyria...`, `Asun writing...`).
+    Cero lógica: sólo cadenas. Hallazgo: S2c traía 4-5 archivos y la regla 1 topa en 3 →
+    **CORTADA**; la mitad de Cochi pasa a S2c-bis. Hallazgos menores: (a) las cadenas
+    model-facing de `AsunPanel` (`'Cancelado por el usuario'`, `'Imagen leída...'`,
+    `'Esta es la imagen solicitada...'`, placeholder `'sujeto de prueba'`) NO se tocan acá:
+    van a S4; (b) el formato de número sigue en `toLocaleString('es')` en `R7TopBar.jsx`,
+    `CochiStatusBar.jsx` y `R9Drawer.jsx`: se alinea en una sesión propia (una decisión, 3 archivos);
+    (c) `AppHeader.jsx` NO se tocó: no tiene texto propio en español — las etiquetas de pestaña viven
+    en `src/lib/webRoutes.js` (S4), la fecha usa locale `es-ES` y `WEATHER.city` sale de `constants` (S6).
+  - [ ] **S2c-bis. Mensajes y confirms de Cochi.** `CochiDesktop.jsx` (`¿Borrar toda la
+    conversación?`, brief del handoff de Asun) + `src/hooks/useCochiTaskLoop.js` (aviso de API key,
+    nota de artefactos ignorados, confirm de revertir archivos del turno, error de revert).
   - [ ] **S2d. Footers y flujos de UI.** `R7FooterInputs.jsx`, `AsunMusicFooter.jsx`,
     `PromptImagenFlow.jsx`, `AsunImagenFlow.jsx`, `SidebarPanel.jsx`, `Descargas.jsx`,
     los `Sequencer*`, `CochiPermissionPanel.jsx`, `CochiMessageList.jsx`/`TitoMessageList.jsx`/
@@ -186,6 +200,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S1 | Watermarks de Cochi/TITO/Asun a inglés, incluida la rama música de Asun (texto visible de estado vacío). Cero lógica, sólo texto: no se tocó ningún handler ni estilo. | lint 0/0 · build OK · test 27/27 | `621be08` |
 | S2a | Headers de los 3 paneles a inglés: tooltip de modelo congelado (Cochi/Asun), placeholders `modelo`→`model`, tooltip del subagente, botones de categoría de Asun (IMAGE/MUSIC), submenú OCCIDENTE→WEST, PROYECTO→PROJECT. `TitoHeader.jsx` no tenía texto visible: no se tocó. Cero lógica. Hallazgo: S2 excedía el tope de 3 archivos (~14) → dividida en S2a–S2d. | lint 0/0 · build OK · test 27/27 | `aa8d6b8` |
 | S2b | Status bars de los 3 paneles a inglés: `Archive R7`, `CANCEL`, `(working...)`, tooltip de archivado, tooltip de coste estimado, chip `cached`, contador de búsquedas web (`search`/`searches`) con tooltip y tooltip `Attach file`. Cero lógica. CLS se mantiene como acrónimo (ya presente en los watermarks en inglés). Hallazgo: `subagent.js` ('trabajando…') va a S4 y `CochiActivityFeed.jsx` ya estaba en S2d. | lint 0/0 · build OK · test 27/27 | `dee2c66` |
+| S2c | Topbar (`R7TopBar.jsx`) + mensajes y confirms de `TitoPanel.jsx`/`AsunPanel.jsx` a inglés. Cero lógica. Hallazgo: el alcance eran 4-5 archivos y la regla 1 topa en 3 → cortada; la mitad de Cochi (`CochiDesktop.jsx` + `useCochiTaskLoop.js`) pasa a **S2c-bis**, las cadenas model-facing de `AsunPanel` a **S4** y el locale numérico `es` (`R7TopBar`/`CochiStatusBar`/`R9Drawer`) a sesión propia. `AppHeader.jsx` sin cambios: su texto viene de `webRoutes.js`/`constants`. | lint 0/0 · build OK · test 27/27 | cierre S2c |
 
 ---
 

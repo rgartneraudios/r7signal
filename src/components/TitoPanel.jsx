@@ -114,7 +114,7 @@ function TitoPanel({
   // K2: CLS/archivado con nombre (la rueda se promueve a global y la sesión nueva
   // hereda el nombre definido). El archivado no bloquea tareas en curso.
   async function handleClear() {
-    if (!window.confirm('¿Borrar toda la conversación?')) return
+    if (!window.confirm('Delete the whole conversation?')) return
     await session.clearSession()
   }
   const handleArchiveWithName = () => session.archiveWithName()
@@ -140,8 +140,8 @@ function TitoPanel({
     if (streaming) return;
     if (!remotePrompts) {
       const msg = promptsError
-        ? '⛔ Sin conexión a R7Signal. Verifica tu red e intenta de nuevo.'
-        : '⏳ Configuración aún cargando. Espera un momento.'
+        ? '⛔ No connection to R7Signal. Check your network and try again.'
+        : '⏳ Configuration still loading. Wait a moment.'
       setMessages(prev => [...prev, { id: newMessageId('tito'), role: 'assistant', content: msg }])
       return
     }
@@ -151,7 +151,7 @@ function TitoPanel({
       setMessages(prev => [...prev, {
         id: newMessageId('tito'),
         role: 'assistant',
-        content: '🔑 Todavía no cargaste tu API key de OpenRouter. Usá el botón de la llave en la barra superior y pegala para poder buscar.'
+        content: '🔑 You have not loaded your OpenRouter API key yet. Use the key button in the top bar and paste it to search.'
       }])
       return
     }

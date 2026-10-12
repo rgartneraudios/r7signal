@@ -33,9 +33,9 @@ const R7TopBar = memo(function R7TopBar({
 
   async function handleWorkspacePick() {
     try {
-      const selected = await openDialog({ directory: true, multiple: false, title: 'Seleccionar carpeta de trabajo' })
+      const selected = await openDialog({ directory: true, multiple: false, title: 'Select working folder' })
       if (selected) onWorkspaceChange?.({ ...workspace, path: selected })
-    } catch (err) { console.error('Error al seleccionar carpeta:', err) }
+    } catch (err) { console.error('Error selecting folder:', err) }
     setShowWorkspaceMenu(false)
   }
 
@@ -50,11 +50,11 @@ const R7TopBar = memo(function R7TopBar({
     : perm === 'readwrite' || perm === 'write' ? '✏️'
     : perm === 'full' ? '⚡'
     : '○'
-  const permissionLabel = perm === 'read' ? 'Lectura'
-    : perm === 'readwrite' ? 'L + Escritura'
-    : perm === 'write' ? 'Escritura'
+  const permissionLabel = perm === 'read' ? 'Read'
+    : perm === 'readwrite' ? 'R + Write'
+    : perm === 'write' ? 'Write'
     : perm === 'full' ? 'Full Access'
-    : 'Sin permisos'
+    : 'No permissions'
 
   return (
     <div style={{
@@ -153,7 +153,7 @@ const R7TopBar = memo(function R7TopBar({
         >
           <span>📁</span>
           <span style={{ maxWidth:'180px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-            {workspace?.path ? workspace.path.split(/[\\/]/).pop() : 'Sin workspace'}
+            {workspace?.path ? workspace.path.split(/[\\/]/).pop() : 'No workspace'}
           </span>
           <span style={{ marginLeft:'6px', color: permissionColor }}>
             {permissionIcon} {permissionLabel}
@@ -167,20 +167,20 @@ const R7TopBar = memo(function R7TopBar({
             padding:'14px 16px', boxShadow:'0 12px 40px rgba(0,0,0,0.9)',
             zIndex:200, display:'flex', flexDirection:'column', gap:10,
           }}>
-            <div style={{ fontSize:'0.6rem', color:'#8A868B', letterSpacing:'0.2em', fontWeight:700, textTransform:'uppercase' }}>CARPETA</div>
+            <div style={{ fontSize:'0.6rem', color:'#8A868B', letterSpacing:'0.2em', fontWeight:700, textTransform:'uppercase' }}>FOLDER</div>
             <button onClick={handleWorkspacePick} style={{
               background:'transparent', border:'1px solid #2F2D35', borderRadius:6,
               padding:'6px 10px', color:'#ccc', cursor:'pointer',
               fontFamily:'JetBrains Mono, monospace', fontSize:'11px', textAlign:'left',
             }}>
-              📁 {workspace?.path ? workspace.path.split(/[\\/]/).pop() : 'Seleccionar carpeta'}
+              📁 {workspace?.path ? workspace.path.split(/[\\/]/).pop() : 'Select folder'}
             </button>
             <div style={{ height:1, background:'#201F23' }} />
-            <div style={{ fontSize:'0.6rem', color:'#8A868B', letterSpacing:'0.2em', fontWeight:700, textTransform:'uppercase' }}>PERMISOS</div>
+            <div style={{ fontSize:'0.6rem', color:'#8A868B', letterSpacing:'0.2em', fontWeight:700, textTransform:'uppercase' }}>PERMISSIONS</div>
             <div style={{ display:'flex', gap:12 }}>
               {[
-                { value:'read', label:'Lectura' },
-                { value:'write', label:'Escritura' },
+                { value:'read', label:'Read' },
+                { value:'write', label:'Write' },
                 { value:'full', label:'Full Access' },
               ].map(p => (
                 <label key={p.value} style={{ display:'flex', alignItems:'center', gap:5, cursor:'pointer', fontSize:'0.65rem', color: workspace.permission === p.value ? '#D4D8DC' : '#5A585C', fontWeight:600 }}>
@@ -232,7 +232,7 @@ const R7TopBar = memo(function R7TopBar({
           padding: '0 8px',
           transition: 'color 0.2s',
         }}
-        title={apiKeyConfigured ? 'API key configurada — click para cambiarla' : 'Falta tu API key de OpenRouter — click para cargarla'}
+        title={apiKeyConfigured ? 'API key configured — click to change it' : 'OpenRouter API key missing — click to load it'}
       >🔑</button>
 
       <button
@@ -248,7 +248,7 @@ const R7TopBar = memo(function R7TopBar({
         }}
         onMouseEnter={e => e.currentTarget.style.color = '#D4D8DC'}
         onMouseLeave={e => e.currentTarget.style.color = '#9BA3A8'}
-        title="Preferencias"
+        title="Preferences"
       >⚙️</button>
     </div>
   )
