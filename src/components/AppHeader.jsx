@@ -15,6 +15,11 @@ function useRealTimeClock() {
 
 const GRADIENT = 'linear-gradient(to right, #ED6491, #477396, #CED2DB, #E8C84A)'
 
+function rgbTriplet(hex) {
+  const n = parseInt(String(hex).replace('#', ''), 16)
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
+}
+
 function Tab({ tab, active, onNavigate, compact }) {
   const [hover, setHover] = useState(false)
   const highlighted = active || hover
@@ -44,12 +49,23 @@ function Tab({ tab, active, onNavigate, compact }) {
   }
 
   if (tab.external) {
+    const neon = tab.neon || THEME.celeste
+    const tint = a => `rgba(${rgbTriplet(neon)},${a})`
+    const neonBase = {
+      ...base,
+      border: `1px solid ${hover ? tint(0.62) : tint(0.34)}`,
+      color: hover ? '#FFFFFF' : tint(0.95),
+      textShadow: `0 0 10px ${tint(hover ? 0.85 : 0.5)}`,
+      boxShadow: hover
+        ? `inset 0 0 16px ${tint(0.22)}, 0 0 18px ${tint(0.6)}, 0 0 40px ${tint(0.35)}, 0 6px 16px rgba(0,0,0,0.7)`
+        : `inset 0 1px 0 rgba(255,255,255,0.03), 0 0 14px ${tint(0.18)}, 0 4px 12px rgba(0,0,0,0.55)`,
+    }
     return (
       <a
         href={tab.href}
         target="_blank"
         rel="noopener noreferrer"
-        style={base}
+        style={neonBase}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
       >
