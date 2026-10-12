@@ -34,3 +34,6 @@ dist/
 
 # Output de agentes (no versionado; se conserva solo en el equipo local)
 output/
+
+# Estado local del CLI de Supabase (project-ref, pooler-url, linked-project): nunca versionado
+**/.temp/

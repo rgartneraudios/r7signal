@@ -162,7 +162,7 @@ export function useCochiTaskLoop({
     const provider = resolveProvider(selectedModel, { preferences, ollamaModel, lmStudioModel })
     const subagentProvider = resolveSubagentProvider(provider, { model: subagentModel })
     const permissionLabel = workspace.permission === 'read' ? 'read-only' : workspace.permission === 'write' ? 'write' : 'full access'
-    const nombreAlternativo = preferences?.nombre_alternativo || 'Signor Roberto'
+    const nombreAlternativo = preferences?.nombre_alternativo || 'user'
     const chatLanguage = preferences?.chat_language || 'Spanish'
 
     const controller = new AbortController()

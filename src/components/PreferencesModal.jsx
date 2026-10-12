@@ -155,7 +155,7 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
               type="text"
               value={nombreUsuario}
               onChange={e => setNombreUsuario(e.target.value)}
-              placeholder="e.g. Signor Roberto"
+              placeholder="e.g. Alex"
               style={inputStyle}
             />
 
@@ -164,7 +164,7 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
               type="text"
               value={nombreAlternativo}
               onChange={e => setNombreAlternativo(e.target.value)}
-              placeholder="e.g. Maravilla"
+              placeholder="e.g. Boss"
               style={inputStyle}
             />
 

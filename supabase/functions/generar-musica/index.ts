@@ -13,8 +13,6 @@ interface RequestBody {
   user_id: string | null
 }
 
-const DEFAULT_USER_ID = 'e18327da-32e9-415c-9bf2-dfb00d64565c' // Fase 0 — sin login, único usuario (Roberto)
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -23,7 +21,6 @@ serve(async (req) => {
   try {
     const body: RequestBody = await req.json()
     const { prompt_musica, modelo_id } = body
-    const user_id = body.user_id || DEFAULT_USER_ID
 
     if (!prompt_musica || !modelo_id) {
       return new Response(

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { THEME } from '../theme'
-import { WEATHER } from '../constants'
 import { WEB_TABS } from '../lib/webRoutes'
 import MoonWidget from './MoonWidget'
 
@@ -136,23 +135,6 @@ export default function AppHeader({ activeRoute = '/', onNavigate }) {
 
       <div style={{ display:'flex', flexDirection:'row', alignItems:'center', gap:22, minWidth:200, justifyContent:'flex-end' }}>
         <MoonWidget />
-        <div style={{ display:'flex', flexDirection:'column', gap:2, alignItems:'flex-end' }}>
-          <div style={{
-            fontFamily:"'Chakra Petch',sans-serif", fontSize:'1.8rem', fontWeight:500,
-            letterSpacing:'0.08em', lineHeight:1.1, color:'transparent',
-            backgroundImage:GRADIENT,
-            WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
-            backgroundClip:'text',
-          }}>
-            {WEATHER.emoji} {WEATHER.temp}
-          </div>
-          <div style={{
-            fontSize:'0.75rem', fontWeight:300, letterSpacing:'0.15em',
-            color:THEME.textLow, marginTop:0,
-          }}>
-            {WEATHER.city}
-          </div>
-        </div>
       </div>
 
     </div>

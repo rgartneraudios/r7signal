@@ -26,7 +26,7 @@ import TitoStatusBar from './TitoStatusBar.jsx'
 const TITO_MODEL = '~deepseek/deepseek-v4-flash-latest'
 
 // Etapa 1 (04/10): saca de los resultados agregadores/directorios de bajo valor
-// (las "páginas amarillas" que reportó Signor Roberto). `excluded_domains` es un
+// (las "páginas amarillas" que reportó el autor). `excluded_domains` es un
 // parámetro del server tool: no cuesta tokens y se edita acá sin tocar nada más.
 const SEARCH_JUNK_DOMAINS = [
   'pinterest.com', 'pinterest.es', 'quora.com',

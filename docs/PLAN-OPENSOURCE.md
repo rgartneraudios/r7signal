@@ -7,11 +7,17 @@ especial el equipo de DeepSeek— la use, la critique y la mejore en ahorro de t
 Estado: Fase 0 cerrada (4/4) y **Fase 1 (idioma) CERRADA** — S1, S2 (S2a–S2d), S3, S4 y S4-bis.
 La UI visible de los 3 paneles, sus flujos, sus modales, las libs puras y los tool results que ve el
 modelo ya nacen en inglés.
-**Fase 2 (limpieza) en curso: S5 CERRADA** — `.env.example` versionado con la regla `VITE_` escrita,
-`VITE_SUPABASE_SERVICE_KEY` purgada del `.env` (era el MISMO valor que `SUPABASE_SERVICE_ROLE_KEY`,
-pero público por el prefijo) y la regla documentada en `README.md` + `AGENTS.md`.
-**Próxima sesión: S6 — purga de identidad** (`supabase/.temp/*` incluye 9 archivos TRACKEADOS con ref
-de proyecto y pooler-url; hallazgo de S5, entra en S6).
+**Fase 2 (limpieza) en curso: S5 y S6 CERRADAS** — S5: `.env.example` versionado con la regla `VITE_`
+escrita, `VITE_SUPABASE_SERVICE_KEY` purgada del `.env` (era el MISMO valor que
+`SUPABASE_SERVICE_ROLE_KEY`, pero público por el prefijo), regla documentada en `README.md` +
+`AGENTS.md`. S6: purga de identidad (10 archivos de `supabase/.temp/` destrackeados + gitignore,
+`DEFAULT_USER_ID` fuera de las 2 edge functions, avatar `media.r7signal.com` y clima `Oviedo` fuera del
+hub, defaults de nombre genéricos).
+**Próxima sesión: S7 — LICENSE + CONTRIBUTING + README real.**
+Hallazgo que pide sesión propia (**S6-bis**, candidata): el badge de clima del hub (Web) se pidió como
+**widget funcional con API pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). S6
+sacó el hardcode `Oviedo`/`18°C` falso, así que el widget vuelve como frente funcional propio (fetch +
+estados + harness): no cabe en una sesión de purga. Necesario en Web; en Tauri no hace falta.
 Hallazgo que pide sesión propia (**S4-ter**, candidata): el contenido del hub (`finanzas.js`,
 `financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`), el texto truncado de `DiffViewer.jsx` y el locale de
 fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
@@ -237,8 +243,34 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   `.env.local`, tampoco): variables muertas, candidatas a la sesión de defaults junto a S6/D5;
   (c) `src/components/ApiKeyModal.jsx:83` y `supabase/functions/generar-asset/index.ts:150` contienen
   `sk-or-`/`service_role` sólo como placeholder y comentario — falsos positivos para gitleaks.
-- [ ] **S6. Purga de identidad.** `supabase/.temp/*` (ref de proyecto y pooler-url), `DEFAULT_USER_ID`
-  en `generar-asset` y `generar-musica`, avatar `media.r7signal.com`, clima `Oviedo`, default `'Signor Roberto'`.
+- [x] **S6. Purga de identidad — CERRADA (13 archivos + 10 destrackeados).** (a) `supabase/.temp/`
+  (9 archivos) y el duplicado anidado `supabase/supabase/.temp/linked-project.json` salieron del índice
+  con `git rm --cached` y entraron a `.gitignore` (`**/.temp/`): project-ref, pooler-url, org id y
+  versiones del CLI dejan de viajar en el repo; los archivos locales quedan (el CLI los regenera).
+  (b) `DEFAULT_USER_ID` (UUID del usuario de auth del autor) fuera de `generar-asset` y `generar-musica`:
+  era **código muerto** — se asignaba y nunca se usaba, y el `user_id` que manda el cliente se ignora
+  igual que antes (cero cambio de comportamiento). (c) `src/constants.js` **borrado**: `EDITORS` (avatar
+  `media.r7signal.com` + rol) no tenía **ni un import** y `WEATHER` era `Oviedo` + `18°C` hardcodeados
+  (dato falso); `AppHeader.jsx` perdió el import y el bloque del badge. (d) Defaults de nombre genéricos:
+  `useCochiTaskLoop` cae a `'user'` (antes `'Signor Roberto'`), `PreferencesModal` usa `e.g. Alex` /
+  `e.g. Boss` (antes `'Signor Roberto'`/`'Maravilla'`), el fixture de `sessionOpening.harness.mjs` pasó a
+  `Alex`/`Alex Rivera` y las 3 referencias al autor en comentarios (`r7Wheel`, `snapshotStore`,
+  `TitoPanel`) quedaron como "el autor". Cero lógica: config, strings, comentarios y un archivo muerto.
+  **Se deja a propósito:** `HTTP-Referer: https://r7signal.com` (marca del proyecto, no identidad de
+  persona), `Footer` y watermarks (`RGartner by R7Signal`), `YOUTUBE_URL` (@Bro7vision y
+  `bro7vision.com`) y el nombre del autor en `docs/`: **S7 declara autoría a propósito**.
+  **Hallazgos:** (1) el clima vuelve como widget real → **S6-bis**; (2) los `supabase/.temp/*` purgados
+  siguen en el HISTORIAL de git → los cubre `gitleaks` de S16/D4; (3) `VITE_SUPABASE_URL` hornea el
+  project-ref en el bundle (`dist/`, no versionado) — es público por diseño de S5 y queda atado a S9
+  (Supabase opcional); (4) `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` (muertas, hallazgo de S5) y el default
+  `chat_language: 'Español'` siguen pendientes de la sesión de defaults junto a D5.
+- [ ] **S6-bis. Widget de clima y ciudad (Web) — candidata.** Restituir el badge de clima del hub como
+  widget real: **API pública sin key** (Open-Meteo geocoding + forecast; CORS abierto, sin registro) —
+  encaja con BYOK porque no hay secreto que guardar. Ciudad elegible por el usuario (persistida), con
+  estados de carga/error/offline y **sin** caer a datos falsos. Habilitado en Web; en Tauri se omite
+  (decisión del autor). Frente funcional: cliente puro e inyectable en `src/lib/` + harness y un
+  componente de header (≤3 archivos). Alternativas evaluadas: wttr.in (sin key, formato texto) y
+  OpenWeather/WeatherAPI (exigen key → peor para BYOK). Va DESPUÉS de S7.
 - [ ] **S7. LICENSE + CONTRIBUTING + README real.** Archivo `LICENSE` con MIT (D1). Setup mínimo:
   `npm install` → cargar key → `npx tauri dev`. Sección **"How this was built"**: dirección humana
   (R. Gartner / R7Signal) + asistencia de IA (Claude Sonnet y DeepSeek Flash 4.0/4.1), declarada sin
@@ -317,6 +349,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S4 | Cierre de la Fase 1 (idioma): 9 archivos de libs puras y mensajes model-facing a inglés — wizard de imagen (`promptImagen`), acordes/grupos del secuenciador, tablero de planes + `statusLabel` + handoffs, subagente (`statusLabel`/label/errores), cabecera R9, `PERMISSION_RULE_HINT` + títulos de aprobación, pestañas del hub, errores de `useCochiTaskLoop` y las frases model-facing de `AsunPanel`. Cero lógica: sólo cadenas. 4 harness actualizados en la misma sesión (`promptImagen` 4 asserts, `sequencer` 1, `cochiPlans` 16, `cochiSubagent` 9). Hallazgo: los tool results model-facing de `cochiTools.js`/`asunTools.js`, el error de `llmClient.js` y el contenido del hub quedan para sesión propia. | lint 0/0 · build OK · test 27/27 | `9d12d2a` |
 | S4-bis | Cierre del idioma en libs: los tool results que ve el modelo pasan a inglés en `cochiTools.js` (~70 cadenas: `⛔ Blocked:`, `File too large`, `TYPO RESUELTO`→`TYPO RESOLVED`, truncados, `(no results)`, tablero de planes, `formatRunCommandOutput`, los 2 `reason` de `checkPathAccess`) y en `asunTools.js`; el error visible de API key de `llmClient.js`; el nombre por defecto de sesión de `sessionStore.js` (`Session …`) y el prompt + 2 errores de `useWheelSession.js`. Cero lógica: sólo cadenas. 3 harness actualizados en la misma sesión (`cochiTools` 2, `cochiGuards` 2, `cochiSessions` 1); `isToolError`/`commandRan` no cambiaron porque clasifican por prefijo agnóstico del idioma. Hallazgo: el hub, el texto truncado de `DiffViewer.jsx` y el locale de fecha/número pasan a **S4-ter**. | lint 0/0 · build OK · test 27/27 | `db8d28f` |
 | S5 | Higiene de secretos: `.env.example` versionado (placeholders + regla `VITE_` en la cabecera), `VITE_SUPABASE_SERVICE_KEY` purgada del `.env` local (era el MISMO valor que `SUPABASE_SERVICE_ROLE_KEY`: el secreto sobrevive sólo en la copia sin prefijo, fuera del bundle) y regla `VITE_` documentada en `README.md` y `AGENTS.md`. Cero lógica: docs y config. Verificación: `dist/` reconstruido sin coincidencias de `service_role`; `git log --all -- .env` vacío (nunca entró al historial). Hallazgos: `supabase/.temp/*` tiene 9 archivos TRACKEADOS → S6; `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` no las lee ningún archivo (variables muertas); los `sk-or-`/`service_role` de `ApiKeyModal`/`generar-asset` son placeholder y comentario. | lint 0/0 · build OK · test 27/27 | `9a77f79` |
+| S6 | Purga de identidad: `supabase/.temp/` + su duplicado anidado fuera del índice y a `.gitignore` (`**/.temp/`) — project-ref, pooler-url y org id dejan de viajar; `DEFAULT_USER_ID` (UUID de auth del autor) fuera de `generar-asset`/`generar-musica`, donde era código muerto (cero cambio de comportamiento); `src/constants.js` borrado (`EDITORS` sin imports + avatar `media.r7signal.com`, y `WEATHER` `Oviedo`/`18°C` falsos) con `AppHeader.jsx` limpio; defaults de nombre genéricos (`'user'`, `e.g. Alex`/`e.g. Boss`, fixture `Alex`/`Alex Rivera`, 3 comentarios a "el autor"). Marca del proyecto y autoría (`HTTP-Referer`, Footer, watermarks, @Bro7vision, `docs/`) intactas a propósito: S7 las declara. Hallazgos: clima a **S6-bis** (widget real con Open-Meteo), `.temp/*` sigue en el historial (S16/gitleaks), project-ref horneado por `VITE_SUPABASE_URL` (S9), muertas de S5 y `chat_language` a la sesión de defaults. | lint 0/0 · build OK · test 27/27 | PENDIENTE |
 
 ---
 

@@ -26,8 +26,6 @@ interface RequestBody {
   paleta_color: string | null
 }
 
-const DEFAULT_USER_ID = 'e18327da-32e9-415c-9bf2-dfb00d64565c' // Fase 0 — sin login, único usuario (Roberto)
-
 async function callOpenRouter(
   apiKey: string,
   modelId: string,
@@ -126,7 +124,6 @@ serve(async (req) => {
   try {
     const body: RequestBody = await req.json()
     const { estilo_id, objetos, vista, orientacion, ubicacion, modelo_id, imagen_b64, momento_dia, clima, epoca, paleta_color } = body
-    const user_id = body.user_id || DEFAULT_USER_ID
 
     if (!modelo_id) {
       return new Response(

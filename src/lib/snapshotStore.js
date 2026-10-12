@@ -3,7 +3,7 @@
 // append_to_file / delete_file / move_file / copy_file / create_dir). Este
 // módulo guarda el estado ANTERIOR de cada ruta tocada para poder revertirla.
 //
-// Diseño (decisiones cerradas con Signor Roberto):
+// Diseño (decisiones cerradas con el autor):
 //   · Snapshot PROPIO en AppLocalData (no git en el workspace del usuario).
 //   · Uno por TURNO (no por tool call): `Snapshots/<sessionId>/turn-<n>/`.
 //   · Backups en BYTES (binario-safe) con topes de tamaño.

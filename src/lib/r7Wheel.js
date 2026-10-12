@@ -2,7 +2,7 @@
 // R1 + R2 = R7. La rueda es un resumen rodante que viaja entre turnos y sesiones
 // y sustituye al historial crudo (D1/D2). El R3 visible nunca viaja al modelo.
 //
-// Decisiones cerradas (no reabrir sin acordar con Signor Roberto):
+// Decisiones cerradas (no reabrir sin acordar con el autor):
 //   D1. R7 = SOLO pares R1+R2 (commit log). El R3 nunca viaja al modelo.
 //   D2. R7 RODANTE: cada turno añade su pareja y la rueda avanza.
 //   D3. HÍBRIDO: prompt = R7 (turnos viejos) + el ÚLTIMO turno CRUDO.
