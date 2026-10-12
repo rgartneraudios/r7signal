@@ -297,7 +297,7 @@ function AsunPanel({
       if (attachedFile?.type === 'text') {
         userContent.push({
           type: 'text',
-          text: `[Archivo adjunto: ${attachedFile.name}]\n\n${attachedFile.content}`
+          text: `[Attached file: ${attachedFile.name}]\n\n${attachedFile.content}`
         })
       }
       userContent.push({ type: 'text', text })
@@ -434,7 +434,7 @@ function AsunPanel({
 
       const cochiMatch = COCHI_RE.exec(finalText)
       if (cochiMatch || isCochiCommand) {
-        handoffBrief = cochiMatch ? cochiMatch[1] : `Ejecutar tarea: ${text}`
+        handoffBrief = cochiMatch ? cochiMatch[1] : `Run task: ${text}`
         displayText  = displayText.replace(COCHI_RE, '').trim()
       }
 

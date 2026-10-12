@@ -98,7 +98,7 @@ export default function ProjectPlanView({ onSendToCochi, onSendToAsun, onClose, 
 
   async function handleDelete() {
     if (!plan) return
-    if (!window.confirm(`¿Borrar el plan "${plan.title}" del tablero?`)) return
+    if (!window.confirm(`Delete the plan "${plan.title}" from the board?`)) return
     const ok = await deletePlan(plan.id)
     if (ok) {
       const next = plans.filter(p => p.id !== plan.id)
@@ -125,15 +125,15 @@ export default function ProjectPlanView({ onSendToCochi, onSendToAsun, onClose, 
   }
 
   if (loading) {
-    return <div style={{ color: '#6B7075', fontSize: '0.8rem', textAlign: 'center', marginTop: 30 }}>Cargando planes…</div>
+    return <div style={{ color: '#6B7075', fontSize: '0.8rem', textAlign: 'center', marginTop: 30 }}>Loading plans…</div>
   }
 
   if (plans.length === 0) {
     return (
       <div style={{ color: '#6B7075', fontSize: '0.8rem', textAlign: 'center', marginTop: 30, lineHeight: 1.6 }}>
-        {error ? `⚠️ No se pudieron leer los planes: ${error}` : (
-          <>Sin planes en el tablero todavía.<br />
-          Abrí Asun con IrmaMax, activá <strong style={{ color: ACCENT }}>PROYECTO</strong> y contale tu idea.</>
+        {error ? `⚠️ Could not read the plans: ${error}` : (
+          <>No plans on the board yet.<br />
+          Open Asun with IrmaMax, enable <strong style={{ color: ACCENT }}>PROJECT</strong> and tell it your idea.</>
         )}
       </div>
     )
@@ -172,7 +172,7 @@ export default function ProjectPlanView({ onSendToCochi, onSendToAsun, onClose, 
               }}>{plan.title}</span>
               <button
                 onClick={handleDelete}
-                title="Borrar plan del tablero"
+                title="Delete plan from board"
                 style={{ background: 'transparent', border: '1px solid #CF444D55', borderRadius: 5, padding: '2px 7px', color: '#CF444D', fontSize: '0.62rem', fontWeight: 700, cursor: 'pointer' }}
               >🗑</button>
             </div>
@@ -201,9 +201,9 @@ export default function ProjectPlanView({ onSendToCochi, onSendToAsun, onClose, 
                   fontFamily: "'Space Grotesk', sans-serif", letterSpacing: '0.03em',
                   textAlign: 'left',
                 }}
-              >▶ Ejecutar bloque {current.id}: {current.title}</button>
+              >▶ Run block {current.id}: {current.title}</button>
             ) : (
-              <span style={{ fontSize: '0.7rem', color: '#7FD1A8', fontWeight: 700 }}>✓ Plan completo</span>
+              <span style={{ fontSize: '0.7rem', color: '#7FD1A8', fontWeight: 700 }}>✓ Plan complete</span>
             )}
 
             {/* E3: leer/preguntar desde Cochi (tablero completo, no un bloque) */}
@@ -215,7 +215,7 @@ export default function ProjectPlanView({ onSendToCochi, onSendToAsun, onClose, 
                 color: ACCENT, fontSize: '0.62rem', fontWeight: 700, cursor: 'pointer',
                 fontFamily: "'Space Grotesk', sans-serif",
               }}
-            >→ Enviar la Planificación a Cochi</button>
+            >→ Send the Plan to Cochi</button>
           </div>
 
           {/* Bloques */}
@@ -243,12 +243,12 @@ export default function ProjectPlanView({ onSendToCochi, onSendToAsun, onClose, 
                 )}
                 {block.evidence && (
                   <span style={{ fontSize: '0.68rem', color: '#7A8FA0', lineHeight: 1.5 }}>
-                    ✓ Hecho cuando: {block.evidence}
+                    ✓ Done when: {block.evidence}
                   </span>
                 )}
                 {block.evidenceLog?.length > 0 && (
                   <span style={{ fontSize: '0.66rem', color: '#7FD1A8', lineHeight: 1.5 }}>
-                    ↳ Evidencia ({block.evidenceLog[block.evidenceLog.length - 1].by}): {block.evidenceLog[block.evidenceLog.length - 1].text}
+                    ↳ Evidence ({block.evidenceLog[block.evidenceLog.length - 1].by}): {block.evidenceLog[block.evidenceLog.length - 1].text}
                   </span>
                 )}
 
@@ -260,14 +260,14 @@ export default function ProjectPlanView({ onSendToCochi, onSendToAsun, onClose, 
                     display: 'flex', flexDirection: 'column', gap: 5,
                   }}>
                     <span style={{ fontSize: '0.68rem', color: '#E0575F', fontWeight: 700 }}>
-                      ⚠ Re-plan propuesto por {block.replan.requestedBy}
+                      ⚠ Re-plan proposed by {block.replan.requestedBy}
                     </span>
                     <span style={{ fontSize: '0.68rem', color: '#C9A9AC', lineHeight: 1.5 }}>
-                      Problema: {block.replan.reason}
+                      Problem: {block.replan.reason}
                     </span>
                     {block.replan.proposal && (
                       <span style={{ fontSize: '0.68rem', color: '#9BA3A8', lineHeight: 1.5 }}>
-                        Propuesta: {block.replan.proposal}
+                        Proposal: {block.replan.proposal}
                       </span>
                     )}
                     <div style={{ display: 'flex', gap: 5, marginTop: 1 }}>
@@ -280,7 +280,7 @@ export default function ProjectPlanView({ onSendToCochi, onSendToAsun, onClose, 
                           color: '#7FD1A8', fontSize: '0.62rem', fontWeight: 700,
                           cursor: busy ? 'default' : 'pointer', fontFamily: "'Space Grotesk', sans-serif",
                         }}
-                      >✓ Aprobar desviación</button>
+                      >✓ Approve deviation</button>
                       <button
                         disabled={busy}
                         onClick={() => askAsun(block.id)}
@@ -290,7 +290,7 @@ export default function ProjectPlanView({ onSendToCochi, onSendToAsun, onClose, 
                           color: '#C8A2D8', fontSize: '0.62rem', fontWeight: 700,
                           cursor: busy ? 'default' : 'pointer', fontFamily: "'Space Grotesk', sans-serif",
                         }}
-                      >→ Que Asun amende</button>
+                      >→ Have Asun amend it</button>
                     </div>
                   </div>
                 )}
@@ -326,7 +326,7 @@ export default function ProjectPlanView({ onSendToCochi, onSendToAsun, onClose, 
                     padding: '3px 9px', color: ACCENT, fontSize: '0.62rem', fontWeight: 700,
                     cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif",
                   }}
-                >→ Enviar a Cochi</button>
+                >→ Send to Cochi</button>
               </div>
             )
           })}

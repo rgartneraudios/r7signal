@@ -4,8 +4,8 @@ export default function SequencerMixer({ mix, onChange, onReset }) {
   return (
     <div className="seq-panel seq-mixer">
       <div className="seq-insp-title">
-        <span>Mezclador · volumen por sonido</span>
-        <button type="button" className="seq-mini" onClick={onReset}>Restaurar</button>
+        <span>Mixer · volume per sound</span>
+        <button type="button" className="seq-mini" onClick={onReset}>Reset</button>
       </div>
       <div className="seq-mixer-grid">
         {CHANNELS.map(ch => {

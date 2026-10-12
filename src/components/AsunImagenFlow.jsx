@@ -9,64 +9,64 @@ const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 // WIZARD IMAGEN
 // ═══════════════════════════════════════════════════════════════════════════════
 const ASUN_SPEECH = {
-  path_select:       '¿Empezamos desde cero o tienes una imagen de referencia?',
-  lore_select:       'Elige el estilo visual para tu imagen.',
-  image_upload:      'Sube tu imagen de referencia (máx. 4MB) y dime qué quieres ver.',
-  briefing_vista:    (n) => `Estilo ${n}. ¿Cómo encuadramos la escena?`,
-  momento_dia:       '¿En qué momento del día transcurre la escena?',
-  clima:             '¿Qué clima o estación ambienta?',
-  epoca:             '¿Época o temática?',
-  paleta_select:     'Elige una paleta de colores.',
-  briefing_formato:  '¿En qué formato?',
-  ubicacion:         '¿Interior o exterior?',
-  briefing_objetos:  '¿Qué objetos, personajes o escenas quieres ver?',
-  confirm:           'Todo listo. ¿Generamos?',
-  processing_imagen: 'Asun generando imagen...',
-  result:            '¿No te convence? Podemos volver a empezar.',
+  path_select:       'Start from scratch or do you have a reference image?',
+  lore_select:       'Pick the visual style for your image.',
+  image_upload:      'Upload your reference image (max 4MB) and tell me what you want to see.',
+  briefing_vista:    (n) => `Style ${n}. How do we frame the scene?`,
+  momento_dia:       'What time of day is the scene set in?',
+  clima:             'What weather or season sets the mood?',
+  epoca:             'Era or theme?',
+  paleta_select:     'Pick a color palette.',
+  briefing_formato:  'Which format?',
+  ubicacion:         'Interior or exterior?',
+  briefing_objetos:  'What objects, characters or scenes do you want to see?',
+  confirm:           'All set. Shall we generate?',
+  processing_imagen: 'Asun generating image...',
+  result:            'Not convinced? We can start over.',
 }
 const BTN_VISTA    = [
-  { label: 'Súper cerca',    value: 'extreme_close_up' },
-  { label: 'Retrato',        value: 'medium_close_up' },
-  { label: 'Primera persona',value: 'first_person_pov' },
-  { label: 'Cuerpo entero',  value: 'full_body' },
-  { label: 'Paisaje amplio', value: 'wide_panoramic' },
+  { label: 'Extreme close-up', value: 'extreme_close_up' },
+  { label: 'Portrait',         value: 'medium_close_up' },
+  { label: 'First person',     value: 'first_person_pov' },
+  { label: 'Full body',        value: 'full_body' },
+  { label: 'Wide landscape',   value: 'wide_panoramic' },
 ]
 const BTN_FORMATO  = [
   { label: 'Horizontal 16:9', value: 'horizontal' },
   { label: 'Vertical 9:16',   value: 'vertical' },
-  { label: 'Cuadrado 1:1',    value: 'cuadrado' },
+  { label: 'Square 1:1',      value: 'cuadrado' },
 ]
 const BTN_UBICACION = [
   { label: 'Interior', value: 'interior_setting' },
   { label: 'Exterior', value: 'exterior_setting' },
 ]
 const BTN_MOMENTO  = [
-  { label: 'Pleno día', value: 'clear_bright_daylight' },
-  { label: 'Amanecer',  value: 'misty_soft_morning' },
-  { label: 'Atardecer', value: 'warm_golden_hour_sunset' },
-  { label: 'Noche',     value: 'dark_midnight' },
+  { label: 'Bright day', value: 'clear_bright_daylight' },
+  { label: 'Sunrise',    value: 'misty_soft_morning' },
+  { label: 'Sunset',     value: 'warm_golden_hour_sunset' },
+  { label: 'Night',      value: 'dark_midnight' },
 ]
 const BTN_CLIMA    = [
-  { label: 'Despejado', value: 'clear_weather' },
-  { label: 'Lluvioso',  value: 'rain_falling_wet' },
-  { label: 'Nevado',    value: 'freezing_snowy' },
-  { label: 'Neblina',   value: 'dense_mysterious_fog' },
-  { label: 'Otoñal',    value: 'autumn_leaves' },
-  { label: 'Primaveral',value: 'blooming_spring' },
+  { label: 'Clear',    value: 'clear_weather' },
+  { label: 'Rainy',    value: 'rain_falling_wet' },
+  { label: 'Snowy',    value: 'freezing_snowy' },
+  { label: 'Fog',      value: 'dense_mysterious_fog' },
+  { label: 'Autumn',   value: 'autumn_leaves' },
+  { label: 'Spring',   value: 'blooming_spring' },
 ]
 const BTN_EPOCA    = [
-  { label: 'Moderno',   value: 'contemporary_modern' },
-  { label: 'Futurista', value: 'futuristic_sci_fi' },
+  { label: 'Modern',     value: 'contemporary_modern' },
+  { label: 'Futuristic', value: 'futuristic_sci_fi' },
   { label: 'Medieval',  value: 'ancient_medieval' },
-  { label: 'Fantasía',  value: 'whimsical_fantasy' },
+  { label: 'Fantasy',   value: 'whimsical_fantasy' },
 ]
 const BTN_PALETA   = [
-  { label: 'Cálidos',   value: 'warm_amber_orange' },
-  { label: 'Fríos',     value: 'cool_blue_teal' },
-  { label: 'Pastel',    value: 'soft_pastel' },
-  { label: 'B/N',       value: 'monochrome_bw' },
-  { label: 'Vibrante',  value: 'vibrant_highly_saturated' },
-  { label: 'Apagado',   value: 'muted_desaturated' },
+  { label: 'Warm',     value: 'warm_amber_orange' },
+  { label: 'Cool',     value: 'cool_blue_teal' },
+  { label: 'Pastel',   value: 'soft_pastel' },
+  { label: 'B/W',      value: 'monochrome_bw' },
+  { label: 'Vibrant',  value: 'vibrant_highly_saturated' },
+  { label: 'Muted',    value: 'muted_desaturated' },
 ]
 
 const BLANK_BRIEF = {
@@ -117,7 +117,7 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
   function handleFile(ev) {
     const file = ev.target.files[0]
     if (!file) return
-    if (file.size > 4 * 1024 * 1024) { setError('Imagen supera 4MB.'); return }
+    if (file.size > 4 * 1024 * 1024) { setError('Image exceeds 4MB.'); return }
     setError(null)
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -142,7 +142,7 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error al generar imagen')
+      if (!res.ok) throw new Error(data.error || 'Error generating image')
       setResultUrl(data.image_url || data.image_b64)
       setUiState('result')
       const imageCost = calculateCost(imageModelId, 0, 0, 'image')
@@ -209,8 +209,8 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
         {/* PATH SELECT */}
         {uiState === 'path_select' && (
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-            <WizardBtn label="Desde cero"         onClick={() => handlePath('A')} />
-            <WizardBtn label="Tengo una imagen"    onClick={() => handlePath('B')} />
+            <WizardBtn label="From scratch"       onClick={() => handlePath('A')} />
+            <WizardBtn label="I have an image"    onClick={() => handlePath('B')} />
           </div>
         )}
 
@@ -218,7 +218,7 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
         {uiState === 'lore_select' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
             {estilos.map(est => {
-              const label = { 'Ilustración 3D': 'Ilustración 1', 'Ilustración 2D': 'Ilustración 2', 'Pintura': 'Digital' }[est.nombre] || est.nombre
+              const label = { 'Ilustración 3D': 'Illustration 1', 'Ilustración 2D': 'Illustration 2', 'Pintura': 'Digital' }[est.nombre] || est.nombre
               return (
                 <button key={est.id} onClick={() => handleEstilo(est)} className="asun-wbtn" style={{ padding: 10, flexDirection: 'column', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <img src={est.preview_url} alt={est.nombre} style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 6 }} />
@@ -241,7 +241,7 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
             }}>
               {preview
                 ? <img src={preview} alt="Preview" style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 6, objectFit: 'contain' }} />
-                : <><span style={{ fontSize: '1.8rem', color: '#3A3840' }}>+</span><span style={{ color: '#8A868B', fontSize: '0.8rem' }}>Haz clic para subir (máx. 4MB)</span></>
+                : <><span style={{ fontSize: '1.8rem', color: '#3A3840' }}>+</span><span style={{ color: '#8A868B', fontSize: '0.8rem' }}>Click to upload (max 4MB)</span></>
               }
             </div>
             <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
@@ -250,7 +250,7 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
                 <textarea
                   value={brief.objetos}
                   onChange={e => set('objetos', e.target.value)}
-                  placeholder="Describe lo que quieres ver..."
+                  placeholder="Describe what you want to see..."
                   rows={3}
                   style={{
                     width: '100%', maxWidth: 380,
@@ -259,8 +259,8 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
                     fontFamily: "'Boogaloo', cursive", outline: 'none', resize: 'vertical', lineHeight: 1.6,
                   }}
                 />
-                <WizardBtn label="Siguiente" onClick={() => {
-                  if (!brief.objetos.trim()) { setError('Escribe qué quieres ver.'); return }
+                <WizardBtn label="Next" onClick={() => {
+                  if (!brief.objetos.trim()) { setError('Write what you want to see.'); return }
                   setError(null); setUiState('momento_dia')
                 }} />
               </>
@@ -323,7 +323,7 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
             <textarea
               value={brief.objetos}
               onChange={e => set('objetos', e.target.value)}
-              placeholder="Describe lo que quieres ver..."
+              placeholder="Describe what you want to see..."
               rows={3}
               style={{
                 width: '100%', maxWidth: 380,
@@ -332,8 +332,8 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
                 fontFamily: "'Boogaloo', cursive", outline: 'none', resize: 'vertical', lineHeight: 1.6,
               }}
             />
-            <WizardBtn label="Siguiente" onClick={() => {
-              if (!brief.objetos.trim()) { setError('Escribe qué quieres ver.'); return }
+            <WizardBtn label="Next" onClick={() => {
+              if (!brief.objetos.trim()) { setError('Write what you want to see.'); return }
               setError(null); setUiState('confirm')
             }} />
           </div>
@@ -347,8 +347,8 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
               border: '1px solid #C8A2D8', borderRadius: 10,
               color: '#E8EAEC', cursor: 'pointer', fontFamily: "'Boogaloo', cursive",
               fontSize: '1.1rem', letterSpacing: '0.04em',
-            }}>¡Generar!</button>
-            <WizardBtn label="Cambiar algo" onClick={() => { reset(); setUiState('lore_select') }} />
+            }}>Generate!</button>
+            <WizardBtn label="Change something" onClick={() => { reset(); setUiState('lore_select') }} />
           </div>
         )}
 
@@ -357,7 +357,7 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
           <div style={{ textAlign: 'center', padding: 24 }}>
             <div className="asun-spinner" style={{ margin: '0 auto 12px' }} />
             <span style={{ color: '#8A868B', fontSize: '0.9rem', fontFamily: "'Space Grotesk', sans-serif" }}>
-              Generando con {submenu === 'occidente' ? 'Grok' : 'SeedDream'}...
+              Generating with {submenu === 'occidente' ? 'Grok' : 'SeedDream'}...
             </span>
           </div>
         )}
@@ -365,9 +365,9 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
         {/* RESULT */}
         {uiState === 'result' && resultUrl && (
           <div style={{ textAlign: 'center' }}>
-            <img src={resultUrl} alt="Resultado" style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid #201F23' }} />
+            <img src={resultUrl} alt="Result" style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid #201F23' }} />
             <div style={{ marginTop: 14, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <WizardBtn label="Nueva imagen" onClick={() => { reset(); setUiState('path_select') }} />
+              <WizardBtn label="New image" onClick={() => { reset(); setUiState('path_select') }} />
             </div>
           </div>
         )}

@@ -33,7 +33,7 @@ export default function SequencerControls({
   return (
     <div className="seq-panel seq-controls">
       <div className="seq-group">
-        <span className="seq-label">Métrica</span>
+        <span className="seq-label">Time signature</span>
         <div className="seq-seg">
           {TIME_SIGNATURES.map(t => (
             <button
@@ -64,30 +64,30 @@ export default function SequencerControls({
       </div>
 
       <div className="seq-group">
-        <button type="button" className={`seq-play${isPlaying ? ' playing' : ''}`} onClick={onToggle} title="Reproducir / Pausar">
+        <button type="button" className={`seq-play${isPlaying ? ' playing' : ''}`} onClick={onToggle} title="Play / Pause">
           {isPlaying ? '❚❚' : '▶'}
         </button>
         <Btn onClick={onStop} color={COLORS.rose}>Stop</Btn>
-        <Btn onClick={onClear} color={COLORS.goldBright}>Limpiar</Btn>
+        <Btn onClick={onClear} color={COLORS.goldBright}>Clear</Btn>
       </div>
 
       <div className="seq-group">
-        <Toggle label="Bucle" on={pattern.loop} onClick={onToggleLoop} color={COLORS.neonCyan} />
-        <Toggle label="Metrónomo" on={pattern.metronome} onClick={onToggleMetronome} color={COLORS.lilac} />
+        <Toggle label="Loop" on={pattern.loop} onClick={onToggleLoop} color={COLORS.neonCyan} />
+        <Toggle label="Metronome" on={pattern.metronome} onClick={onToggleMetronome} color={COLORS.lilac} />
       </div>
 
       <div className="seq-group">
         <Btn onClick={onExportMidi} color={COLORS.neonCyan}>MIDI</Btn>
         <Btn onClick={onExportWav} color={COLORS.gold} disabled={exporting === 'wav'}>
-          {exporting === 'wav' ? 'Renderizando…' : 'WAV'}
+          {exporting === 'wav' ? 'Rendering…' : 'WAV'}
         </Btn>
         <Btn onClick={onExportMp3} color={COLORS.lilac} disabled={exporting === 'mp3'}>
-          {exporting === 'mp3' ? 'Renderizando…' : 'MP3'}
+          {exporting === 'mp3' ? 'Rendering…' : 'MP3'}
         </Btn>
       </div>
 
       <div className="seq-status">
-        {isPlaying ? `Compás ${bar} · tiempo ${beat}` : 'Listo'}
+        {isPlaying ? `Bar ${bar} · beat ${beat}` : 'Ready'}
       </div>
     </div>
   )

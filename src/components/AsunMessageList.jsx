@@ -28,14 +28,14 @@ export function AsunBubble({ msg, isLast, showActions, canRegenerate, onUndo, on
             className="asun-handoff-btn"
             onClick={() => onHandoff?.({ type: 'text', content: msg.contenido, brief: msg.handoffBrief })}
           >
-            → Enviar a Cochi
+            → Send to Cochi
           </button>
         )}
         {msg.rol === 'asistente' && isLast && showActions && (
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button
               onClick={onUndo}
-              title="Deshacer el último turno"
+              title="Undo the last turn"
               style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}
@@ -43,7 +43,7 @@ export function AsunBubble({ msg, isLast, showActions, canRegenerate, onUndo, on
             {canRegenerate && (
               <button
                 onClick={onRegenerate}
-                title="Volver a generar la última respuesta"
+                title="Regenerate the last response"
                 style={{ background: 'transparent', border: '1px solid #C8A2D833', borderRadius: 4, padding: '2px 8px', color: '#C8A2D866', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = '#C8A2D8'; e.currentTarget.style.color = '#C8A2D8' }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = '#C8A2D833'; e.currentTarget.style.color = '#C8A2D866' }}

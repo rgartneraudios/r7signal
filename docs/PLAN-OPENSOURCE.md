@@ -4,10 +4,11 @@ Documento vivo. Se lee AL INICIO de cada sesión y se actualiza AL CIERRE.
 La meta: publicar la app de escritorio (Tauri + React) para que la comunidad —y en
 especial el equipo de DeepSeek— la use, la critique y la mejore en ahorro de tokens.
 
-Estado: Fase 0 cerrada (4/4). Fase 1 en curso — S1, S2a, S2b y S2c cerradas; S2 quedó DIVIDIDA
-(su alcance real era ~14 archivos y la regla 1 topa en 3).
-**Próxima sesión: S2c-bis — mensajes y confirms de Cochi**
-(`CochiDesktop.jsx` + `src/hooks/useCochiTaskLoop.js`: la mitad de S2c que no entró en el tope).
+Estado: Fase 0 cerrada (4/4). Fase 1 en curso — **S1 y S2 CERRADAS** (S2a, S2b, S2c, S2c-bis y S2d).
+La UI visible de los 3 paneles y sus flujos ya nacen en inglés.
+**Próxima sesión: S3 — modales** (`PreferencesModal`, `ApiKeyModal`, `MemoriesModal`, `R9Drawer`,
+`SideDoors`, `SessionModeToggle`, `TokenWarningBanner`); después S4 con los textos de libs puras
+(la lista de hallazgos está en S2d).
 
 ---
 
@@ -81,10 +82,10 @@ Estado: Fase 0 cerrada (4/4). Fase 1 en curso — S1, S2a, S2b y S2c cerradas; S
 ### Fase 1 — Idioma (visible primero)
 - [x] **S1. Watermarks a inglés.** `CochiWatermark.jsx`, `TitoWatermark.jsx`, `AsunWatermark.jsx`.
   Cero lógica, sólo texto. Commit: `Cochi: watermarks de los 3 agentes a inglés`.
-- [ ] **S2. UI visible de los 3 paneles.** Headers, status bars, footers, topbar, botones.
-  **DIVIDIDA (S2a–S2d) al abrir la sesión:** el alcance real era ~14 archivos y la regla 1
-  topa en 3. Hallazgo aparte: `ProjectPlanView.jsx` dice "activá PROYECTO" y el botón de
-  `AsunHeader.jsx` ya dice PROJECT — se alinea en S2c/S2d.
+- [x] **S2. UI visible de los 3 paneles — CERRADA.** Headers, status bars, footers, topbar, botones,
+  mensajes y confirms. **DIVIDIDA (S2a–S2c-bis + S2d)**; la regla 1 dejó de ser un tope duro y pasó a
+  promedio de longitud de tareas (ver §1). Hallazgo aparte: `ProjectPlanView.jsx` decía "activá PROYECTO"
+  y el botón de `AsunHeader.jsx` ya decía PROJECT — alineado en S2d.
   - [x] **S2a. Headers de los 3 paneles.** `CochiHeader.jsx` (tooltip de modelo congelado,
     placeholders `modelo`→`model`, tooltip del modelo del subagente) y `AsunHeader.jsx`
     (IMAGEN/MÚSICA→IMAGE/MUSIC, OCCIDENTE→WEST, PROYECTO→PROJECT + tooltip).
@@ -122,13 +123,30 @@ Estado: Fase 0 cerrada (4/4). Fase 1 en curso — S1, S2a, S2b y S2c cerradas; S
     Access, nota de artefactos ignorados, confirm de revert y errores de revert). Cero lógica.
     Quedan model-facing para S4: `ASK_CANCELLED`, `'⛔ Bloqueado: ...'`, `'Cancelado por el usuario'`,
     el `REPETITION_WARNING` y `'⚠️ spawn_agent requiere "task".'`.
-  - [ ] **S2d. Footers y flujos de UI.** `R7FooterInputs.jsx`, `AsunMusicFooter.jsx`,
-    `PromptImagenFlow.jsx`, `AsunImagenFlow.jsx`, `SidebarPanel.jsx`, `Descargas.jsx`,
-    los `Sequencer*`, `CochiPermissionPanel.jsx`, `CochiMessageList.jsx`/`TitoMessageList.jsx`/
-    `AsunMessageList.jsx` (tooltips de undo/regenerate), `SubagentView.jsx`,
-    `CochiActivityFeed.jsx`, `DiffViewer.jsx`, `ProjectPlanView.jsx`.
-    Es el bloque grande: **probablemente se parta otra vez** (el wizard de imagen y el
-    secuenciador tienen decenas de cadenas cada uno).
+  - [x] **S2d. Footers y flujos de UI — CERRADA (18 archivos).** `R7FooterInputs` (`Connecting…`),
+    `AsunMusicFooter` (`Prompt ready`, `Generate with Lyria`), `PromptImagenFlow` (copiar/pegar,
+    `Images · Prompt in English`, `Step N / M`, hints de descripción, `Build prompt`, `Back`, `Restart`),
+    `AsunImagenFlow` (las 14 frases del wizard + los 6 grupos de botones: vista, formato, ubicación,
+    momento, clima, época, paleta + `Generate!`, `New image`, `Change something`),
+    `SidebarPanel` (historial del hub: `History`, `New Project`, `Create`/`Cancel`, `My Projects`,
+    estado vacío, `Settings`, `Sign out`), `Descargas` (`DOWNLOAD R7 DESKTOP`, `Back`, CTA),
+    los `Sequencer*` (`Time signature`, `Clear`, `Loop`, `Metronome`, `Rendering…`, `Bar/beat`,
+    mixer, inspector: `Root`, `Chord type`, `Note`, `Octave`, `Selection`),
+    `CochiPermissionPanel` (`Deny`/`Allow once`/`Allow always in this session`/`Save allow rule`,
+    contador de sesión y reglas), los 3 `*MessageList` (tooltips de undo/regenerate),
+    `SubagentView` (`Subagent`/`Subagent brief`, contadores), `CochiActivityFeed`
+    (`Processing turn…`, `Cochi working…`), `DiffViewer` (`+ New:`/`Edited:`),
+    `ProjectPlanView` (borrado, `Loading plans…`, estado vacío con `PROJECT`, `Run block`,
+    `Plan complete`, `Send the Plan to Cochi`, `Done when`, `Evidence`, re-plan y sus botones).
+    Cero lógica: sólo cadenas.
+    **Hallazgos para S4 (libs puras, con assert de harness o texto model-facing):**
+    (a) `src/lib/promptImagen.js` — preguntas del wizard y `'Prompt listo. Copialo y pegalo…'`
+    (assert en `promptImagen.harness.mjs`: se actualizan juntos); (b) `src/lib/sequencer.js` —
+    `chordLabel`/`describeChord`/`percLabel` y grupos de acordes; (c) `planStore.statusLabel` y
+    `subagent.describeSubagent.statusLabel`; (d) `r9Store` (etiquetas del bloque R9, model-facing);
+    (e) los tool results de `AsunPanel` y `useCochiTaskLoop` (model-facing).
+    Fuera de S2 (queda para el hub, no son paneles): `Home.jsx`, `AppHeader`/`webRoutes.js`
+    (etiquetas de pestaña) y el locale de fecha `es-ES`.
 - [ ] **S3. Modales.** `PreferencesModal`, `ApiKeyModal`, `MemoriesModal`, `R9Drawer`, `SideDoors`, `SessionModeToggle`, `TokenWarningBanner`.
 - [ ] **S4. Textos de libs puras y mensajes de error.** Si cambia un assert de harness, se actualiza el harness en la misma sesión.
 
@@ -209,7 +227,8 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S2a | Headers de los 3 paneles a inglés: tooltip de modelo congelado (Cochi/Asun), placeholders `modelo`→`model`, tooltip del subagente, botones de categoría de Asun (IMAGE/MUSIC), submenú OCCIDENTE→WEST, PROYECTO→PROJECT. `TitoHeader.jsx` no tenía texto visible: no se tocó. Cero lógica. Hallazgo: S2 excedía el tope de 3 archivos (~14) → dividida en S2a–S2d. | lint 0/0 · build OK · test 27/27 | `aa8d6b8` |
 | S2b | Status bars de los 3 paneles a inglés: `Archive R7`, `CANCEL`, `(working...)`, tooltip de archivado, tooltip de coste estimado, chip `cached`, contador de búsquedas web (`search`/`searches`) con tooltip y tooltip `Attach file`. Cero lógica. CLS se mantiene como acrónimo (ya presente en los watermarks en inglés). Hallazgo: `subagent.js` ('trabajando…') va a S4 y `CochiActivityFeed.jsx` ya estaba en S2d. | lint 0/0 · build OK · test 27/27 | `dee2c66` |
 | S2c | Topbar (`R7TopBar.jsx`) + mensajes y confirms de `TitoPanel.jsx`/`AsunPanel.jsx` a inglés. Cero lógica. Hallazgo: el alcance eran 4-5 archivos y la regla 1 topa en 3 → cortada; la mitad de Cochi (`CochiDesktop.jsx` + `useCochiTaskLoop.js`) pasa a **S2c-bis**, las cadenas model-facing de `AsunPanel` a **S4** y el locale numérico `es` (`R7TopBar`/`CochiStatusBar`/`R9Drawer`) a sesión propia. `AppHeader.jsx` sin cambios: su texto viene de `webRoutes.js`/`constants`. | lint 0/0 · build OK · test 27/27 | `7e68d79` |
-| S2c-bis | Mensajes y confirms de Cochi a inglés: `CochiDesktop.jsx` (borrado + brief del handoff) y `useCochiTaskLoop.js` (API key, activity feed, corte por tokens, bucle por repetición, `Done.`/`No response from the model.`, Full Access, nota de artefactos, confirm de revert). Cero lógica. Model-facing a S4. Regla 1 del plan relajada a promedio de archivos (decisión del autor). | lint 0/0 · build OK · test 27/27 | cierre S2c-bis |
+| S2c-bis | Mensajes y confirms de Cochi a inglés: `CochiDesktop.jsx` (borrado + brief del handoff) y `useCochiTaskLoop.js` (API key, activity feed, corte por tokens, bucle por repetición, `Done.`/`No response from the model.`, Full Access, nota de artefactos, confirm de revert). Cero lógica. Model-facing a S4. Regla 1 del plan relajada a promedio de archivos (decisión del autor). | lint 0/0 · build OK · test 27/27 | `5d3016d` |
+| S2d | Cierre de S2: 18 archivos de footers y flujos a inglés (wizards de imagen y prompt, secuenciador completo, message lists, permission panel, subagentes, feed de actividad, diff viewer, tablero de plan, sidebar y descargas del hub). Cero lógica: sólo cadenas. Hallazgos a S4: `promptImagen.js` (con su assert de harness), `sequencer.js`, `planStore.statusLabel`, `subagent.statusLabel`, `r9Store` y los tool results model-facing. Fuera de S2: hub (`Home.jsx`, `webRoutes.js`, locale de fecha). **Fase 1 (idioma) del camino crítico: sólo falta S3 (modales) y S4 (libs).** | lint 0/0 · build OK · test 27/27 | cierre S2d |
 
 ---
 

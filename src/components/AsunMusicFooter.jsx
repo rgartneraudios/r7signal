@@ -12,9 +12,9 @@ export default function AsunMusicFooter({ promptMusica, generating, onGenerate }
       <span style={{
         fontFamily: "'Space Grotesk', sans-serif", fontSize: '0.75rem',
         color: '#4A4850', letterSpacing: '0.05em',
-      }}>Concepto listo</span>
+      }}>Prompt ready</span>
       <button className="asun-gen-btn" disabled={generating} onClick={onGenerate}>
-        {generating ? 'Generando...' : '🎵 Generar con Lyria'}
+        {generating ? 'Generating...' : '🎵 Generate with Lyria'}
       </button>
     </div>
   )

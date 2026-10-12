@@ -39,7 +39,7 @@ export const SubagentBubble = memo(function SubagentBubble({ sub }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <StatusDot running={v.running} />
         <span style={{ fontSize: '0.64rem', letterSpacing: '0.14em', fontWeight: 700, textTransform: 'uppercase', color: ACCENT }}>
-          🤖 Subagente · {v.label}
+          🤖 Subagent · {v.label}
         </span>
         <span style={{ fontSize: '0.6rem', color: '#8A868B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{v.statusLabel}</span>
       </div>
@@ -56,12 +56,12 @@ export const SubagentBubble = memo(function SubagentBubble({ sub }) {
         </div>
       ))}
       {v.toolCount > 8 && (
-        <div style={{ fontSize: '0.58rem', color: '#6A7A8A', letterSpacing: '0.08em' }}>+{v.toolCount - 8} acción(es) más…</div>
+        <div style={{ fontSize: '0.58rem', color: '#6A7A8A', letterSpacing: '0.08em' }}>+{v.toolCount - 8} more action(s)…</div>
       )}
       {(v.iterations > 0 || v.totalTokens > 0 || v.model) && (
         <div style={{ fontSize: '0.58rem', color: '#6A7A8A', letterSpacing: '0.08em', marginTop: 2 }}>
           {v.model ? `${v.model.replace(/^~/, '').split('/').pop()} · ` : ''}
-          {v.iterations > 0 ? `${v.iterations} turno(s) interno(s)` : ''}
+          {v.iterations > 0 ? `${v.iterations} internal turn(s)` : ''}
           {v.iterations > 0 && v.totalTokens > 0 ? ' · ' : ''}
           {v.totalTokens > 0 ? `${v.totalTokens.toLocaleString()} tok` : ''}
         </div>
@@ -98,7 +98,7 @@ export const SubagentBrief = memo(function SubagentBrief({ sub, renderMarkdown }
     ? (renderMarkdown
         ? <DeferredMarkdown content={v.brief} render={renderMarkdown} />
         : v.brief)
-    : `⚠️ ${v.error || 'El subagente no devolvió un brief.'}`
+    : `⚠️ ${v.error || 'The subagent did not return a brief.'}`
   return (
     <div style={{
       alignSelf: 'flex-start', maxWidth: '100%', width: '100%',
@@ -108,10 +108,10 @@ export const SubagentBrief = memo(function SubagentBrief({ sub, renderMarkdown }
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
         <StatusDot running={false} />
         <span style={{ fontSize: '0.64rem', letterSpacing: '0.14em', fontWeight: 700, textTransform: 'uppercase', color: ACCENT }}>
-          🤖 Brief del subagente · {v.label}
+          🤖 Subagent brief · {v.label}
         </span>
         <span style={{ fontSize: '0.6rem', color: v.failed ? '#FF4466' : '#8A868B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          {v.statusLabel}{v.model ? ` · ${v.model.replace(/^~/, '').split('/').pop()}` : ''}{v.calls ? ` · ${v.calls} llamada(s)` : ''}{v.totalTokens ? ` · ${v.totalTokens.toLocaleString()} tok` : ''}
+          {v.statusLabel}{v.model ? ` · ${v.model.replace(/^~/, '').split('/').pop()}` : ''}{v.calls ? ` · ${v.calls} call(s)` : ''}{v.totalTokens ? ` · ${v.totalTokens.toLocaleString()} tok` : ''}
         </span>
       </div>
       <div style={{

@@ -89,8 +89,8 @@ const R7FooterInputs = memo(forwardRef(function R7FooterInputs({
             onBlur={() => setLeftFocused(false)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendLeft() } }}
             placeholder={
-              activeLeftPanel === 'asun' && !promptsReady.asun ? 'Conectando…' :
-              activeLeftPanel === 'tito' && !promptsReady.tito ? 'Conectando…' :
+              activeLeftPanel === 'asun' && !promptsReady.asun ? 'Connecting…' :
+              activeLeftPanel === 'tito' && !promptsReady.tito ? 'Connecting…' :
               'Asun / TITO'
             }
             disabled={

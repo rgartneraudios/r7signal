@@ -45,7 +45,7 @@ function CopyButton({ text }) {
     window.setTimeout(() => setState('idle'), 2200)
   }
 
-  const label = state === 'done' ? 'Copiado ✓' : state === 'error' ? 'No se pudo copiar' : 'Copiar prompt'
+  const label = state === 'done' ? 'Copied ✓' : state === 'error' ? 'Copy failed' : 'Copy prompt'
   return <button className="pia-btn" onClick={copy} disabled={!text}>{label}</button>
 }
 
@@ -80,7 +80,7 @@ export default function PromptImagenFlow() {
 
   function confirmDescripcion() {
     if (!brief.descripcion.trim()) {
-      setError('Escribí la descripción antes de continuar.')
+      setError('Write the description before continuing.')
       return
     }
     goTo('resultado')
@@ -108,11 +108,11 @@ export default function PromptImagenFlow() {
             fontFamily: "'Space Grotesk',sans-serif", fontSize: '0.6rem', fontWeight: 800,
             letterSpacing: '0.24em', textTransform: 'uppercase',
             color: COLORS.gold, textShadow: `0 0 12px ${rgba(COLORS.gold, 0.45)}`,
-          }}>Imágenes · Prompt en inglés</div>
+          }}>Images · Prompt in English</div>
           <div style={{
             fontFamily: "'Space Grotesk',sans-serif", fontSize: '0.6rem', fontWeight: 700,
             letterSpacing: '0.2em', textTransform: 'uppercase', color: '#8A868B',
-          }}>Paso {position} / {total}</div>
+          }}>Step {position} / {total}</div>
         </div>
 
         <div style={{
@@ -181,15 +181,15 @@ export default function PromptImagenFlow() {
             rows={4}
           />
           <div style={{ fontSize: '0.78rem', color: COLORS.neonCyan, fontWeight: 600, letterSpacing: '0.02em' }}>
-            Escribí la descripción en inglés. La App arma el prompt profesional con esto y con lo que elegiste.
+            Write the description in English. The App builds the professional prompt with this and with what you picked.
           </div>
           {spanishHint && (
             <div style={{ fontSize: '0.78rem', color: COLORS.rose, fontWeight: 600 }}>
-              Detecté acentos o ñ. El prompt final tiene que quedar 100% en inglés.
+              Accents or ñ detected. The final prompt has to be 100% in English.
             </div>
           )}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button className="pia-btn" onClick={confirmDescripcion}>Armar prompt</button>
+            <button className="pia-btn" onClick={confirmDescripcion}>Build prompt</button>
           </div>
         </div>
       )}
@@ -199,7 +199,7 @@ export default function PromptImagenFlow() {
           <pre className="pia-prompt">{prompt}</pre>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
             <CopyButton text={prompt} />
-            <button className="pia-btn ghost" onClick={restart}>Nuevo prompt</button>
+            <button className="pia-btn ghost" onClick={restart}>New prompt</button>
           </div>
         </div>
       )}
@@ -209,9 +209,9 @@ export default function PromptImagenFlow() {
           className="pia-btn ghost"
           onClick={() => goTo(prevStep(step))}
           disabled={step === WIZARD_ORDER[0]}
-        >◀ Atrás</button>
+        >◀ Back</button>
         {step !== WIZARD_ORDER[0] && (
-          <button className="pia-btn ghost" onClick={restart}>Reiniciar</button>
+          <button className="pia-btn ghost" onClick={restart}>Restart</button>
         )}
       </div>
     </div>

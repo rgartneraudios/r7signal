@@ -40,7 +40,7 @@ function PaginaDescargas({ onClose }) {
           onMouseEnter={e => { e.currentTarget.style.color = THEME.textHigh; e.currentTarget.style.borderColor = THEME.celeste35 }}
           onMouseLeave={e => { e.currentTarget.style.color = THEME.textMed; e.currentTarget.style.borderColor = THEME.borderSubtle }}
         >
-          ◀ Volver
+          ◀ Back
         </button>
 
         <div style={{
@@ -50,10 +50,10 @@ function PaginaDescargas({ onClose }) {
           boxShadow:`0 8px 40px rgba(0,0,0,0.5)`, backdropFilter:'blur(8px)', textAlign:'center',
         }}>
           <div style={{ fontFamily:"'Orbitron',monospace", fontSize:'1.6rem', fontWeight:700, color:THEME.textHigh, letterSpacing:'0.08em', marginBottom:16 }}>
-            DESCARGAR R7 DESKTOP
+            DOWNLOAD R7 DESKTOP
           </div>
           <div style={{ fontSize:'0.9rem', color:THEME.textMed, fontFamily:"'Exo 2',sans-serif", lineHeight:1.6, marginBottom:28 }}>
-            Elegí tu plataforma para descargar R7 Desktop — tu equipo de agentes local
+            Pick your platform to download R7 Desktop — your local team of agents
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
             {PLATFORMS.map(p => (
@@ -135,8 +135,8 @@ export default function Descargas({ variant }) {
             </svg>
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:'2px' }}>
-            <div style={{ fontSize:'0.85rem', fontWeight:700, letterSpacing:'0.15em', color:'#D4D8DC' }}>DESCARGAR R7 DESKTOP</div>
-            <div style={{ fontSize:'0.65rem', color:'#9BA3A8', fontWeight:500, letterSpacing:'0.05em' }}>TITO · Asun · Cochi — tu equipo local</div>
+            <div style={{ fontSize:'0.85rem', fontWeight:700, letterSpacing:'0.15em', color:'#D4D8DC' }}>DOWNLOAD R7 DESKTOP</div>
+            <div style={{ fontSize:'0.65rem', color:'#9BA3A8', fontWeight:500, letterSpacing:'0.05em' }}>TITO · Asun · Cochi — your local team</div>
           </div>
         </button>
       ) : (
@@ -161,7 +161,7 @@ export default function Descargas({ variant }) {
             e.currentTarget.style.boxShadow = 'none'
           }}
         >
-          ⬇ DESCARGAR R7 DESKTOP
+          ⬇ DOWNLOAD R7 DESKTOP
         </button>
       )}
     </>

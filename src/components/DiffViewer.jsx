@@ -65,7 +65,7 @@ export default function DiffViewer({ diff }) {
         fontSize: '0.7rem',
         fontFamily: "'Space Grotesk', sans-serif",
       }}>
-        {isNewFile ? '+ Nuevo: ' : 'Editado: '}{path}
+        {isNewFile ? '+ New: ' : 'Edited: '}{path}
       </div>
       <div style={{ maxHeight: 340, overflowY: 'auto' }}>
         {numbered.map((h, idx) => {

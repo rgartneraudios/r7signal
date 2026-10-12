@@ -10,7 +10,7 @@ export default function CochiActivityFeed({ activity }) {
   if (activity.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: 20, color: '#6A7A8A' }}>
-        <div className="cd-pulse" style={{ display: 'inline-block', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Procesando turno…</div>
+        <div className="cd-pulse" style={{ display: 'inline-block', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Processing turn…</div>
       </div>
     )
   }
@@ -22,9 +22,9 @@ export default function CochiActivityFeed({ activity }) {
       padding: '10px 14px', alignSelf: 'flex-start', maxWidth: '100%',
       display: 'flex', flexDirection: 'column', gap: 4,
     }}>
-      <div style={{ fontSize: '0.68rem', color: '#6A7A8A', letterSpacing: '0.15em', fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' }}>🔄 Cochi trabajando…</div>
+      <div style={{ fontSize: '0.68rem', color: '#6A7A8A', letterSpacing: '0.15em', fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' }}>🔄 Cochi working…</div>
       {hiddenCount > 0 && (
-        <div style={{ fontSize: '0.6rem', color: '#5A585C', letterSpacing: '0.08em' }}>+{hiddenCount} acción(es) anterior(es)…</div>
+        <div style={{ fontSize: '0.6rem', color: '#5A585C', letterSpacing: '0.08em' }}>+{hiddenCount} earlier action(s)…</div>
       )}
       {shown.map((a, i) => (
         <div key={i} className="cd-activity-item" style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
