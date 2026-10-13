@@ -72,5 +72,17 @@ check('titulo del README', readme.split('\n')[0], '# R7 Desktop')
 const suites = readdirSync(here).filter((f) => f.endsWith('.harness.mjs')).length
 check('el README declara las suites reales', Number((readme.match(/(\d+) suites in total/) || [])[1]), suites)
 
+// Las capturas del README viven en docs/media (S13-bis): una image rota en la portada del repo
+// es un dato podrido mas, igual que la version o el conteo de suites. El conteo real de tomas
+// esta fijado para que borrar una no pase en silencio.
+console.log('— capturas —')
+const shotRefs = [...readme.matchAll(/\]\((docs\/media\/[^)]+\.png)\)/g)].map((m) => m[1])
+check('capturas citadas por el README', shotRefs.length, 5)
+for (const ref of shotRefs) {
+  check(`captura presente ${ref}`, existsSync(join(root, ref)), true)
+}
+const shots = readdirSync(join(root, 'docs', 'media')).filter((f) => f.endsWith('.png'))
+check('capturas en docs/media', shots.length, 9)
+
 console.log(`\n[metadata] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)

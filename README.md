@@ -26,6 +26,31 @@ Each agent gets its own wheel and its own workspace folder. All three share the 
 loop: the model calls tools, the system executes them and returns the results, and the loop ends when
 the model answers with text (capped at 25 iterations).
 
+## Screenshots
+
+Two panels share one window: each agent keeps its own wheel, its own workspace folder and its own
+model selector.
+
+![Cochi and Asun in one window](docs/media/06-cochi-session.png)
+
+*Cochi, the task agent, next to Asun, who keeps images, music and project mode.*
+
+![Asun in a live turn](docs/media/07-asun-session.png)
+
+*Asun answering, with Tito one tab away.*
+
+![Tito answering](docs/media/08-tito-session.png)
+
+*Tito, the search and telemetry unit: chat with web search and a tone of its own.*
+
+![The right side door](docs/media/05-right-door.png)
+
+*The right side door: saved sessions, plans and R9 selections.*
+
+![Session Memories](docs/media/09-Session-Memories.png)
+
+*Session Memories (HOT): the global memory file travels as a stable prefix block.*
+
 ## What is in here
 
 - `src/lib/` — the pure, harness-tested logic: the wheel, sessions, plans, snapshots, permissions,
