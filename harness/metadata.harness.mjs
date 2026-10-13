@@ -127,5 +127,26 @@ check('toda semilla trae etiquetas', [...nota.matchAll(/^\*\*Labels:\*\* `.+`$/g
 check('keyring e i18n van como good first issue', [...nota.matchAll(/^\*\*Labels:\*\* `good first issue`/gm)].length, 2)
 check('la semilla abierta va como help wanted', /^\*\*Labels:\*\* `help wanted`$/m.test(nota), true)
 
+// El doc de difusion (S24-bis) cita datos que se pudren solos —la nota, el doc de la innovacion, el asset
+// del Release y las 3 issues— y es el unico lugar del repo donde se escribe para afuera: las cifras que
+// publica no pueden salir de las que mide docs/QUE-ES-R7.md, y los posteos cortos tienen que entrar en X.
+console.log('— difusion —')
+const difusion = readFileSync(join(root, 'docs', 'DIFUSION-S24.md'), 'utf8')
+check('docs/DIFUSION-S24.md existe y titula', difusion.split('\n')[0], '# Announcement — R7 Desktop (EN / ES)')
+check('linkea la nota al equipo DeepSeek', difusion.includes(`${REPO_URL}/blob/main/docs/PARA-DEEPSEEK.md`), true)
+check('linkea el doc de la innovacion', difusion.includes(`${REPO_URL}/blob/main/docs/QUE-ES-R7.md`), true)
+check('linkea el asset del Release', difusion.includes(`/download/v${VERSION}/${INSTALLER_ASSET}`), true)
+for (const n of [11, 12, 13]) {
+  check(`linkea la issue #${n}`, difusion.includes(`${REPO_URL}/issues/${n}`), true)
+}
+const figuras = [...new Set([...difusion.matchAll(/\d+(?:\.\d+)?%/g)].map((m) => m[0]))]
+check('sin cifras que no sean las medidas', figuras, ['13.8%', '42.7%', '77.5%'])
+check('esas cifras estan en el doc medido', figuras.every((f) => queEs.includes(f)), true)
+check('no generaliza el ahorro', /no general savings figure\s+is claimed/.test(difusion), true)
+check('declara el OUT como no establecido', difusion.includes('not established'), true)
+const posts = [...difusion.matchAll(/```text\n([\s\S]*?)```/g)].map((m) => m[1].trim())
+check('dos posteos cortos (EN y ES)', posts.length, 2)
+check('los cortos entran en X (280)', posts.every((p) => p.length <= 280), true)
+
 console.log(`\n[metadata] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)
