@@ -1,8 +1,10 @@
 # Feedback for the DSH Harness team (EN / ES)
 
-Nota lista para pegar en el casillero de feedback de la app (los tres puntos). Todo lo de acá se observó
-el 13/10 en una máquina Windows 11, dentro de una sesión real de trabajo —build, gates y push de un
-proyecto Tauri + React—, no en un banco de pruebas. Las rutas personales van generalizadas a propósito:
+Nota lista para pegar en el casillero de feedback de la app (los tres puntos). **De qué habla: del sandbox
+de este harness —el que envuelve los comandos que ejecuto—, no de R7 Desktop.** El proyecto que estaba
+compilando sólo aporta el caso, y ningún síntoma de acá sale de su código: lo que falla es el entorno, no la
+app. Todo se observó el 13/10 en **Windows 10 Pro 22H2 (build 19045.6466)**, dentro de una sesión real de
+trabajo —build, gates y push—, no en un banco de pruebas. Las rutas personales van generalizadas a propósito:
 el repo no lleva identidad (S6), y esto es feedback del sandbox, no datos del autor.
 
 Carril: esto es DSH Harness (sandbox, plugins, API). Los pedidos de plataforma —reporte de caché por
@@ -11,8 +13,8 @@ endpoint, motor de búsqueda— ya salieron por mail y viven en `docs/PARA-DEEPS
 ## Short version — pegar en el casillero (EN)
 
 ```text
-Windows 11 · DSH 2.0 (banner: Harness 0.1 in developer testing) · sandbox workspace-write
-Working project: Tauri + React + Vite, npm, git.
+Windows 10 Pro 22H2 (build 19045.6466) · DSH 2.0 (banner: Harness 0.1 in developer testing)
+Subject: the sandbox that wraps my commands, not the app I was building (Tauri + React + Vite, npm, git).
 
 Documented, but expensive in practice: child processes that capture output through piped stdio die with
 `spawn EPERM` (npm run build stops inside esbuild), and writes outside the workspace are denied, so npm
@@ -36,8 +38,8 @@ Built with DSH: https://github.com/rgartneraudios/r7signal
 ## Versión corta — pegar en el casillero (ES)
 
 ```text
-Windows 11 · DSH 2.0 (banner: Harness 0.1 en pruebas) · sandbox workspace-write
-Proyecto: Tauri + React + Vite, npm, git.
+Windows 10 Pro 22H2 (build 19045.6466) · DSH 2.0 (banner: Harness 0.1 en pruebas)
+Tema: el sandbox que envuelve mis comandos, no la app que estaba compilando (Tauri + React + Vite, npm, git).
 
 Documentado, pero caro en la práctica: los procesos hijos que capturan salida por stdio canalizado mueren
 con `spawn EPERM` (npm run build se detiene dentro de esbuild), y las escrituras fuera del workspace se
@@ -67,14 +69,18 @@ Comando: `npm run build` (Vite 7 + esbuild 0.27.3).
 Observado: `Error: spawn EPERM at ChildProcess.spawn (node:internal/child_process:421:11)`, desde
 `esbuild/lib/main.js:1978 (ensureServiceIsRunning)`. El servicio de esbuild no puede arrancar porque el
 hijo hereda stdio canalizado.
-Clasificación: **documentado** — es la frontera conocida de named pipes en este sandbox. Se reporta por
-costo: es el gate obligatorio del repo, así que todo cierre de sesión pide un permiso extra.
+Mecanismo: el harness captura la salida del comando por una tubería con nombre (named pipe), y este sandbox
+no deja que los hijos las abran; esbuild arranca como proceso aparte y muere ahí mismo.
+Clasificación: **documentado** — es la frontera conocida. Se reporta por costo: es el gate obligatorio del
+repo, así que todo cierre de sesión pide un permiso extra.
 
 ### 2. Caché y logs de npm bloqueados (documented)
 
 Comandos: `npm update browserslist @babel/core`, `npm view braces versions`.
 Observado: `EPERM: operation not permitted, open '%APPDATA%\npm-cache\_cacache\tmp\<rand>'` y
 `Log files were not written due to an error writing to the directory: %APPDATA%\npm-cache\_logs`.
+Mecanismo: npm escribe su caché y sus logs en `%APPDATA%`, fuera del workspace, y el sandbox sólo deja
+escribir dentro del workspace.
 Clasificación: **documentado** — el workspace es lo único escribible. El costo es que `npm audit`, que sólo
 lee, también termina pidiendo permiso ampliado por su log.
 
