@@ -130,7 +130,12 @@ casillero es del **Harness** (sandbox, plugins, API) y los pedidos de plataforma
 EN y ES más la evidencia cruda de 5 hallazgos —comando, error literal y clasificación—, separando lo
 **documentado** (stdio canalizado → `spawn EPERM` en esbuild; caché/logs de npm fuera del workspace) de lo
 **no documentado** (`%TEMP%` real sin permiso de borrado aun escalado, TLS de schannel que rompe
-`git push`/`curl`, CIM sin acceso). `metadata.harness.mjs` sube a **102 checks**.
+`git push`/`curl`, CIM sin acceso). `metadata.harness.mjs` sube a **105 checks**: después de la primera
+redacción el autor marcó dos defectos de la nota —el SO estaba **inventado** (decía Windows 11 y el real es
+**Windows 10 Pro 22H2, build 19045.6466**, medido en el registro) y no se entendía de qué hablaba— así que se
+corrigió el SO y la cabecera declara que el tema es **el sandbox del harness**, no R7 Desktop: el proyecto
+sólo aporta el caso. Los 2 hallazgos documentados sumaron su mecanismo en palabras simples (named pipes en el
+stdio canalizado; caché y log de npm fuera del workspace).
 **Estado (13/10): en PAUSA por decisión del autor** — no hay sesión programada. Se retoma cuando haya
 señal: respuesta de DeepSeek al mail, comentario en el anuncio (`discussions/15`), issue/PR nuevo de
 terceros, o simplemente ganas de hacer **S4-ter-b**. Nada de lo que queda es urgente.
