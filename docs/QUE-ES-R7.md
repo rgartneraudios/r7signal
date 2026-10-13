@@ -9,6 +9,33 @@ promised is no longer pending: the recipe is committed and the numbers are in
 ["What was measured"](#what-was-measured), with their caveats. The OUT side is still open — and this
 project does not publish claims it has not measured.
 
+## Why three agents, and why each one has tiers
+
+Three agents instead of one, because the work does not live in one place and does not want the same
+register: files and code (Cochi), media and planning (Asun), the live web (Tito). They are meant to
+collaborate — the user is the messenger between them, and one artifact crosses over: the plan board Asun
+writes and Cochi executes. Each keeps its own wheel, so a session with one agent never pays for the
+history of the others, and each panel picks the cheapest model that can do the job.
+
+**Cochi — the team's file administrator.** It has two tiers. *Centinela* is the everyday driver: a
+low-cost flash model, text only. *Terminator* is the escalation: a bigger vision-capable model for work
+that needs more rigor. The subagents Cochi spawns can be configured in either tier — they reuse the
+parent's endpoint and key, which is why the selector only offers the tiers that live behind it.
+
+**Asun — three modes in one agent.** The conversational side has a base tier and a High tier, like
+Cochi: *MaríaBase* is multimodal and cheap to run with a very low cached-input rate, and *IrmaMax* is the
+reasoning escalation, which in turn carries the extra *Project* mode for the IrmaMax architect (the
+planning mode described above). The other two modes are not chat: in image generation Asun interviews
+the user to build the ideal prompt before anything is rendered, and in music an LLM writes the song
+prompt while an audio model renders it.
+
+**Tito — current web search.** Perplexity was the first choice, and it was dropped on cost. The rule
+that settled it is this repository's own: the engine left behind does not cache the prefix, and an
+expensive answer that caches is cheaper per turn than a cheaper one that does not. What ships is the
+same flash model as Centinela plus OpenRouter's default search engine as a server tool — around $0.007
+per search, capped at two searches per turn, with the citations painted back into the answer instead of
+being taken from what the model claims to have read.
+
 ## The problem
 
 Most agent apps resend the whole conversation every turn. Two things follow.

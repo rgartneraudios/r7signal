@@ -112,6 +112,7 @@ check('el doc mide y no generaliza', /No general savings figure is claimed/.test
 check('el doc explica sesion fria y Memories', queEs.includes('Cold by default, and what "Session Memories" adds'), true)
 check('el doc explica el modo Proyecto de Asun', queEs.includes("Asun's project mode"), true)
 check('el doc separa prompting de entrenamiento', queEs.includes('What prompting can and cannot do'), true)
+check('el doc explica el por que de los 3 agentes', queEs.includes('## Why three agents, and why each one has tiers'), true)
 
 // La nota al equipo DeepSeek (S18) es el escrito abierto del autor: sus pedidos y las 3
 // semillas de issues que el repo publica para que alguien mas las tome.
