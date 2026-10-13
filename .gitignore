@@ -37,3 +37,8 @@ output/
 
 # Estado local del CLI de Supabase (project-ref, pooler-url, linked-project): nunca versionado
 **/.temp/
+
+# Cuaderno y restos de sesiones locales (no versionados; se conservan solo en el equipo)
+resumen.txt
+tauri-build-log*.txt
+check_braces.cjs
