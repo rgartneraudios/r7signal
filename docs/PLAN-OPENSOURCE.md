@@ -85,8 +85,9 @@ viva era la de `PreferencesModal` **sin `onSave`**, que nunca corre—, con `src
 `src/lib/supabaseConfig.js`, su harness y la dependencia fuera del árbol: `npm audit` **18 → 15** y el
 chunk `supabase-*.js` (164,77 kB / 43,96 kB gzip) fuera del build. Lo que queda de Supabase es del **hub
 web** (edge function legacy `get-agent-prompts/` y `finance-proxy/`), sin dependencia npm.
-**Próxima sesión: S24-bis** (difusión al equipo DeepSeek; cerrada S24-a, la higiene previa, y Discussions ya
-está habilitado). Candidata siguiente: **S4-ter** (contenido del hub y locale de fecha/número).
+**S24-a y S24-bis CERRADAS** (higiene del repo público antes de difundir, y el anuncio EN+ES con sus
+asserts). **Próxima sesión: S4-ter** (contenido del hub y locale de fecha/número); queda del lado del
+autor el pegado del anuncio en cada canal.
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -923,16 +924,22 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   pasó de `has_discussions: false` a **`true`**, con su tema de bienvenida (GitHub no deja activarlo sin
   un primer tema). Categorías: las 6 por defecto, con **Announcements** (formato *announcement*: sólo el
   owner crea temas, cualquiera comenta) como destino del anuncio.
-- [ ] **S24-bis. Difusión al equipo DeepSeek — PENDIENTE.** Texto de anuncio con **versión EN y ES**, y
-  dos registros por canal: largo (Discussions / foro / mail a devrel) y corto (X ≤280 / LinkedIn).
-  Contenido: qué es R7 Desktop, el ahorro **medido** sin salir de `docs/QUE-ES-R7.md` (77,5% de prefijo
-  cacheado en los turnos 2+, billable 655 vs 1425 con prefijos byte-idénticos, $0.0006 de gasto, y las
-  salvedades: n=1, no benchmark, OUT **no** establecido), el pedido de **entrenar el registro comprimido**
-  (ya redactado en `docs/PARA-DEEPSEEK.md`, ask #2) y el link a la nota más las issues **#11, #12 y #13**.
-  Link de descarga incluido: el asset de `v0.1.0` ya está congelado en el harness. Archivos previstos: el
-  doc de difusión, este plan y `harness/metadata.harness.mjs` (congelar nota + URLs de issues, porque se
-  pudren solos). **Pendiente de decisión:** el canal oficial de developer relations de DeepSeek — sin
-  dirección verificada hasta ahora.
+- [x] **S24-bis. Difusión al equipo DeepSeek — CERRADA (1 doc + 1 harness).** `docs/DIFUSION-S24.md` es el
+  anuncio, en inglés con su versión en español (regla 8: el nuevo nace en EN) y en **dos registros por
+  idioma**: largo para GitHub Discussions, foros y el mail al equipo, y corto para X/LinkedIn, medido
+  (272 y 279 caracteres, el harness falla si pasa de 280). Contenido: qué es R7 Desktop (rueda
+  append-only, pin de proveedor, compactación sin modelo, BYOK sin proxy), la **medición** de S19 —13,8% /
+  42,7% / 77,5% cacheados y billable 655 vs 1425, con prefijos byte-idénticos, $0.0006 de gasto—, el
+  **pedido de entrenar el registro comprimido** (el ask #2 de `docs/PARA-DEEPSEEK.md`, con la semilla del
+  OUT declarada inconclusa) y los links: la nota, el doc de la innovación, el asset de `v0.1.0` y las
+  issues **#11, #12 y #13**. Cierra con una sección explícita de **lo que el texto NO reclama** (sin
+  porcentaje de ahorro general, no es benchmark, OUT no establecido, sin free tier, sin promesa de
+  roadmap). Cortes de honestidad verificables: el harness **rechaza cualquier porcentaje que no sean los
+  tres medidos** y exige que esos tres estén en `docs/QUE-ES-R7.md`.
+  **Corte (regla 5) y pendiente del autor:** el **mail a developer relations sigue sin dirección
+  verificada** —no hay canal confirmado, así que el doc lo dice en vez de inventar un correo— y el
+  **pegado en cada canal lo hace el autor** (Discussions → Announcements, borrando el tema de bienvenida
+  cuando publique el real; foros; X/LinkedIn).
 
 ---
 
@@ -1013,6 +1020,8 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S23 | **E2E real del Modo Proyecto (Asun IrmaMax → tablero → Cochi) + 2 fixes del snapshot.** El autor corrió el guion completo con su key sobre `63af79a`, workspace vacío (`output/s23-scratch`) y Full Access: Asun entrevistó y guardó el plan `Saludo CLI` (3 bloques con `evidence`) en el tablero; `→ Send the Plan to Cochi` mandó el handoff de tablero y Cochi llamó `read_project_plan` y **preguntó qué bloque** con `ask_user` (scope `full` por `touchesBoard`, sin corte del Guard Full Access); el bloque A ejecutó, marcó `in_progress` → `done` con evidencia y el tablero subió a `1/3`. **El re-plan salió de un defecto real**, no de laboratorio: el bloque C pedía un commit de git en una carpeta anidada en el repo de R7SIGNAL, así que `git log -1` resolvía al historial de la app (verificado con `rev-parse --show-toplevel`) y un commit habría caído sobre otro proyecto; Cochi registró `request_replan` (motivo + propuesta) sin ejecutar git y sin tocar definición ni estado, el usuario arbitró `→ Have Asun amend it` y Asun re-guardó con el mismo `planId` y **sólo** C, conservando `done` + `evidenceLog` de A y B (el merge DEFINICIÓN↔ESTADO quedó medido con estado real, no con fixture); B (tests `node:test`) y C (repo propio aislado, commit `ffef85b`, README, `.gitignore`) cerraron el plan en `3/3 · 100%` con el repo de la app intacto (HEAD seguía en `63af79a`). **Medido** (`[cache:audit]`, 4 turnos de Cochi + 2 de Asun): 32 requests / 37 tools / **54.749 tokens facturables** / **≈$0,0072**, hit **0 en el primer request de cada turno y 86-98% dentro del turno**, `sysHash` fijo (`d7dc7ff3`) y `sysStable: true` en todos menos el primero: el prompt base no se movió, sólo crecieron los briefs (3.799 → 5.337 chars) y ningún turno activó `[USER MEMORIES]` (corrida en frío, como pide el guion). **Fix 1 (el revert dejaba carpetas huecas):** `write_file`/`create_dir`/`move_file`/`copy_file` capturaban sólo la ruta destino y la cadena de padres creada con `mkdir` recursivo entraba al snapshot recién en el barrido de `captureWorkspace` (antes del primer `run_command`), donde ya aparecía como preexistente → los archivos volvían y `src/`/`test/` quedaban vacías; se agregó el helper puro **`missingParentCandidates`** (de fuera hacia dentro, sin salir de la raíz del workspace) y la captura previa de la cadena faltante en las 4 tools, con harness **`cochiTools` 86 → 95 checks**. **Fix 2:** los avisos del undo afirmaban *"Changes to workspace files are covered by revert"* aun cuando no había nada que revertir → ahora distinguen **sin snapshot** (nada revertido) de **sin diferencias** (nada que revertir). **Guion versionado** en `docs/S23-E2E-PROYECTO.md` con el paso a paso, los números y la corrección del disparador de re-plan (tiene que apuntar a un defecto real del plan generado). **Abiertos:** `CochiAskUserPanel.jsx` sigue pintando español (`❓ Cochi pregunta`, `Responder`, `Omitir`), deuda de Fase 1 —S23 ya gastó sus 3 archivos de código—; el primer request de cada turno reporta `cached=0` (la caché aparece dentro del turno, mientras S19 midió hit entre turnos en el brazo pineado: la diferencia es dónde se inserta el brief de la rueda) y conviene un workspace con repo propio, porque `git log/status` en una carpeta sin repo resuelve al repo padre. | lint 0/0 · build OK · test 33/33 | `8444608` |
 
 | S24-a | **Higiene del repo público antes de difundir.** `llms.txt` seguía trackeado desde el INITIAL (2026-05-28) vendiendo el feed viejo —*"R7Signal is the AI-Friendly Data Layer. Token-optimized, post-cutoff data feed for LLMs and AI agents"*, la MISMA frase que S16-ter sacó de la descripción del repo— y lo acompañaban `tauri-build-log.txt`/`tauri-build-log2.txt` (logs de build de julio, `877fa8b`) y `check_braces.cjs` (script suelto). Los 4 **borrados** tras confirmar por `git grep` que **nada** los referencia; `resumen.txt` (el cuaderno del autor, citado como "resumen v24" en `2645d9e`) **destrackeado** y conservado en disco. `.gitignore` cubre `resumen.txt`, `tauri-build-log*.txt` y `check_braces.cjs`. Cero lógica de app. **En la misma sesión el autor habilitó Discussions** (`GET /repos/…`: `has_discussions` `false`→**`true`**), que era el bloqueo del canal del anuncio: 6 categorías por defecto y **Announcements** como destino (sólo el owner crea temas, cualquiera comenta). | lint 0/0 · build OK · test 33/33 | `2c2c394` |
+
+| S24-bis | **Difusión al equipo DeepSeek: el anuncio y sus guardarraíles.** `docs/DIFUSION-S24.md` trae el texto en inglés con su versión en español y **dos registros por idioma** (largo para Discussions/foros/mail; corto para X/LinkedIn, 272 y 279 caracteres). Cubre qué es R7 Desktop, la medición de S19 (13,8% / 42,7% / 77,5% y billable 655 vs 1425, prefijos byte-idénticos, $0.0006), el pedido de **entrenar el registro comprimido** y los links a la nota, al doc de la innovación, al asset de `v0.1.0` y a las issues **#11/#12/#13**. Cierra con lo que el texto **no** reclama: sin porcentaje general de ahorro, no benchmark, OUT no establecido, sin free tier, sin promesa de roadmap. `metadata.harness.mjs` pasa a **73 checks** y congela lo que se pudre: los 4 links, las 3 issues, que ningún porcentaje salga de los tres medidos —y que esos tres estén en `docs/QUE-ES-R7.md`— y el tope de 280 en los posteos cortos. **Pendiente del autor:** el mail a devrel no tiene dirección verificada (el doc lo declara en vez de inventarla) y el pegado en cada canal es suyo. | lint 0/0 · build OK · test 33/33 | `3159204` |
 
 ---
 
