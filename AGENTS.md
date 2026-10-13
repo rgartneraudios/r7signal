@@ -113,9 +113,12 @@ por `sourceMappingURL`); sólo `package-lock.json`. Medido: `npm audit` **15 rut
 **6 avisos distintos → 3**. Quedan `braces` 3.0.3 (**high sin parche publicado**: es la última versión),
 `postcss-selector-parser` 6.1.4 (moderate; el fix 7.1.6 es major) y `esbuild` 0.27.3 (low; lo frena el rango
 de Vite). Los 3 son toolchain de build: no entran al bundle. **El banner de GitHub no coincide con el
-lockfile**: decía 5 (1/2/2) cuando la cuenta propia daba 6 (3/1/2), y su lista no es pública
+lockfile**: antes del push decía 5 (1 high / 2 moderate / 2 low) cuando la cuenta propia daba 6 (3/1/2), y
+**después del push dice 3 (0 high / 2 moderate / 1 low)** — el único `high` era uno de los dos de
+`browserslist`, **no** `braces`, que sigue y ahí cuenta como moderate—; su lista no es pública
 (`/dependabot/alerts` → **401**). Y **las PRs del bot no se cierran solas** al aterrizar la versión: `#4` y
-`#6` siguen abiertas con sus bumps de S20 ya en `main` (corrige lo que decía S16-quater).
+`#6` siguen abiertas con sus bumps de S20 ya en `main` (corrige lo que decía S16-quater), y `#16`/`#10` se
+sumaron a la lista: cerrarlas es acción del autor (`@dependabot close`).
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
