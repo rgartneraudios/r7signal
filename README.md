@@ -10,7 +10,8 @@ it grows past 70k tokens, and each model is pinned to providers that report cach
 without the pin the router balances happily between providers that report `cached=0`.
 
 The project is a proof of concept, published so it can be criticized and improved — especially by
-people who care about token cost.
+people who care about token cost. The design rationale, and the claim it does *not* make yet, are
+written out in [`docs/QUE-ES-R7.md`](docs/QUE-ES-R7.md).
 
 ## The three agents
 

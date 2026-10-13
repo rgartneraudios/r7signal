@@ -99,5 +99,14 @@ check('una url por plataforma', [...descargas.matchAll(/url: [A-Za-z_$]/g)].leng
 check('el README linkea los Releases', readme.includes(`](${RELEASES_URL})`), true)
 check('el README nombra el asset', readme.includes(INSTALLER_ASSET), true)
 
+// El doc de la innovacion (S17) es la portada tecnica del repo: el conteo de suites que declara se
+// pudre igual que el del README, y un doc publico que miente en el numero es peor que no tenerlo.
+console.log('— doc de la innovacion —')
+const queEs = readFileSync(join(root, 'docs', 'QUE-ES-R7.md'), 'utf8')
+check('docs/QUE-ES-R7.md existe y titula', queEs.split('\n')[0], '# What is R7?')
+check('el doc declara las suites reales', Number((queEs.match(/(\d+) harness suites/) || [])[1]), suites)
+check('el README linkea el doc', readme.includes('](docs/QUE-ES-R7.md)'), true)
+check('el doc no promete cifras de ahorro', /no savings figures are claimed/.test(queEs), true)
+
 console.log(`\n[metadata] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)
