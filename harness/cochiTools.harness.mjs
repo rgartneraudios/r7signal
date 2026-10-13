@@ -2,7 +2,7 @@
 // Ejecutar:  node harness/cochiTools.harness.mjs   (o npm run harness:tools)
 // El foco actual es resolveCommandCwd: run_command debe caer a la raíz del
 // workspace cuando el modelo no manda `cwd` (bug: corría en el cwd del proceso).
-import { resolveCommandCwd, buildShellInvocation, getToolsForPermission, formatRunCommandOutput, applyTextReplacement, isSkippedWalkEntry } from '../src/lib/cochiTools.js'
+import { resolveCommandCwd, buildShellInvocation, getToolsForPermission, formatRunCommandOutput, applyTextReplacement, isSkippedWalkEntry, missingParentCandidates } from '../src/lib/cochiTools.js'
 
 let pass = 0
 let fail = 0
@@ -148,6 +148,34 @@ console.log('- #4b applyTextReplacement: tolera CRLF/LF sin romper el EOL del ar
 
   const r7 = applyTextReplacement('hola\nmundo\n', 'mundo', 'mundo')
   check('reemplazo sin cambio -> not_found', r7.status, 'not_found')
+}
+
+// ─── Cadena de carpetas padre (E2E S23: el revert dejaba carpetas huecas) ─────
+// Las tools que mutan crean los padres con mkdir recursivo; si la cadena no existe
+// hay que capturarla ANTES como inexistente. El barrido del workspace corre después
+// del primer run_command y ya la vería creada -> el revert restauraba el archivo y
+// dejaba la carpeta vacía.
+console.log('\n— missingParentCandidates —')
+{
+  check('ruta anidada, de fuera hacia dentro',
+    missingParentCandidates('C:/ws/a/b/c.js', 'C:/ws'), ['C:/ws/a', 'C:/ws/a/b'])
+  check('raíz con separador final',
+    missingParentCandidates('C:/ws/a/b/c.js', 'C:/ws/'), ['C:/ws/a', 'C:/ws/a/b'])
+  check('backslashes normalizados',
+    missingParentCandidates('C:\\ws\\a\\b.js', 'C:/ws'), ['C:/ws/a'])
+  check('archivo en la raíz no tiene candidatos',
+    missingParentCandidates('C:/ws/x.js', 'C:/ws'), [])
+  check('fuera del workspace → vacío',
+    missingParentCandidates('C:/otro/a/b.js', 'C:/ws'), [])
+  check('prefijo parecido NO cuela (ws2 vs ws)',
+    missingParentCandidates('C:/ws2/a/b.js', 'C:/ws'), [])
+  check('sin workspaceRoot → vacío',
+    missingParentCandidates('C:/ws/a/b.js', ''), [])
+  check('ruta vacía → vacío',
+    missingParentCandidates('', 'C:/ws'), [])
+  check('tres niveles',
+    missingParentCandidates('C:/ws/a/b/c/d.js', 'C:/ws'),
+    ['C:/ws/a', 'C:/ws/a/b', 'C:/ws/a/b/c'])
 }
 
 console.log(`\n${pass} PASS - ${fail} FAIL`)

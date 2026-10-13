@@ -885,6 +885,30 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   **publicado** de `v0.1.0`, congelado con las 34 suites de ese build. **La regla 5 no se activó** —el
   frente no creció—: lo que queda de Supabase es del **hub web** (`finance-proxy/` y la edge function
   legacy `get-agent-prompts/`), sin dependencia npm.
+- [x] **S23. E2E real del Modo Proyecto (Asun IrmaMax + tablero + Cochi) — CERRADA (guion versionado + 2 fixes).**
+  Corrida real del autor sobre `63af79a`, app en dev y su propia key, workspace vacío y Full Access: Asun
+  entrevistó y guardó un plan de 3 bloques en el tablero; el handoff de tablero hizo que Cochi leyera el
+  plan y **preguntara** qué bloque (`ask_user` pausó el loop, scope `full` por `touchesBoard`); A ejecutó y
+  marcó `in_progress` → `done` con evidencia; el **re-plan** salió de un defecto real (el bloque C pedía un
+  commit de git en una carpeta anidada en el repo de R7SIGNAL, así que `git log -1` resolvía al historial de
+  la app) — Cochi registró `request_replan` sin tocar definición ni estado, el usuario arbitró
+  `Have Asun amend it` y Asun re-guardó con el mismo `planId` y **sólo** C, conservando `done` + evidencia de
+  A/B (el merge DEFINICIÓN↔ESTADO quedó medido con estado real, no con fixture); B y C cerraron el plan en
+  `3/3`, con repo propio aislado en el workspace (commit `ffef85b`) y el repo de la app intacto.
+  **Medido** (`[cache:audit]`): 32 requests / 37 tools / **54.749 tokens facturables** / **≈$0,0072** en los
+  4 turnos de Cochi, hit **86-98% dentro del turno**, `sysHash` fijo (`d7dc7ff3`) y `sysStable: true` en
+  todos menos el primero: el prompt base no se movió, sólo crecieron los briefs (3.799 → 5.337 chars).
+  **Fixes de la sesión:** (1) el revert dejaba **carpetas huecas** cuando la mutación creaba la cadena de
+  padres —`write_file`/`create_dir`/`move_file`/`copy_file` capturaban sólo la ruta destino, y el barrido de
+  `captureWorkspace` (antes del primer `run_command`) veía esas carpetas ya creadas, marcándolas
+  preexistentes—; arreglado con el helper puro `missingParentCandidates` + captura previa de la cadena
+  faltante, con harness `cochiTools` **86 → 95 checks**; (2) el aviso del undo afirmaba *"covered by
+  revert"* aun cuando no había nada que revertir: ahora son dos textos explícitos (sin snapshot ≠ nada
+  revertido). **Guion versionado** en `docs/S23-E2E-PROYECTO.md` (paso a paso, números, hallazgos y el
+  disparador de re-plan corregido). **Abiertos:** `CochiAskUserPanel.jsx` sigue pintando español (deuda de
+  Fase 1: `❓ Cochi pregunta`, `Responder`, `Omitir`) —S23 ya gastó sus 3 archivos de código— y el primer
+  request de cada turno reporta `cached=0`, con la caché apareciendo dentro del turno: a verificar en
+  corrida dedicada.
 
 ---
 

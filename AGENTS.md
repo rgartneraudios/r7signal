@@ -29,8 +29,9 @@ se eliminó (`cochiHmrGuard` de `vite.config.js`, `plugins/hmrProtect.js`, `src/
 harness) y el HMR de Vite quedó normal. **No rehacer.**
 
 Cerrados: loop único · tools · permisos · tablero · R7/R9 · snapshots de archivos · **shell revertible**
-(harness `cochiSnapshots` 91/91 + E2E real 06/10) · **reinicio de la app Rust** (E2E dev 06/10:
-`tauri dev` recompila/reinicia solo; en release lo hace el humano).
+(harness `cochiSnapshots` 91/91 + E2E real 06/10 y 13/10) · **Modo Proyecto de Asun punta a punta**
+(E2E real 13/10: entrevista, tablero, handoff, re-plan y amendment) · **reinicio de la app Rust** (E2E dev
+06/10: `tauri dev` recompila/reinicia solo; en release lo hace el humano).
 
 ## Plan vigente: apertura Open Source (`docs/PLAN-OPENSOURCE.md`)
 
@@ -332,7 +333,11 @@ El costo de las búsquedas web (server tool) va **aparte** de los tokens.
 - **Snapshots**: las mutaciones de archivo y **los efectos de `run_command` dentro del workspace** entran
   al snapshot del turno (`captureWorkspace`/`reconcileWorkspace`); los artefactos en dirs ignorados
   (`node_modules`/`.git`/`target`/`dist`/`build`/…) no se rastrean (se regeneran). Undo/Regenerate
-  conversación; Regenerate avisa si el turno tocó archivos/música.
+  conversación; Regenerate avisa si el turno tocó archivos/música. **Cadena de carpetas (S23):** las
+  tools que crean carpetas capturan antes la cadena padre faltante (`missingParentCandidates` en
+  `cochiTools.js`), porque el barrido del workspace corre después del primer `run_command` y si no la
+  vería creada: el revert restauraba el archivo y dejaba la carpeta hueca. Los avisos del undo distinguen
+  "sin snapshot" de "nada que revertir" (antes ambos decían *covered by revert*).
 - **TYPO de archivo**: `read_file` detecta el nombre mal escrito y lee el archivo más parecido
   (`findClosestPath` + `TYPO RESOLVED`, `cochiTools.js`). Implementado. **Idioma**: los tool results
   que ve el modelo y los errores visibles de las libs nacen en inglés (cerrado en S4/S4-bis del plan).
@@ -340,7 +345,13 @@ El costo de las búsquedas web (server tool) va **aparte** de los tokens.
 ## Pendientes / opcional
 
 - **Vocabulario R1/R2**: `commitR7Turn` escribe `R1:`/`R2:`; renombrar si se quiere desacoplar.
-- **Modo Asun Proyecto**: revisar E2E (alineado en repo, sin probar).
+- **Modo Asun Proyecto — PROBADO (S23, 13/10)**: el circuito completo (entrevista → `save_project_plan` →
+  tablero → handoff de tablero → `ask_user` qué bloque → ejecución con `update_plan_block` + evidencia →
+  `request_replan` → amendment de Asun con el mismo `planId` → cierre `3/3`) funciona en real; guion,
+  números y hallazgos en `docs/S23-E2E-PROYECTO.md`. Quedan abiertos dos hallazgos de esa corrida:
+  `CochiAskUserPanel.jsx` sigue pintando español (`❓ Cochi pregunta`, `Responder`, `Omitir`), y el primer
+  request de cada turno reporta `cached=0` con la caché apareciendo dentro del turno (en S19 el brazo
+  pineado sí midió hit entre turnos: la diferencia es dónde se inserta el brief de la rueda).
 - **Prompts legacy en Supabase**: la edge function `get-agent-prompts/` y la tabla `agent_prompts` ya no
   se leen (S8); se pueden borrar en un paso APARTE. Las claves `planning`/`task` tampoco se usan.
 - **Tito Etapa 2/3**: DESCARTADO (07/10). Tito queda como está (server tool `web_search` + citas); no
@@ -355,10 +366,12 @@ El costo de las búsquedas web (server tool) va **aparte** de los tokens.
   Backup en `%TEMP%\opencode\r7signal-purge-backup`. GitHub puede conservar blobs viejos por SHA (y en
   forks/PRs) → borrado total = GitHub Support. **Insumo de D4 del plan Open Source.**
 - **Ya verificado — no re-probar**: `cochiSnapshots` 91/91 · `cochiPermissions` 49/49 · `cochiTools`
-  86/86 · `cochiSessions` 63/63 · `cargo test` 5/5 (SSRF). E2E reales 06/10: crear/borrar con
+  95/95 · `cochiSessions` 63/63 · `cargo test` 5/5 (SSRF). E2E reales 06/10: crear/borrar con
   `run_command` → Undo intacto; `replace_in_file` sobre CRLF conserva los saltos; `tauri dev` recompila y
   reinicia solo al tocar `src-tauri/`. Piloto de auto-hospedaje 07/10 (Cochi editó `asunTools.js` de
-  punta a punta): deuda Asun `walkDir` CERRADA.
+  punta a punta): deuda Asun `walkDir` CERRADA. E2E real 13/10 (S23, Modo Proyecto completo): el undo
+  revierte archivos y **carpetas creadas** en el turno, y el merge DEFINICIÓN↔ESTADO del tablero conserva
+  estado y evidencia al amendarse un bloque.
 - **Hitos ya absorbidos por las secciones de arriba** (no duplicar acá): loop único (planner/R4/R5/toggle
   Tarea podados; `cochiLanes.js`, `cochiPlanningPrompts.js` y `PlanViewer.jsx` eliminados) · capa 1/2/3 de
   caché (E2E 01/10: charla 962 tok con hit 98%, lectura 2.416, multi-tool 11.698; compactación −78% sin

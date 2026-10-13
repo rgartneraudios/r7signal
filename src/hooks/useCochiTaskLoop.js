@@ -508,14 +508,18 @@ export function useCochiTaskLoop({
     snapshotRef.current = null
     const ranCommand = lastTurnHadCommandRef.current
     const ignoredArtifactsNote = 'ℹ️ This turn ran run_command. Changes to workspace files are covered by revert; artifacts under node_modules/.git/target/dist/build/… are NOT tracked (they get regenerated).'
+    // Sin snapshot o sin diferencias el revert NO toca nada: decirlo explícito. El
+    // texto viejo ("covered by revert") afirmaba cobertura donde no hubo revert (E2E S23).
+    const noSnapshotNote = '⚠️ Nothing was reverted: this turn has no snapshot of its previous state, so the files it created or overwrote are still on disk.'
+    const nothingToRevertNote = 'ℹ️ Nothing to revert: no tracked workspace file differs from the state before the first command of this turn.'
     if (!snap) {
-      if (ranCommand) notes.push({ role: 'assistant', content: ignoredArtifactsNote })
+      notes.push({ role: 'assistant', content: noSnapshotNote })
       return notes
     }
     const info = await summarizeSnapshotAgainstDisk(snap)
     if (info.count === 0) {
       await discardTurn(snap)
-      if (ranCommand) notes.push({ role: 'assistant', content: ignoredArtifactsNote })
+      notes.push({ role: 'assistant', content: ranCommand ? `${nothingToRevertNote}\n${ignoredArtifactsNote}` : nothingToRevertNote })
       return notes
     }
     const list = info.paths.slice(0, 12).map(p => `• ${p}`).join('\n')

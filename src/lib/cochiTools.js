@@ -28,6 +28,27 @@ export function resolveCommandCwd(args, workspaceRoot) {
   return root || undefined
 }
 
+// Cadena de carpetas padre de `filePath`, de la más externa a la más interna, sin
+// salir de `workspaceRoot`. Puro: NO consulta el disco (la existencia la resuelve
+// el llamador). Existe para que las tools que crean carpetas las capturen en el
+// snapshot del turno: si no, el barrido del workspace las ve ya creadas y el revert
+// deja la carpeta hueca (E2E S23).
+export function missingParentCandidates(filePath, workspaceRoot) {
+  const root = String(workspaceRoot || '').replace(/\\/g, '/').replace(/\/+$/, '')
+  if (!root) return []
+  const parts = String(filePath || '').replace(/\\/g, '/').split('/')
+  parts.pop()
+  const out = []
+  let dir = parts.join('/')
+  while (dir && dir.length > root.length && dir.startsWith(`${root}/`)) {
+    out.push(dir)
+    const up = dir.split('/')
+    up.pop()
+    dir = up.join('/')
+  }
+  return out.reverse()
+}
+
 // Prologue de PowerShell para que run_command capture stdout LIMPIO y en UTF-8.
 // En Windows, cuando la salida de PowerShell se REDIRIGE (siempre, acá), escribe
 // en la OEM code page (cp850/cp1252) y el texto no-ASCII llegaba sucio/corrupto.
@@ -954,6 +975,18 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
   // dryRun (previsualización) NO captura. `snap` es idempotente por ruta/turno.
   const snapshot = options?.snapshot || null
   const snap = async (p) => { if (snapshot && !dryRun && p) await capturePath(snapshot, p) }
+  // Las tools que mutan crean la cadena de carpetas padre (mkdir recursivo). Si esa
+  // cadena NO existe hay que capturarla AHORA como inexistente: el barrido del
+  // workspace corre recién antes del primer run_command y para entonces ya la vería
+  // creada, marcándola como preexistente — el revert restauraba el archivo y dejaba
+  // la carpeta hueca (E2E S23). Se corta en la raíz del workspace.
+  const snapNewParents = async (filePath) => {
+    if (!snapshot || dryRun || !filePath) return
+    const candidates = missingParentCandidates(filePath, workspaceRoot)
+    let i = 0
+    while (i < candidates.length && await pathExistsCochi(candidates[i])) i++
+    for (; i < candidates.length; i++) await snap(candidates[i])
+  }
 
   if (!canWrite && ['write_file', 'replace_in_file', 'append_to_file', 'create_dir', 'move_file', 'copy_file'].includes(name))
     return { modelResult: '⛔ Blocked: read-only permission. Change the level in Workspace.', diff: null }
@@ -1029,6 +1062,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       const diff = { path: args.path, before, after: args.content }
       if (dryRun) return { modelResult: `(preview) write ${args.path}`, diff }
       await snap(args.path)
+      await snapNewParents(args.path)
       if (dir && !(await exists(dir))) await mkdir(dir, { recursive: true })
       await writeTextFile(args.path, args.content)
       return {
@@ -1341,6 +1375,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         return { modelResult: `⛔ A file already exists at that path: ${args.path}`, diff: null }
       }
       await snap(args.path)
+      await snapNewParents(args.path)
       await mkdir(args.path, { recursive: true })
       return { modelResult: `✅ Directory created: ${args.path}`, diff: null }
     }
@@ -1353,6 +1388,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
       }
       await snap(args.fromPath)
       await snap(args.toPath)
+      await snapNewParents(args.toPath)
       await ensureParentDir(args.toPath)
       if (destExists) await remove(args.toPath, { recursive: true }).catch(() => {})
       await rename(args.fromPath, args.toPath)
@@ -1367,6 +1403,7 @@ export async function executeTool(name, args, permission = 'full', workspaceRoot
         return { modelResult: `⚠️ The destination already exists: ${args.toPath}. Pass overwrite: true to replace it.`, diff: null }
       }
       await snap(args.toPath)
+      await snapNewParents(args.toPath)
       await ensureParentDir(args.toPath)
       if (destExists) await remove(args.toPath, { recursive: true }).catch(() => {})
       if (info.isDirectory) await copyDirRecursive(args.fromPath, args.toPath)
