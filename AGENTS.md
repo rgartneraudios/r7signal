@@ -77,8 +77,11 @@ diseño y el otro hit es un falso positivo de `generic-api-key`), así que D4 se
 fingerprints quedan en `.gitleaksignore`. **S16-bis CERRADA**: ruleset `main-protection` activo en GitHub
 (`deletion` + `non_fast_forward` sobre `refs/heads/main`; a propósito **sin** requisito de PR, que sin
 bypass tumbaría el push directo a `main`), Dependabot alerts + security updates ON y secret
-scanning/push protection ya activos por default en repo público. **Pendiente S16-ter**: cambiar la
-descripción vieja del repo y cargar los topics (2 clicks del autor).
+scanning/push protection ya activos por default en repo público. **S16-ter CERRADA**: la descripción del
+repo (se edita en la **portada → `About` → engranaje**, NO en Settings) ya dice R7 Desktop y quedaron los
+6 topics. **S16-quater CERRADA**: los 3 bumps de Dependabot entraron con `npm update` y gate verde
+(`nanoid` 3.3.20, `source-map-js` 1.2.2 —CVE-2026-93749—, `@humanfs/node` 0.16.8; sólo
+`package-lock.json`). Pendiente de deps: `npm audit` reporta 45 avisos y Dependabot tiene 6 PRs abiertas.
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
