@@ -41,15 +41,17 @@ a `rgba(37, 10, 48, 0.25)` y el autor re-disparó las 10, incluida **`10-Plans`*
 verificado por API contra el hash local). El texto del Release vive en `docs/RELEASE-v0.1.0.md`. **El
 upload lo hizo el autor a mano**: no hay `gh` CLI ni token en el entorno y el sandbox bloquea el helper
 de credenciales de git (corte de S14, regla 5).
-**S16 CERRADA (escaneo) — estado.** El repo **ya era público** cuando se corrió el escaneo de D4:
-gitleaks 8.30.1 sobre las 243 commits dio **0 secretos reales** (la anon key de Supabase es pública por
-diseño; el otro hit es un falso positivo de `generic-api-key`), así que **no hay nada que rotar ni
-squash que hacer**; los 2 fingerprints viven en `.gitleaksignore`. Falta **S16-bis**, que es del lado de
-GitHub y lo hace el autor en la UI: secret scanning + push protection + branch protection, y cambiar la
-descripción vieja del repo (ver §6).
-**Próxima sesión (candidata): S16-bis (protecciones en GitHub, UI)** o **S15 (link de descarga)** o
-**la de defaults** (`HUD.jsx` muerto, `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` sin lectores, default
-`chat_language: 'Español'` — decisión del autor).
+**S16 CERRADA (escaneo) y S16-bis CERRADA (protecciones) — estado.** El repo **ya era público** cuando
+se corrió el escaneo de D4: gitleaks 8.30.1 sobre las 243 commits dio **0 secretos reales** (la anon key
+de Supabase es pública por diseño; el otro hit es un falso positivo de `generic-api-key`), así que **no
+hay nada que rotar ni squash que hacer**; los 2 fingerprints viven en `.gitleaksignore`. Del lado de
+GitHub, verificado por API: ruleset **`main-protection`** activo (`deletion` + `non_fast_forward` sobre
+`refs/heads/main`, sin requisito de PR para no tumbar el push directo), **Dependabot alerts + security
+updates ON** (ya abrieron 3 PRs) y secret scanning/push protection, que en repo público ya vienen
+activos. Queda **S16-ter** (2 clicks: descripción vieja del repo y topics, ver §6) y **S15**.
+**Próxima sesión (candidata): S15 (link de descarga)**, **S16-ter (2 clicks)** o **la de defaults**
+(`HUD.jsx` muerto, `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` sin lectores, default `chat_language: 'Español'`
+— decisión del autor).
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -571,24 +573,30 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   `https://github.com/rgartneraudios/r7signal/releases/tag/v0.1.0`.
 
 ### Fase 6 — Apertura y difusión
-- [ ] **S16-bis. Protecciones del repo en GitHub (las hace el autor en la UI).** No se pueden tocar
-  desde acá: no hay `gh` CLI ni token, y el sandbox bloquea el helper de credenciales.
-  (a) **Settings → Code security**: activar *Secret Protection* (secret scanning) y *Push protection*,
-  más Dependabot alerts y security updates. (b) **Settings → Branches**: branch protection rule para
-  `main` (requerir PR antes de merge, prohibir force-push y borrado). (c) **Settings → General**:
-  reemplazar la **descripción vieja** del repo ("AI-Friendly Data Layer — Token-optimized post-cutoff
-  data feed for LLMs and AI agents", que quedó del feed anterior y contradice el README de S7) por una
-  línea del proyecto real y cargar topics. Cuando estén las tres, marcar esta casilla.
-  **Estado verificado en esta sesión (API pública):** `GET …/rulesets` → `[]` y `topics` → `[]`: falta
-  el ruleset y falta cambiar la descripción, que sigue siendo la del feed. Del lado del autor:
-  *Secret scanning* y *Push protection* **ya venían activos** (en un repo público la UI muestra el botón
-  de apagado, no el de encendido) y prendió **Dependabot alerts + security updates**; el estado exacto
-  de `security_and_analysis` **no** es legible por API sin token, así que se anota como reportado por la
-  UI.
-  **Ojo con el orden al armar el ruleset:** *Restrict deletions* y *Block force pushes* no tienen
-  fricción; si se activa **"Require a pull request before merging" sin bypass**, el push directo a `main`
-  (el que usa esta sesión para cerrar cada sesión) se cae — conviene habilitarlo **con bypass para
-  Repository admin**, o dejarlo para más adelante.
+- [x] **S16-bis. Protecciones del repo en GitHub — CERRADA (acciones del autor, verificadas por API).**
+  No se pueden tocar desde acá: no hay `gh` CLI ni token, y el sandbox bloquea el helper de credenciales,
+  así que las hizo el autor en la UI y Cochi verificó por API lo verificable.
+  (a) **Secret scanning + Push protection**: ya venían **activos** (en un repo público la UI muestra el
+  botón de apagado, no el de encendido; `security_and_analysis` **no** es legible sin token, así que se
+  anota como reportado por la UI). **Dependabot alerts + security updates**: prendidos por el autor y ya
+  abrieron 3 PRs (ver el hallazgo abajo).
+  (b) **Ruleset `main-protection` creado**: `GET …/rulesets` →
+  `[{ id: 24995015, name: "main-protection", target: "branch", enforcement: "active" }]`, y en el detalle
+  `conditions.ref_name.include = ["refs/heads/main"]` con `rules = [{deletion}, {non_fast_forward}]`.
+  **Sin "Require a pull request before merging" a propósito**: con ese requisito y sin bypass, el push
+  directo a `main` que usa esta sesión para cerrar cada sesión se cae (si algún día se quiere, va con
+  bypass para *Repository admin*). La GUI tardó en dejarlo guardar con "Branch targeting has not been
+  configured": el ruleset nace sin alcance y hay que agregar `main` en *Target branches*.
+  (c) la **descripción vieja** del repo y los **topics** pasan a **S16-ter** (2 clicks, cosmético).
+  **Hallazgo (3 PRs de Dependabot abiertas → sesión propia):** `source-map-js` 1.2.1→1.2.2 (trae
+  **CVE-2026-93749**, DoS con source maps maliciosos; es dependencia **transitiva de build**, no del
+  runtime de la app), `nanoid` 3.3.11→3.3.20 y `@humanfs/node` 0.16.7→0.16.8. No se tocan acá: mergearlas
+  pide correr los 3 gates después.
+- [ ] **S16-ter. Descripción y topics del repo (2 clicks del autor).** `GET /repos/…` sigue devolviendo
+  la descripción del feed viejo ("AI-Friendly Data Layer — Token-optimized post-cutoff data feed for
+  LLMs and AI agents", que contradice el README de S7) y `topics: []`. Texto sugerido:
+  `R7 Desktop — desktop app (Tauri + React) with three LLM agents and an appendable, cache-friendly
+  context wheel. BYOK, MIT.` Topics: `tauri`, `react`, `llm`, `ai-agents`, `token-optimization`, `byok`.
 - [x] **S16. Escaneo de secretos del historial completo — CERRADA (1 archivo + 1 comando).**
   `gitleaks` **8.30.1** (binario oficial de GitHub Releases; el `.zip` se verificó contra el `digest`
   `sha256:d29144de…` que devuelve la API de GitHub **antes** de ejecutarlo) corrido con
@@ -659,9 +667,10 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 - **El repo está público y abrió antes de tiempo.** La API de GitHub devuelve `visibility: public`
   para `rgartneraudios/r7signal` (hallazgo de S14): el escaneo de D4 y las protecciones de S16 corren
   **sobre un repo abierto**, no antes de abrirlo. **S16 ya escaneó todo el historial** (243 commits,
-  gitleaks 8.30.1): 0 secretos reales, así que no hay nada que rotar por fuga. Queda **S16-bis**: secret
-  scanning + push protection + branch protection en GitHub (las hace el autor en la UI) y reemplazar la
-  **descripción vieja** del repo ("AI-Friendly Data Layer…"), que contradice el README de S7.
+  gitleaks 8.30.1): 0 secretos reales, así que no hay nada que rotar por fuga. **S16-bis dejó el ruleset
+  `main-protection` activo** (`deletion` + `non_fast_forward` sobre `refs/heads/main`) y Dependabot
+  alerts + security updates ON. Queda **S16-ter**: reemplazar la **descripción vieja** del repo
+  ("AI-Friendly Data Layer…"), que contradice el README de S7, y cargar los topics.
 
 ---
 
@@ -693,6 +702,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S13-bis-2 | **Segunda pasada de las capturas (misma sesión): lienzo + tablero.** El velo de los 3 paneles pasó de `rgba(30, 15, 32, 0.25)` a `rgba(37, 10, 48, 0.25)` — `CochiDesktop.jsx:395`, `R7Desktop.jsx:378` (`.tito-chat`) y `AsunPanel.jsx:646` — y el autor re-disparó las 10 capturas más la nueva `10-Plans.png` con el tablero cargado (`Plans 1`, rótulos `Run block` / `Done when` leídos por OCR). El `README.md` swapea la 08 por la 10: la 06 re-disparada ya no es el par Cochi+Asun sino Cochi+Tito, así que 06/08/09 mostraban el mismo par y el README publicaba la misma escena tres veces. El tinte nuevo se verificó por píxeles contra la captura de HEAD (Δ R +0.28 / G −0.89 / B +2.69: mismo hue y dirección que el +1.75/−1.25/+4.00 esperado, amortiguado porque el velo no cubre header ni drawer). `metadata.harness.mjs` pasa a exigir 10 capturas en `docs/media/`. Sin tocar prompts ni lógica de app. | lint 0/0 · build OK · test 34/34 | `2779ea6` |
 | S14 | **Build del instalador + notas del Release (parte automatizable de la Fase 5).** `npx tauri build` en release generó el único instalador NSIS: `R7 Desktop_0.1.0_x64-setup.exe` (5.856.905 B ≈ 5.6 MB, SHA-256 `33CFD8633648E8A18BAB5616774734F5305437F5AE4B2751E4B79BDCF2680EFA`), con `ProductName` `R7 Desktop` y versión `0.1.0` leídos del propio binario (metadatos de S13 confirmados en el artefacto, no supuestos); `r7signal.exe` (18.7 MB) queda en `target/release`. `docs/RELEASE-v0.1.0.md` es el texto del Release en inglés: asset + tamaño + hash reproducible, pasos de instalación (per-user, sin admin, WebView2 por bootstrapper si falta), aviso de SmartScreen, los 3 agentes, BYOK y limitaciones (sin firma, key en texto plano, `cochi-full-access`, sin cifras de ahorro hasta S19). El aviso de SmartScreen ya estaba en el README (S7): el README no se tocó. **Corte (regla 5) + cierre manual:** el Release no se crea desde acá — sin `gh` CLI, sin token en el entorno y con el helper de credenciales de git bloqueado por el sandbox; Cochi dejó commit + push + tag `v0.1.0` + notas + hash y **el autor publicó el Release en la UI**: https://github.com/rgartneraudios/r7signal/releases/tag/v0.1.0, con el asset `R7.Desktop_0.1.0_x64-setup.exe` (5.856.905 B) y `digest: sha256:33cfd8…` verificados por API contra el hash local, `draft: false` y `prerelease: false`. **Hallazgos:** el repo **ya es público** (API de GitHub: `private: false`) y su descripción sigue siendo la del feed viejo → **S16/D4 corren sobre un repo abierto**; barrido preliminar de secretos sobre todo el historial (`git log --all -p`): sólo placeholders de los fixtures de harness (no reemplaza a `gitleaks`); el instalador sale **sin `publisher`/`copyright`** (`tauri.conf.json` no los declara); `webviewInstallMode` por defecto ⇒ el primer install necesita red si falta WebView2. | lint 0/0 · build OK · test 34/34 | `54ddf98` |
 | S16 | **Escaneo de secretos del historial completo (condición de D4).** `gitleaks` **8.30.1** —zip oficial de GitHub Releases verificado contra el `digest` `sha256:d29144de…` que publica la API **antes** de ejecutarlo— sobre las **243 commits / 3,46 MB** con `git --log-opts='--all --full-history'`: **2 hallazgos, 0 secretos reales**. (a) `src/App.jsx:72` en `3da296e`: la **anon key** de Supabase (`role: anon`, ref `ovvpyotqstweqbrmeyme`, exp 2036) — pública por diseño, ya viaja en el bundle web (regla `VITE_`, S5); (b) `supabase/functions/procesar-input/index.ts:160` en `abce198`: **falso positivo** del rule `generic-api-key` sobre `tokens: nuevoR7.length` (capturó el `.length` de un array: 14 chars). No hay `service_role`, ni PATs, ni keys de proveedor → **D4 se cumple con el historial completo, sin squash**. `.gitleaksignore` (nuevo, raíz) fija los 2 fingerprints con el motivo escrito al lado: el escaneo queda reproducible y da `exit 0` / `no leaks found`. Verificación extra: `git grep -nE "eyJ" HEAD -- src/App.jsx` vacío (el HEAD no tiene la key hardcodeada) y `procesar-input/` fuera del árbol. **Método:** `detect` fue renombrado a `git` (v8.19); el escaneo del worktree se descartó a propósito (recorre `node_modules`/`target` y en árbol limpio no agrega nada); el `.env` local sí tiene keys reales, pero está gitignored y **nunca entró al historial** (S5). **Corte (regla 5):** las protecciones de GitHub (secret scanning, push protection, branch protection) y la descripción vieja del repo son **S16-bis**, las hace el autor en la UI (no hay `gh` ni token desde acá). **Riesgo residual (del autor, no del repo):** el proyecto Supabase del `.env` sigue vivo y su anon key está en un historial ya público: revisar RLS o pausar/borrar el proyecto cuando deje de usarse. | lint 0/0 · build OK · test 34/34 | `8166b97` |
+| S16-bis | **Protecciones del repo en GitHub (UI del autor, verificadas por API).** `GET …/rulesets` devuelve el ruleset **`main-protection`** (`id` 24995015, `enforcement: active`) con `conditions.ref_name.include = ["refs/heads/main"]` y `rules = [{deletion}, {non_fast_forward}]`; se dejó **sin** "Require a pull request before merging" a propósito, porque sin bypass tumbaría el push directo a `main` que usa esta sesión para cerrar cada sesión. La GUI no dejaba guardar hasta agregar el alcance en *Target branches* ("Branch targeting has not been configured"). **Dependabot alerts + security updates** quedaron **ON** y ya abrieron 3 PRs (`source-map-js` 1.2.1→1.2.2 con **CVE-2026-93749** —DoS con source maps maliciosos, dependencia transitiva de build—, `nanoid` 3.3.11→3.3.20 y `@humanfs/node` 0.16.7→0.16.8); *Secret scanning* y *Push protection* ya venían activos por default en repo público (la UI muestra el botón de apagado; `security_and_analysis` no es legible sin token, se anota como reportado). **Corte (regla 5):** la descripción vieja del repo y `topics: []` pasan a **S16-ter** (2 clicks). | lint 0/0 · build OK · test 34/34 | `pendiente` |
 
 ---
 

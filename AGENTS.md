@@ -74,8 +74,11 @@ con el asset verificado por API (`digest` idéntico al hash local); las notas vi
 `docs/RELEASE-v0.1.0.md`. **S16 CERRADA (escaneo de secretos)**: `gitleaks` 8.30.1 sobre las 243 commits
 del historial (`--all --full-history`) → **0 secretos reales** (la anon key de Supabase es pública por
 diseño y el otro hit es un falso positivo de `generic-api-key`), así que D4 se cumple sin squash; los 2
-fingerprints quedan en `.gitleaksignore`. **Pendiente S16-bis** (UI de GitHub, la hace el autor): secret
-scanning + push protection + branch protection para `main` y cambiar la descripción vieja del repo.
+fingerprints quedan en `.gitleaksignore`. **S16-bis CERRADA**: ruleset `main-protection` activo en GitHub
+(`deletion` + `non_fast_forward` sobre `refs/heads/main`; a propósito **sin** requisito de PR, que sin
+bypass tumbaría el push directo a `main`), Dependabot alerts + security updates ON y secret
+scanning/push protection ya activos por default en repo público. **Pendiente S16-ter**: cambiar la
+descripción vieja del repo y cargar los topics (2 clicks del autor).
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
