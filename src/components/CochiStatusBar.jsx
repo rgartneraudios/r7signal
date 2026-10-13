@@ -32,7 +32,7 @@ export default function CochiStatusBar({
         )}
         {(cost > 0 || cachedTokens > 0) && (
           <span title="Estimated cost (cached input discounted)" style={{ color: '#5FD3E0', fontSize: '0.55rem' }}>
-            · {costStr}{cachedTokens > 0 ? ` · ⚡ ${cachedTokens.toLocaleString('es')} cached` : ''}
+            · {costStr}{cachedTokens > 0 ? ` · ⚡ ${cachedTokens.toLocaleString('en-US')} cached` : ''}
           </span>
         )}
         {planStatus === 'executing' && <span style={{ color: '#8A868B', fontSize: '0.65rem', marginLeft: 4 }}>(working...)</span>}

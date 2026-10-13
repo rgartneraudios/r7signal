@@ -87,7 +87,13 @@ chunk `supabase-*.js` (164,77 kB / 43,96 kB gzip) fuera del build. Lo que queda 
 web** (edge function legacy `get-agent-prompts/` y `finance-proxy/`), sin dependencia npm.
 **S24-a, S24-bis, S24-ter y S24-quater CERRADAS** (higiene del repo público, el anuncio EN+ES publicado en
 Announcements, el canal oficial con el borrador del mail, y el lienzo al carbón con las 10 capturas
-nuevas). **Próxima sesión: S4-ter** (contenido del hub y locale de fecha/número); quedan del lado del
+nuevas). **S4-ter-a CERRADA (locale de número y fecha en los paneles)**: la mitad de código de S4-ter que
+no dependía del hub — los 3 archivos que el plan ya tenía listados (`R7TopBar.jsx` ×3, `CochiStatusBar.jsx`
+y `R9Drawer.jsx`) dejan `es`/`es-ES` por **`en-US`**, coherente con la UI visible en inglés de la Fase 1.
+**Próxima sesión: S4-ter-b** (contenido del hub `finanzas.js`/`financiero.js`/`Finanzas.jsx`/`PromoRail.jsx`
++ el truncado de `DiffViewer.jsx` + el locale del lado hub: `AppHeader.jsx` y `SidebarPanel.jsx`, que se
+dejan juntos A PROPÓSITO porque el hub todavía está en español y cambiarle la fecha antes que el texto lo
+dejaría mezclado); quedan del lado del
 autor el pegado del corto en X, el mail a `api-service@deepseek.com` y el PR a la lista curada de DeepSeek
 —los tres en pausa por decisión suya: el anuncio ya está publicado y el que busca lo encuentra.
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
@@ -98,9 +104,12 @@ guardada muestra `Set city` y hay que clickear para cargarla (así se diseñó e
 falsos, el `Oviedo`/`18°C` de `src/constants.js` no vuelve). **No hay sesión programada para poner una
 ciudad por defecto**: si se quiere una (o borrar `HUD.jsx`, que sigue muerto con su clima por prop), va
 a la **sesión de defaults junto a D5**.
-Hallazgo que pide sesión propia (**S4-ter**, candidata): el contenido del hub (`finanzas.js`,
+Hallazgo que pide sesión propia (**S4-ter-b**, candidata): el contenido del hub (`finanzas.js`,
 `financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`), el texto truncado de `DiffViewer.jsx` y el locale de
-fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
+fecha/número del lado hub (`AppHeader.jsx` y `SidebarPanel.jsx`). **Hallazgo de S4-ter-a:** la decisión de
+locale alcanza también a 2 libs model-facing (el `when` de `memoriesStore.js:85` y `r9Store.js:49` van
+`es-ES`), así que tocarlas **no** es cosmética: ese texto entra al bloque que puede viajar al modelo
+(`[USER MEMORIES]` / R9) y mover el prefijo — va con prueba de turno real, como un prompt.
 
 ---
 

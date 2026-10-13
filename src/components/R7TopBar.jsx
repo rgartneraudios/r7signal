@@ -119,7 +119,7 @@ const R7TopBar = memo(function R7TopBar({
         <span style={{
           fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
           fontWeight:700, color:'#C8A2D8', letterSpacing:'0.04em', lineHeight:1,
-        }}>{usage.asun.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+        }}>{usage.asun.toLocaleString('en-US')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
       </div>
 
       <div style={{ width:1, height:24, background:'rgba(255,255,255,0.05)', flexShrink:0 }} />
@@ -134,7 +134,7 @@ const R7TopBar = memo(function R7TopBar({
         <span style={{
           fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
           fontWeight:700, color:'#A89EC4', letterSpacing:'0.04em', lineHeight:1,
-        }}>{usage.tito.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+        }}>{usage.tito.toLocaleString('en-US')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
       </div>
 
       <div style={{ flex:1 }} />
@@ -218,7 +218,7 @@ const R7TopBar = memo(function R7TopBar({
         <span style={{
           fontFamily:"'JetBrains Mono',monospace", fontSize:'0.85rem',
           fontWeight:700, color:'#C47460', letterSpacing:'0.04em', lineHeight:1,
-        }}>{usage.cochi.toLocaleString('es')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
+        }}>{usage.cochi.toLocaleString('en-US')} <span style={{ fontSize:'0.55rem', opacity:0.6, fontWeight:400 }}>tok</span></span>
       </div>
 
       <button

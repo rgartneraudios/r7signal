@@ -14,7 +14,7 @@ const AGENT_ACCENT = { cochi: '#CF444D', asun: '#C8A2D8', tito: '#E8C84A' }
 const AGENT_LABEL = { cochi: 'COCHI', asun: 'ASUN', tito: 'TITO' }
 
 function formatWhen(iso) {
-  try { return new Date(iso).toLocaleString('es-ES') } catch { return '' }
+  try { return new Date(iso).toLocaleString('en-US') } catch { return '' }
 }
 
 export default function R9Drawer({ onClose, onInsertAsun, onInsertCochi, onOpenSession, onSendToCochi }) {
