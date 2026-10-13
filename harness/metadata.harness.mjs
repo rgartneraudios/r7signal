@@ -147,6 +147,14 @@ check('declara el OUT como no establecido', difusion.includes('not established')
 const posts = [...difusion.matchAll(/```text\n([\s\S]*?)```/g)].map((m) => m[1].trim())
 check('dos posteos cortos (EN y ES)', posts.length, 2)
 check('los cortos entran en X (280)', posts.every((p) => p.length <= 280), true)
+// Los contactos oficiales se leyeron de las propiedades de DeepSeek (footer de api-docs y §Contact de sus
+// repos), no de memoria: si el doc los cita, el harness los ata para que no se cambien a mano sin fuente.
+check('contacto de la API', difusion.includes('api-service@deepseek.com'), true)
+check('contacto general', difusion.includes('service@deepseek.com'), true)
+check('Discord oficial', difusion.includes('https://discord.gg/Tc7c45Zzu5'), true)
+check('X oficial', difusion.includes('twitter.com/deepseek_ai'), true)
+check('lista curada de DeepSeek', difusion.includes('github.com/deepseek-ai/awesome-deepseek-integration'), true)
+check('borrador del mail con su asunto', difusion.includes('Prefix-cache reporting per endpoint'), true)
 
 console.log(`\n[metadata] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)

@@ -166,14 +166,79 @@ https://github.com/rgartneraudios/r7signal
 ## Channels
 
 - **GitHub Discussions** → category **Announcements** (only the owner opens topics there; anyone can
-  comment). The placeholder welcome topic that GitHub created when Discussions was enabled gets deleted
-  once the real announcement is published.
+  comment). Done: `discussions/15`, with the placeholder welcome topic deleted.
 - **Community forums** → the long form, as is.
-- **X / LinkedIn** → the short form. LinkedIn accepts more, but the short form is enough; the long form
-  goes in the first comment if a full post is wanted.
-- **Mail to the DeepSeek team** → the long form plus a pointer to `docs/PARA-DEEPSEEK.md`. **The developer
-  relations address is not verified yet**: no confirmed channel, so this one waits for a verified contact
-  instead of guessing an address.
+- **X / LinkedIn** → the short form, in a thread: English first, Spanish as the reply.
+
+### Verified contacts (read off DeepSeek's own properties, not from memory)
+
+| channel | address | source |
+| --- | --- | --- |
+| API / platform, email | `api-service@deepseek.com` | footer of [api-docs.deepseek.com](https://api-docs.deepseek.com/), under *Community → Email* |
+| General, email | `service@deepseek.com` | §Contact of DeepSeek's own model repos, e.g. [DeepSeek-V3](https://github.com/deepseek-ai/DeepSeek-V3#9-contact) |
+| Discord | https://discord.gg/Tc7c45Zzu5 | API docs footer and the badge on the model repos |
+| X | [@deepseek_ai](https://twitter.com/deepseek_ai) | API docs footer and the badge on the model repos |
+| Curated list | [awesome-deepseek-integration](https://github.com/deepseek-ai/awesome-deepseek-integration) | linked from the API docs |
+
+There is no separately published developer-relations address: `api-service@deepseek.com` is the API-facing
+contact DeepSeek documents, and it is the one that matches what this project asks for. Sending to both
+addresses at once is unnecessary; a copy to `service@deepseek.com` is defensible but not required.
+
+**The public path is worth more than the cold email.** That curated list already carries desktop clients
+built on the API — Chatbox, Cherry Studio, DeepChat, AingDesk — which is exactly the category R7 Desktop
+belongs to, and a merged PR there leaves a permanent trace that an inbox does not. The repo has **no
+CONTRIBUTING.md** (verified: 404), so the convention is read off the existing entries: a
+`docs/<project>/README.md` plus a row in the **Applications** table with a small logo. Do that first; the
+email is for the two platform asks, which are not a listing matter.
+
+### Mail draft — the two platform asks (English)
+
+**To:** `api-service@deepseek.com`
+
+**Subject:** Prefix-cache reporting per endpoint, and a measured case for a compressed output register
+
+**Body:**
+
+Hello,
+
+I maintain R7 Desktop, a small open source desktop app (MIT, BYOK) whose agents run on DeepSeek models. It
+was built to test one hypothesis, and it produced a measurement I think is worth thirty seconds of your
+time.
+
+The finding: with byte-identical prompt prefixes and the same model, and with provider routing as the only
+difference, the share of the prefix served from cache went from 13.8% to 77.5% between two runs, and the
+billable count from 1425 to 655. One endpoint reported no cached input at all in four of six turns on an
+unchanged prefix; a second one cached for four turns and then stopped. That is why the app pins each model
+to the endpoints that report cached input.
+
+Two asks, both small on your side:
+
+1. Publish prefix-cache behaviour as a per-endpoint contract — whether an endpoint caches, and whether it
+   reports it. That is the single change that would let a client stop guessing.
+
+2. Consider training the compressed register instead of leaving it to a system prompt. The prompts ask for
+   a telegraphic register, and that is a prompt-level approximation with a hard ceiling: it changes the
+   visible answer, not the work behind it. The OUT seed measurement is two samples, 134 against 209 and
+   256 against 315 completion tokens, and it is reported as inconclusive.
+
+Everything is committed and reproducible with your own key: the recipe is `tools/s19-measure.mjs`, the
+numbers and their caveats are in `docs/QUE-ES-R7.md`, and the full note is `docs/PARA-DEEPSEEK.md`, in
+[github.com/rgartneraudios/r7signal](https://github.com/rgartneraudios/r7signal).
+
+If the numbers do not reproduce on your side, that is the most useful outcome for me: a counter-example
+with numbers attached is worth more than agreement.
+
+Thank you,
+R. Gartner (R7Signal)
+
+### What not to do
+
+- Do not send the announcement text as the email. The email has two concrete asks; the announcement is for
+  the public channels.
+- Do not restate the numbers as a savings percentage. 655 against 1425 is what was measured, once, with
+  the caveats above it.
+- Do not open the pull request and send the email in the same breath as a campaign. The PR is a listing;
+  the email is a platform request. They are different conversations.
 
 ## What this text does not claim
 
