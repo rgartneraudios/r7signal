@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { calculateCost } from '../lib/modelPrices.js'
+import { listImageStyles } from '../lib/imageStyles.js'
 
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -69,6 +70,8 @@ const BTN_PALETA   = [
   { label: 'Muted',    value: 'muted_desaturated' },
 ]
 
+const IMAGE_STYLES = listImageStyles()
+
 const BLANK_BRIEF = {
   path: null, estilo_id: null, estilo_nombre: null,
   vista: null, orientacion: null, objetos: '',
@@ -88,18 +91,12 @@ function WizardBtn({ label, active, onClick }) {
 }
 
 export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
-  const [estilos,  setEstilos]  = useState([])
   const [uiState,  setUiState]  = useState('path_select')
   const [brief,    setBrief]    = useState(BLANK_BRIEF)
   const [resultUrl,setResultUrl]= useState(null)
   const [error,    setError]    = useState(null)
   const [preview,  setPreview]  = useState(null)
   const fileRef = useRef(null)
-
-  useEffect(() => {
-    supabase.from('estilos_imagen_public').select('*').order('orden')
-      .then(({ data }) => { if (data) setEstilos(data) })
-  }, [])
 
   function reset() {
     setBrief(BLANK_BRIEF); setPreview(null); setError(null)
@@ -111,7 +108,7 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
     setUiState(path === 'A' ? 'lore_select' : 'image_upload')
   }
   function handleEstilo(e) {
-    setBrief(p => ({ ...p, estilo_id: e.id, estilo_nombre: e.nombre }))
+    setBrief(p => ({ ...p, estilo_id: e.id, estilo_nombre: e.name }))
     setUiState('briefing_vista')
   }
   function handleFile(ev) {
@@ -217,15 +214,12 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
         {/* LORE SELECT */}
         {uiState === 'lore_select' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
-            {estilos.map(est => {
-              const label = { 'Ilustración 3D': 'Illustration 1', 'Ilustración 2D': 'Illustration 2', 'Pintura': 'Digital' }[est.nombre] || est.nombre
-              return (
-                <button key={est.id} onClick={() => handleEstilo(est)} className="asun-wbtn" style={{ padding: 10, flexDirection: 'column', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <img src={est.preview_url} alt={est.nombre} style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 6 }} />
-                  <span style={{ fontSize: '0.78rem' }}>{label}</span>
-                </button>
-              )
-            })}
+            {IMAGE_STYLES.map(est => (
+              <button key={est.id} onClick={() => handleEstilo(est)} className="asun-wbtn" style={{ padding: 10, flexDirection: 'column', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <img src={est.previewUrl} alt={est.name} style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 6 }} />
+                <span style={{ fontSize: '0.78rem' }}>{est.name}</span>
+              </button>
+            ))}
           </div>
         )}
 

@@ -13,12 +13,19 @@ escrita, `VITE_SUPABASE_SERVICE_KEY` purgada del `.env` (era el MISMO valor que
 `AGENTS.md`. S6: purga de identidad (10 archivos de `supabase/.temp/` destrackeados + gitignore,
 `DEFAULT_USER_ID` fuera de las 2 edge functions, avatar `media.r7signal.com` y clima `Oviedo` fuera del
 hub, defaults de nombre genéricos).
-**Fase 3 (desacople de Supabase) ABIERTA: S8 CERRADA** — los 5 prompts salieron de `agent_prompts` a
-`src/lib/prompts/` con variante EN + ES; `promptLoader.js` ya no hace fetch.
-**Próxima sesión: S9 — Supabase opcional (cliente que devuelve `null` sin `.env`).**
+**Fase 3 (desacople de Supabase) ABIERTA: S8 y S10 CERRADAS** — los 5 prompts salieron de `agent_prompts` a
+`src/lib/prompts/` con variante EN + ES (`promptLoader.js` ya no hace fetch) y los 7 estilos de imagen
+salieron de `estilos_imagen_public` a `src/lib/imageStyles.js`.
+**Próxima sesión: S9 — Supabase opcional (cliente que devuelve `null` sin `.env`).** (S10 se cerró
+antes de S9 por pedido del autor; no dependía de ella.)
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
+**Consulta del autor (13/10) sobre el clima:** el widget **no tiene ciudad hardcodeada** — sin ciudad
+guardada muestra `Set city` y hay que clickear para cargarla (así se diseñó en S6-bis: cero datos
+falsos, el `Oviedo`/`18°C` de `src/constants.js` no vuelve). **No hay sesión programada para poner una
+ciudad por defecto**: si se quiere una (o borrar `HUD.jsx`, que sigue muerto con su clima por prop), va
+a la **sesión de defaults junto a D5**.
 Hallazgo que pide sesión propia (**S4-ter**, candidata): el contenido del hub (`finanzas.js`,
 `financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`), el texto truncado de `DiffViewer.jsx` y el locale de
 fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
@@ -222,7 +229,7 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   **Hallazgos (fuera del frente → S4-ter):** (a) el hub sigue en español (`finanzas.js`,
   `financiero.js`, `Finanzas.jsx`, `PromoRail.jsx`, con `Visítanos!`); (b) `DiffViewer.jsx` conserva
   `… N líneas más, truncado` (texto visible de un componente, no de una lib); (c) el mapa de
-  `AsunImagenFlow.jsx:221` con claves en español para los estilos de Supabase sigue atado a S10;
+  `AsunImagenFlow.jsx:221` con claves en español para los estilos de Supabase **cerrado en S10**;
   (d) los `console.error` de `SideDoors.jsx` (`… falló:`) son dev-facing, no visibles al usuario.
   Fuera de alcance por decisión del autor: el default `chat_language: 'Español'` (S3) y los endónimos
   de `IDIOMAS`.
@@ -335,7 +342,23 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   `20260627_descontar_credito.sql` siguen sin documentar (hallazgo de S3, sin cambios).
 - [ ] **S9. Supabase opcional.** Hoy `src/supabaseClient.js` hace `createClient(undefined, undefined)` y
   revienta sin `.env`. Guardar para que devuelva `null` sin env. `PreferencesModal` → `local_config.json`.
-- [ ] **S10. Estilos de imagen a JSON local** (hoy tabla `estilos_imagen_public`).
+- [x] **S10. Estilos de imagen a JSON local — CERRADA (2 archivos + 1 harness).** Los 7 estilos de la
+  tabla `estilos_imagen_public` (export real vía REST con la anon key, no trascritos a mano) pasan a
+  `src/lib/imageStyles.js` como catálogo congelado: `IMAGE_STYLES` (id, name, previewUrl, order),
+  `sortImageStyles(rows)` pura e inyectable, `listImageStyles()` y `findImageStyle(id)`.
+  `AsunImagenFlow.jsx` pierde el `useEffect` + `supabase.from('estilos_imagen_public')` y el mapa
+  `'Ilustración 3D' → 'Illustration 1'` (hallazgo de S4): los nombres visibles nacen en inglés en el
+  catálogo (`Realism`, `3D Illustration`, `2D Illustration`, `Comic`, `Cinema`, `Vector`, `Painting`)
+  y el wizard ya no dice `Style Ilustración 3D` en la burbuja de Asun.
+  Harness nuevo `imageStyles.harness.mjs` (25 checks): 7 filas, **UUID de producción congelados**
+  (son la clave con la que `generar-asset` resuelve `estilos_imagen.prompt_base`), orden, nombres sin
+  español, previews existentes en `public/assets/`, catálogo congelado, contrato de `sortImageStyles`
+  y de `findImageStyle`, y el assert de que el componente ya no cita `estilos_imagen_public`.
+  **Hallazgos:** (a) los `id` NO se pueden renombrar mientras la edge function `generar-asset` siga
+  leyendo `estilos_imagen.prompt_base` por id → atado a **S11**; (b) `AsunImagenFlow` sigue usando
+  `supabase.auth.getUser()` y el fetch a la edge function, así que el componente todavía depende de
+  Supabase aunque el catálogo ya sea local → **S9**; (c) la tabla `estilos_imagen_public` quedó sin
+  lectores en la app (la `estilos_imagen` de `prompt_base` la sigue leyendo la edge function).
 - [ ] **S11. Música e imagen directas.** Llamar a OpenRouter (`google/lyria-3-pro-preview` y el modelo de
   imagen) con la key del usuario. Retirar `generar-musica` y `generar-asset` del repo público.
 
@@ -405,6 +428,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S6-bis | Widget de clima del hub web: `src/lib/weather.js` (cliente puro e inyectable sobre Open-Meteo — geocoding + forecast, sin key y con CORS abierto, compatible BYOK: URLs, parseo, 28 códigos WMO, `fetchWeather` con errores por código y persistencia de ciudad), `WeatherWidget.jsx` (estados idle/carga/listo/error/offline, ciudad editable y persistida en `localStorage` `r7signal.weather.city`, refresh 15 min, `Retry`) y `AppHeader.jsx` (lo monta junto a `MoonWidget`). Sin default de ciudad: estado vacío `Set city`, cero datos falsos (el `Oviedo`/`18°C` de S6 no vuelve). Tauri omitido por construcción (AppHeader sólo vive en la rama web de `App.jsx`). `react-hooks/set-state-in-effect` obligó a derivar el estado en vez de setear dentro del efecto. E2E real contra API viva: `Oviedo, Principality of Asturias, Spain · 18°C · Clear sky`. Hallazgos: `HUD.jsx` muerto (candidato a borrado junto a D5) y locale `es-ES` de `AppHeader` a S4-ter; el build exige escalar permiso en el sandbox (`spawn EPERM` de esbuild). | lint 0/0 · build OK · test 28/28 | `bc5ce6f` |
 | S7 | LICENSE + CONTRIBUTING + README real: `LICENSE` MIT (copyright `2026 R. Gartner (R7Signal)`), `CONTRIBUTING.md` en inglés (setup, 3 gates, harness obligatorio para lógica pura, commits en español, prompts en Supabase hasta S8) y `README.md` reescrito completo — el anterior describía el feed de `r7signal.com`, no la app. El README cubre: qué es y los 3 agentes, la rueda R7 (prefijo append-only, pin de proveedor, compactación a 70k sin modelo), requisitos, `npm install` → `npx tauri dev` → cargar key, BYOK multi-proveedor, la regla `VITE_`, Supabase opcional, comandos, notas de seguridad (`cochi-full-access` con scope a `$HOME` documentado antes de abrir, 2 capas de SSRF, key en texto plano, SmartScreen sin firma), **How this was built** (dirección humana de R. Gartner / R7Signal + asistencia de Claude Sonnet y DeepSeek Flash 4.0/4.1) y **Trademark** (MIT no cede nombre ni logo). Cero lógica: sólo docs. El README describe el mecanismo y no promete cifras de ahorro: la tabla IN/OUT es S19. Hallazgos de S5/S6/S6-bis (variables muertas, `HUD.jsx`, `chat_language`) siguen en la sesión de defaults junto a D5. | lint 0/0 · build OK · test 28/28 | `d64beed` |
 | S8 | Prompts al código (arranque Fase 3): los 5 prompts de `agent_prompts` pasaron a `src/lib/prompts/` (`cochi.js`, `asun.js`, `tito.js` + `index.js`) con variante **EN + ES** elegida por `chat_language`. El ES es el **texto de producción byte a byte** (generado desde el export de Supabase y congelado por hash en el harness); el EN es la variante nueva (mismo cuerpo, samples de registro/cierres traducidos). `promptLoader.js` sin fetch (sync, conserva `interpolatePrompt`), `useAgentPrompts` síncrono (los 3 paneles pierden la rama muerta de carga/error), `cochiAgentPrompt.js` **borrado** + guard `isLegacyContract` fuera. La rueda NO cambia: los prompts citan literal `── Turno N ──`. Harness nuevo `prompts.harness.mjs` (75 checks). Prueba de la regla 7: **1 turno real por agente** contra OpenRouter con el prompt ya en código (Cochi ES y EN, Tito ES, Asun ES), los 4 en personaje. Hallazgo: `agent_prompts` + edge function `get-agent-prompts/` quedan **legacy**, borrarlas es paso APARTE. | lint 0/0 · build OK · test 29/29 | `359063a` |
+| S10 | Estilos de imagen a catálogo local (S10 antes de S9, por pedido del autor: no dependía de ella). Los 7 estilos de `estilos_imagen_public` se exportaron por REST con la anon key (datos reales, no trascritos) a `src/lib/imageStyles.js`: `IMAGE_STYLES` congelado (`id`, `name`, `previewUrl`, `order`), `sortImageStyles` pura e inyectable, `listImageStyles()` y `findImageStyle(id)`. `AsunImagenFlow.jsx` pierde el `useEffect` + `supabase.from('estilos_imagen_public')` y el mapa `'Ilustración 3D' → 'Illustration 1'` (hallazgo de S4): los nombres visibles nacen en inglés en el catálogo (`Realism`, `3D Illustration`, `2D Illustration`, `Comic`, `Cinema`, `Vector`, `Painting`) y la burbuja de Asun ya no dice `Style Ilustración 3D`. Harness nuevo `imageStyles.harness.mjs` (25 checks): 7 filas, UUID de producción congelados (son la clave con la que `generar-asset` resuelve `estilos_imagen.prompt_base`), orden, nombres sin español, previews existentes en `public/assets/`, catálogo congelado, contratos de `sortImageStyles`/`findImageStyle` y assert de que el componente no cita la tabla. Hallazgos: los `id` no se renombran hasta **S11** (la edge function sigue leyendo `prompt_base` por id) y `AsunImagenFlow` todavía usa `supabase.auth.getUser()` + fetch a la edge function → **S9**. | lint 0/0 · build OK · test 30/30 | pendiente |
 
 ---
 
