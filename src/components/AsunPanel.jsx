@@ -93,7 +93,9 @@ function AsunPanel({
   const [generating,  setGenerating]   = useState(false)
   const [attachedFile, setAttachedFile] = useState(null)
   const [selectedLLMModel, setSelectedLLMModel] = useState(ASUN_MODELS[0].id)
-  const isIrmaMax = selectedLLMModel === '~deepseek/deepseek-flash-latest'
+  // D5: el modo Proyecto lo habilita el catálogo (`project`), no un id fijo: lo
+  // declaran las dos variantes de DeepSeek con visión (alias e id directo).
+  const isIrmaMax = ASUN_MODELS.find(m => m.id === selectedLLMModel)?.project === true
   const [projectMode, setProjectMode] = useState(false) // Modo Proyecto — Arquitecto Senior, toggle ortogonal
   const messagesEndRef = useRef(null)
   const chatContainerRef = useRef(null)
@@ -524,11 +526,12 @@ function AsunPanel({
   // se cambia, el primer request sale frío y se paga el prefijo entero.
   const modelLocked = messages.some(m => m.rol === 'usuario')
 
-  // El modo Proyecto es exclusivo de IrmaMax: al pasar a MaríaBase se desactiva.
+  // El modo Proyecto es exclusivo de los modelos de DeepSeek con visión: al
+  // pasar a MaríaBase se desactiva (D5: la capacidad la declara el catálogo).
   function selectLLMModel(id) {
     if (modelLocked && id !== selectedLLMModel) return
     setSelectedLLMModel(id)
-    if (id !== '~deepseek/deepseek-flash-latest') setProjectMode(false)
+    if (ASUN_MODELS.find(m => m.id === id)?.project !== true) setProjectMode(false)
   }
 
   // ─── Cambio de categoría ───────────────────────────────────────────────────

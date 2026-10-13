@@ -1,9 +1,10 @@
-import { COCHI_MODELS } from '../lib/modelPrices.js'
+import { COCHI_MODELS, SUBAGENT_MODELS } from '../lib/modelPrices.js'
 
 // ─── Header compacto: selectores de modelo ───────────────────────────────────
 // Centinela lleva el gradiente en el texto; el resto usa el acento de Cochi.
 // El modelo "sub" (spawn_agent) sólo aplica a OpenRouter; con proveedor local
-// se hereda el del padre (por eso queda deshabilitado).
+// se hereda el del padre (por eso queda deshabilitado) y con la API directa de
+// DeepSeek tampoco se ofrece: el subagente reusa la url/key del PADRE.
 export default function CochiHeader({
   selectedModel,
   onSelectModel,
@@ -28,12 +29,15 @@ export default function CochiHeader({
           const isSelected = selectedModel === m.id
           const isCentinela = m.label === 'Centinela'
           const locked = modelLocked && !isSelected
+          const hint = m.provider === 'deepseek'
+            ? `${m.label} · ${m.id} · direct DeepSeek API (needs your DeepSeek key)`
+            : `${m.label} · ${m.id} · OpenRouter`
           return (
             <button
               key={m.id}
               onClick={() => onSelectModel(m.id)}
               disabled={locked}
-              title={locked ? 'Model frozen for this session — use CLS to change it' : undefined}
+              title={locked ? 'Model frozen for this session — use CLS to change it' : hint}
               style={{
                 padding: '3px 10px', borderRadius: 4, cursor: locked ? 'not-allowed' : 'pointer',
                 fontFamily: "'JetBrains Mono', monospace", fontSize: '11px',
@@ -146,7 +150,7 @@ export default function CochiHeader({
             padding: '3px 6px', outline: 'none',
           }}
         >
-          {COCHI_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          {SUBAGENT_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
       </div>
     </div>

@@ -55,8 +55,10 @@ salieron de `estilos_imagen_public` a `src/lib/imageStyles.js` (catálogo congel
 y los `prompt_base` de los 7 estilos viven en `imageStyles.js` (hash congelado en el harness).
 **S12 CERRADA**: registro de proveedores puro (`src/lib/providers.js`) + modal de conexión multi-proveedor
 (`ApiKeyModal.jsx`) — OpenRouter default, DeepSeek directo opcional, Ollama/LM Studio locales; una key por
-proveedor en `local_config.json`. La Fase 4 sigue abierta: la lista pública de modelos (**D5**) y el
-selector de los IDs directos van a **S12-bis**.
+proveedor en `local_config.json`. **S12-bis CERRADA (D5, cierra la Fase 4)**: el catálogo público por panel
+vive en `src/lib/modelPrices.js` —cada modelo declara `provider`/`vision`/`project`— y los paneles ya
+ofrecen los IDs directos de DeepSeek (`deepseek-flash`, `deepseek-v4-pro`) con sus precios (tarifa peak);
+el subagente sólo lista ids de OpenRouter (`SUBAGENT_MODELS`) porque reusa la url/key del padre.
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
@@ -245,6 +247,13 @@ El costo de las búsquedas web (server tool) va **aparte** de los tokens.
   `~deepseek/deepseek-flash-latest` (text+image). El subagente usa Centinela.
 - **Asun MaríaBase** = `xiaomi/mimo-v2.6-flash` (text+image+video+audio, cache 0.02x). **IrmaMax** =
   `~deepseek/deepseek-flash-latest` (visión, Proyecto).
+- **D5 (S12-bis) — catálogo público y IDs directos.** `modelPrices.js` es la lista que la UI ofrece:
+  cada entrada declara `provider` (cruzado con `providers.providerIdForModel` por el harness), `vision` y
+  `project`. Cochi: Centinela, Terminator, `deepseek-flash` y `deepseek-v4-pro`; Asun: MaríaBase, IrmaMax
+  y `deepseek-flash` (sólo modelos con visión); subagente: **sólo OpenRouter** (`SUBAGENT_MODELS`), porque
+  `resolveSubagentProvider` reusa la url/key del padre y sólo cambia el `model`. Los ids pelados
+  (`deepseek-flash` = V4.1-Flash, visión ✓; `deepseek-v4-pro` = V4-Pro-0813, sin visión) van a la API
+  DIRECTA de DeepSeek y se facturan con la tarifa **peak** (2x off-peak) para no subestimar el header.
 - **Tito** = `~deepseek/deepseek-v4-flash-latest` (mismo alias que Centinela) + **server tool**
   `openrouter:web_search` (motor Exa, ~$0.007/búsqueda, cap `max_uses:2`). El modelo decide 0–N
   búsquedas; un saludo no busca. Las citas (`url_citation`) se capturan en `llmClient` (`annotations`) y

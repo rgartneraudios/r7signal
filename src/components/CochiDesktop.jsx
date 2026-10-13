@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, memo } from 'react'
 import { readTextFile, writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { COCHI_MODELS, MODEL_PRICES } from '../lib/modelPrices.js'
+import { COCHI_MODELS, SUBAGENT_MODELS, MODEL_PRICES } from '../lib/modelPrices.js'
 import { resolveStoredModel } from '../lib/llmMetrics.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { clearSessionSnapshots, pruneOldSnapshots } from '../lib/snapshotStore.js'
@@ -229,7 +229,8 @@ function CochiDesktop({
           if (data.ollamaModel) setOllamaModel(data.ollamaModel)
           if (data.lmStudioModel) setLmStudioModel(data.lmStudioModel)
           // Fase 3.4e: restaurar el modelo del subagente si sigue siendo válido.
-          setSubagentModel(resolveStoredSubagentModel(data.subagentModel, COCHI_MODELS.map(m => m.id)))
+          // D5: sólo ids de OpenRouter — el subagente reusa la url/key del padre.
+          setSubagentModel(resolveStoredSubagentModel(data.subagentModel, SUBAGENT_MODELS.map(m => m.id)))
           // Fase 3.4f: restaurar el modelo del PADRE (incluye proveedores locales).
           setSelectedModel(resolveStoredModel(
             data.selectedModel,
@@ -353,7 +354,9 @@ function CochiDesktop({
     await taskLoop.handleSendText(userText)
   })
 
-  const isTerminator = selectedModel === '~deepseek/deepseek-flash-latest'
+  // D5: el acento de "visión" (Terminator) lo declara el catálogo, no un id fijo:
+  // también lo llevan los ids directos con visión (DeepSeek Flash).
+  const isTerminator = COCHI_MODELS.find(m => m.id === selectedModel)?.vision === true
   const activeModelPrice = MODEL_PRICES[selectedModel]
 
   const costStr = cost < 0.001 ? '~0,00€' : `~${cost.toFixed(3).replace('.', ',')}€`

@@ -22,8 +22,13 @@ directo contra OpenRouter con la key del usuario (`src/lib/asunMedia.js`) y las 
 **S12 CERRADA — Fase 4 abierta (registro de proveedores + modal de conexión).** Los 4 proveedores
 (OpenRouter default, DeepSeek directo, Ollama, LM Studio) viven en un registro puro
 (`src/lib/providers.js`) que ahora manda el ruteo de `resolveProvider`, la URL del chat, el campo de
-key en `local_config.json` y el estado de conexión del first-run. **Próxima sesión: S12-bis — D5**
-(lista pública de modelos: IDs reales de OpenRouter + IDs directos de DeepSeek + selector en la UI).
+key en `local_config.json` y el estado de conexión del first-run.
+**S12-bis CERRADA — Fase 4 (proveedores) CERRADA: S12 + S12-bis.** D5 quedó resuelto: la lista pública
+de modelos vive en `src/lib/modelPrices.js` (catálogo por panel con `provider`/`vision`/`project` +
+precios de los IDs directos) y los paneles ya ofrecen los IDs directos de DeepSeek en el selector.
+**Próxima sesión (candidata): la de defaults** (`HUD.jsx` muerto, `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO`
+sin lectores, default `chat_language: 'Español'` — decisión del autor) o **S13 (metadatos)**, que abre
+la Fase 5.
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -95,18 +100,20 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
 
 ### Aún abierto (no bloquea Fase 1)
 
-- [ ] **D5. Lista pública de modelos por defecto.** Los IDs actuales (`~deepseek/deepseek-v4-flash-latest`,
-  `deepseek-flash-latest`) son **alias de OpenRouter**: si el usuario abre la app sin OpenRouter, no
-  existen. **Datos verificados 14/10 (S12) contra la doc oficial de la API directa:** base
-  `https://api.deepseek.com` (formato OpenAI), modelos `deepseek-flash` (V4.1-Flash, 1M de contexto,
+- [x] **D5. Lista pública de modelos por defecto — CERRADA en S12-bis.** Decisión: la app ofrece los
+  **alias de OpenRouter** (puerta por defecto: caché de prefijo + server tools) **y** los **IDs directos
+  de la API de DeepSeek** (cuando el usuario carga esa key). Cochi ofrece 4 (Centinela, Terminator,
+  `deepseek-flash`, `deepseek-v4-pro`), Asun 3 (MaríaBase, IrmaMax, `deepseek-flash` —sólo modelos con
+  visión—) y el subagente 2 (sólo OpenRouter: reusa url/key del padre). Tito NO migra.
+  Los IDs directos entran a `MODEL_PRICES` con la tarifa **PEAK** (2x off-peak, la más cara) para no
+  subestimar el costo del header. **Datos verificados 14/10 contra la doc oficial de la API directa:**
+  base `https://api.deepseek.com` (formato OpenAI), modelos `deepseek-flash` (V4.1-Flash, 1M de contexto,
   visión ✓, tool calls ✓) y `deepseek-v4-pro` (V4-Pro-0813, sin visión); los nombres legados
   `deepseek-v4-flash`/`deepseek-v4-flash-vision-exp` siguen aceptados pero se sirven con el modelo Flash
   y facturan a precio Flash. Precios por 1M: Flash cache-hit $0.003 off-peak / $0.006 peak, miss
   $0.15/$0.30, output $0.60/$1.20; Pro hit $0.022/$0.044, miss $0.66/$1.32, output $1.98/$3.96
-  (peak = 01:00-04:00 y 06:00-10:00 UTC L-V). **Pendiente para S12-bis:** elegir los modelos
-  públicos definitivos, cargar precios/`billableTokens` de los IDs directos en `modelPrices.js` y
-  exponerlos en el selector (hoy el registro los conoce pero ningún panel los ofrece). Verificar la
-  lista de OpenRouter el día del release.
+  (peak = 01:00-04:00 y 06:00-10:00 UTC L-V). **Pendiente para el día del release:** verificar la lista
+  de OpenRouter (los alias `~deepseek/...` son el contrato con esa puerta).
 - [ ] **D6. ¿Free tier?** Hoy: no (BYOK puro). Si algún día se quiere, va por proxy propio con rate
   limit y la key del autor del lado servidor — nunca en el binario.
 
@@ -444,6 +451,23 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   quedan para **S12-bis** — el ruteo y la key de DeepSeek ya funcionan y están cubiertos por harness, pero
   ningún panel ofrece hoy un modelo de la API directa. `Tito` NO migra: `web_search` es server tool de
   OpenRouter (restricción del plan, intacta).
+- [x] **S12-bis. D5 — lista pública de modelos + selector de IDs directos — CERRADA (5 archivos + 1
+  harness).** `src/lib/modelPrices.js` pasa a ser el **catálogo público por panel**: cada entrada declara
+  `provider` (el harness lo cruza con `providers.providerIdForModel`: de ahí salen key, URL y aviso),
+  `vision` (habilita adjuntar imagen en Asun) y `project` (modo Proyecto de Asun); Cochi ofrece 4
+  modelos (Centinela, Terminator, `deepseek-flash`, `deepseek-v4-pro`), Asun 3 (MaríaBase, IrmaMax,
+  `deepseek-flash`) y se suma `SUBAGENT_MODELS` con **sólo los ids de OpenRouter**, porque
+  `resolveSubagentProvider` no cambia de proveedor —sólo el `model`— y mandaría `deepseek-flash` al
+  endpoint de OpenRouter. Los precios de los IDs directos entran a `MODEL_PRICES` con la tarifa **peak**
+  (2x off-peak: la más cara, para no subestimar el costo). `CochiHeader.jsx` suma los 2 botones directos
+  con tooltip `… · direct DeepSeek API (needs your DeepSeek key)` y su `<select>` de subagente pasa a
+  `SUBAGENT_MODELS`; `CochiDesktop.jsx` valida el subagente guardado contra esa lista y deriva el acento
+  de visión (`isTerminator`) del catálogo; `AsunHeader.jsx` colorea por `provider` y `AsunPanel.jsx`
+  deriva `isIrmaMax`/el corte del modo Proyecto de `project` (el `deepseek-flash` directo también es
+  DeepSeek con visión). Harness `cochiLlmMetrics` ampliado (89 checks): tarifas directas, `billableTokens`
+  y 10 asserts de consistencia del catálogo. Cero cambios de prompts y cero migración de Tito.
+  **Corte (regla 5) y pendientes anotados:** la verificación de la lista de OpenRouter queda para el día
+  del release y la sesión de defaults (`HUD.jsx`, variables muertas, `chat_language`) sigue sin hacer.
 
 ### Fase 5 — Release
 - [ ] **S13. Metadatos.** `version` 0.1.0 (hoy 0.0.0), `productName`, `identifier`, iconos, targets.
@@ -510,6 +534,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S10 | Estilos de imagen a catálogo local (S10 antes de S9, por pedido del autor: no dependía de ella). Los 7 estilos de `estilos_imagen_public` se exportaron por REST con la anon key (datos reales, no trascritos) a `src/lib/imageStyles.js`: `IMAGE_STYLES` congelado (`id`, `name`, `previewUrl`, `order`), `sortImageStyles` pura e inyectable, `listImageStyles()` y `findImageStyle(id)`. `AsunImagenFlow.jsx` pierde el `useEffect` + `supabase.from('estilos_imagen_public')` y el mapa `'Ilustración 3D' → 'Illustration 1'` (hallazgo de S4): los nombres visibles nacen en inglés en el catálogo (`Realism`, `3D Illustration`, `2D Illustration`, `Comic`, `Cinema`, `Vector`, `Painting`) y la burbuja de Asun ya no dice `Style Ilustración 3D`. Harness nuevo `imageStyles.harness.mjs` (25 checks): 7 filas, UUID de producción congelados (son la clave con la que `generar-asset` resuelve `estilos_imagen.prompt_base`), orden, nombres sin español, previews existentes en `public/assets/`, catálogo congelado, contratos de `sortImageStyles`/`findImageStyle` y assert de que el componente no cita la tabla. Hallazgos: los `id` no se renombran hasta **S11** (la edge function sigue leyendo `prompt_base` por id) y `AsunImagenFlow` todavía usa `supabase.auth.getUser()` + fetch a la edge function → **S11** (S9 lo dejó nullable y con aviso legible, pero la dependencia sigue). | lint 0/0 · build OK · test 30/30 | `412e89b` |
 | S11 | Música e imagen directas (cierre de la Fase 3): `src/lib/asunMedia.js` genera contra OpenRouter con la key del usuario —imagen por `/api/v1/images` (Seedream, b64/url) o `/chat/completions` + `modalities:['image']` (Grok y chat-nativos) y música por SSE de audio (Lyria: chunks base64 concatenados, transcript y tokens)—. El prompt de imagen se compone local y determinista con el `prompt_base` del estilo, que pasa de Supabase a `imageStyles.js` (hash congelado en el harness); se elimina el paso "prompt engineer" LLM de `generar-asset` y el system prompt de texto de `generar-musica`. `AsunImagenFlow.jsx` y `AsunPanel.jsx` pierden `supabase.auth.getUser()` + el fetch a la edge function y usan `getOpenRouterKey()` (BYOK puro); la categoría imagen deja de exceptuar el guard de la key. Fix de paso: el wizard mandaba `imagen_b64` como data URL completa y la edge function la volvía a prefijar (referencia rota) — `toDataUrl` normaliza. `generar-asset/` y `generar-musica/` **retiradas** del repo y `SUPABASE_IMAGE_REQUIRED`/`SUPABASE_MUSIC_REQUIRED` borradas (sin consumidores). Harness nuevo `asunMedia` (92 checks) + `imageStyles` (+11 con `prompt_base` y hash) y `supabaseConfig` recableado a "sin Supabase". Hallazgos: `estilos_imagen`/`estilos_imagen_public` quedan sin lectores (borrado = paso aparte) y `finance-proxy/` sigue sin documentar (ahora al menos listado). E2E real de imagen/música con key viva: pendiente del próximo arranque de la app. | lint 0/0 · build OK · test 32/32 | `4742a0c` |
 | S12 | Registro de proveedores + modal de conexión (arranca la Fase 4): `src/lib/providers.js` (puro) es la fuente única —OpenRouter default, DeepSeek directo opcional, Ollama y LM Studio locales— con `providerIdForModel` (alias `~`/`vendor/model` → OpenRouter, `deepseek-*` → API directa), `chatUrlFor`, `connectionState`/`isAnyRemoteConfigured` y `validateProviderKey`. `localConfig.js` guarda una key por campo (`getStoredKeys`/`getKey`/`saveKey`/`clearKey`) conservando los exports históricos de OpenRouter para no perder la key instalada; `resolveProvider` de `llmClient.js` se reescribe sobre el registro y `buildBody` deja de mandar el pin `provider` cuando el destino no es OpenRouter; `ApiKeyModal.jsx` pasa a modal de conexión (4 fichas con estado, key por proveedor con Save/Remove/Show, aviso de prefijo sin bloquear, links de keys, endpoints locales, y `Use a local model` en first-run); el guard de first-run (`R7Desktop`), el globo de la llave (`R7TopBar`) y el guard de key del loop de Cochi dejan de exigir OpenRouter fijo. Harness nuevo `providers` (71 checks). **Corte (regla 5):** la lista pública de modelos (D5) y el selector de los IDs directos van a **S12-bis**; DeepSeek ya tiene ruteo + key + harness, pero ningún panel lo ofrece todavía. Tito NO migra (`web_search` es server tool de OpenRouter). D5 queda documentado con los IDs y precios reales de la API directa verificados hoy contra la doc oficial. | lint 0/0 · build OK · test 33/33 | `ff77a61` |
+| S12-bis | **D5 — lista pública de modelos + selector de IDs directos (cierra la Fase 4).** `modelPrices.js` pasa a ser el catálogo por panel: cada entrada declara `provider` (el harness lo cruza con `providers.providerIdForModel`: de ahí salen key, URL y aviso), `vision` (adjuntar imagen en Asun) y `project` (modo Proyecto). Cochi ofrece 4 modelos (Centinela, Terminator, `deepseek-flash`, `deepseek-v4-pro`), Asun 3 (MaríaBase, IrmaMax, `deepseek-flash`) y el subagente `SUBAGENT_MODELS` con **sólo ids de OpenRouter**, porque `resolveSubagentProvider` no cambia de proveedor —sólo el `model`— y un id directo iría al endpoint de OpenRouter con la key equivocada. Los precios de los IDs directos entran con la tarifa **peak** (2x off-peak: la más cara, para no subestimar el costo del header). `CochiHeader.jsx` suma los 2 botones directos (tooltip `… · direct DeepSeek API (needs your DeepSeek key)`) y su select de subagente pasa a `SUBAGENT_MODELS`; `CochiDesktop.jsx` valida el subagente guardado contra esa lista y deriva el acento de visión (`isTerminator`) del catálogo; `AsunHeader.jsx` colorea por `provider` y `AsunPanel.jsx` deriva `isIrmaMax` y el corte del modo Proyecto de `project`. Cero cambios de prompts; Tito NO migra. Harness `cochiLlmMetrics` ampliado a 89 checks (tarifas directas + 10 asserts de consistencia del catálogo). Pendientes anotados: verificar la lista de OpenRouter el día del release y la sesión de defaults (`HUD.jsx`, variables muertas, `chat_language`). | lint 0/0 · build OK · test 33/33 | `PENDIENTE` |
 
 ---
 

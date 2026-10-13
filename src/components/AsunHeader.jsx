@@ -46,14 +46,17 @@ export default function AsunHeader({
             {category === 'llm'
               ? ASUN_MODELS.map(m => {
                   const locked = modelLocked && selectedLLMModel !== m.id
+                  const hint = m.provider === 'deepseek'
+                    ? `${m.label} · ${m.id} · direct DeepSeek API (needs your DeepSeek key)`
+                    : `${m.label} · ${m.id} · OpenRouter`
                   return (
                     <button key={m.id}
                       className={`asun-header-btn${selectedLLMModel === m.id ? ' active' : ''}`}
                       onClick={() => onSelectLLMModel(m.id)}
                       disabled={locked}
-                      title={locked ? 'Model frozen for this session — use CLS to change it' : undefined}
+                      title={locked ? 'Model frozen for this session — use CLS to change it' : hint}
                       style={selectedLLMModel === m.id
-                        ? { color: m.id === '~deepseek/deepseek-flash-latest' ? '#FA7A9A' : '#DF9CFF' }
+                        ? { color: m.provider === 'deepseek' ? '#FA7A9A' : '#DF9CFF' }
                         : (locked ? { opacity: 0.4, cursor: 'not-allowed' } : undefined)}
                     >
                       {m.label}

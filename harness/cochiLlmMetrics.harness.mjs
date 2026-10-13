@@ -14,7 +14,8 @@ import {
   costBreakdown,
   resolveStoredModel,
 } from '../src/lib/llmMetrics.js'
-import { calculateCost, billableTokens } from '../src/lib/modelPrices.js'
+import { calculateCost, billableTokens, MODEL_PRICES, COCHI_MODELS, ASUN_MODELS, SUBAGENT_MODELS } from '../src/lib/modelPrices.js'
+import { findProvider, providerIdForModel } from '../src/lib/providers.js'
 
 let pass = 0
 let fail = 0
@@ -153,9 +154,42 @@ checkClose('coherente con costo (sin output): billable/1M*inputPerM = cost',
   (billableTokens(TERMINATOR, { promptTokens: 1_000_000, completionTokens: 0, cachedTokens: 400_000 }) / 1_000_000) * 0.0198,
   0.013044, 1e-6)
 
+console.log('— D5 (S12-bis): IDs directos de DeepSeek —')
+// Tarifa PEAK (2x off-peak), elegida a propósito para no subestimar el costo.
+const DS_FLASH = 'deepseek-flash'
+const DS_PRO = 'deepseek-v4-pro'
+checkClose('flash: miss 0.30/M', calculateCost(DS_FLASH, 1_000_000, 0), 0.30)
+checkClose('flash: output 1.20/M', calculateCost(DS_FLASH, 0, 1_000_000), 1.20)
+checkClose('flash: cache-hit 0.006/M (0.02x)', calculateCost(DS_FLASH, 1_000_000, 0, 'token', 1_000_000), 0.006)
+check('flash: billable con caché (factor 0.02)', billableTokens(DS_FLASH, { promptTokens: 1000, completionTokens: 0, cachedTokens: 500 }), 510)
+checkClose('pro: miss 1.32/M', calculateCost(DS_PRO, 1_000_000, 0), 1.32)
+checkClose('pro: output 3.96/M', calculateCost(DS_PRO, 0, 1_000_000), 3.96)
+checkClose('pro: cache-hit 0.044/M (factor 0.0333..)', calculateCost(DS_PRO, 1_000_000, 0, 'token', 1_000_000), 0.044)
+check('pro: billable con caché (factor 1/30)', billableTokens(DS_PRO, { promptTokens: 1000, completionTokens: 0, cachedTokens: 500 }), 517)
+
+console.log('— D5: catálogo público por panel —')
+check('Cochi ofrece 4 modelos', COCHI_MODELS.map(m => m.id), [CENTINELA, TERMINATOR, DS_FLASH, DS_PRO])
+check('Asun ofrece 3 modelos', ASUN_MODELS.map(m => m.id), ['xiaomi/mimo-v2.6-flash', TERMINATOR, DS_FLASH])
+check('subagente: sólo ids de OpenRouter (reusa url/key del padre)',
+  SUBAGENT_MODELS.map(m => m.id), [CENTINELA, TERMINATOR])
+const CATALOG = [...new Map([...COCHI_MODELS, ...ASUN_MODELS].map(m => [m.id, m])).values()]
+check('todo el catálogo enruta al proveedor que declara',
+  CATALOG.map(m => providerIdForModel(m.id) === m.provider), CATALOG.map(() => true))
+check('todo el catálogo tiene precio cargado',
+  CATALOG.map(m => !!MODEL_PRICES[m.id]), CATALOG.map(() => true))
+check('los ids directos son los del registro de proveedores',
+  CATALOG.filter(m => m.provider === 'deepseek').map(m => m.id), findProvider('deepseek').models)
+check('todo el catálogo tiene label visible', CATALOG.map(m => typeof m.label === 'string' && m.label.length > 0), CATALOG.map(() => true))
+check('Asun sólo ofrece modelos con visión', ASUN_MODELS.map(m => m.vision === true), [true, true, true])
+check('Cochi: sólo Terminator y el flash directo son de visión',
+  COCHI_MODELS.filter(m => m.vision).map(m => m.id), [TERMINATOR, DS_FLASH])
+check('modo Proyecto: las dos variantes DeepSeek con visión',
+  ASUN_MODELS.filter(m => m.project).map(m => m.id), [TERMINATOR, DS_FLASH])
+
 console.log('— resolveStoredModel (persistencia del modelo, 3.4f) —')
-const parentIds = [CENTINELA, TERMINATOR, 'ollama', 'lmstudio']
+const parentIds = [...COCHI_MODELS.map(m => m.id), 'ollama', 'lmstudio']
 check('guardado válido → se conserva', resolveStoredModel(TERMINATOR, parentIds, CENTINELA), TERMINATOR)
+check('id directo guardado → se conserva', resolveStoredModel(DS_PRO, parentIds, CENTINELA), DS_PRO)
 check('proveedor local válido → se conserva', resolveStoredModel('ollama', parentIds, CENTINELA), 'ollama')
 check('vacío → fallback', resolveStoredModel('', parentIds, CENTINELA), CENTINELA)
 check('undefined → fallback', resolveStoredModel(undefined, parentIds, CENTINELA), CENTINELA)

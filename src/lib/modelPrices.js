@@ -27,6 +27,18 @@ export const MODEL_PRICES = {
   'perplexity/sonar':                      { inputPerM: 1, outputPerM: 1  },
   // Asun IrmaMax y Cochi Terminator comparten el alias flash-latest
   '~deepseek/deepseek-flash-latest':       { inputPerM: 0.0198, outputPerM: 0.396, cachedInputPerM: 0.00291 },
+  // D5 (S12-bis) — IDs DIRECTOS de la API de DeepSeek (https://api.deepseek.com,
+  // formato OpenAI; los sirve `resolveProvider`, no OpenRouter). Se carga la
+  // tarifa PEAK (L-V 01:00-04:00 y 06:00-10:00 UTC) = 2x off-peak: es la más
+  // cara a propósito, para no SUBESTIMAR el costo del header cuando no hay
+  // reloj en el camino. Verificado 14/10 contra la doc oficial (plan §3 D5).
+  // `deepseek-flash` (V4.1-Flash, 1M de contexto, visión ✓) reemplaza al alias
+  // de OpenRouter cuando el usuario va directo; `deepseek-v4-pro` (V4-Pro-0813,
+  // sin visión) es el escalón de razonamiento. Los nombres legados
+  // `deepseek-v4-flash*` se sirven con Flash y facturan a precio Flash: por eso
+  // NO tienen entrada propia.
+  'deepseek-flash':    { inputPerM: 0.30, outputPerM: 1.20, cachedInputPerM: 0.006 },
+  'deepseek-v4-pro':   { inputPerM: 1.32, outputPerM: 3.96, cachedInputPerM: 0.044 },
   // Local (free)
   'ollama':    { inputPerM: 0, outputPerM: 0 },
   'lmstudio':  { inputPerM: 0, outputPerM: 0 },
@@ -73,14 +85,31 @@ export function billableTokens(modelId, { promptTokens = 0, completionTokens = 0
   return Math.round(uncached + cached * factor + completionTokens)
 }
 
+// ─── Catálogo público por panel (D5, S12-bis) ────────────────────────────────
+// Única lista de modelos que la UI ofrece. `provider` debe coincidir con
+// `providers.providerIdForModel(id)` (assert del harness): de ahí salen la key
+// (`keyField`), la URL del chat y —si falta la key— el aviso del panel.
+//   · `vision: true`  → el panel puede adjuntar imagen al modelo (Asun).
+//   · `project: true` → habilita el modo Proyecto de Asun (Arquitecto Senior).
+// Los alias `~deepseek/...` son la puerta de OpenRouter (caché + server tools);
+// los ids pelados (`deepseek-*`) son la API DIRECTA de DeepSeek.
+
 // Asun LLM tier names
 export const ASUN_MODELS = [
-  { id: 'xiaomi/mimo-v2.6-flash',              label: 'MaríaBase',  vision: true  },
-  { id: '~deepseek/deepseek-flash-latest',     label: 'IrmaMax', vision: true },
+  { id: 'xiaomi/mimo-v2.6-flash',              label: 'MaríaBase',       provider: 'openrouter', vision: true  },
+  { id: '~deepseek/deepseek-flash-latest',     label: 'IrmaMax',         provider: 'openrouter', vision: true, project: true },
+  { id: 'deepseek-flash',                      label: 'DeepSeek Flash',  provider: 'deepseek',   vision: true, project: true },
 ]
 
 // Cochi tier names
 export const COCHI_MODELS = [
-  { id: '~deepseek/deepseek-v4-flash-latest', label: 'Centinela' },
-  { id: '~deepseek/deepseek-flash-latest', label: 'Terminator' },
+  { id: '~deepseek/deepseek-v4-flash-latest',  label: 'Centinela',       provider: 'openrouter' },
+  { id: '~deepseek/deepseek-flash-latest',     label: 'Terminator',      provider: 'openrouter', vision: true },
+  { id: 'deepseek-flash',                      label: 'DeepSeek Flash',  provider: 'deepseek',   vision: true },
+  { id: 'deepseek-v4-pro',                     label: 'DeepSeek Pro',    provider: 'deepseek' },
 ]
+
+// El subagente NO tiene provider propio: `resolveSubagentProvider` sólo cambia
+// el `model` y reusa url/key/headers del padre. Ofrecerle un id de otro
+// proveedor mandaría, por ejemplo, `deepseek-flash` al endpoint de OpenRouter.
+export const SUBAGENT_MODELS = COCHI_MODELS.filter(m => m.provider === 'openrouter')
