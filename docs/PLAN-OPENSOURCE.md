@@ -30,10 +30,11 @@ precios de los IDs directos) y los paneles ya ofrecen los IDs directos de DeepSe
 manifiestos (con harness que impide que se separen), `productName` **R7 Desktop**, `targets` sólo NSIS,
 crate `r7signal` en vez del scaffold `app` y `identifier` congelado por contrato (es AppLocalData).
 Las **capturas quedaron cortadas**: piden la app viva con key → **S13-bis**.
-**S13-bis CERRADA — capturas.** 9 tomas reales (1920x1039) en `docs/media/` y sección `## Screenshots`
+**S13-bis CERRADA — capturas.** 10 tomas reales (1920x1039) en `docs/media/` y sección `## Screenshots`
 en el `README.md` con 5 de ellas; las capturas las tomó el autor con la app viva y una key cargada (no
-se automatiza: sin GUI no hay toma). El **tablero de planes quedó sin capturar**: `Plans (0)` y su única
-cara posible era `No plans on the board yet.` → se re-dispara cuando exista un plan de Asun.
+se automatiza: sin GUI no hay toma). Segunda pasada de la misma sesión: el lienzo de los 3 paneles pasó
+a `rgba(37, 10, 48, 0.25)` y el autor re-disparó las 10, incluida **`10-Plans`** con el tablero cargado
+(`Plans 1`, `Run block` / `Done when` verificados por OCR).
 **Próxima sesión (candidata): S14 (build + GitHub Release)** o **la de defaults** (`HUD.jsx` muerto,
 `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` sin lectores, default `chat_language: 'Español'` — decisión del
 autor).
@@ -497,21 +498,26 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   contra los archivos reales de `harness/`** (que era otro dato podrido: decía 29 con 33 suites).
   **Corte (regla 5): las capturas NO se hicieron** — piden la app viva con una key cargada y una
   sesión de UI; el README no lleva una sección de imágenes rota. Pasa a **S13-bis**.
-- [x] **S13-bis. Capturas para el README — CERRADA (9 tomas + 1 sección + 7 asserts).** El autor tomó
-  **9 capturas reales** de la app viva (1920x1039, PNG sin recomprimir, 11.9 MB) en `docs/media/`: los
+- [x] **S13-bis. Capturas para el README — CERRADA (10 tomas + 1 sección + 7 asserts).** El autor tomó
+  **10 capturas reales** de la app viva (1920x1039, PNG sin recomprimir, ~13 MB) en `docs/media/`: los
   3 pares de paneles en frío con sus dos configuraciones de modelo (`01` Asun MaríaBase, `02` Cochi
-  Centinela/Terminator), la sesión de cada agente con conversación real (`06` Cochi, `07` Asun, `08`
-  Tito), las **dos puertas laterales** (`04` izquierda: Memories/OR Credits/OR Activity; `05` derecha:
-  Sessions 154/Plans 0/R9 Selections 0) y **Session Memories** activo (`09`). El `README.md` publica 5
-  (las 3 conversaciones + la puerta derecha + Session Memories); las otras 4 quedan como insumo de S17.
-  Los pies de foto se escribieron leyendo las tomas por **OCR nativo** (`Windows.Media.Ocr`, es-ES):
-  cero datos inventados sobre imágenes que la sesión no puede ver. Nombres normalizados a
-  `04-left-door`, `05-right-door` y `06/07/08-*-session`: los 3 que el autor había rotulado `-board`
-  **no traen el tablero adentro** (son conversaciones) y `05` explica por qué —`Plans (0)`, el
-  `ProjectPlanView` sólo mostraría su estado vacío—. **Hallazgo:** la toma del tablero queda pendiente
-  de un plan real de Asun Modo Proyecto. `metadata.harness.mjs` pasa a **38 checks**: toda captura
-  citada por el README debe existir en disco y el conteo real de `docs/media/` queda fijado para que
-  borrar una no pase en silencio. Cero lógica de app: assets, docs y asserts.
+  Centinela/Terminator), la sesión de cada agente con conversación real (`06` Cochi + Tito, `07` Asun,
+  `08` Tito + Cochi), las **dos puertas laterales** (`04` izquierda: Memories/OR Credits/OR Activity;
+  `05` derecha: Sessions/Plans/R9 Selections) y **Session Memories** activo (`09`).
+  **Segunda pasada (misma sesión):** el lienzo de los 3 paneles pasó a `rgba(37, 10, 48, 0.25)`
+  —`CochiDesktop.jsx:395`, `R7Desktop.jsx:378` (`.tito-chat`) y `AsunPanel.jsx:646`— y el autor
+  re-disparó las 10, sumando **`10-Plans`** con el tablero cargado (`Plans 1` y los rótulos `Run block`
+  / `Done when` del `ProjectPlanView`, leídos por OCR). El `README.md` publica 5: `06` (Cochi + Tito),
+  `07` (Asun), `10` (tablero), `05` (puerta derecha) y `09` (Session Memories).
+  **Hallazgo de la segunda pasada:** la `06` re-disparada ya no trae el par Cochi+Asun sino Cochi+Tito,
+  y así quedaba triplicada con `08` y `09` → el README swapea la `08` por la `10` en vez de repetir el
+  mismo par. Los pies de foto se escribieron leyendo las tomas por **OCR nativo** (`Windows.Media.Ocr`,
+  es-ES): cero datos inventados sobre imágenes que la sesión no puede ver. El tinte nuevo se
+  **verificó por píxeles** contra la captura de HEAD (`09` nueva vs vieja: Δ R +0.28 / G −0.89 /
+  B +2.69 — mismo hue y dirección que el esperado +1.75 / −1.25 / +4.00, amortiguado porque el velo no
+  cubre header ni drawer). `metadata.harness.mjs` queda en **38 checks**: toda captura citada por el
+  README debe existir en disco y el conteo real de `docs/media/` está fijado en 10 para que borrar una
+  no pase en silencio. Cero lógica de app: assets, docs, un tinte y asserts.
 - [ ] **S14. Build + GitHub Release** con el instalador. Sin firma de código: avisar SmartScreen en el README.
 - [ ] **S15. Link de descarga.** `src/components/Descargas.jsx`: `PLATFORMS` tiene `url: '#'` en las tres
   plataformas → apuntar a la página de Releases (o a un asset). Revisar el CTA del `Home.jsx`.
@@ -577,6 +583,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S12-bis | **D5 — lista pública de modelos + selector de IDs directos (cierra la Fase 4).** `modelPrices.js` pasa a ser el catálogo por panel: cada entrada declara `provider` (el harness lo cruza con `providers.providerIdForModel`: de ahí salen key, URL y aviso), `vision` (adjuntar imagen en Asun) y `project` (modo Proyecto). Cochi ofrece 4 modelos (Centinela, Terminator, `deepseek-flash`, `deepseek-v4-pro`), Asun 3 (MaríaBase, IrmaMax, `deepseek-flash`) y el subagente `SUBAGENT_MODELS` con **sólo ids de OpenRouter**, porque `resolveSubagentProvider` no cambia de proveedor —sólo el `model`— y un id directo iría al endpoint de OpenRouter con la key equivocada. Los precios de los IDs directos entran con la tarifa **peak** (2x off-peak: la más cara, para no subestimar el costo del header). `CochiHeader.jsx` suma los 2 botones directos (tooltip `… · direct DeepSeek API (needs your DeepSeek key)`) y su select de subagente pasa a `SUBAGENT_MODELS`; `CochiDesktop.jsx` valida el subagente guardado contra esa lista y deriva el acento de visión (`isTerminator`) del catálogo; `AsunHeader.jsx` colorea por `provider` y `AsunPanel.jsx` deriva `isIrmaMax` y el corte del modo Proyecto de `project`. Cero cambios de prompts; Tito NO migra. Harness `cochiLlmMetrics` ampliado a 89 checks (tarifas directas + 10 asserts de consistencia del catálogo). Pendientes anotados: verificar la lista de OpenRouter el día del release y la sesión de defaults (`HUD.jsx`, variables muertas, `chat_language`). | lint 0/0 · build OK · test 33/33 | `b74dc0a` |
 | S13 | **Metadatos de release (abre la Fase 5).** `version` 0.1.0 en los 3 manifiestos — `package.json` decía `0.0.0` mientras Tauri y Cargo ya decían 0.1.0 (el instalador salía bien y el paquete npm mentía) —, `productName` `r7signal`→`R7 Desktop` (D3) y `targets` `all`→`["nsis"]` (un solo instalador `.exe` para el Release de S14, sin WiX). `identifier` **intacto a propósito**: `com.r7signal.cochi` es AppLocalData — renombrarlo borra las keys de `local_config.json` y `R7/`/`R9` de las instalaciones vivas. Iconos verificados, no regenerados: ya eran propios (desde `logo-r7.png`, 16/07 y 15/08) y el harness exige que los 5 del `bundle.icon` existan. El crate deja el scaffold de Tauri: `[package] name` `app`→`r7signal` (el binario pasa de `app.exe` a `r7signal.exe`; la lib sigue `app_lib` porque `main.rs` la llama así), `description`/`authors`/`license`/`repository` propios (antes `A Tauri App` / `["you"]` / vacíos) y `Cargo.lock` reordenado por cargo (21+21 líneas, cero dependencias tocadas). El README corrige dos datos podridos: el conteo de suites (decía 29 con 33) y la lista de modelos (ya no son sólo alias de OpenRouter desde S12-bis). Harness nuevo `metadata.harness.mjs` (31 checks) que ata versión/bundle/crate/LICENSE/README al repo. **Corte (regla 5): las capturas NO se hicieron** (piden la app viva con key y sesión de UI) → **S13-bis**. | lint 0/0 · build OK · test 34/34 | `454a9b4` |
 | S13-bis | **Capturas del README.** 9 tomas reales de la app viva en `docs/media/` (1920x1039, PNG originales, 11.9 MB): los 3 pares de paneles (MaríaBase y Centinela/Terminator), la sesión de cada agente con conversación real, las 2 puertas laterales y `Session Memories` activo. El `README.md` suma `## Screenshots` con 5 (06 Cochi, 07 Asun, 08 Tito, 05 puerta derecha, 09 Session Memories). Los pies de foto se escribieron leyendo las tomas por **OCR nativo** (`Windows.Media.Ocr` es-ES) porque la sesión no tiene visión: cero afirmaciones sobre imágenes no verificadas. Nombres normalizados (`04/05-*door`, `06/07/08-*-session`): los rotulados `-board` no contenían el tablero de planes, y `05` lo confirma (`Plans 0` → `No plans on the board yet.`) → esa toma queda pendiente de un plan de Asun Modo Proyecto. `metadata.harness.mjs` a **38 checks** (cada captura citada por el README debe existir en disco + conteo real de `docs/media/` fijado). Gate igual que S6-bis: `npm run build` falla con `spawn EPERM` de esbuild bajo el sandbox confinado y se verificó escalando el permiso, no cambiando el comando. | lint 0/0 · build OK · test 34/34 | `1d6d956` |
+| S13-bis-2 | **Segunda pasada de las capturas (misma sesión): lienzo + tablero.** El velo de los 3 paneles pasó de `rgba(30, 15, 32, 0.25)` a `rgba(37, 10, 48, 0.25)` — `CochiDesktop.jsx:395`, `R7Desktop.jsx:378` (`.tito-chat`) y `AsunPanel.jsx:646` — y el autor re-disparó las 10 capturas más la nueva `10-Plans.png` con el tablero cargado (`Plans 1`, rótulos `Run block` / `Done when` leídos por OCR). El `README.md` swapea la 08 por la 10: la 06 re-disparada ya no es el par Cochi+Asun sino Cochi+Tito, así que 06/08/09 mostraban el mismo par y el README publicaba la misma escena tres veces. El tinte nuevo se verificó por píxeles contra la captura de HEAD (Δ R +0.28 / G −0.89 / B +2.69: mismo hue y dirección que el +1.75/−1.25/+4.00 esperado, amortiguado porque el velo no cubre header ni drawer). `metadata.harness.mjs` pasa a exigir 10 capturas en `docs/media/`. Sin tocar prompts ni lógica de app. | lint 0/0 · build OK · test 34/34 | `PENDIENTE` |
 
 ---
 

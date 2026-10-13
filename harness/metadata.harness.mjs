@@ -82,7 +82,7 @@ for (const ref of shotRefs) {
   check(`captura presente ${ref}`, existsSync(join(root, ref)), true)
 }
 const shots = readdirSync(join(root, 'docs', 'media')).filter((f) => f.endsWith('.png'))
-check('capturas en docs/media', shots.length, 9)
+check('capturas en docs/media', shots.length, 10)
 
 console.log(`\n[metadata] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)

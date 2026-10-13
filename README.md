@@ -31,17 +31,18 @@ the model answers with text (capped at 25 iterations).
 Two panels share one window: each agent keeps its own wheel, its own workspace folder and its own
 model selector.
 
-![Cochi and Asun in one window](docs/media/06-cochi-session.png)
+![Cochi and Tito in one window](docs/media/06-cochi-session.png)
 
-*Cochi, the task agent, next to Asun, who keeps images, music and project mode.*
+*Cochi, the task agent, and Tito, the search and telemetry unit, answering side by side.*
 
 ![Asun in a live turn](docs/media/07-asun-session.png)
 
-*Asun answering, with Tito one tab away.*
+*Asun answering in its own register, with Cochi's panel alongside.*
 
-![Tito answering](docs/media/08-tito-session.png)
+![The plan board](docs/media/10-Plans.png)
 
-*Tito, the search and telemetry unit: chat with web search and a tone of its own.*
+*A plan loaded on the board, with the Plans tab open beside it: blocks, run, done-when and evidence,
+written by Asun's project mode for Cochi to execute.*
 
 ![The right side door](docs/media/05-right-door.png)
 
