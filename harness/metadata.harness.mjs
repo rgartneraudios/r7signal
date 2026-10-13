@@ -72,6 +72,22 @@ check('titulo del README', readme.split('\n')[0], '# R7 Desktop')
 const suites = readdirSync(here).filter((f) => f.endsWith('.harness.mjs')).length
 check('el README declara las suites reales', Number((readme.match(/(\d+) suites in total/) || [])[1]), suites)
 
+// El hub es la cara publica del repo y hasta S26 servia SIN favicon declarado: `index.html` no
+// tenia ningun `<link rel="icon">`, asi que el navegador pedia `/favicon.ico` y el catch-all de
+// Cloudflare Pages (`public/_redirects`) le devolvia el propio index.html con 200; el decode
+// fallaba y la pestana caia al icono generico. Los PNG ya existian en `public/icons` sin que
+// nadie los citara: aca quedan atados los 3 links y la existencia del archivo que cada uno nombra.
+console.log('— favicon del hub —')
+const indexHtml = readFileSync(join(root, 'index.html'), 'utf8')
+const iconRefs = [...indexHtml.matchAll(/<link rel="(?:icon|apple-touch-icon)"[^>]*href="([^"]+)"/g)].map((m) => m[1])
+check('el hub declara sus iconos', iconRefs.length, 3)
+check('favicon 32', iconRefs.includes('/icons/favicon-32.png'), true)
+check('favicon 16', iconRefs.includes('/icons/favicon-16.png'), true)
+check('apple-touch-icon', iconRefs.includes('/icons/apple-touch-icon.png'), true)
+for (const ref of iconRefs) {
+  check(`icono presente ${ref}`, existsSync(join(root, 'public', ref)), true)
+}
+
 // Las capturas del README viven en docs/media (S13-bis): una image rota en la portada del repo
 // es un dato podrido mas, igual que la version o el conteo de suites. El conteo real de tomas
 // esta fijado para que borrar una no pase en silencio.
