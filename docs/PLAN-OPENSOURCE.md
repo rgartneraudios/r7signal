@@ -19,7 +19,11 @@ salieron de `estilos_imagen_public` a `src/lib/imageStyles.js` (ya con su `promp
 Supabase es `null` sin `.env` y **la imagen y la música tampoco pasan por Supabase**: Asun las genera
 directo contra OpenRouter con la key del usuario (`src/lib/asunMedia.js`) y las edge functions
 `generar-asset`/`generar-musica` se retiraron del repo.
-**Próxima sesión: S12 — registro de proveedores + modal de conexión** (arranca la Fase 4).
+**S12 CERRADA — Fase 4 abierta (registro de proveedores + modal de conexión).** Los 4 proveedores
+(OpenRouter default, DeepSeek directo, Ollama, LM Studio) viven en un registro puro
+(`src/lib/providers.js`) que ahora manda el ruteo de `resolveProvider`, la URL del chat, el campo de
+key en `local_config.json` y el estado de conexión del first-run. **Próxima sesión: S12-bis — D5**
+(lista pública de modelos: IDs reales de OpenRouter + IDs directos de DeepSeek + selector en la UI).
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -93,8 +97,16 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
 
 - [ ] **D5. Lista pública de modelos por defecto.** Los IDs actuales (`~deepseek/deepseek-v4-flash-latest`,
   `deepseek-flash-latest`) son **alias de OpenRouter**: si el usuario abre la app sin OpenRouter, no
-  existen. En S12 hay que fijar la lista pública (IDs reales de OpenRouter + IDs de la API directa de
-  DeepSeek + Ollama/LM Studio) y verificar cuáles siguen vivos el día del release.
+  existen. **Datos verificados 14/10 (S12) contra la doc oficial de la API directa:** base
+  `https://api.deepseek.com` (formato OpenAI), modelos `deepseek-flash` (V4.1-Flash, 1M de contexto,
+  visión ✓, tool calls ✓) y `deepseek-v4-pro` (V4-Pro-0813, sin visión); los nombres legados
+  `deepseek-v4-flash`/`deepseek-v4-flash-vision-exp` siguen aceptados pero se sirven con el modelo Flash
+  y facturan a precio Flash. Precios por 1M: Flash cache-hit $0.003 off-peak / $0.006 peak, miss
+  $0.15/$0.30, output $0.60/$1.20; Pro hit $0.022/$0.044, miss $0.66/$1.32, output $1.98/$3.96
+  (peak = 01:00-04:00 y 06:00-10:00 UTC L-V). **Pendiente para S12-bis:** elegir los modelos
+  públicos definitivos, cargar precios/`billableTokens` de los IDs directos en `modelPrices.js` y
+  exponerlos en el selector (hoy el registro los conoce pero ningún panel los ofrece). Verificar la
+  lista de OpenRouter el día del release.
 - [ ] **D6. ¿Free tier?** Hoy: no (BYOK puro). Si algún día se quiere, va por proxy propio con rate
   limit y la key del autor del lado servidor — nunca en el binario.
 
@@ -410,9 +422,28 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   (c) el E2E real de imagen/música con key viva queda pendiente del próximo arranque de la app.
 
 ### Fase 4 — Proveedores
-- [ ] **S12. Registro de proveedores + modal de conexión.** OpenRouter por defecto; DeepSeek directo opcional;
-  Ollama y LM Studio ya soportados en `resolveProvider`.
-  **Restricción:** el `web_search` de Tito es server tool de OpenRouter. Tito NO migra a la API directa de DeepSeek.
+- [x] **S12. Registro de proveedores + modal de conexión — CERRADA (5 archivos + 1 harness).** El
+  registro puro `src/lib/providers.js` es la fuente única de "a quién le hablamos": **OpenRouter**
+  (default, `sk-or-`, key histórica `openrouter_api_key`), **DeepSeek directo** (opcional, `sk-`,
+  `deepseek_api_key`, `https://api.deepseek.com/chat/completions`) y los **locales** Ollama / LM Studio
+  (sin key, endpoint por defecto y en `Preferences`). Expone `listProviders`/`findProvider`,
+  `providerIdForModel` (alias `~…` y `vendor/model` → OpenRouter; `deepseek-*` → API directa;
+  `ollama`/`lmstudio` → local), `providerForModel`/`keyFieldForModel`, `chatUrlFor(id, preferences)`,
+  `connectionState(keys)`/`isAnyRemoteConfigured(keys)` y `validateProviderKey(provider, key)`.
+  `localConfig.js` pasa a guardar **una key por campo** (`getStoredKeys`/`getKey`/`saveKey`/`clearKey`) y
+  conserva `getOpenRouterKey`/`saveOpenRouterKey` para no perder la key de las instalaciones existentes.
+  `resolveProvider` (llmClient) se reescribe sobre el registro —URL, headers, key y label salen de ahí—
+  y `buildBody` deja de mandar el pin `provider` de OpenRouter cuando el destino es la API directa o un
+  servidor local (ese campo no existe ahí). `ApiKeyModal.jsx` se convierte en **modal de conexión**:
+  fichas de los 4 proveedores con estado, key por proveedor con `Save`/`Remove`/`Show`, aviso de prefijo
+  ajeno (no bloquea), link a la página de keys y endpoint + nota en los locales; en first-run agrega
+  `Use a local model` para no encerrar al que sólo quiere Ollama/LM Studio. El guard del first-run
+  (`R7Desktop`), el globo de la llave (`R7TopBar`) y el guard de key del loop de Cochi pasan a preguntar
+  al registro en vez de a OpenRouter fijo. Harness nuevo `providers.harness.mjs` (71 checks).
+  **Corte (regla 5):** la lista pública de modelos (D5) y el selector de los IDs directos en los paneles
+  quedan para **S12-bis** — el ruteo y la key de DeepSeek ya funcionan y están cubiertos por harness, pero
+  ningún panel ofrece hoy un modelo de la API directa. `Tito` NO migra: `web_search` es server tool de
+  OpenRouter (restricción del plan, intacta).
 
 ### Fase 5 — Release
 - [ ] **S13. Metadatos.** `version` 0.1.0 (hoy 0.0.0), `productName`, `identifier`, iconos, targets.
@@ -478,6 +509,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S9 | Supabase opcional: `supabaseClient.js` hacía `createClient(undefined, undefined)` y reventaba en el import sin `.env` (supabase-js lanza `supabaseUrl is required.`), matando la app. La decisión pasa a un módulo puro sin `import.meta` (`src/lib/supabaseConfig.js`): `resolveSupabaseConfig(env)` (recorta, exige key no vacía y URL http/https) y `createSupabaseClientFrom(env, factory)` que devuelve `null` sin env o si la factory revienta; `supabaseClient.js` queda en una línea. `AsunPanel` (música) y `AsunImagenFlow` (imagen) cortan con error legible (`SUPABASE_IMAGE_REQUIRED` / `SUPABASE_MUSIC_REQUIRED`, en inglés y nombrando las 2 variables) en vez de un `TypeError`. `R7Desktop`/`PreferencesModal` sin cambios: el modal ya guardaba `!supabase` → `No save method available.` y en desktop `onSave` persiste en `user_preferences.json` (AppLocalData); el `local_config.json` era S5. Harness nuevo `supabaseConfig.harness.mjs` (29 checks). Verificado con la `.env` real: cliente configurado, sin regresión; env vacía → `null`. Hallazgos: imagen y música siguen colgando de las edge functions → **S11**; `VITE_SUPABASE_URL` sigue horneando el project-ref en `dist/` (público por diseño). | lint 0/0 · build OK · test 31/31 | `3a193e2` |
 | S10 | Estilos de imagen a catálogo local (S10 antes de S9, por pedido del autor: no dependía de ella). Los 7 estilos de `estilos_imagen_public` se exportaron por REST con la anon key (datos reales, no trascritos) a `src/lib/imageStyles.js`: `IMAGE_STYLES` congelado (`id`, `name`, `previewUrl`, `order`), `sortImageStyles` pura e inyectable, `listImageStyles()` y `findImageStyle(id)`. `AsunImagenFlow.jsx` pierde el `useEffect` + `supabase.from('estilos_imagen_public')` y el mapa `'Ilustración 3D' → 'Illustration 1'` (hallazgo de S4): los nombres visibles nacen en inglés en el catálogo (`Realism`, `3D Illustration`, `2D Illustration`, `Comic`, `Cinema`, `Vector`, `Painting`) y la burbuja de Asun ya no dice `Style Ilustración 3D`. Harness nuevo `imageStyles.harness.mjs` (25 checks): 7 filas, UUID de producción congelados (son la clave con la que `generar-asset` resuelve `estilos_imagen.prompt_base`), orden, nombres sin español, previews existentes en `public/assets/`, catálogo congelado, contratos de `sortImageStyles`/`findImageStyle` y assert de que el componente no cita la tabla. Hallazgos: los `id` no se renombran hasta **S11** (la edge function sigue leyendo `prompt_base` por id) y `AsunImagenFlow` todavía usa `supabase.auth.getUser()` + fetch a la edge function → **S11** (S9 lo dejó nullable y con aviso legible, pero la dependencia sigue). | lint 0/0 · build OK · test 30/30 | `412e89b` |
 | S11 | Música e imagen directas (cierre de la Fase 3): `src/lib/asunMedia.js` genera contra OpenRouter con la key del usuario —imagen por `/api/v1/images` (Seedream, b64/url) o `/chat/completions` + `modalities:['image']` (Grok y chat-nativos) y música por SSE de audio (Lyria: chunks base64 concatenados, transcript y tokens)—. El prompt de imagen se compone local y determinista con el `prompt_base` del estilo, que pasa de Supabase a `imageStyles.js` (hash congelado en el harness); se elimina el paso "prompt engineer" LLM de `generar-asset` y el system prompt de texto de `generar-musica`. `AsunImagenFlow.jsx` y `AsunPanel.jsx` pierden `supabase.auth.getUser()` + el fetch a la edge function y usan `getOpenRouterKey()` (BYOK puro); la categoría imagen deja de exceptuar el guard de la key. Fix de paso: el wizard mandaba `imagen_b64` como data URL completa y la edge function la volvía a prefijar (referencia rota) — `toDataUrl` normaliza. `generar-asset/` y `generar-musica/` **retiradas** del repo y `SUPABASE_IMAGE_REQUIRED`/`SUPABASE_MUSIC_REQUIRED` borradas (sin consumidores). Harness nuevo `asunMedia` (92 checks) + `imageStyles` (+11 con `prompt_base` y hash) y `supabaseConfig` recableado a "sin Supabase". Hallazgos: `estilos_imagen`/`estilos_imagen_public` quedan sin lectores (borrado = paso aparte) y `finance-proxy/` sigue sin documentar (ahora al menos listado). E2E real de imagen/música con key viva: pendiente del próximo arranque de la app. | lint 0/0 · build OK · test 32/32 | `4742a0c` |
+| S12 | Registro de proveedores + modal de conexión (arranca la Fase 4): `src/lib/providers.js` (puro) es la fuente única —OpenRouter default, DeepSeek directo opcional, Ollama y LM Studio locales— con `providerIdForModel` (alias `~`/`vendor/model` → OpenRouter, `deepseek-*` → API directa), `chatUrlFor`, `connectionState`/`isAnyRemoteConfigured` y `validateProviderKey`. `localConfig.js` guarda una key por campo (`getStoredKeys`/`getKey`/`saveKey`/`clearKey`) conservando los exports históricos de OpenRouter para no perder la key instalada; `resolveProvider` de `llmClient.js` se reescribe sobre el registro y `buildBody` deja de mandar el pin `provider` cuando el destino no es OpenRouter; `ApiKeyModal.jsx` pasa a modal de conexión (4 fichas con estado, key por proveedor con Save/Remove/Show, aviso de prefijo sin bloquear, links de keys, endpoints locales, y `Use a local model` en first-run); el guard de first-run (`R7Desktop`), el globo de la llave (`R7TopBar`) y el guard de key del loop de Cochi dejan de exigir OpenRouter fijo. Harness nuevo `providers` (71 checks). **Corte (regla 5):** la lista pública de modelos (D5) y el selector de los IDs directos van a **S12-bis**; DeepSeek ya tiene ruteo + key + harness, pero ningún panel lo ofrece todavía. Tito NO migra (`web_search` es server tool de OpenRouter). D5 queda documentado con los IDs y precios reales de la API directa verificados hoy contra la doc oficial. | lint 0/0 · build OK · test 33/33 | `PENDIENTE` |
 
 ---
 

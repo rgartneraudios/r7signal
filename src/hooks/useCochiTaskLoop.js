@@ -4,7 +4,8 @@ import { interpolatePrompt } from '../lib/promptLoader.js'
 import { calculateCost, billableTokens } from '../lib/modelPrices.js'
 import { resolveProvider, streamChat } from '../lib/llmClient.js'
 import { normalizeUsage } from '../lib/llmMetrics.js'
-import { getOpenRouterKey } from '../lib/localConfig.js'
+import { getKey } from '../lib/localConfig.js'
+import { providerForModel } from '../lib/providers.js'
 import { TOOL_ICONS, executeTool, getToolsForPermission, getSubagentTools, SUBAGENT_EXCLUDED_TOOLS } from '../lib/cochiTools.js'
 import { buildPermissionRequest, evaluatePermission, normalizeRules, buildRuleFromRequest } from '../lib/cochiPermissions.js'
 import { buildSystemContext, READ_ONLY_TOOLS, makeStreamingDisplayExtractor } from '../lib/cochiContext.js'
@@ -149,11 +150,11 @@ export function useCochiTaskLoop({
   }
 
   async function runTurn() {
-    const usesOpenRouter = selectedModel !== 'ollama' && selectedModel !== 'lmstudio'
-    if (usesOpenRouter && !getOpenRouterKey()) {
+    const modelProvider = providerForModel(selectedModel)
+    if (modelProvider?.requiresKey && !getKey(modelProvider.keyField)) {
       pushMessage({
         role: 'assistant',
-        content: '🔑 You have not loaded your OpenRouter API key yet. Use the key button in the top bar and paste it to work.'
+        content: `🔑 You have not loaded your ${modelProvider.label} API key yet. Use the key button in the top bar and paste it to work.`
       })
       return
     }

@@ -53,6 +53,10 @@ salieron de `estilos_imagen_public` a `src/lib/imageStyles.js` (catálogo congel
 **S11 CERRADA**: Asun genera **imagen y música directas contra OpenRouter** con la key del usuario
 (`src/lib/asunMedia.js`); las edge functions `generar-asset/` y `generar-musica/` se retiraron del repo
 y los `prompt_base` de los 7 estilos viven en `imageStyles.js` (hash congelado en el harness).
+**S12 CERRADA**: registro de proveedores puro (`src/lib/providers.js`) + modal de conexión multi-proveedor
+(`ApiKeyModal.jsx`) — OpenRouter default, DeepSeek directo opcional, Ollama/LM Studio locales; una key por
+proveedor en `local_config.json`. La Fase 4 sigue abierta: la lista pública de modelos (**D5**) y el
+selector de los IDs directos van a **S12-bis**.
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
@@ -75,8 +79,9 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
   **Regla `VITE_` (S5):** Vite hornea toda variable con prefijo `VITE_` en el bundle → es pública.
   Ningún secreto lleva ese prefijo. Públicas: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
   `VITE_STRICT`. Sin prefijo (nunca al bundle, dev/edge functions): `OPENROUTER_API_KEY`,
-  `SUPABASE_SERVICE_ROLE_KEY`. El E2E de escritorio necesita además una API key de OpenRouter cargada
-  en la app. `VITE_SUPABASE_SERVICE_KEY` se eliminó en S5 (mismo valor que `SUPABASE_SERVICE_ROLE_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY`. El E2E de escritorio necesita además una key de proveedor cargada en la
+  app (OpenRouter por defecto; DeepSeek directo es opcional desde S12). `VITE_SUPABASE_SERVICE_KEY` se
+  eliminó en S5 (mismo valor que `SUPABASE_SERVICE_ROLE_KEY`,
   pero público por prefijo y sin uso en `src`); `VITE_R7_USER_ID` quedó sin uso en el código.
 - **Identidad (S6):** nada personal en el repo. `supabase/.temp/` (project-ref, pooler-url, org id)
   está **destrackeado** y cubierto por `.gitignore` (`**/.temp/`); `src/constants.js` se eliminó
@@ -99,8 +104,9 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
   directo contra OpenRouter** con la key del usuario (`src/lib/asunMedia.js`): las edge functions
   `generar-asset`/`generar-musica` y sus avisos `SUPABASE_*_REQUIRED` se retiraron (S11). Las
   preferencias del desktop **no** pasan por Supabase: `CochiDesktop.savePreferences` escribe
-  `user_preferences.json` (AppLocalData) y la key vive en `local_config.json`; el camino Supabase de
-  `PreferencesModal` sólo corre sin `onSave`.
+  `user_preferences.json` (AppLocalData) y las keys viven en `local_config.json` —una por proveedor,
+  `keyField` del registro `providers.js` (`openrouter_api_key` es la histórica, `deepseek_api_key` la de
+  S12)—; el camino Supabase de `PreferencesModal` sólo corre sin `onSave`.
 
 ## Arquitectura (dónde tocar)
 
@@ -125,6 +131,14 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
   - `agentScope.js` — carpeta segura por agente (`R7/<agente>/`).
   - `llmClient.js` / `llmMetrics.js` / `modelPrices.js` — fetch/SSE común, capacidades, reasoning,
     costos, `billableTokens`, `extractUrlCitations`.
+  - `providers.js` — registro de proveedores (S12): **OpenRouter** (default), **DeepSeek directo**
+    (opcional, `https://api.deepseek.com`) y los **locales** Ollama/LM Studio (sin key). De acá salen el
+    ruteo (`providerIdForModel`: alias `~…` y `vendor/model` → OpenRouter, `deepseek-*` → API directa),
+    la URL del chat (`chatUrlFor`), el campo de key de `local_config.json` (`keyField`) y el estado del
+    first-run (`connectionState`/`isAnyRemoteConfigured`). Puro e inyectable; `llmClient` lo consume y
+    **omite el pin `provider` de OpenRouter** cuando el destino es la API directa o un servidor local.
+    Una key por proveedor (`getStoredKeys`/`getKey`/`saveKey`/`clearKey`): `openrouter_api_key` es la
+    histórica. El modal de conexión (`ApiKeyModal.jsx`) ya no es sólo de OpenRouter.
   - `cacheAudit.js` — `providerRouting` (pin por modelo) + log `[cache:audit]`.
   - `asunMedia.js` — imagen y música de Asun **directas** contra OpenRouter con la key del usuario
     (S11): `/api/v1/images` para Seedream, `/chat/completions` + `modalities:['image']` para Grok y

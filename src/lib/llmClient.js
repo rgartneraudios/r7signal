@@ -3,11 +3,11 @@
 // la acumulación de tool_calls troceadas). Consumido por Cochi (y reutilizable
 // por Asun/Tito para matar la duplicación de apiUrl/modelSlug/authHeader).
 
-import { getOpenRouterKey } from './localConfig.js'
+import { getStoredKeys } from './localConfig.js'
+import { chatUrlFor, findProvider, providerIdForModel } from './providers.js'
 import { buildReasoningConfig, extractReasoningDelta } from './llmMetrics.js'
 import { auditCache, providerRouting } from './cacheAudit.js'
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const OPENROUTER_HEADERS = {
   'HTTP-Referer': 'https://r7signal.com',
   'X-Title': 'R7Signal · Cochi Desktop',
@@ -16,56 +16,51 @@ const OPENROUTER_HEADERS = {
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 /**
- * Resuelve el proveedor efectivo a partir del modelo seleccionado.
- * @returns {{ id:string, isLocal:boolean, supportsUsage:boolean, url:string, model:string, headers:object }}
+ * Resuelve el proveedor efectivo a partir del modelo seleccionado (registro de
+ * `providers.js`): OpenRouter por defecto, DeepSeek directo o un servidor local.
+ * @returns {{ id:string, label:string, isLocal:boolean, supportsUsage:boolean, url:string, model:string, headers:object }}
  */
 export function resolveProvider(selectedModel, ctx = {}) {
   const {
     preferences = {},
     ollamaModel = 'llama3.2',
     lmStudioModel = 'local-model',
-    apiKey = getOpenRouterKey(),
+    keys = getStoredKeys(),
   } = ctx
   const prefs = preferences || {}
+  const providerId = providerIdForModel(selectedModel)
+  const meta = findProvider(providerId)
 
-  if (selectedModel === 'ollama') {
+  if (meta.kind === 'local') {
     return {
-      id: 'ollama',
+      id: meta.id,
+      label: meta.label,
       isLocal: true,
       supportsUsage: false,
-      url: `${prefs.ollamaEndpoint || 'http://localhost:11434'}/v1/chat/completions`,
-      model: ollamaModel,
+      url: chatUrlFor(meta.id, prefs),
+      model: meta.id === 'ollama' ? ollamaModel : lmStudioModel,
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ollama' },
     }
   }
 
-  if (selectedModel === 'lmstudio') {
-    return {
-      id: 'lmstudio',
-      isLocal: true,
-      supportsUsage: false,
-      url: `${prefs.lmStudioEndpoint || 'http://localhost:1234'}/v1/chat/completions`,
-      model: lmStudioModel,
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ollama' },
-    }
-  }
-
+  const apiKey = String((keys || {})[meta.keyField] || '').trim()
   if (!apiKey) {
-    const e = new Error('Missing your OpenRouter API key. Load it from the key button in the top bar.')
+    const e = new Error(`Missing your ${meta.label} API key. Load it from the key button in the top bar.`)
     e.noApiKey = true
     throw e
   }
 
   return {
-    id: 'openrouter',
+    id: meta.id,
+    label: meta.label,
     isLocal: false,
-    supportsUsage: true,
-    url: OPENROUTER_URL,
+    supportsUsage: !!meta.supportsUsage,
+    url: chatUrlFor(meta.id, prefs),
     model: selectedModel,
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
-      ...OPENROUTER_HEADERS,
+      ...(meta.id === 'openrouter' ? OPENROUTER_HEADERS : {}),
     },
   }
 }
@@ -82,8 +77,10 @@ export function buildBody({ provider, messages, tools, toolChoice = 'auto', stre
   // Capa 1 (30/09-ter): prefiere proveedores que SÍ cachean el prefijo. Sin esto,
   // OpenRouter balancea entre endpoints y la caché se pierde turno por turno (ver
   // cacheAudit.providerRouting). DeepSeek no-visión → StreamLake/Parasail/Alibaba;
-  // visión (MaríaBase) → DeepInfra (medido 01/10: cached ~93%).
-  const routing = providerRouting(provider.model)
+  // visión (MaríaBase) → DeepInfra (medido 01/10: cached ~93%). El pin es de
+  // OpenRouter: en la API directa de DeepSeek o en un servidor local ese campo no
+  // existe y se omite.
+  const routing = provider.id === 'openrouter' ? providerRouting(provider.model) : null
   if (routing) body.provider = routing
   if (maxTokens) body.max_tokens = maxTokens
   if (temperature != null) body.temperature = temperature

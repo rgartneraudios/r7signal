@@ -232,7 +232,7 @@ const R7TopBar = memo(function R7TopBar({
           padding: '0 8px',
           transition: 'color 0.2s',
         }}
-        title={apiKeyConfigured ? 'API key configured — click to change it' : 'OpenRouter API key missing — click to load it'}
+        title={apiKeyConfigured ? 'Provider connected — click to manage it' : 'No provider key yet — click to connect one'}
       >🔑</button>
 
       <button

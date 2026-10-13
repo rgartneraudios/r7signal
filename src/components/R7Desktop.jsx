@@ -10,7 +10,8 @@ import R7FooterInputs from './R7FooterInputs'
 import SideDoors from './SideDoors'
 import MemoriesModal from './MemoriesModal'
 import { supabase } from '../supabaseClient'
-import { loadLocalConfig, hasOpenRouterKey } from '../lib/localConfig.js'
+import { loadLocalConfig, getStoredKeys } from '../lib/localConfig.js'
+import { isAnyRemoteConfigured } from '../lib/providers.js'
 import { readMemories } from '../lib/memoriesStore.js'
 
 const DEFAULT_WORKSPACE = { path: '', permission: 'read' }
@@ -73,13 +74,13 @@ export default function R7Desktop() {
     setPromptsReady(prev => ({ ...prev, [agent]: true }))
   }, [])
 
-  // First-run: hidratar la config local (AppLocalData) y, si no hay key
-  // guardada, abrir el modal propio del desktop antes de cualquier fetch.
+  // First-run: hidratar la config local (AppLocalData) y, si no hay ningún
+  // proveedor remoto conectado, abrir el modal de conexión antes de cualquier fetch.
   useEffect(() => {
     let alive = true
     loadLocalConfig().then(() => {
       if (!alive) return
-      const has = hasOpenRouterKey()
+      const has = isAnyRemoteConfigured(getStoredKeys())
       setApiKeyConfigured(has)
       if (!has) setShowApiKey(true)
     })

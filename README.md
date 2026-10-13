@@ -71,9 +71,14 @@ There is no hosted tier and no proxy of ours in v0.1: every user spends their ow
 - **DeepSeek direct** — optional, if you prefer to bill their API directly.
 - **Ollama** and **LM Studio** — already supported locally, no key and no cost.
 
-The default model IDs ship as OpenRouter aliases (`~deepseek/...`), so they only resolve if you are
-connected through OpenRouter. The final public model list and its local endpoints are settled before
-the first release.
+The key button in the top bar opens the provider connection modal: one key per provider, stored on this
+machine (`local_config.json` in AppLocalData) and never synced anywhere. OpenRouter is selected by
+default; the direct DeepSeek endpoint is already wired in the provider registry
+(`src/lib/providers.js`).
+
+The model IDs that ship today are OpenRouter aliases (`~deepseek/...`), so they only resolve if you are
+connected through OpenRouter. The final public model list — OpenRouter aliases plus the direct-API IDs —
+and its local endpoints are settled before the first release.
 
 ## Environment
 
