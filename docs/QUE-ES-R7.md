@@ -147,8 +147,10 @@ spreadsheet.
 The claim this project would eventually like to make is precise: the same session, same model, IN with
 the pin and without it, OUT in the telegraphic register and OUT in a normal one, run as one turn per
 agent, reported as a table with the billable counters and the cache audit lines. That table does not
-exist yet. Until it does, everything above is a mechanism description, and the README says the same
-thing: no savings figures are claimed.
+exist yet — but the recipe that produces it is committed and runnable: `tools/s19-measure.mjs` drives
+the app's own request builder against a six-turn session, twice with the provider pin and twice
+without, and prints the table. Until a run is pasted here, everything above is a mechanism
+description, and the README says the same thing: no savings figures are claimed.
 
 Measurement is the invitation. If you think the wheel, the pin or the register does not do what is
 described here, build the counter-example — the numbers live in your own app data folder.
