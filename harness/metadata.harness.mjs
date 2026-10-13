@@ -184,6 +184,8 @@ check('docs/FEEDBACK-DSH.md existe y titula', feedback.split('\n')[0], '# Feedba
 const bloques = [...feedback.matchAll(/```text\n([\s\S]*?)```/g)].map((m) => m[1])
 check('dos versiones cortas (EN y ES)', bloques.length, 2)
 check('las dos linkean el repo', bloques.every((b) => b.includes(REPO_URL)), true)
+check('las dos presentan el proyecto y su cifra', bloques.every((b) => b.includes('R7 Desktop') && b.includes('77.5%')), true)
+check('el cierre canonico va en ingles', /## Built with DSH\n\nR7 Desktop is another agent harness/.test(feedback), true)
 check('las dos apuntan al sandbox y no a la app', bloques.every((b) => b.includes('sandbox') && !/Windows 11/.test(b)), true)
 check('el SO de las dos es el medido', bloques.every((b) => b.includes('Windows 10 Pro 22H2 (build 19045.6466)')), true)
 check('la nota aclara que no habla de la app', feedback.includes('no de R7 Desktop'), true)

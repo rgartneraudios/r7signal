@@ -32,7 +32,11 @@ Not documented, observed WITH the sandbox escalated:
 What would help: TEMP/cache redirection for child processes consistent with the shell's, and a TLS path for
 children that does not depend on schannel credentials.
 
-Built with DSH: https://github.com/rgartneraudios/r7signal
+Project: R7 Desktop — another agent harness, not a plugin (Tauri + React, BYOK, MIT). Three agents, a single
+tool loop, revertible snapshots and an append-only context wheel that stays cacheable turn after turn.
+Measured with the prefix pinned to one provider: 77.5% of the prefix served from cache and billable tokens
+down from 1,425 to 655 (6 turns, $0.0006).
+Repo: https://github.com/rgartneraudios/r7signal · mechanism and numbers in docs/QUE-ES-R7.md
 ```
 
 ## Versión corta — pegar en el casillero (ES)
@@ -58,7 +62,11 @@ No documentado, observado CON el sandbox escalado:
 Qué ayudaría: redirección de TEMP/caché para los hijos consistente con la del shell, y un camino TLS para
 los hijos que no dependa de las credenciales de schannel.
 
-Construido con DSH: https://github.com/rgartneraudios/r7signal
+Proyecto: R7 Desktop — otro harness de agentes, no un plugin (Tauri + React, BYOK, MIT). Tres agentes, loop
+único con herramientas, snapshots revertibles y una rueda de contexto append-only que se mantiene cacheable
+turno a turno. Medido con el prefijo fijado a un proveedor: 77.5% del prefijo servido desde caché y tokens
+facturables de 1.425 a 655 (6 turnos, $0.0006).
+Repo: https://github.com/rgartneraudios/r7signal · mecanismo y números en docs/QUE-ES-R7.md
 ```
 
 ## Findings, with the exact command
@@ -125,11 +133,10 @@ Clasificación: **no documentado**.
 
 ## Built with DSH
 
-R7 Desktop es otro harness de agentes, no un plugin: tres agentes sobre una API compatible con OpenAI, un
-loop único con herramientas, snapshots revertibles y una rueda de contexto append-only que se mantiene
-cacheable turno a turno. Lo que mide está en `docs/QUE-ES-R7.md`: con el prefijo fijado a un proveedor,
-**77.5%** del prefijo se sirvió desde caché y los tokens facturables bajaron de 1.425 a 655, con los
-prefijos byte-idénticos, en una corrida de 6 turnos y $0.0006. El OUT —formato telegrama— queda declarado
-como **no establecido**.
+R7 Desktop is another agent harness, not a plugin: three agents over an OpenAI-compatible API, a single tool
+loop, revertible snapshots and an append-only context wheel that stays cacheable turn after turn. What it
+measures lives in `docs/QUE-ES-R7.md`: with the prefix pinned to one provider, **77.5%** of the prefix was
+served from cache and billable tokens went from 1,425 to 655, with byte-identical prefixes, over 6 turns and
+$0.0006. The OUT —the telegram register— is declared **not established**.
 
 Repo: https://github.com/rgartneraudios/r7signal
