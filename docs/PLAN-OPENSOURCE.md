@@ -579,6 +579,16 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   reemplazar la **descripción vieja** del repo ("AI-Friendly Data Layer — Token-optimized post-cutoff
   data feed for LLMs and AI agents", que quedó del feed anterior y contradice el README de S7) por una
   línea del proyecto real y cargar topics. Cuando estén las tres, marcar esta casilla.
+  **Estado verificado en esta sesión (API pública):** `GET …/rulesets` → `[]` y `topics` → `[]`: falta
+  el ruleset y falta cambiar la descripción, que sigue siendo la del feed. Del lado del autor:
+  *Secret scanning* y *Push protection* **ya venían activos** (en un repo público la UI muestra el botón
+  de apagado, no el de encendido) y prendió **Dependabot alerts + security updates**; el estado exacto
+  de `security_and_analysis` **no** es legible por API sin token, así que se anota como reportado por la
+  UI.
+  **Ojo con el orden al armar el ruleset:** *Restrict deletions* y *Block force pushes* no tienen
+  fricción; si se activa **"Require a pull request before merging" sin bypass**, el push directo a `main`
+  (el que usa esta sesión para cerrar cada sesión) se cae — conviene habilitarlo **con bypass para
+  Repository admin**, o dejarlo para más adelante.
 - [x] **S16. Escaneo de secretos del historial completo — CERRADA (1 archivo + 1 comando).**
   `gitleaks` **8.30.1** (binario oficial de GitHub Releases; el `.zip` se verificó contra el `digest`
   `sha256:d29144de…` que devuelve la API de GitHub **antes** de ejecutarlo) corrido con
