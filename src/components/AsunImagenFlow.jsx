@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { calculateCost } from '../lib/modelPrices.js'
 import { listImageStyles } from '../lib/imageStyles.js'
+import { SUPABASE_IMAGE_REQUIRED } from '../lib/supabaseConfig.js'
 
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -128,6 +129,7 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
     setError(null)
     setUiState('processing_imagen')
     try {
+      if (!supabase) throw new Error(SUPABASE_IMAGE_REQUIRED)
       const { data: authData } = await supabase.auth.getUser()
       const res = await fetch(`${SUPABASE_URL}/functions/v1/generar-asset`, {
         method: 'POST',

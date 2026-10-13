@@ -12,6 +12,7 @@ import { commitR7Turn, buildWheelMessages, buildTurnPair } from '../lib/r7Wheel.
 import { stripAsunOpening } from '../lib/sessionOpening.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
+import { SUPABASE_MUSIC_REQUIRED } from '../lib/supabaseConfig.js'
 import { useWheelSession } from '../hooks/useWheelSession.js'
 import { useAgentPrompts } from '../hooks/useAgentPrompts.js'
 import { useR9Selection } from '../hooks/useR9Selection.js'
@@ -483,6 +484,7 @@ function AsunPanel({
     setGenerating(true)
     setMessages(prev => [...prev, { rol: 'usuario', contenido: '🎵 Generate song', id: newMessageId('asun') }])
     try {
+      if (!supabase) throw new Error(SUPABASE_MUSIC_REQUIRED)
       const { data: authData } = await supabase.auth.getUser()
       const res = await fetch(`${SUPABASE_URL}/functions/v1/generar-musica`, {
         method: 'POST',

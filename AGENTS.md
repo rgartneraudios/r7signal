@@ -47,6 +47,9 @@ built" con la asistencia de IA y "Trademark": MIT no cede nombre ni logo).
 `useAgentPrompts` es síncrono y `cochiAgentPrompt.js` se borró (ya no hay fallback). La variante se
 elige con `chat_language`: ES es el **texto de producción byte a byte** (congelado por hash en el
 harness), EN es la variante nueva con los samples de registro en inglés.
+**S9 CERRADA**: `supabaseClient` devuelve `null` sin `.env` (config pura en `src/lib/supabaseConfig.js`);
+imagen y música avisan en vez de reventar con `TypeError`. **S10 CERRADA**: los 7 estilos de imagen
+salieron de `estilos_imagen_public` a `src/lib/imageStyles.js` (catálogo congelado, nombres en inglés).
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
@@ -86,6 +89,14 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
   fetch** y `cochiAgentPrompt.js` se borró: no hay fallback. La edge function
   `supabase/functions/get-agent-prompts/` y la tabla `agent_prompts` quedan como **legacy** (nadie las
   lee desde la app); las claves `planning`/`task` siguen sin uso.
+- **Supabase opcional (S9):** `src/supabaseClient.js` ya no revienta sin `.env` — la decisión vive en
+  `src/lib/supabaseConfig.js` (puro, sin `import.meta`): `resolveSupabaseConfig(env)` exige key no vacía
+  y URL `http/https`; `createSupabaseClientFrom(env, factory)` devuelve `null` sin config. **Sin
+  Supabase la app arranca** y las features que aún cuelgan de edge functions (`generar-asset`,
+  `generar-musica`) avisan con `SUPABASE_IMAGE_REQUIRED`/`SUPABASE_MUSIC_REQUIRED` en la burbuja de
+  Asun en vez de tirar un `TypeError`: quedan atadas a S11. Las preferencias del desktop **no** pasan
+  por Supabase: `CochiDesktop.savePreferences` escribe `user_preferences.json` (AppLocalData) y la key
+  vive en `local_config.json`; el camino Supabase de `PreferencesModal` sólo corre sin `onSave`.
 
 ## Arquitectura (dónde tocar)
 
