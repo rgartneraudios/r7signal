@@ -65,8 +65,17 @@ decía `0.0.0`— con el harness nuevo `metadata.harness.mjs` (31 checks) que im
 `[package] name` `app`→`r7signal` (el binario pasa a `r7signal.exe`; la lib sigue `app_lib` porque
 `main.rs` la llama así) con `description`/`authors`/`license`/`repository` propios. **`identifier`
 `com.r7signal.cochi` queda congelado**: es la carpeta AppLocalData (`local_config.json` con las keys,
-`R7/`, `R9`) — renombrarlo borra los datos de las instalaciones vivas. **Capturas del README pendientes
-(S13-bis)**: piden la app viva con key, no se automatizan.
+`R7/`, `R9`) — renombrarlo borra los datos de las instalaciones vivas.
+**S13-bis CERRADA (capturas)**: 10 tomas reales en `docs/media/` (1920x1039) y sección `## Screenshots`
+en el README, con los pies leídos por OCR nativo; `metadata.harness.mjs` exige que existan. **S14
+CERRADA (build + Release)**: `npx tauri build` deja el único instalador NSIS
+`R7 Desktop_0.1.0_x64-setup.exe` (5.856.905 B, SHA-256 `33CFD8…`) y el Release `v0.1.0` está publicado
+con el asset verificado por API (`digest` idéntico al hash local); las notas viven en
+`docs/RELEASE-v0.1.0.md`. **S16 CERRADA (escaneo de secretos)**: `gitleaks` 8.30.1 sobre las 243 commits
+del historial (`--all --full-history`) → **0 secretos reales** (la anon key de Supabase es pública por
+diseño y el otro hit es un falso positivo de `generic-api-key`), así que D4 se cumple sin squash; los 2
+fingerprints quedan en `.gitleaksignore`. **Pendiente S16-bis** (UI de GitHub, la hace el autor): secret
+scanning + push protection + branch protection para `main` y cambiar la descripción vieja del repo.
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
@@ -174,6 +183,13 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
 - Toda lógica no-UI nueva debe ser **pura e inyectable** y tener harness en `harness/`.
 - Commits: en español, prefijo (`Cochi: ...`, `Refactor ...`, `Fix ...`), explicando causa raíz y qué
   harness/gate cambió. **Push sólo si el usuario lo pide o si la sesión lo declara.**
+- **Secretos (S16)**: `.gitleaksignore` en la raíz lista los 2 hallazgos del historial ya revisados a
+  mano (la **anon key** de Supabase, pública por diseño: viaja en el bundle web, y un **falso positivo**
+  de `generic-api-key` sobre `tokens: nuevoR7.length`). Escaneo reproducible:
+  `gitleaks git . --log-opts='--all --full-history'` → `exit 0` = limpio (v8.19 renombró `detect` a
+  `git`). El binario **no se versiona**: en S16 se bajó el zip oficial y se verificó contra el `digest`
+  de la API de GitHub antes de ejecutarlo. Lo que NUNCA puede aparecer es la `service_role`, una key de
+  proveedor o un PAT.
 - **Prompts (S8)**: `src/lib/prompts/` es la fuente de verdad. Cambiar un prompt es un cambio de código
   (entra al bundle) y **rompe la caché de prefijo** de la próxima sesión: probar 1 turno real por
   agente afectado y, si se toca el ES, actualizar el hash congelado del harness. El ES NO se reescribe

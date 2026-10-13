@@ -41,11 +41,15 @@ a `rgba(37, 10, 48, 0.25)` y el autor re-disparó las 10, incluida **`10-Plans`*
 verificado por API contra el hash local). El texto del Release vive en `docs/RELEASE-v0.1.0.md`. **El
 upload lo hizo el autor a mano**: no hay `gh` CLI ni token en el entorno y el sandbox bloquea el helper
 de credenciales de git (corte de S14, regla 5).
-**Hallazgo grave:** el repo **ya es público** con la descripción vieja del feed → **S16/D4 pasan a
-correr sobre un repo abierto** (ver §6).
-**Próxima sesión (candidata): S15 (link de descarga)** o **la de defaults** (`HUD.jsx` muerto,
-`VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` sin lectores, default `chat_language: 'Español'` — decisión del
-autor).
+**S16 CERRADA (escaneo) — estado.** El repo **ya era público** cuando se corrió el escaneo de D4:
+gitleaks 8.30.1 sobre las 243 commits dio **0 secretos reales** (la anon key de Supabase es pública por
+diseño; el otro hit es un falso positivo de `generic-api-key`), así que **no hay nada que rotar ni
+squash que hacer**; los 2 fingerprints viven en `.gitleaksignore`. Falta **S16-bis**, que es del lado de
+GitHub y lo hace el autor en la UI: secret scanning + push protection + branch protection, y cambiar la
+descripción vieja del repo (ver §6).
+**Próxima sesión (candidata): S16-bis (protecciones en GitHub, UI)** o **S15 (link de descarga)** o
+**la de defaults** (`HUD.jsx` muerto, `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` sin lectores, default
+`chat_language: 'Español'` — decisión del autor).
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -114,6 +118,9 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   Condición obligatoria antes de abrir: **escaneo de secretos sobre TODO el historial** (gitleaks
   o equivalente) + secret scanning y push protection de GitHub activados. Si el escaneo encuentra
   algo sensible, se reconsidera el squash.
+  **Escaneo hecho en S16** (243 commits, `--all --full-history`, gitleaks 8.30.1): **0 secretos
+  reales** (anon key pública por diseño + un falso positivo) → **sin squash**. Lo que falta de la
+  condición es del lado de GitHub (secret scanning + push protection): **S16-bis**.
 
 ### Aún abierto (no bloquea Fase 1)
 
@@ -564,8 +571,39 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   `https://github.com/rgartneraudios/r7signal/releases/tag/v0.1.0`.
 
 ### Fase 6 — Apertura y difusión
-- [ ] **S16. Repo público.** Antes de abrir: `gitleaks detect --log-opts=--all` sobre TODO el historial
-  (D4). Luego activar secret scanning + push protection y branch protection.
+- [ ] **S16-bis. Protecciones del repo en GitHub (las hace el autor en la UI).** No se pueden tocar
+  desde acá: no hay `gh` CLI ni token, y el sandbox bloquea el helper de credenciales.
+  (a) **Settings → Code security**: activar *Secret Protection* (secret scanning) y *Push protection*,
+  más Dependabot alerts y security updates. (b) **Settings → Branches**: branch protection rule para
+  `main` (requerir PR antes de merge, prohibir force-push y borrado). (c) **Settings → General**:
+  reemplazar la **descripción vieja** del repo ("AI-Friendly Data Layer — Token-optimized post-cutoff
+  data feed for LLMs and AI agents", que quedó del feed anterior y contradice el README de S7) por una
+  línea del proyecto real y cargar topics. Cuando estén las tres, marcar esta casilla.
+- [x] **S16. Escaneo de secretos del historial completo — CERRADA (1 archivo + 1 comando).**
+  `gitleaks` **8.30.1** (binario oficial de GitHub Releases; el `.zip` se verificó contra el `digest`
+  `sha256:d29144de…` que devuelve la API de GitHub **antes** de ejecutarlo) corrido con
+  `gitleaks git . --log-opts='--all --full-history'` sobre las **243 commits / 3,46 MB** del repo:
+  **2 hallazgos, 0 secretos reales**.
+  (a) `src/App.jsx:72` en el commit `3da296e`: la **anon key** de Supabase
+  (`{"iss":"supabase","ref":"ovvpyotqstweqbrmeyme","role":"anon"}`, exp 2036) — pública por diseño, la
+  misma familia que `VITE_SUPABASE_ANON_KEY`, que S5 declaró pública y que ya viaja en el bundle web;
+  (b) `supabase/functions/procesar-input/index.ts:160` en el commit `abce198`: **falso positivo** del
+  rule `generic-api-key` sobre `tokens: nuevoR7.length` (capturó el `.length` de un array: 14 chars,
+  entropía 3.52).
+  **No hay `service_role`, ni PATs, ni claves de proveedor en el historial** → **la condición de D4 se
+  cumple**: historial completo, sin squash. Los 2 fingerprints quedan en **`.gitleaksignore`** con el
+  motivo escrito al lado para que el escaneo sea reproducible y dé limpio
+  (`gitleaks git . --log-opts='--all'` → **exit 0**, `no leaks found`). Verificación extra:
+  `git grep -nE "eyJ|SUPABASE_KEY" HEAD -- src/App.jsx` vacío (el HEAD **no** tiene la key
+  hardcodeada) y `supabase/functions/procesar-input/` ya no está en el árbol.
+  **Nota de método:** `gitleaks detect` fue renombrado a `gitleaks git` (v8.19); el escaneo del
+  **worktree** se descartó a propósito — recorre `node_modules`/`target`/`dist` (inviable) y en un
+  árbol limpio no agrega nada sobre el escaneo de historial; el `.env` local sí tiene keys reales,
+  pero está gitignored y **nunca entró al historial** (verificado en S5).
+  **Riesgo residual para el autor (no es del repo):** el proyecto Supabase `ovvpyotqstweqbrmeyme` sigue
+  **vivo** (es el del `.env` local) y su anon key está en un historial ya público. La anon key no es un
+  secreto, pero si alguna tabla quedara **sin RLS** cualquiera podría leerla con esa key: revisar RLS en
+  Supabase, o pausar/borrar el proyecto cuando Supabase deje de usarse.
 - [ ] **S17. `docs/QUE-ES-R7.md`.** La innovación, en inglés: rueda R7 append-only, caché de prefijo con pin
   de proveedor, tope de 70k compactado sin modelo, loop único con tools, snapshots revertibles del turno,
   SSRF real en Rust, 34 suites de harness. Materia prima: §8 Notas del autor.
@@ -596,12 +634,12 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
   no bug, pero se documenta en el README ANTES de abrir o lo reportan como vulnerabilidad.
 - **Sin firma de código:** SmartScreen avisa en Windows. Documentar, no ocultar.
 - **Modelos `~deepseek/...`:** son alias de OpenRouter. Si se abre sin OpenRouter, la lista de modelos cambia.
-- **El repo YA es público sin el escaneo de D4 hecho.** La API de GitHub devuelve `visibility: public`
-  para `rgartneraudios/r7signal` (hallazgo de S14): S16 —`gitleaks` sobre TODO el historial + secret
-  scanning + push protection + branch protection— corre **sobre un repo abierto**, no antes de abrirlo.
-  Además la **descripción del repo sigue siendo la del feed viejo** ("AI-Friendly Data Layer…"), que
-  contradice el README de S7. Barrido preliminar de S14 (patrones de key en `git log --all -p`): sólo
-  placeholders de fixtures de harness; **no sustituye** a `gitleaks`.
+- **El repo está público y abrió antes de tiempo.** La API de GitHub devuelve `visibility: public`
+  para `rgartneraudios/r7signal` (hallazgo de S14): el escaneo de D4 y las protecciones de S16 corren
+  **sobre un repo abierto**, no antes de abrirlo. **S16 ya escaneó todo el historial** (243 commits,
+  gitleaks 8.30.1): 0 secretos reales, así que no hay nada que rotar por fuga. Queda **S16-bis**: secret
+  scanning + push protection + branch protection en GitHub (las hace el autor en la UI) y reemplazar la
+  **descripción vieja** del repo ("AI-Friendly Data Layer…"), que contradice el README de S7.
 
 ---
 
@@ -632,6 +670,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S13-bis | **Capturas del README.** 9 tomas reales de la app viva en `docs/media/` (1920x1039, PNG originales, 11.9 MB): los 3 pares de paneles (MaríaBase y Centinela/Terminator), la sesión de cada agente con conversación real, las 2 puertas laterales y `Session Memories` activo. El `README.md` suma `## Screenshots` con 5 (06 Cochi, 07 Asun, 08 Tito, 05 puerta derecha, 09 Session Memories). Los pies de foto se escribieron leyendo las tomas por **OCR nativo** (`Windows.Media.Ocr` es-ES) porque la sesión no tiene visión: cero afirmaciones sobre imágenes no verificadas. Nombres normalizados (`04/05-*door`, `06/07/08-*-session`): los rotulados `-board` no contenían el tablero de planes, y `05` lo confirma (`Plans 0` → `No plans on the board yet.`) → esa toma queda pendiente de un plan de Asun Modo Proyecto. `metadata.harness.mjs` a **38 checks** (cada captura citada por el README debe existir en disco + conteo real de `docs/media/` fijado). Gate igual que S6-bis: `npm run build` falla con `spawn EPERM` de esbuild bajo el sandbox confinado y se verificó escalando el permiso, no cambiando el comando. | lint 0/0 · build OK · test 34/34 | `1d6d956` |
 | S13-bis-2 | **Segunda pasada de las capturas (misma sesión): lienzo + tablero.** El velo de los 3 paneles pasó de `rgba(30, 15, 32, 0.25)` a `rgba(37, 10, 48, 0.25)` — `CochiDesktop.jsx:395`, `R7Desktop.jsx:378` (`.tito-chat`) y `AsunPanel.jsx:646` — y el autor re-disparó las 10 capturas más la nueva `10-Plans.png` con el tablero cargado (`Plans 1`, rótulos `Run block` / `Done when` leídos por OCR). El `README.md` swapea la 08 por la 10: la 06 re-disparada ya no es el par Cochi+Asun sino Cochi+Tito, así que 06/08/09 mostraban el mismo par y el README publicaba la misma escena tres veces. El tinte nuevo se verificó por píxeles contra la captura de HEAD (Δ R +0.28 / G −0.89 / B +2.69: mismo hue y dirección que el +1.75/−1.25/+4.00 esperado, amortiguado porque el velo no cubre header ni drawer). `metadata.harness.mjs` pasa a exigir 10 capturas en `docs/media/`. Sin tocar prompts ni lógica de app. | lint 0/0 · build OK · test 34/34 | `2779ea6` |
 | S14 | **Build del instalador + notas del Release (parte automatizable de la Fase 5).** `npx tauri build` en release generó el único instalador NSIS: `R7 Desktop_0.1.0_x64-setup.exe` (5.856.905 B ≈ 5.6 MB, SHA-256 `33CFD8633648E8A18BAB5616774734F5305437F5AE4B2751E4B79BDCF2680EFA`), con `ProductName` `R7 Desktop` y versión `0.1.0` leídos del propio binario (metadatos de S13 confirmados en el artefacto, no supuestos); `r7signal.exe` (18.7 MB) queda en `target/release`. `docs/RELEASE-v0.1.0.md` es el texto del Release en inglés: asset + tamaño + hash reproducible, pasos de instalación (per-user, sin admin, WebView2 por bootstrapper si falta), aviso de SmartScreen, los 3 agentes, BYOK y limitaciones (sin firma, key en texto plano, `cochi-full-access`, sin cifras de ahorro hasta S19). El aviso de SmartScreen ya estaba en el README (S7): el README no se tocó. **Corte (regla 5) + cierre manual:** el Release no se crea desde acá — sin `gh` CLI, sin token en el entorno y con el helper de credenciales de git bloqueado por el sandbox; Cochi dejó commit + push + tag `v0.1.0` + notas + hash y **el autor publicó el Release en la UI**: https://github.com/rgartneraudios/r7signal/releases/tag/v0.1.0, con el asset `R7.Desktop_0.1.0_x64-setup.exe` (5.856.905 B) y `digest: sha256:33cfd8…` verificados por API contra el hash local, `draft: false` y `prerelease: false`. **Hallazgos:** el repo **ya es público** (API de GitHub: `private: false`) y su descripción sigue siendo la del feed viejo → **S16/D4 corren sobre un repo abierto**; barrido preliminar de secretos sobre todo el historial (`git log --all -p`): sólo placeholders de los fixtures de harness (no reemplaza a `gitleaks`); el instalador sale **sin `publisher`/`copyright`** (`tauri.conf.json` no los declara); `webviewInstallMode` por defecto ⇒ el primer install necesita red si falta WebView2. | lint 0/0 · build OK · test 34/34 | `54ddf98` |
+| S16 | **Escaneo de secretos del historial completo (condición de D4).** `gitleaks` **8.30.1** —zip oficial de GitHub Releases verificado contra el `digest` `sha256:d29144de…` que publica la API **antes** de ejecutarlo— sobre las **243 commits / 3,46 MB** con `git --log-opts='--all --full-history'`: **2 hallazgos, 0 secretos reales**. (a) `src/App.jsx:72` en `3da296e`: la **anon key** de Supabase (`role: anon`, ref `ovvpyotqstweqbrmeyme`, exp 2036) — pública por diseño, ya viaja en el bundle web (regla `VITE_`, S5); (b) `supabase/functions/procesar-input/index.ts:160` en `abce198`: **falso positivo** del rule `generic-api-key` sobre `tokens: nuevoR7.length` (capturó el `.length` de un array: 14 chars). No hay `service_role`, ni PATs, ni keys de proveedor → **D4 se cumple con el historial completo, sin squash**. `.gitleaksignore` (nuevo, raíz) fija los 2 fingerprints con el motivo escrito al lado: el escaneo queda reproducible y da `exit 0` / `no leaks found`. Verificación extra: `git grep -nE "eyJ" HEAD -- src/App.jsx` vacío (el HEAD no tiene la key hardcodeada) y `procesar-input/` fuera del árbol. **Método:** `detect` fue renombrado a `git` (v8.19); el escaneo del worktree se descartó a propósito (recorre `node_modules`/`target` y en árbol limpio no agrega nada); el `.env` local sí tiene keys reales, pero está gitignored y **nunca entró al historial** (S5). **Corte (regla 5):** las protecciones de GitHub (secret scanning, push protection, branch protection) y la descripción vieja del repo son **S16-bis**, las hace el autor en la UI (no hay `gh` ni token desde acá). **Riesgo residual (del autor, no del repo):** el proyecto Supabase del `.env` sigue vivo y su anon key está en un historial ya público: revisar RLS o pausar/borrar el proyecto cuando deje de usarse. | lint 0/0 · build OK · test 34/34 | `pendiente` |
 
 ---
 

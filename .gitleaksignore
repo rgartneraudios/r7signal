@@ -1,0 +1,10 @@
+# Hallazgos revisados a mano en el escaneo de S16 (gitleaks 8.30.1, git --log-opts=--all).
+# No son secretos:
+#  - src/App.jsx (commit 3da296e): la clave de Supabase del historial es la ANON (JWT con
+#    role=anon, exp 2036). Es publica por diseno: ya viaja en el bundle web (regla VITE_, S5).
+#    Lo que NUNCA debe aparecer es la service_role: el escaneo no la encontro.
+#  - procesar-input/index.ts (commit abce198): falso positivo del rule generic-api-key sobre
+#    `tokens: nuevoR7.length` (capturo el `.length` de un array, no una clave).
+# Si el proyecto Supabase cambia (deja de existir o se rota el anon key), revisar estas lineas.
+3da296ee72358bbc55b2c778ec2c1b9d2be3932f:src/App.jsx:jwt:72
+abce1987dff658dd2990c13fb90065e4f8c520fa:supabase/functions/procesar-input/index.ts:generic-api-key:160
