@@ -85,10 +85,11 @@ viva era la de `PreferencesModal` **sin `onSave`**, que nunca corre—, con `src
 `src/lib/supabaseConfig.js`, su harness y la dependencia fuera del árbol: `npm audit` **18 → 15** y el
 chunk `supabase-*.js` (164,77 kB / 43,96 kB gzip) fuera del build. Lo que queda de Supabase es del **hub
 web** (edge function legacy `get-agent-prompts/` y `finance-proxy/`), sin dependencia npm.
-**S24-a, S24-bis y S24-ter CERRADAS** (higiene del repo público, el anuncio EN+ES publicado en
-Announcements, y el canal oficial con el borrador del mail). **Próxima sesión: S4-ter** (contenido del hub
-y locale de fecha/número); quedan del lado del autor el pegado de los cortos en X/LinkedIn, el mail a
-`api-service@deepseek.com` y el PR a la lista curada de DeepSeek.
+**S24-a, S24-bis, S24-ter y S24-quater CERRADAS** (higiene del repo público, el anuncio EN+ES publicado en
+Announcements, el canal oficial con el borrador del mail, y el lienzo al carbón con las 10 capturas
+nuevas). **Próxima sesión: S4-ter** (contenido del hub y locale de fecha/número); quedan del lado del
+autor el pegado del corto en X, el mail a `api-service@deepseek.com` y el PR a la lista curada de DeepSeek
+—los tres en pausa por decisión suya: el anuncio ya está publicado y el que busca lo encuentra.
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -964,6 +965,19 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   `metadata.harness.mjs` a **79 checks**: los 4 contactos y el asunto del mail quedan congelados para que no
   se cambien a mano sin fuente. **Pendiente del autor:** mandar el mail y abrir el PR de la lista; ninguno
   de los dos es automatizable desde acá (sin token ni `gh`).
+- [x] **S24-quater. Lienzo a carbón y capturas nuevas — CERRADA (3 componentes + 10 capturas).** El velo del
+  lienzo de los 3 paneles era un violeta propio —`rgba(37, 10, 48, 0.25)`— que no pertenecía a ninguna
+  escala del tema. El color base de la app es el **carbón `#09080A`** (rgb 9, 8, 10), la misma terna en
+  headers (0.5), lista de tareas (0.6), footer de música (0.7), status bars (0.8), top bar (0.9) y footer
+  de inputs (0.97), y ya opaco en los bloques de código de `CochiMarkdown`. **Decisión del autor:** el
+  lienzo pasa a `rgba(9, 8, 10, 0.6)` —el alfa de `CochiTodoList`— moviendo los 3 a la vez para que no
+  quede desparejo: `CochiDesktop.jsx:395`, `R7Desktop.jsx:377` (dentro del CSS de `.tito-chat`) y
+  `AsunPanel.jsx:646`. El autor re-disparó las **10 capturas** de `docs/media/` (1920x1039, mismos nombres)
+  y **no se dieron por buenas por confianza**: se midieron por **píxeles** contra HEAD —el modelo no tiene
+  visión, mismo método que S13-bis-2— y la brecha R-G que dejaba el violeta (5,5–6,0) cae a **0,6–0,9**,
+  con el azul apenas arriba del rojo: la firma de la mezcla nueva. El build volvió a morir en el `spawn
+  EPERM` del sandbox y esta vez el autor rechazó la escalada en el primer intento para re-aprobarla después:
+  el gate se cerró con su OK explícito, no por defecto.
 
 ---
 
@@ -1048,6 +1062,8 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S24-bis | **Difusión al equipo DeepSeek: el anuncio y sus guardarraíles.** `docs/DIFUSION-S24.md` trae el texto en inglés con su versión en español y **dos registros por idioma** (largo para Discussions/foros/mail; corto para X/LinkedIn, 272 y 279 caracteres). Cubre qué es R7 Desktop, la medición de S19 (13,8% / 42,7% / 77,5% y billable 655 vs 1425, prefijos byte-idénticos, $0.0006), el pedido de **entrenar el registro comprimido** y los links a la nota, al doc de la innovación, al asset de `v0.1.0` y a las issues **#11/#12/#13**. Cierra con lo que el texto **no** reclama: sin porcentaje general de ahorro, no benchmark, OUT no establecido, sin free tier, sin promesa de roadmap. `metadata.harness.mjs` pasa a **73 checks** y congela lo que se pudre: los 4 links, las 3 issues, que ningún porcentaje salga de los tres medidos —y que esos tres estén en `docs/QUE-ES-R7.md`— y el tope de 280 en los posteos cortos. **Pendiente del autor:** el mail a devrel no tiene dirección verificada (el doc lo declara en vez de inventarla) **Publicado por el autor en Announcements** (`discussions/15`, EN+ES en el mismo cuerpo, bienvenida borrada; API: un solo tema). Queda suyo el pegado de los cortos en X/LinkedIn y el mail a devrel. | lint 0/0 · build OK · test 33/33 | `3159204` |
 
 | S24-ter | **Canal oficial de DeepSeek: verificado, y el mail como segundo movimiento.** Los contactos salen de las propiedades de DeepSeek, no de memoria: `api-service@deepseek.com` (footer de `api-docs.deepseek.com`, *Community → Email*), `service@deepseek.com` (§Contact de sus repos de modelos), Discord oficial `discord.gg/Tc7c45Zzu5`, X `@deepseek_ai` y la lista curada `awesome-deepseek-integration`. **No hay dirección de developer relations publicada aparte**: el doc lo dice en vez de inventarla. **Decisión:** el camino público deja más rastro que la bandeja de entrada —la lista curada ya publica clientes de escritorio sobre la API y no tiene `CONTRIBUTING.md` (404), así que la convención es `docs/<proyecto>/README.md` + fila en la tabla *Applications*—, y el mail queda para los dos pedidos de plataforma, con borrador (asunto + cuerpo) listo para pegar y una sección de lo que **no** hacer. `metadata.harness.mjs` a **79 checks** (4 contactos + asunto congelados). Pendiente del autor: mandar el mail y abrir el PR. | lint 0/0 · build OK · test 33/33 | `34bec5a` |
+
+| S24-quater | **Lienzo a carbón y capturas nuevas.** El velo de los 3 paneles era un violeta propio (`rgba(37, 10, 48, 0.25)`) fuera de la escala del tema; pasa a **`rgba(9, 8, 10, 0.6)`**, el carbón `#09080A` al alfa de `CochiTodoList`, en `CochiDesktop.jsx:395`, `R7Desktop.jsx:377` (`.tito-chat`) y `AsunPanel.jsx:646`. El autor re-disparó las **10 capturas** (1920x1039, mismos nombres) y se verificaron por **píxeles contra HEAD**: la brecha R-G del violeta (5,5–6,0) cae a 0,6–0,9 y el azul queda apenas arriba del rojo, la firma de la mezcla nueva. Sin visión en el modelo: mismo método que S13-bis-2. | lint 0/0 · build OK · test 33/33 | `da18496` |
 
 ---
 
