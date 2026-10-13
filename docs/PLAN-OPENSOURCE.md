@@ -35,7 +35,13 @@ en el `README.md` con 5 de ellas; las capturas las tomó el autor con la app viv
 se automatiza: sin GUI no hay toma). Segunda pasada de la misma sesión: el lienzo de los 3 paneles pasó
 a `rgba(37, 10, 48, 0.25)` y el autor re-disparó las 10, incluida **`10-Plans`** con el tablero cargado
 (`Plans 1`, `Run block` / `Done when` verificados por OCR).
-**Próxima sesión (candidata): S14 (build + GitHub Release)** o **la de defaults** (`HUD.jsx` muerto,
+**S14 CERRADA — Fase 5 en curso.** El instalador NSIS existe y está hasheado
+(`R7 Desktop_0.1.0_x64-setup.exe`, 5.856.905 B, SHA-256 `33CFD8…`) y el texto del Release vive en
+`docs/RELEASE-v0.1.0.md`. **El Release en GitHub lo publica el autor a mano**: no hay `gh` CLI ni token
+en el entorno y el sandbox bloquea el helper de credenciales de git (corte de S14, regla 5).
+**Hallazgo grave:** el repo **ya es público** con la descripción vieja del feed → **S16/D4 pasan a
+correr sobre un repo abierto** (ver §6).
+**Próxima sesión (candidata): S15 (link de descarga)** o **la de defaults** (`HUD.jsx` muerto,
 `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` sin lectores, default `chat_language: 'Español'` — decisión del
 autor).
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
@@ -518,7 +524,33 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   cubre header ni drawer). `metadata.harness.mjs` queda en **38 checks**: toda captura citada por el
   README debe existir en disco y el conteo real de `docs/media/` está fijado en 10 para que borrar una
   no pase en silencio. Cero lógica de app: assets, docs, un tinte y asserts.
-- [ ] **S14. Build + GitHub Release** con el instalador. Sin firma de código: avisar SmartScreen en el README.
+- [x] **S14. Build + GitHub Release — CERRADA (1 instalador + 1 doc de release).** `npx tauri build`
+  en release produjo el único instalador del proyecto: **`R7 Desktop_0.1.0_x64-setup.exe`**
+  (5.856.905 B ≈ 5.6 MB, SHA-256 `33CFD8633648E8A18BAB5616774734F5305437F5AE4B2751E4B79BDCF2680EFA`),
+  con `ProductName` `R7 Desktop` y `FileVersion`/`ProductVersion` `0.1.0` ya propios (metadatos de S13
+  verificados en el binario, no supuestos). El ejecutable suelto (`r7signal.exe`, 18.7 MB) queda en
+  `target/release` como subproducto del bundle. `docs/RELEASE-v0.1.0.md` (inglés, regla 8) es el texto
+  del Release: asset + tamaño + hash reproducible (`Get-FileHash -Algorithm SHA256`), pasos de
+  instalación (per-user, sin admin, WebView2 por bootstrapper si falta), el aviso de SmartScreen, los 3
+  agentes, BYOK y las limitaciones conocidas (sin firma, key en texto plano, `cochi-full-access`, sin
+  cifras de ahorro: la tabla IN/OUT es S19). El aviso de SmartScreen **ya estaba** en el README
+  (S7, §Security notes): no se tocó nada en el README.
+  **Corte (regla 5): el Release en GitHub NO se pudo crear desde acá.** No hay `gh` CLI en la máquina
+  (`gh`, `winget` y `gitleaks` no existen en PATH) ni token en el entorno, y el sandbox confinado
+  bloquea el helper de credenciales de git (`git credential fill` → `couldn't create signal pipe`).
+  Se deja todo listo (commit + tag `v0.1.0` + notas + hash) y el autor publica el Release en la UI de
+  GitHub subiendo el `.exe`.
+  **Hallazgos:** (a) **el repo YA es público** — `GET /repos/rgartneraudios/r7signal` devuelve
+  `visibility: public` y `private: false` — así que el escaneo de secretos de **D4 y el resto de S16
+  corren sobre un repo ya abierto**, no antes de abrirlo, y la **descripción del repo sigue siendo la
+  del feed viejo** ("AI-Friendly Data Layer — Token-optimized post-cutoff data feed for LLMs and AI
+  agents"), que contradice el README de S7; (b) barrido **preliminar** de patrones sobre todo el
+  historial (`git log --all --pretty=format: -p` buscando `sk-or-v1-…`, `sk-<32 hex>`, `ghp_…`,
+  `service_role` con JWT): los únicos hits son los **placeholders de los fixtures de harness**
+  (`sk-or-v1-abcdefghijklmnopqrstuvwxyz`) — no reemplaza a `gitleaks` de S16; (c) el instalador sale
+  **sin `publisher` ni `copyright`** (CompanyName/LegalCopyright vacíos) porque `tauri.conf.json` no los
+  declara: candidato a una sesión corta de metadatos, no se tocó acá; (d) `webviewInstallMode` por
+  defecto (`downloadBootstrapper`) ⇒ el primer install necesita red si falta WebView2.
 - [ ] **S15. Link de descarga.** `src/components/Descargas.jsx`: `PLATFORMS` tiene `url: '#'` en las tres
   plataformas → apuntar a la página de Releases (o a un asset). Revisar el CTA del `Home.jsx`.
 
@@ -555,6 +587,12 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
   no bug, pero se documenta en el README ANTES de abrir o lo reportan como vulnerabilidad.
 - **Sin firma de código:** SmartScreen avisa en Windows. Documentar, no ocultar.
 - **Modelos `~deepseek/...`:** son alias de OpenRouter. Si se abre sin OpenRouter, la lista de modelos cambia.
+- **El repo YA es público sin el escaneo de D4 hecho.** La API de GitHub devuelve `visibility: public`
+  para `rgartneraudios/r7signal` (hallazgo de S14): S16 —`gitleaks` sobre TODO el historial + secret
+  scanning + push protection + branch protection— corre **sobre un repo abierto**, no antes de abrirlo.
+  Además la **descripción del repo sigue siendo la del feed viejo** ("AI-Friendly Data Layer…"), que
+  contradice el README de S7. Barrido preliminar de S14 (patrones de key en `git log --all -p`): sólo
+  placeholders de fixtures de harness; **no sustituye** a `gitleaks`.
 
 ---
 
@@ -584,6 +622,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S13 | **Metadatos de release (abre la Fase 5).** `version` 0.1.0 en los 3 manifiestos — `package.json` decía `0.0.0` mientras Tauri y Cargo ya decían 0.1.0 (el instalador salía bien y el paquete npm mentía) —, `productName` `r7signal`→`R7 Desktop` (D3) y `targets` `all`→`["nsis"]` (un solo instalador `.exe` para el Release de S14, sin WiX). `identifier` **intacto a propósito**: `com.r7signal.cochi` es AppLocalData — renombrarlo borra las keys de `local_config.json` y `R7/`/`R9` de las instalaciones vivas. Iconos verificados, no regenerados: ya eran propios (desde `logo-r7.png`, 16/07 y 15/08) y el harness exige que los 5 del `bundle.icon` existan. El crate deja el scaffold de Tauri: `[package] name` `app`→`r7signal` (el binario pasa de `app.exe` a `r7signal.exe`; la lib sigue `app_lib` porque `main.rs` la llama así), `description`/`authors`/`license`/`repository` propios (antes `A Tauri App` / `["you"]` / vacíos) y `Cargo.lock` reordenado por cargo (21+21 líneas, cero dependencias tocadas). El README corrige dos datos podridos: el conteo de suites (decía 29 con 33) y la lista de modelos (ya no son sólo alias de OpenRouter desde S12-bis). Harness nuevo `metadata.harness.mjs` (31 checks) que ata versión/bundle/crate/LICENSE/README al repo. **Corte (regla 5): las capturas NO se hicieron** (piden la app viva con key y sesión de UI) → **S13-bis**. | lint 0/0 · build OK · test 34/34 | `454a9b4` |
 | S13-bis | **Capturas del README.** 9 tomas reales de la app viva en `docs/media/` (1920x1039, PNG originales, 11.9 MB): los 3 pares de paneles (MaríaBase y Centinela/Terminator), la sesión de cada agente con conversación real, las 2 puertas laterales y `Session Memories` activo. El `README.md` suma `## Screenshots` con 5 (06 Cochi, 07 Asun, 08 Tito, 05 puerta derecha, 09 Session Memories). Los pies de foto se escribieron leyendo las tomas por **OCR nativo** (`Windows.Media.Ocr` es-ES) porque la sesión no tiene visión: cero afirmaciones sobre imágenes no verificadas. Nombres normalizados (`04/05-*door`, `06/07/08-*-session`): los rotulados `-board` no contenían el tablero de planes, y `05` lo confirma (`Plans 0` → `No plans on the board yet.`) → esa toma queda pendiente de un plan de Asun Modo Proyecto. `metadata.harness.mjs` a **38 checks** (cada captura citada por el README debe existir en disco + conteo real de `docs/media/` fijado). Gate igual que S6-bis: `npm run build` falla con `spawn EPERM` de esbuild bajo el sandbox confinado y se verificó escalando el permiso, no cambiando el comando. | lint 0/0 · build OK · test 34/34 | `1d6d956` |
 | S13-bis-2 | **Segunda pasada de las capturas (misma sesión): lienzo + tablero.** El velo de los 3 paneles pasó de `rgba(30, 15, 32, 0.25)` a `rgba(37, 10, 48, 0.25)` — `CochiDesktop.jsx:395`, `R7Desktop.jsx:378` (`.tito-chat`) y `AsunPanel.jsx:646` — y el autor re-disparó las 10 capturas más la nueva `10-Plans.png` con el tablero cargado (`Plans 1`, rótulos `Run block` / `Done when` leídos por OCR). El `README.md` swapea la 08 por la 10: la 06 re-disparada ya no es el par Cochi+Asun sino Cochi+Tito, así que 06/08/09 mostraban el mismo par y el README publicaba la misma escena tres veces. El tinte nuevo se verificó por píxeles contra la captura de HEAD (Δ R +0.28 / G −0.89 / B +2.69: mismo hue y dirección que el +1.75/−1.25/+4.00 esperado, amortiguado porque el velo no cubre header ni drawer). `metadata.harness.mjs` pasa a exigir 10 capturas en `docs/media/`. Sin tocar prompts ni lógica de app. | lint 0/0 · build OK · test 34/34 | `2779ea6` |
+| S14 | **Build del instalador + notas del Release (parte automatizable de la Fase 5).** `npx tauri build` en release generó el único instalador NSIS: `R7 Desktop_0.1.0_x64-setup.exe` (5.856.905 B ≈ 5.6 MB, SHA-256 `33CFD8633648E8A18BAB5616774734F5305437F5AE4B2751E4B79BDCF2680EFA`), con `ProductName` `R7 Desktop` y versión `0.1.0` leídos del propio binario (metadatos de S13 confirmados en el artefacto, no supuestos); `r7signal.exe` (18.7 MB) queda en `target/release`. `docs/RELEASE-v0.1.0.md` es el texto del Release en inglés: asset + tamaño + hash reproducible, pasos de instalación (per-user, sin admin, WebView2 por bootstrapper si falta), aviso de SmartScreen, los 3 agentes, BYOK y limitaciones (sin firma, key en texto plano, `cochi-full-access`, sin cifras de ahorro hasta S19). El aviso de SmartScreen ya estaba en el README (S7): el README no se tocó. **Corte (regla 5):** el Release en GitHub no se crea desde acá — sin `gh` CLI, sin token en el entorno y con el helper de credenciales de git bloqueado por el sandbox; queda commit + tag `v0.1.0` + notas + hash y el autor lo publica en la UI. **Hallazgos:** el repo **ya es público** (API de GitHub: `private: false`) y su descripción sigue siendo la del feed viejo → **S16/D4 corren sobre un repo abierto**; barrido preliminar de secretos sobre todo el historial (`git log --all -p`): sólo placeholders de los fixtures de harness (no reemplaza a `gitleaks`); el instalador sale **sin `publisher`/`copyright`** (`tauri.conf.json` no los declara); `webviewInstallMode` por defecto ⇒ el primer install necesita red si falta WebView2. | lint 0/0 · build OK · test 34/34 | `pendiente` |
 
 ---
 
