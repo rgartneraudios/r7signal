@@ -117,7 +117,12 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
   `SUPABASE_SERVICE_ROLE_KEY`. El E2E de escritorio necesita además una key de proveedor cargada en la
   app (OpenRouter por defecto; DeepSeek directo es opcional desde S12). `VITE_SUPABASE_SERVICE_KEY` se
   eliminó en S5 (mismo valor que `SUPABASE_SERVICE_ROLE_KEY`,
-  pero público por prefijo y sin uso en `src`); `VITE_R7_USER_ID` quedó sin uso en el código.
+  pero público por prefijo y sin uso en `src`). **S21:** las 2 variables muertas que quedaban
+  (`VITE_R7_USER_ID` en el `.env`, `VITE_SHOW_STUDIO` en el `.env.local`) se borraron de los archivos
+  locales: ningún archivo del repo las leía desde S5/S6, así que no quedan banderas fantasma que
+  parezcan configuración viva. Default de `chat_language`: **`Español` se queda** (decisión del autor,
+  13/10): el ES es su voz y el texto de producción congelado por hash; cambiarlo alteraría la variante
+  del prompt y la caché de las instalaciones nuevas.
 - **Identidad (S6):** nada personal en el repo. `supabase/.temp/` (project-ref, pooler-url, org id)
   está **destrackeado** y cubierto por `.gitignore` (`**/.temp/`); `src/constants.js` se eliminó
   (avatar `media.r7signal.com` y clima `Oviedo` hardcodeados) y los defaults que nombraban al autor
