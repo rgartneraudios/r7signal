@@ -175,5 +175,26 @@ check('X oficial', difusion.includes('twitter.com/deepseek_ai'), true)
 check('lista curada de DeepSeek', difusion.includes('github.com/deepseek-ai/awesome-deepseek-integration'), true)
 check('borrador del mail con su asunto', difusion.includes('Prefix-cache reporting per endpoint'), true)
 
+// La nota al equipo del Harness (S28) es la que el autor pega en el casillero de feedback de la app. Sus
+// hallazgos son sintomas medidos con el comando y el error literal, y las rutas van generalizadas porque el
+// repo no lleva identidad (S6): aca se ata lo uno y lo otro para que "mejorar" el texto no lo deje mentir.
+console.log('— feedback al Harness —')
+const feedback = readFileSync(join(root, 'docs', 'FEEDBACK-DSH.md'), 'utf8')
+check('docs/FEEDBACK-DSH.md existe y titula', feedback.split('\n')[0], '# Feedback for the DSH Harness team (EN / ES)')
+const bloques = [...feedback.matchAll(/```text\n([\s\S]*?)```/g)].map((m) => m[1])
+check('dos versiones cortas (EN y ES)', bloques.length, 2)
+check('las dos linkean el repo', bloques.every((b) => b.includes(REPO_URL)), true)
+check('las dos declaran el sandbox', bloques.every((b) => b.includes('workspace-write')), true)
+check('sin identidad del autor', /C:\\Users\\[A-Za-z]+|DESKTOP-/.test(feedback), false)
+check('error de esbuild literal', feedback.includes('spawn EPERM'), true)
+check('error de %TEMP% literal', feedback.includes('Access is denied'), true)
+check('error de TLS literal', feedback.includes('SEC_E_NO_CREDENTIALS (0x8009030E)'), true)
+check('error de CIM descrito', feedback.toLowerCase().includes('cim resource'), true)
+check('cada hallazgo clasificado', [...feedback.matchAll(/^Clasificación: \*\*/gm)].length, 5)
+check('2 documentadas y 3 no documentadas', [...feedback.matchAll(/^Clasificación: \*\*documentado/gm)].length, 2)
+check('no repite el pedido del mail', feedback.includes('docs/PARA-DEEPSEEK.md'), true)
+check('la unica cifra es la medida', [...new Set([...feedback.matchAll(/\d+(?:\.\d+)?%/g)].map((m) => m[0]))], ['77.5%'])
+check('esa cifra esta en el doc medido', queEs.includes('77.5%'), true)
+
 console.log(`\n[metadata] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)
