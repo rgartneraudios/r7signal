@@ -600,10 +600,22 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   **worktree** se descartó a propósito — recorre `node_modules`/`target`/`dist` (inviable) y en un
   árbol limpio no agrega nada sobre el escaneo de historial; el `.env` local sí tiene keys reales,
   pero está gitignored y **nunca entró al historial** (verificado en S5).
-  **Riesgo residual para el autor (no es del repo):** el proyecto Supabase `ovvpyotqstweqbrmeyme` sigue
-  **vivo** (es el del `.env` local) y su anon key está en un historial ya público. La anon key no es un
-  secreto, pero si alguna tabla quedara **sin RLS** cualquiera podría leerla con esa key: revisar RLS en
-  Supabase, o pausar/borrar el proyecto cuando Supabase deje de usarse.
+  **Proyecto Supabase: revisión del autor en la misma sesión (advisors).** El proyecto
+  `ovvpyotqstweqbrmeyme` sigue **vivo** (es el del `.env` local) y su anon key está en un historial ya
+  público. Se revisó a fondo: (a) **tablas sin RLS → 0 filas**
+  (`select … from pg_tables where schemaname='public' and rowsecurity=false`), o sea que la anon key
+  pública **no** puede leer ninguna tabla; (b) el único aviso **rojo** era `security_definer_view` sobre
+  `public.estilos_imagen_public` (vista sin lectores desde S10/S11) y **el autor lo cerró con
+  `drop view`** — avance del pendiente "estilos_imagen* sin lectores": queda la **tabla** `estilos_imagen`
+  (`prompt_base`), también sin lectores, para un paso aparte; (c) **11 amarillos evaluados y aceptados a
+  propósito**: son *hardening*, no exposición. Los 2 propios son funciones `SECURITY DEFINER` —
+  `handle_new_user` (trigger `on_auth_user_created`) y `crear_balance_inicial` (trigger
+  `trigger_crear_balance`, del sistema de créditos legacy) — y el resto son triggers internos de
+  Storage/Realtime que no se tocan. Los dos propios se pueden cerrar con
+  `revoke execute on function public.<fn>() from public, anon, authenticated;` (los triggers **no** piden
+  EXECUTE a quien los dispara) y es seguro hacerlo: el repo **no tiene una sola llamada `.rpc(`** ni
+  referencias a esas funciones. Decisión del autor: dejarlo así. Si el hub web no usa el proyecto para
+  login, pausarlo (reversible, no borra datos) sigue siendo la salida limpia.
 - [ ] **S17. `docs/QUE-ES-R7.md`.** La innovación, en inglés: rueda R7 append-only, caché de prefijo con pin
   de proveedor, tope de 70k compactado sin modelo, loop único con tools, snapshots revertibles del turno,
   SSRF real en Rust, 34 suites de harness. Materia prima: §8 Notas del autor.
