@@ -67,10 +67,16 @@ IN/OUT de S19). Linkeado desde el README y atado al harness (48 checks).
 **77,5% del prefijo servido desde caché** y billable **655 vs 1.425** contra el ruteo por defecto, con
 prefijos byte-idénticos; el primer intento fue inconcluso y así se reporta. La tabla y sus salvedades
 viven en `docs/QUE-ES-R7.md`; el OUT quedó pendiente con diseño propio.
-**Próxima sesión (candidata): S18 (escrito para el equipo DeepSeek + issues semilla, ya con los números
-de S19)** o **la de defaults** (`HUD.jsx` muerto,
+**S18 CERRADA (escrito abierto + issues semilla)**: `docs/PARA-DEEPSEEK.md` es el escrito para el equipo
+DeepSeek (mecanismo, los números de S19, 3 pedidos y las 3 **issues semilla** listas para pegar) y
+`docs/QUE-ES-R7.md` sumó lo que faltaba del diseño: la **sesión fría por defecto** frente a **Session
+Memories** (el `Memories.txt` que sólo escribe el usuario y viaja como `system` estable), el **modo
+Proyecto de Asun** (el arquitecto que parte el proyecto en bloques cortos y verificables sobre el
+tablero) y la precisión del OUT (el prompt recorta lo visible; el trabajo interno sigue haciéndose en el
+vocabulario entrenado). 11 asserts nuevos en `metadata.harness.mjs` (59 checks).
+**Próxima sesión (candidata): la de defaults** (`HUD.jsx` muerto,
 `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` sin lectores, default `chat_language: 'Español'` — decisión del
-autor).
+autor) o **S4-ter** (contenido del hub y locale de fecha/número).
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -712,8 +718,31 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   **Cero lógica:** sólo docs, un link en el README y 4 asserts nuevos en `metadata.harness.mjs` (48
   checks): el doc existe y titula, **declara el conteo real de suites** (mismo dato podrido que el README,
   ahora atado en los dos lados), el README lo linkea y el doc no promete cifras de ahorro.
-- [ ] **S18. Escrito para el equipo DeepSeek + issues semilla.** Etiquetas `good first issue`:
-  keyring del sistema para la key, i18n formal, ideas de ahorro de tokens.
+- [x] **S18. Escrito abierto + issues semilla — CERRADA (2 docs + README + 11 asserts).**
+  `docs/PARA-DEEPSEEK.md` (nuevo, inglés) es el escrito para el equipo DeepSeek: el mecanismo en un
+  párrafo, la tabla medida de S19 con su receta commiteada y sus salvedades (`not a benchmark`), **tres
+  pedidos** —(1) contrato de caché de prefijo por endpoint, porque el pin de la app existe justo porque
+  el mismo modelo ruteado a endpoints distintos reporta `cached=0`; (2) entrenar el **registro
+  comprimido** en vez de dejarlo a un system prompt; (3) atacar la medición con la receta commiteada— y
+  las **3 issues semilla listas para pegar**: keyring del sistema para la key e i18n formal de la UI con
+  `good first issue`, más la puerta abierta de **ahorro de tokens** (medida, no prometida) con
+  `help wanted`. Cada semilla trae título, etiquetas, contexto y criterio de aceptación; la etiqueta
+  `good first issue` ya existe en el repo (verificado por API en S18), así que no hay label que crear.
+  **Sin token de GitHub desde acá** (ni `gh` CLI ni `GITHUB_TOKEN` en el entorno): las issues las abre el
+  autor pegando el texto, igual que el Release de S14 y las protecciones de S16-bis.
+  En el mismo objetivo, `docs/QUE-ES-R7.md` cerró los huecos que el autor marcó antes de publicar:
+  **Cold by default, and what "Session Memories" adds** (la sesión nace fría; el otro modo inyecta
+  `Memories.txt` como bloque `system` `[USER MEMORIES]` tras el prompt base y antes de los briefs, que
+  sólo escribe el usuario y que va atado a la caché: si el archivo cambia a mitad de sesión, el prefijo
+  se mueve), **Asun's project mode** (el arquitecto entrevista, parte el proyecto en bloques atómicos con
+  su `done when`/evidence y los guarda en el tablero —fuera del workspace y fuera del prefijo—; el
+  argumento de los ~70k tokens es del autor y se cita como umbral de trabajo, no como ley) y **What
+  prompting can and cannot do** (el prompt cambia la respuesta visible, no el trabajo interno: por eso el
+  OUT pide entrenamiento). Se corrigió además una frase podrida de la portada del doc (decía que la
+  medición era "a separate, pending job" con S19 ya cerrada) y se sumó que **la compactación es la única
+  ruptura de prefijo deliberada** del diseño. `README.md` linkea la nota y su nota de seguridad del
+  keyring apunta a las semillas. `metadata.harness.mjs` pasa a **59 checks** (secciones nuevas del doc,
+  la nota existe y titula, la receta citada, `not a benchmark`, 3 semillas y sus etiquetas).
 - [x] **S19. Evidencia IN/OUT — CERRADA (1 script + 1 doc + 1 assert).** Medición real corrida con la
   key del autor (`~deepseek/deepseek-v4-flash-latest`, prompt ES, 6 turnos, 20 requests, **$0.0006**). `tools/s19-measure.mjs` (nuevo, fuera de `harness/` a propósito:
   hace red y gasta créditos) mide con las piezas **reales** de la app, no con una reimplementación:
@@ -857,6 +886,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S20 | **Dependencias: triaje del `npm audit` y bajada de 45 a 18.** El número mezclaba cosas muy distintas: `fixAvailable: false` en los 45 (o sea, `npm audit fix` no sirve y el camino son los bumps del bot) y **19 de los 45 eran declaración muerta** — `@aws-sdk/client-s3` y `@aws-sdk/s3-request-presigner` figuraban en `dependencies` sin **un solo import** en el repo (`npm ls`: hijos directos de la raíz, nadie más los pide; el bundle nunca los llevó). **Aplicado:** `npm uninstall` de las 2 (19 avisos y ~2.7k líneas de lock menos) y los **4 bumps de Dependabot dentro de rango** con `npm update vite postcss brace-expansion postcss-selector-parser tailwindcss`: `vite` 7.3.2→**7.3.7**, `postcss` 8.5.6→**8.5.30**, `brace-expansion` 5.0.5→**5.0.12**, `postcss-selector-parser` 6.1.2→**6.1.4**. `tailwindcss` queda en **3.4.19**: la PR #5 del bot apunta a la línea 4.x, major contra el `^3.4.1` declarado → **corte (regla 5)**. **Resultado medido:** `npm audit` **45 (4/26/15) → 18 (4 low / 4 moderate / 10 high), 0 critical**, y los 18 siguen sin fix publicado: 16 son toolchain de build y **lo único que entra al bundle es `ws`** (high) por `@supabase/realtime-js`, alcanzable sólo si el usuario configura Supabase (opcional desde S9/S11: sin `.env` el cliente es `null`). GitHub ya mostraba 18 (cuenta advisories, no rutas del árbol): **no coincidía con npm y tampoco coincide después** — al hacer push, su grafo bajó a **7 (2 high / 3 moderate / 2 low)**, medido el 13/10 en el mismo remoto. Nota de método: el resumen transitorio de 11 avisos que imprimió `npm update` no es el asentado. Nota de entorno: `npm` rechaza escribir su caché/logs fuera del workspace en el sandbox confinado → gate y bump verificados escalando el permiso, igual que el `spawn EPERM` de esbuild. **Docs:** el README suma el aviso en `## Security notes` (no vender el árbol como limpio) y `AGENTS.md` actualiza el estado. **Pendiente del autor (S21 candidata):** sacar `@supabase/supabase-js` del bundle tumbaría `ws` y la cadena de storage, a costa del camino legacy de `PreferencesModal`/`R7Desktop`: es diseño, no bump. | lint 0/0 · build OK · test 34/34 | `194ea92` |
 | S17 | **`docs/QUE-ES-R7.md`: el documento de la innovación, en inglés.** Portada técnica del repo para la comunidad y el equipo DeepSeek, con los datos **leídos del código** en vez de memoria: el problema (un prefijo que deja de ser byte-idéntico tumba la caché de todo lo que sigue), la **rueda R7** (par `R1`/`R2` que sella el SISTEMA por turno —`R1` primera línea del pedido tope 300 chars, `R2` respuesta visible tope 1.500— append-only como bloques `── Turno N ──` que viajan como `system` estables, con la conversación visible y `Memories.txt` como objetos aparte que nunca van al modelo), el **pin de proveedor** (`providerRouting` → `provider.order` con `allow_fallbacks`, porque la caché está atada a modelo **+ endpoint** y sin pin el ruteo reparte y aparece `cached=0`; regla de oro incluida), la **compactación sin modelo** (`compactWheel`: primer turno + recientes dentro del presupuesto de 6.000 chars, el medio colapsado a un marcador con su cuenta, renumerado — con su costo declarado: el medio se pierde), el **loop único** (`MAX_ITER` 25, scopes `read`/`edit`/`task`/`full`, sin planner ni reescritura intra-turno, snapshots revertibles) y la **tesis OUT** del autor (formato telegrama; pide entrenamiento, no prompting), citada y traducida desde §8 **sin reescribir su voz**, con la precisión técnica de Cochi al lado (el ahorro del IN no es "menos tokens" sino tokens a tarifa de caché). Suma la sección `What is not measured yet` — sin cifras hasta S19, mismo criterio que el README y el Release — más BYOK sin proxy, Supabase opcional, SSRF real en Rust, las 34 suites y el contador `billableTokens` como método. Cero lógica: docs + link en el README + 4 asserts en `metadata.harness.mjs` (48 checks: el doc titula, declara el conteo real de suites —dato que se pudre, atado ahora en dos lados—, el README lo linkea y no promete cifras). | lint 0/0 · build OK · test 34/34 | `7d7e6ff` |
 | S19 | **Medición IN/OUT: el instrumento y los números.** `tools/s19-measure.mjs` mide con las piezas **reales** de la app (`resolveProvider` + `buildBody` → el pin de `cacheAudit` y la forma del body son los de la app; `getAgentPrompts('cochi', …)` → el prompt de producción ES congelado; `buildTurnPair`/`appendR7Pair`/`buildWheelMessages` → los briefs reales de la rueda append-only; `billableTokens`/`calculateCost` → la contabilidad del header) en vez de reimplementar la request. **4 brazos / 20 requests / centavos:** sesión de Cochi de 6 turnos con pin, los mismos 6 turnos sin pin **dos veces** (sin pin el ruteo puede caer por suerte en un proveedor que cachea) y las dos respuestas OUT (registro telegrama contra prosa). El brazo sin pin **reusa los R1/R2 del brazo con pin**, así los prefijos son byte-idénticos y el `prefixFingerprint` de la tabla lo prueba: sin eso la comparación no valdría. Imprime dos tablas markdown (por turno y resumen por brazo) más las respuestas OUT plegadas. **Diseño honesto:** turno 1 siempre `cached=0`, el dato del IN vive en los turnos 2-6; n=1 es receta, no benchmark; el prefijo medido es de sesión corta (~900 tok) porque los schemas de tools quedan afuera a propósito (arrastrarían el workspace al script) → la tabla muestra dirección, no techo. **Modo seco** `S19_DRY=1` valida armado y fingerprints sin red ni gasto (así se verificó antes de commitear). **Corte (regla 5):** la corrida con `OPENROUTER_API_KEY` la hace el autor — decisión suya, var de entorno, nada toca disco — así que **S19 no cierra**: cuando pegue la salida en `docs/QUE-ES-R7.md` (reemplazando `What is not measured yet`), cierra y S18 tiene números. Cambios de paso: `eslint.config.js` suma `tools/**/*.mjs` a los globals de Node (el script usa `process`); el doc de la innovación ahora cita la receta commiteada. **Corrida real (2 pasadas, $0.0006 las dos):** la primera salió **inconclusa y se reporta así** — las tres armas en **StreamLake** (78,5% / 87,0% / 87,0% cached), o sea que en esa ventana caliente no había ruteo que separar y los brazos sin pin heredaron la caché del brazo con pin. Eso obligó a corregir el protocolo: los brazos sin pin van **primero** y con `session_id` propio. La segunda pasada sí repartió: **sin pin → CoreWeave (0,0,0,1024,0,0; 13,8% medio; billable 1.425 ≈ input crudo)**, **sin pin 2ª → Venice (768×4 y después 0; 42,7%)**, **con pin → StreamLake (768,768,1024,1280,1280,1536; 77,5% medio; billable 655)** — con prefijos **byte-idénticos** entre `in-nopin` e `in-pin` (fingerprint igual turno a turno), así que la única diferencia era el pin: pagó **un poco más de la mitad** y el brazo sin pin quedó sin caché en 4 de 6 turnos. **El OUT no quedó establecido** (134 vs 209 y 256 vs 315 tokens de completion; el registro telegrama salió más corto las dos veces, pero en una corrida el modelo contestó en prosa en los dos brazos) → dirección, no efecto. Queda pendiente con Asun/Tito y el caso de sesión larga. La tabla y las salvedades quedaron en `docs/QUE-ES-R7.md`, y `metadata.harness.mjs` cambia su assert: ya no exige "no hay cifras" sino que el doc **no generalice** lo medido. | lint 0/0 · build OK · test 34/34 | `c4be3ad` |
+| S18 | **Escrito abierto para el equipo DeepSeek + issues semilla (y los huecos del doc de la innovación).** `docs/PARA-DEEPSEEK.md` (nuevo, inglés) tiene el escrito: el mecanismo en un párrafo, la tabla medida de S19 con su receta y sus salvedades, y **tres pedidos** —contrato de caché de prefijo **por endpoint** (el pin de la app existe porque el mismo modelo ruteado a endpoints distintos reporta `cached=0`), **entrenar** el registro comprimido en vez de dejarlo a un system prompt, y **atacar la medición** con `tools/s19-measure.mjs`—. Cierra con las **3 issues semilla listas para pegar**: keyring del sistema para la key e i18n formal de la UI (`good first issue`) y la puerta abierta de ahorro de tokens, medida y no prometida (`help wanted`); cada una con título, etiquetas, contexto y criterio de aceptación. La etiqueta `good first issue` **ya existe** en el repo (verificado por API): no hay label que crear, y **sin token de GitHub desde acá** (ni `gh` ni `GITHUB_TOKEN`) las issues las abre el autor pegando el texto, igual que el Release de S14 y las protecciones de S16-bis. En el mismo objetivo, `docs/QUE-ES-R7.md` cerró los huecos que el autor marcó antes de publicar: **Cold by default, and what "Session Memories" adds** (la sesión nace fría; el otro modo inyecta `Memories.txt` como bloque `system` `[USER MEMORIES]` entre el prompt base y los briefs, archivo que **sólo escribe el usuario** y cuyo cambio a mitad de sesión mueve el prefijo), **Asun's project mode** (el arquitecto entrevista y parte el proyecto en bloques atómicos con su `done when`/evidence sobre el tablero, que vive fuera del workspace y fuera del prefijo; el umbral de ~70k tokens se cita **como argumento del autor**, no como ley) y **What prompting can and cannot do** (el prompt cambia la respuesta visible, no el trabajo interno: por eso el OUT pide entrenamiento, no un prompt mejor). Se corrigió una frase podrida de la portada del doc (la medición ya no es "a separate, pending job": S19 cerró) y se agregó que **la compactación es la única ruptura de prefijo deliberada** del diseño. `README.md` linkea la nota y su aviso de keyring apunta a las semillas; `metadata.harness.mjs` pasa a **59 checks** (secciones nuevas del doc, la nota existe y titula, receta citada, `not a benchmark`, 3 semillas con sus etiquetas). Cero lógica de app: sólo docs, un link y asserts. | lint 0/0 · build OK · test 34/34 | _pendiente_ |
 
 ---
 
@@ -896,4 +926,40 @@ entrenado en ese registro, legible para humanos y comprimido para máquinas.
 
 **Pendiente del autor:** el escrito abierto sobre qué pretendió y qué consiguió con la rueda R7,
 y qué se buscó con el OUT. Se redacta más adelante; estas notas son el insumo.
+**CERRADO en S18:** ese escrito es `docs/PARA-DEEPSEEK.md` (los pedidos al proveedor) más las secciones
+nuevas de `docs/QUE-ES-R7.md`, y las notas de abajo son su insumo.
+
+**Sobre la sesión fría y `Session Memories` (13/10, insumo de S18):**
+> "Falta explicar los de Session Memories y Cold Session. Aquí explicar que hay un botón para incluir un
+> determinado contexto para poder trabajar junto a los 3 agentes. Ahí se crea un archivo que es legible
+> pulsando el modo 'Session Memories' en el Header. Caso contrario, cuando se quiere obviar leer ese
+> archivo de contexto 'Memories' se pulsa el modo 'Cold Memories' que por defecto está habilitado."
+
+Precisión técnica de Cochi (dos correcciones de etiqueta, no de concepto): el modo por defecto se llama
+**`Cold session`** en la UI (no "Cold Memories") y el botón `Memories` que crea el archivo vive en la
+**puerta lateral IZQUIERDA** (`SideDoors`, junto a `Data folder` y los atajos de OpenRouter); la puerta
+**derecha** abre el modal compartido **Sessions / Plans / R9**. El resto es exacto: el archivo es
+`Memories.txt` (AppLocalData), lo escribe **sólo el usuario** y **sólo viaja al modelo** con `Session
+Memories` encendido, como bloque `system` `[USER MEMORIES]` entre el prompt base y los briefs.
+
+**Sobre el modo Proyecto de Asun (13/10, insumo de S18):**
+> "Falta explicar lo que se pretende con la pestaña de 'Proyecto' en Asun. Aquí explicar que con el modo
+> 'Proyecto' Asun se pretende que un modelo con capacidad de arquitecto tenga la capacidad de separar el
+> proyecto encargado en sesiones con tareas cortas. De esta manera las sesiones quedan sin riesgo de
+> alucinaciones. Cabe destacar que a los 70.000 tokens (de los modelos provistos por Openrouter) ya el
+> modelo empieza a gastar más tokens y aunque los modelos no alucinan, queda menos recorrido para ello."
+
+Precisión técnica de Cochi (no contradice, aterriza): el umbral de ~70k es **el del banner de la app**
+(`TokenWarningBanner` corta a >70k billable y ofrece compactar), así que el argumento del autor y el
+diseño apuntan a la misma línea; en el doc se cita **como criterio del autor y de su ventana de prueba**,
+no como propiedad universal de los modelos.
+
+**Sobre el OUT y el trabajo interno del modelo (13/10, insumo de S18):**
+> "El prompt no evita que el trabajo interno del agente se haga con el vocabulario en el cual fue
+> entrenado."
+
+Esa frase es la que faltaba en el doc (sección `What prompting can and cannot do`): el prompt recorta la
+**salida visible**, no el razonamiento — por eso el reclamo de un idioma nuevo para las máquinas es un
+pedido de **entrenamiento** (corpus sintético / fine-tuning), y el estilo telegrama del prompt queda
+declarado como mitigación, no como solución.
 

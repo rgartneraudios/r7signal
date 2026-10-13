@@ -4,9 +4,10 @@ R7 Desktop is a desktop app built around three LLM agents. The interesting part 
 is the bet underneath them — that a long-running agent does not have to pay full price for its own
 history on every turn, and that the way a model is asked to answer can shrink what it costs to read.
 
-This document explains the mechanism, in the open, so it can be attacked. It deliberately states no
-savings figures: the reproducible measurement is a separate, pending job (`docs/PLAN-OPENSOURCE.md`,
-S19), and this project does not publish claims it has not measured.
+This document explains the mechanism, in the open, so it can be attacked. The IN measurement it
+promised is no longer pending: the recipe is committed and the numbers are in
+["What was measured"](#what-was-measured), with their caveats. The OUT side is still open — and this
+project does not publish claims it has not measured.
 
 ## The problem
 
@@ -37,11 +38,35 @@ model. It never carries the full transcript.
   `R9` is the separate global store for selections and reusable context.
 
 The conversation you see in the UI is a different object. It is kept only so the window can repaint
-after a reload, and it **never** travels to the model. Memory (`Memories.txt`, the "session memories"
-mode) is a third object: a user-written block that rides as a stable `system` message outside the wheel.
+after a reload, and it **never** travels to the model. Memory is a third object, and it gets its own
+section right below.
 
 That separation is the point. What travels is small, ordered, stable and cacheable; what you see stays
 rich.
+
+## Cold by default, and what "Session Memories" adds
+
+A new session starts **cold**. That is the default position of the toggle in the header, and it is not a
+compromise: a cold session has no accumulated memory, no wheel from another day and no context borrowed
+from another agent. The briefs it writes are its own, written from zero.
+
+The other position, `Session Memories`, injects one file as context: `Memories.txt`, in the app data
+folder. It is plain text, one memory per line, written in the clipped register the agents answer in. Two
+rules make it safe to read:
+
+- **Only the user writes it.** There is no memory tool: the agents may read the file and cannot touch
+  it. It is created and edited from the `Memories` button on the left side door, or by hand in the data
+  folder.
+- **It rides outside the wheel.** With the mode on, the file travels as a stable `system` block tagged
+  `[USER MEMORIES]`, placed after the system prompt and before the wheel briefs — the same position for
+  all three agents, because the file is shared by Cochi, Asun and Tito.
+
+The cost logic is the same as everywhere else in this document: while the file does not change, that
+block is byte-identical on every turn of the session, so it caches with the rest of the prefix. Edit the
+memory mid-session and the prefix moves from that turn on — memory is context, and context that changes
+is not free. Cold means only that the file is not read: it stays on disk, and flipping the toggle does
+not delete it. Loading an old wheel is a separate, explicit action (the right side door, `Sessions`),
+never a side effect of the switch.
 
 ## Ingredient 2 — pinning the provider
 
@@ -72,6 +97,10 @@ This is deterministic text surgery, not summarisation. It has a real cost — th
 session is gone, and the marker says how much — and that is a deliberate trade: a summarisation step
 would mean a model call that rewrites the prefix, which is precisely what breaks the cache.
 
+Compaction is, in fact, the one place where this design deliberately lets the prefix move. The surviving
+turns are renumbered, so the next request builds a new prefix and pays the cache write again. It is a
+visible, one-off cost, and it is cheaper than carrying a wheel that grows without bound.
+
 ## Ingredient 4 — one loop, tools, and snapshots
 
 There is no planner model, no multi-lane pipeline and no intra-turn rewriting of the conversation. One
@@ -86,6 +115,30 @@ a command has inside the workspace, is captured in a per-turn snapshot, so a tur
 UI offers undo and regenerate. The bundle also ships a `cochi-full-access` capability that lets the
 agent spawn a shell with scope over your home folder — that is real access, and the README says so
 before you run it.
+
+## Asun's project mode: planning so sessions stay short
+
+Asun has a second role behind the `PROJECT` tab, on the models the catalog marks as project-capable:
+senior architect. In that mode it writes no code, images or music. It interviews the user until the
+scope is real — target language and stack, prototype versus product, whether web research is needed,
+whether workspace write permission will be granted — and then turns the idea into a plan of short,
+verifiable blocks and saves it to the board with a single tool call.
+
+- One block = one atomic, actionable task. Too much in one block, and it gets split.
+- Every block must declare its evidence: **how** completion is checked (a harness, a test, a commit, a
+  manual check). A block whose completion cannot be checked is not a block.
+- The definition belongs to Asun; the **status** belongs to Cochi, which executes the blocks and marks
+  them. The board — not the chat — is the source of truth, and it lives outside the workspace and
+  outside the prefix, as a JSON file in the app data folder that Cochi reads through tools.
+- The user is the messenger: there are no automatic calls between agents.
+
+The reason to plan this way is not tidiness. It is the budget argument of this whole document, applied
+one level up: a short block becomes a short session with one objective, and a short session is one whose
+prefix stays small and whose executor has one thing to hold in mind. Past roughly 70,000 tokens — the
+line the app uses for its own warning banner — the models tested here start spending more on the same
+work, and even granting that they do not hallucinate, there is simply less runway left before they
+would. Splitting the project into blocks is how the app tries to keep the executor away from that line,
+instead of compacting after crossing it.
 
 ## Ingredient 5 — the OUT side: a register, not just a context trick
 
@@ -117,6 +170,19 @@ A precision that does not contradict the author, it lands it: the wheel does not
 much as it sends them at the **cached** rate — roughly an order of magnitude below normal input on
 caching providers. The claim to publish is therefore: *the IN is paid at cache price, not at full
 price.*
+
+### What prompting can and cannot do
+
+Asking for the register in the prompt is a mitigation, not the fix. It changes the **visible** answer; it
+does not change the work behind it. The model still reasons in the vocabulary and grammar it was trained
+on, so the internal cost of that reasoning is untouched — the same tokens are spent, one layer below the
+part the user reads. A system prompt can trim completion tokens; it cannot compress what the model
+thinks with.
+
+That is the argument for treating this as a training problem rather than a prompting problem: a synthetic
+corpus written in the compressed register, or a model fine-tuned on it, is what would make the saving
+hold across languages, and not only in the last layer of the output. Until then R7 Desktop ships the
+prompt and measures what it can, with the numbers above as the honest size of the claim.
 
 ## How the numbers are accounted for
 
@@ -182,7 +248,10 @@ The OUT side of the thesis. Two single samples answered the same question with t
 with an explicit prose override: 134 against 209 completion tokens in one run, 256 against 315 in the
 other. Both point the same way, and that is all they do — the telegraphic register was not even followed
 reliably in one of the runs, so a register effect is not established. It needs the same treatment the IN
-side got: more samples, fixed questions, and a blind read of the answers.
+side got: more samples, fixed questions, and a blind read of the answers. And even then it would be a
+prompt-level effect, for the reason given under "What prompting can and cannot do": whatever the
+register saves on the page, the reasoning that produced it was still done in the model's own training
+vocabulary.
 
 Also pending: the same table for Asun and Tito, and the extreme case of a long session, where the
 append-only wheel dominates the prefix and the cached share should climb towards the whole brief history.

@@ -107,6 +107,24 @@ check('docs/QUE-ES-R7.md existe y titula', queEs.split('\n')[0], '# What is R7?'
 check('el doc declara las suites reales', Number((queEs.match(/(\d+) harness suites/) || [])[1]), suites)
 check('el README linkea el doc', readme.includes('](docs/QUE-ES-R7.md)'), true)
 check('el doc mide y no generaliza', /No general savings figure is claimed/.test(queEs), true)
+// Secciones que S18 agrego al doc: sin ellas el lector no entiende la sesion fria, el modo
+// Proyecto de Asun ni por que el registro del OUT pide entrenamiento y no prompting.
+check('el doc explica sesion fria y Memories', queEs.includes('Cold by default, and what "Session Memories" adds'), true)
+check('el doc explica el modo Proyecto de Asun', queEs.includes("Asun's project mode"), true)
+check('el doc separa prompting de entrenamiento', queEs.includes('What prompting can and cannot do'), true)
+
+// La nota al equipo DeepSeek (S18) es el escrito abierto del autor: sus pedidos y las 3
+// semillas de issues que el repo publica para que alguien mas las tome.
+console.log('— nota al equipo DeepSeek —')
+const nota = readFileSync(join(root, 'docs', 'PARA-DEEPSEEK.md'), 'utf8')
+check('docs/PARA-DEEPSEEK.md existe y titula', nota.split('\n')[0], '# A note to the DeepSeek team')
+check('el README linkea la nota', readme.includes('](docs/PARA-DEEPSEEK.md)'), true)
+check('la nota cita la receta de S19', nota.includes('tools/s19-measure.mjs'), true)
+check('la nota no vende la medicion como benchmark', nota.includes('**not a benchmark**'), true)
+check('la nota trae las 3 semillas', [...nota.matchAll(/^### Seed \d+ — /gm)].length, 3)
+check('toda semilla trae etiquetas', [...nota.matchAll(/^\*\*Labels:\*\* `.+`$/gm)].length, 3)
+check('keyring e i18n van como good first issue', [...nota.matchAll(/^\*\*Labels:\*\* `good first issue`/gm)].length, 2)
+check('la semilla abierta va como help wanted', /^\*\*Labels:\*\* `help wanted`$/m.test(nota), true)
 
 console.log(`\n[metadata] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)

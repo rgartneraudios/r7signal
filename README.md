@@ -11,7 +11,9 @@ without the pin the router balances happily between providers that report `cache
 
 The project is a proof of concept, published so it can be criticized and improved — especially by
 people who care about token cost. The design rationale, the IN/OUT measurement and the caveats it comes
-with are written out in [`docs/QUE-ES-R7.md`](docs/QUE-ES-R7.md).
+with are written out in [`docs/QUE-ES-R7.md`](docs/QUE-ES-R7.md). What we are asking model providers to
+do about it, and the seed issues for newcomers, are in
+[`docs/PARA-DEEPSEEK.md`](docs/PARA-DEEPSEEK.md).
 
 ## The three agents
 
@@ -156,8 +158,8 @@ Read these before running the agent on a folder you care about.
   between the check and the request.
 - **The build is not code-signed yet.** Windows SmartScreen will warn on the installer. That is
   expected, not a sign of tampering.
-- **The API key is stored in plain text** in the app data folder. A system keyring is on the list of
-  good first issues.
+- **The API key is stored in plain text** in the app data folder. A system keyring is the first of the
+  listed [good first issues](docs/PARA-DEEPSEEK.md#seed-issues).
 - **Dependency advisories are tracked, not hidden.** `npm audit` reports advisories that no published
   version fixes inside our ranges. Almost all of them are build tooling (Vite + esbuild, PostCSS,
   Babel, browserslist, micromatch/braces). The only one that reaches the bundle is `ws`, pulled in by
