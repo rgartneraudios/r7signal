@@ -106,7 +106,7 @@ const queEs = readFileSync(join(root, 'docs', 'QUE-ES-R7.md'), 'utf8')
 check('docs/QUE-ES-R7.md existe y titula', queEs.split('\n')[0], '# What is R7?')
 check('el doc declara las suites reales', Number((queEs.match(/(\d+) harness suites/) || [])[1]), suites)
 check('el README linkea el doc', readme.includes('](docs/QUE-ES-R7.md)'), true)
-check('el doc no promete cifras de ahorro', /no savings figures are claimed/.test(queEs), true)
+check('el doc mide y no generaliza', /No general savings figure is claimed/.test(queEs), true)
 
 console.log(`\n[metadata] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)

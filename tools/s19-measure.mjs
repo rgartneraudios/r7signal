@@ -9,14 +9,25 @@
 // Variables opcionales: S19_MODEL, S19_QUESTION, S19_LANGUAGE, S19_DRY.
 //
 // Protocolo (n=1 por brazo; es una receta, no un benchmark):
-//   · in-pin    → 3 turnos de una sesión de Cochi con el pin de proveedor de la app.
-//   · in-nopin  → los MISMOS 3 turnos, con `body.provider` quitado (dos pasadas,
-//                 porque sin pin el ruteo puede caer por suerte en uno que cachea).
+//   · in-nopin / in-nopin-2 → sesión de Cochi de 6 turnos con `body.provider` quitado,
+//                 dos pasadas, y con `session_id` propio por brazo. Van PRIMERO: el
+//                 turno frío (cached=0) tiene que caer del lado que el pin protege.
+//   · in-pin    → los MISMOS 6 turnos con el pin de proveedor de la app.
 //   · out-tel   → una respuesta del prompt de producción (registro telegrama).
 //   · out-prosa → la misma pregunta, con override de prosa normal.
-// El brazo sin pin reusa los R1/R2 del brazo con pin, así los prefijos son
-// byte-idénticos y el fingerprint lo prueba. El turno 1 siempre reporta cached=0:
-// el dato del IN vive en los turnos 2 y 3.
+// El brazo con pin reusa los R1/R2 del PRIMER brazo sin pin, así esos dos prefijos son
+// byte-idénticos y el fingerprint lo prueba. La segunda pasada sin pin genera sus propias
+// respuestas y por lo tanto sus propios prefijos: es una muestra independiente de la
+// lotería del ruteo, no una repetición comparable turno a turno.
+// El turno 1 siempre reporta cached=0 (a menos que otro brazo ya haya calentado ese
+// prefijo en el mismo proveedor): el dato del IN vive en los turnos 2+.
+//
+// LÍMITE CONOCIDO (medido el 13/10): en una ventana caliente, el ruteo por defecto de
+// OpenRouter también cae en el mismo proveedor que cachea, así que el brazo sin pin puede
+// acertar la caché igual que el pin (pasó en la primera corrida: las tres armas en
+// StreamLake, sin diferencia). Ese resultado NO valida el pin: muestra que en esa ventana
+// no había nada que separar. En la segunda corrida el ruteo sí se repartió —CoreWeave y
+// Venice— y ahí el pin se separó del montón. Ver cacheAudit.js para el pin.
 //
 // El prefijo medido es sistema + briefs de la rueda + mensaje del usuario. Los
 // schemas de tools van afuera a propósito: sumarlos solo agranda el mismo prefijo
@@ -63,8 +74,8 @@ if (provider.isLocal) {
 
 const rows = []
 
-async function ask(messages, { pin, maxTokens }) {
-  const body = buildBody({ provider, messages, stream: false, maxTokens, sessionId: 's19-measure' })
+async function ask(messages, { pin, maxTokens, sessionId = 's19-measure' }) {
+  const body = buildBody({ provider, messages, stream: false, maxTokens, sessionId })
   if (!pin) delete body.provider
 
   let json = null
@@ -113,7 +124,7 @@ async function runInArm(arm, pin, seedPairs = null) {
   const own = []
   for (let i = 0; i < TURNS.length; i++) {
     const history = seedPairs ? seedPairs.slice(0, i) : own
-    const result = await ask(messagesFor(TURNS[i], history), { pin, maxTokens: 400 })
+    const result = await ask(messagesFor(TURNS[i], history), { pin, maxTokens: 400, sessionId: `s19-${arm}` })
     rows.push({ arm, turn: i + 1, ...result })
     own.push(buildTurnPair(TURNS[i], result.text))
     console.error(`  ${arm} turno ${i + 1}/${TURNS.length} → ${result.usage.promptTokens} in, ${result.usage.cachedTokens} cached`)
@@ -122,9 +133,12 @@ async function runInArm(arm, pin, seedPairs = null) {
 }
 
 console.error(`S19 · ${MODEL} · prompt ${LANGUAGE} · ${DRY ? 'DRY RUN (sin red)' : 'medición real'}`)
-const seeded = await runInArm('in-pin', true)
-await runInArm('in-nopin', false, seeded)
-await runInArm('in-nopin-2', false, seeded)
+// Orden deliberado: los brazos SIN pin van PRIMERO, con su propio `session_id`, para que el turno
+// frío (cached=0) caiga del lado que el pin debería proteger. Si el pin corriera primero, calentaría
+// la caché del proveedor y el brazo sin pin heredaría el acierto: comparación inválida.
+const seeded = await runInArm('in-nopin', false)
+await runInArm('in-nopin-2', false)
+await runInArm('in-pin', true, seeded)
 
 const outTel = await ask(messagesFor(QUESTION, []), { pin: true, maxTokens: 700 })
 rows.push({ arm: 'out-tel', turn: 1, ...outTel })
@@ -165,7 +179,7 @@ for (const arm of arms) {
   console.log(`| ${arm} | ${list.length} | ${Math.round(avg(list, (r) => r.usage.promptTokens))} | ${warm.length ? `${(cachedShare * 100).toFixed(1)}%` : '—'} | ${avg(list, (r) => r.usage.completionTokens).toFixed(0)} | ${Math.round(avg(list, (r) => r.billable))} | ${usd(list.reduce((n, r) => n + r.usd, 0))} |`)
 }
 
-console.log('\nn=1 por brazo: esto es una receta reproducible, no un benchmark. El turno 1 siempre da cached=0; el dato del IN son los turnos 2+, y el del pin es la comparación entre brazos con el MISMO prefijo (mismo fingerprint, que es lo que prueba que la comparación es válida). El prefijo medido es el de una sesión corta: la rueda es append-only, así que el ahorro del IN crece con la sesión — acá se ve la dirección, no el techo.\n')
+console.log('\nn=1 por brazo: esto es una receta reproducible, no un benchmark. El turno 1 siempre da cached=0; el dato del IN son los turnos 2+, y el del pin es la comparación entre brazos con el MISMO prefijo (mismo fingerprint, que es lo que prueba que la comparación es válida). El prefijo medido es el de una sesión corta: la rueda es append-only, así que el ahorro del IN crece con la sesión — acá se ve la dirección, no el techo. Si la columna `servido por` repite el mismo proveedor en TODOS los brazos, la comparación del pin queda INCONCLUSA (no hubo ruteo que separar), no a favor del pin.\n')
 
 console.log('<details><summary>OUT tel (registro del prompt de producción)</summary>\n')
 console.log(outTel.text.trim())

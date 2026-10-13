@@ -142,15 +142,51 @@ spreadsheet.
   token accounting, provider registry — runs under `npm test`. If you want to argue with the design,
   the assays are there to be argued with.
 
-## What is not measured yet
+## What was measured
 
-The claim this project would eventually like to make is precise: the same session, same model, IN with
-the pin and without it, OUT in the telegraphic register and OUT in a normal one, run as one turn per
-agent, reported as a table with the billable counters and the cache audit lines. That table does not
-exist yet — but the recipe that produces it is committed and runnable: `tools/s19-measure.mjs` drives
-the app's own request builder against a six-turn session, twice with the provider pin and twice
-without, and prints the table. Until a run is pasted here, everything above is a mechanism
-description, and the README says the same thing: no savings figures are claimed.
+The recipe is committed: [`tools/s19-measure.mjs`](../tools/s19-measure.mjs) drives the app's own request
+builder — `resolveProvider` + `buildBody` from `src/lib/llmClient.js`, the production Cochi prompt, the
+real wheel briefs, and the same billable accounting the header shows — against a six-turn session, and
+prints the table. Run it with your own key:
+
+```powershell
+$env:OPENROUTER_API_KEY='sk-or-v1-...'
+node tools/s19-measure.mjs
+```
+
+Measured on 2026-10-13, `~deepseek/deepseek-v4-flash-latest`, Spanish prompt, six turns, 20 requests,
+**$0.0006 of real spend**. The pinned arm sent byte-identical prefixes to the first unpinned arm — the
+printed `prefix fingerprint` matches turn by turn — so the only difference between those two rows is the
+pin.
+
+| arm | served by | cached tokens per turn (1→6) | avg cached, turns 2+ | avg prompt | avg billable |
+| --- | --- | --- | --- | --- | --- |
+| unpinned | CoreWeave | 0, 0, 0, 1024, 0, 0 | 13.8% | 1397 | 1425 |
+| unpinned (2nd run) | Venice | 768, 768, 768, 768, 0, 0 | 42.7% | 1153 | 798 |
+| pinned | StreamLake | 768, 768, 1024, 1280, 1280, 1536 | 77.5% | 1397 | 655 |
+
+Read it plainly. With the pin, the same prefixes were served at 77.5% cached and the billable counter
+reported a bit over half of the unpinned run — 655 against 1425, for identical prompts. Without it, the
+router picked a provider that reported no cached input at all in four of six turns, and a second
+unpinned run landed on a third provider that cached for four turns and then stopped. The pin is
+insurance: it costs nothing when default routing happens to be good, and it is the whole difference when
+it is not.
+
+Two caveats. This is n=1 per arm, one model, one window: a reproduction recipe, not a benchmark. And the
+unpinned number is a lottery — an earlier run of the same arms landed everything on a single caching
+provider and showed no difference at all, which is exactly why the unpinned arm now runs first and twice.
+
+## What is still not measured
+
+The OUT side of the thesis. Two single samples answered the same question with the production prompt and
+with an explicit prose override: 134 against 209 completion tokens in one run, 256 against 315 in the
+other. Both point the same way, and that is all they do — the telegraphic register was not even followed
+reliably in one of the runs, so a register effect is not established. It needs the same treatment the IN
+side got: more samples, fixed questions, and a blind read of the answers.
+
+Also pending: the same table for Asun and Tito, and the extreme case of a long session, where the
+append-only wheel dominates the prefix and the cached share should climb towards the whole brief history.
+No general savings figure is claimed.
 
 Measurement is the invitation. If you think the wheel, the pin or the register does not do what is
 described here, build the counter-example — the numbers live in your own app data folder.
