@@ -119,6 +119,16 @@ lockfile**: antes del push decía 5 (1 high / 2 moderate / 2 low) cuando la cuen
 (`/dependabot/alerts` → **401**). Y **las PRs del bot no se cierran solas** al aterrizar la versión: `#4` y
 `#6` siguen abiertas con sus bumps de S20 ya en `main` (corrige lo que decía S16-quater), y `#16`/`#10` se
 sumaron a la lista: cerrarlas es acción del autor (`@dependabot close`).
+**S28 CERRADA (nota de feedback al equipo del Harness)**: `docs/FEEDBACK-DSH.md` es lo que el autor pega en
+el casillero de feedback de la app (EN + ES) más la evidencia cruda: 5 hallazgos de esta sesión, cada uno con
+comando, error literal y clasificación. Los 2 **documentados** —stdio canalizado que mata `npm run build`
+con `spawn EPERM` en esbuild, y la caché/logs de npm fuera del workspace, que obligan a escalar hasta un
+`npm audit`— van reportados **por costo**, no como bug. Los 3 **no documentados**: el scratch de esbuild en
+el `%TEMP%` real que no se puede borrar **ni escalado** y con NTFS heredado correcto, el TLS de schannel
+(`SEC_E_NO_CREDENTIALS`) que rompe `git push`/`curl` en los hijos mientras el `fetch` de node funciona, y
+`Get-CimInstance` sin acceso a CIM. **Carril separado a propósito**: el casillero es del Harness y los
+pedidos de plataforma viven en `docs/PARA-DEEPSEEK.md`; no se repiten. Rutas personales generalizadas (S6) y
+la única cifra es la medida (77.5%, atada a `docs/QUE-ES-R7.md`); `metadata.harness.mjs` **88 → 102 checks**.
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
