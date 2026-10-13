@@ -59,6 +59,14 @@ proveedor en `local_config.json`. **S12-bis CERRADA (D5, cierra la Fase 4)**: el
 vive en `src/lib/modelPrices.js` —cada modelo declara `provider`/`vision`/`project`— y los paneles ya
 ofrecen los IDs directos de DeepSeek (`deepseek-flash`, `deepseek-v4-pro`) con sus precios (tarifa peak);
 el subagente sólo lista ids de OpenRouter (`SUBAGENT_MODELS`) porque reusa la url/key del padre.
+**S13 CERRADA (metadatos de release, abre la Fase 5)**: `version` 0.1.0 en los 3 manifiestos —`package.json`
+decía `0.0.0`— con el harness nuevo `metadata.harness.mjs` (31 checks) que impide que se separen;
+`productName` **R7 Desktop** y `targets` `["nsis"]` (un solo instalador). El crate deja el scaffold:
+`[package] name` `app`→`r7signal` (el binario pasa a `r7signal.exe`; la lib sigue `app_lib` porque
+`main.rs` la llama así) con `description`/`authors`/`license`/`repository` propios. **`identifier`
+`com.r7signal.cochi` queda congelado**: es la carpeta AppLocalData (`local_config.json` con las keys,
+`R7/`, `R9`) — renombrarlo borra los datos de las instalaciones vivas. **Capturas del README pendientes
+(S13-bis)**: piden la app viva con key, no se automatizan.
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.

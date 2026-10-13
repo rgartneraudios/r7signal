@@ -35,7 +35,7 @@ the model answers with text (capped at 25 iterations).
 - `src-tauri/` — the Rust side: the window, the shell and filesystem wiring, and `fetch_url_guarded`,
   a real SSRF guard for `web_fetch` (DNS resolution, validated IP pinned against rebinding,
   revalidated redirects).
-- `harness/` — one `.mjs` per library, 29 suites in total, run by `npm test`. No network required.
+- `harness/` — one `.mjs` per library, 34 suites in total, run by `npm test`. No network required.
 - `supabase/functions/` — optional edge functions (the prompt loader is legacy since the prompts moved
   into the code). Supabase is outside the critical path.
 
@@ -76,9 +76,10 @@ machine (`local_config.json` in AppLocalData) and never synced anywhere. OpenRou
 default; the direct DeepSeek endpoint is already wired in the provider registry
 (`src/lib/providers.js`).
 
-The model IDs that ship today are OpenRouter aliases (`~deepseek/...`), so they only resolve if you are
-connected through OpenRouter. The final public model list — OpenRouter aliases plus the direct-API IDs —
-and its local endpoints are settled before the first release.
+The public model list lives in `src/lib/modelPrices.js`, per panel, and the selectors offer two families:
+the OpenRouter aliases (`~deepseek/...` — that is where the prefix cache and Tito's server-side search
+live) and the direct DeepSeek API IDs (`deepseek-flash`, `deepseek-v4-pro`), which resolve only if you
+saved a DeepSeek key in the same modal. Ollama and LM Studio models run locally instead.
 
 ## Environment
 

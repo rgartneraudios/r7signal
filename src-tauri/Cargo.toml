@@ -1,10 +1,10 @@
 [package]
-name = "app"
+name = "r7signal"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+description = "R7 Desktop - three LLM agents on an append-only, cache-friendly context wheel"
+authors = ["R. Gartner (R7Signal)"]
+license = "MIT"
+repository = "https://github.com/rgartneraudios/r7signal"
 edition = "2021"
 rust-version = "1.77.2"
 

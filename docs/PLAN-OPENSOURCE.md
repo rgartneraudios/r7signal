@@ -26,9 +26,13 @@ key en `local_config.json` y el estado de conexión del first-run.
 **S12-bis CERRADA — Fase 4 (proveedores) CERRADA: S12 + S12-bis.** D5 quedó resuelto: la lista pública
 de modelos vive en `src/lib/modelPrices.js` (catálogo por panel con `provider`/`vision`/`project` +
 precios de los IDs directos) y los paneles ya ofrecen los IDs directos de DeepSeek en el selector.
-**Próxima sesión (candidata): la de defaults** (`HUD.jsx` muerto, `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO`
-sin lectores, default `chat_language: 'Español'` — decisión del autor) o **S13 (metadatos)**, que abre
-la Fase 5.
+**S13 CERRADA — Fase 5 (release) abierta.** Metadatos de publicación: `version` 0.1.0 alineada en los 3
+manifiestos (con harness que impide que se separen), `productName` **R7 Desktop**, `targets` sólo NSIS,
+crate `r7signal` en vez del scaffold `app` y `identifier` congelado por contrato (es AppLocalData).
+Las **capturas quedaron cortadas**: piden la app viva con key → **S13-bis**.
+**Próxima sesión (candidata): S13-bis (capturas)** o **la de defaults** (`HUD.jsx` muerto,
+`VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` sin lectores, default `chat_language: 'Español'` — decisión del
+autor).
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -470,8 +474,28 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   del release y la sesión de defaults (`HUD.jsx`, variables muertas, `chat_language`) sigue sin hacer.
 
 ### Fase 5 — Release
-- [ ] **S13. Metadatos.** `version` 0.1.0 (hoy 0.0.0), `productName`, `identifier`, iconos, targets.
-  Incluye capturas de los 3 paneles y del tablero para el README (sin capturas no hay adopción).
+- [x] **S13. Metadatos — CERRADA (5 archivos + 1 harness + 3 docs).** `version` 0.1.0 en los **3**
+  manifiestos: `package.json` decía **0.0.0** mientras Tauri y Cargo ya decían 0.1.0 (el instalador
+  salía bien, el paquete npm mentía). `productName` `r7signal`→**`R7 Desktop`** (D3: repo `r7signal`,
+  app "R7 Desktop") y `targets` `all`→**`["nsis"]`** (un solo instalador `.exe` para el Release de S14,
+  sin WiX; el MSI queda a un cambio de una línea si se quiere). El `identifier` **no se toca a
+  propósito**: `com.r7signal.cochi` es la carpeta AppLocalData — renombrarlo borra el
+  `local_config.json` (las keys) y `R7/`/`R9` de las instalaciones vivas. Los **iconos ya eran
+  propios** (regenerados desde `logo-r7.png` el 16/07 y refrescados el 15/08): no se generaron
+  nuevos, y el harness ahora verifica que los 5 del `bundle.icon` existan en disco. El crate deja de
+  ser el scaffold de Tauri: `[package] name` `app`→`r7signal` (el binario pasa de `app.exe` a
+  `r7signal.exe`; la lib sigue siendo `app_lib` porque `main.rs` la llama por ese nombre),
+  `description`/`authors`/`license`/`repository` propios (antes `A Tauri App` / `["you"]` / vacíos: eso
+  es lo que se ve en las propiedades del instalador) y `Cargo.lock` reordenado por cargo (21+21
+  líneas, sin tocar una sola dependencia). Harness nuevo `metadata.harness.mjs` (31 checks): la
+  versión de los 3 manifiestos coincide, identifier congelado, targets, los 5 iconos presentes, crate
+  renombrado y con la lib que `main.rs` espera, LICENSE/README y el **conteo de suites del README
+  contra los archivos reales de `harness/`** (que era otro dato podrido: decía 29 con 33 suites).
+  **Corte (regla 5): las capturas NO se hicieron** — piden la app viva con una key cargada y una
+  sesión de UI; el README no lleva una sección de imágenes rota. Pasa a **S13-bis**.
+- [ ] **S13-bis. Capturas para el README (corte de S13).** 4 capturas (Cochi, Asun, Tito y el tablero)
+  a `docs/media/` + sección Screenshots en el `README.md`. Requiere la app viva con key: no se puede
+  automatizar desde el harness ni desde una sesión sin GUI.
 - [ ] **S14. Build + GitHub Release** con el instalador. Sin firma de código: avisar SmartScreen en el README.
 - [ ] **S15. Link de descarga.** `src/components/Descargas.jsx`: `PLATFORMS` tiene `url: '#'` en las tres
   plataformas → apuntar a la página de Releases (o a un asset). Revisar el CTA del `Home.jsx`.
@@ -481,7 +505,7 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   (D4). Luego activar secret scanning + push protection y branch protection.
 - [ ] **S17. `docs/QUE-ES-R7.md`.** La innovación, en inglés: rueda R7 append-only, caché de prefijo con pin
   de proveedor, tope de 70k compactado sin modelo, loop único con tools, snapshots revertibles del turno,
-  SSRF real en Rust, 17 suites de harness. Materia prima: §8 Notas del autor.
+  SSRF real en Rust, 34 suites de harness. Materia prima: §8 Notas del autor.
 - [ ] **S18. Escrito para el equipo DeepSeek + issues semilla.** Etiquetas `good first issue`:
   keyring del sistema para la key, i18n formal, ideas de ahorro de tokens.
 - [ ] **S19. Evidencia IN/OUT (obligatoria antes de afirmar ahorro).** Tabla reproducible con los
@@ -535,6 +559,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S11 | Música e imagen directas (cierre de la Fase 3): `src/lib/asunMedia.js` genera contra OpenRouter con la key del usuario —imagen por `/api/v1/images` (Seedream, b64/url) o `/chat/completions` + `modalities:['image']` (Grok y chat-nativos) y música por SSE de audio (Lyria: chunks base64 concatenados, transcript y tokens)—. El prompt de imagen se compone local y determinista con el `prompt_base` del estilo, que pasa de Supabase a `imageStyles.js` (hash congelado en el harness); se elimina el paso "prompt engineer" LLM de `generar-asset` y el system prompt de texto de `generar-musica`. `AsunImagenFlow.jsx` y `AsunPanel.jsx` pierden `supabase.auth.getUser()` + el fetch a la edge function y usan `getOpenRouterKey()` (BYOK puro); la categoría imagen deja de exceptuar el guard de la key. Fix de paso: el wizard mandaba `imagen_b64` como data URL completa y la edge function la volvía a prefijar (referencia rota) — `toDataUrl` normaliza. `generar-asset/` y `generar-musica/` **retiradas** del repo y `SUPABASE_IMAGE_REQUIRED`/`SUPABASE_MUSIC_REQUIRED` borradas (sin consumidores). Harness nuevo `asunMedia` (92 checks) + `imageStyles` (+11 con `prompt_base` y hash) y `supabaseConfig` recableado a "sin Supabase". Hallazgos: `estilos_imagen`/`estilos_imagen_public` quedan sin lectores (borrado = paso aparte) y `finance-proxy/` sigue sin documentar (ahora al menos listado). E2E real de imagen/música con key viva: pendiente del próximo arranque de la app. | lint 0/0 · build OK · test 32/32 | `4742a0c` |
 | S12 | Registro de proveedores + modal de conexión (arranca la Fase 4): `src/lib/providers.js` (puro) es la fuente única —OpenRouter default, DeepSeek directo opcional, Ollama y LM Studio locales— con `providerIdForModel` (alias `~`/`vendor/model` → OpenRouter, `deepseek-*` → API directa), `chatUrlFor`, `connectionState`/`isAnyRemoteConfigured` y `validateProviderKey`. `localConfig.js` guarda una key por campo (`getStoredKeys`/`getKey`/`saveKey`/`clearKey`) conservando los exports históricos de OpenRouter para no perder la key instalada; `resolveProvider` de `llmClient.js` se reescribe sobre el registro y `buildBody` deja de mandar el pin `provider` cuando el destino no es OpenRouter; `ApiKeyModal.jsx` pasa a modal de conexión (4 fichas con estado, key por proveedor con Save/Remove/Show, aviso de prefijo sin bloquear, links de keys, endpoints locales, y `Use a local model` en first-run); el guard de first-run (`R7Desktop`), el globo de la llave (`R7TopBar`) y el guard de key del loop de Cochi dejan de exigir OpenRouter fijo. Harness nuevo `providers` (71 checks). **Corte (regla 5):** la lista pública de modelos (D5) y el selector de los IDs directos van a **S12-bis**; DeepSeek ya tiene ruteo + key + harness, pero ningún panel lo ofrece todavía. Tito NO migra (`web_search` es server tool de OpenRouter). D5 queda documentado con los IDs y precios reales de la API directa verificados hoy contra la doc oficial. | lint 0/0 · build OK · test 33/33 | `ff77a61` |
 | S12-bis | **D5 — lista pública de modelos + selector de IDs directos (cierra la Fase 4).** `modelPrices.js` pasa a ser el catálogo por panel: cada entrada declara `provider` (el harness lo cruza con `providers.providerIdForModel`: de ahí salen key, URL y aviso), `vision` (adjuntar imagen en Asun) y `project` (modo Proyecto). Cochi ofrece 4 modelos (Centinela, Terminator, `deepseek-flash`, `deepseek-v4-pro`), Asun 3 (MaríaBase, IrmaMax, `deepseek-flash`) y el subagente `SUBAGENT_MODELS` con **sólo ids de OpenRouter**, porque `resolveSubagentProvider` no cambia de proveedor —sólo el `model`— y un id directo iría al endpoint de OpenRouter con la key equivocada. Los precios de los IDs directos entran con la tarifa **peak** (2x off-peak: la más cara, para no subestimar el costo del header). `CochiHeader.jsx` suma los 2 botones directos (tooltip `… · direct DeepSeek API (needs your DeepSeek key)`) y su select de subagente pasa a `SUBAGENT_MODELS`; `CochiDesktop.jsx` valida el subagente guardado contra esa lista y deriva el acento de visión (`isTerminator`) del catálogo; `AsunHeader.jsx` colorea por `provider` y `AsunPanel.jsx` deriva `isIrmaMax` y el corte del modo Proyecto de `project`. Cero cambios de prompts; Tito NO migra. Harness `cochiLlmMetrics` ampliado a 89 checks (tarifas directas + 10 asserts de consistencia del catálogo). Pendientes anotados: verificar la lista de OpenRouter el día del release y la sesión de defaults (`HUD.jsx`, variables muertas, `chat_language`). | lint 0/0 · build OK · test 33/33 | `b74dc0a` |
+| S13 | **Metadatos de release (abre la Fase 5).** `version` 0.1.0 en los 3 manifiestos — `package.json` decía `0.0.0` mientras Tauri y Cargo ya decían 0.1.0 (el instalador salía bien y el paquete npm mentía) —, `productName` `r7signal`→`R7 Desktop` (D3) y `targets` `all`→`["nsis"]` (un solo instalador `.exe` para el Release de S14, sin WiX). `identifier` **intacto a propósito**: `com.r7signal.cochi` es AppLocalData — renombrarlo borra las keys de `local_config.json` y `R7/`/`R9` de las instalaciones vivas. Iconos verificados, no regenerados: ya eran propios (desde `logo-r7.png`, 16/07 y 15/08) y el harness exige que los 5 del `bundle.icon` existan. El crate deja el scaffold de Tauri: `[package] name` `app`→`r7signal` (el binario pasa de `app.exe` a `r7signal.exe`; la lib sigue `app_lib` porque `main.rs` la llama así), `description`/`authors`/`license`/`repository` propios (antes `A Tauri App` / `["you"]` / vacíos) y `Cargo.lock` reordenado por cargo (21+21 líneas, cero dependencias tocadas). El README corrige dos datos podridos: el conteo de suites (decía 29 con 33) y la lista de modelos (ya no son sólo alias de OpenRouter desde S12-bis). Harness nuevo `metadata.harness.mjs` (31 checks) que ata versión/bundle/crate/LICENSE/README al repo. **Corte (regla 5): las capturas NO se hicieron** (piden la app viva con key y sesión de UI) → **S13-bis**. | lint 0/0 · build OK · test 34/34 | `—` |
 
 ---
 
