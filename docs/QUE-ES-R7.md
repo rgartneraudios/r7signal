@@ -231,7 +231,7 @@ spreadsheet.
 - **A real SSRF guard.** URL filtering happens in JavaScript, but the fetch itself goes through a Rust
   command that resolves DNS, rejects internal addresses, pins the validated IP so the name cannot be
   rebound between check and request, and revalidates every redirect.
-- **34 harness suites, no network.** The pure logic — wheel, session, plans, snapshots, permissions,
+- **33 harness suites, no network.** The pure logic — wheel, session, plans, snapshots, permissions,
   token accounting, provider registry — runs under `npm test`. If you want to argue with the design,
   the assays are there to be argued with.
 

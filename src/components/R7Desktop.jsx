@@ -9,7 +9,6 @@ import R7TopBar from './R7TopBar'
 import R7FooterInputs from './R7FooterInputs'
 import SideDoors from './SideDoors'
 import MemoriesModal from './MemoriesModal'
-import { supabase } from '../supabaseClient'
 import { loadLocalConfig, getStoredKeys } from '../lib/localConfig.js'
 import { isAnyRemoteConfigured } from '../lib/providers.js'
 import { readMemories } from '../lib/memoriesStore.js'
@@ -489,7 +488,6 @@ const handleUsage = useCallback(({ source, inputTokens = 0, outputTokens = 0, bi
           preferences={preferences}
           onSave={(data) => cochiSavePrefsRef.current?.(data)}
           onSaved={(prefs) => setPreferences(prefs)}
-          supabase={supabase}
         />
       )}
 

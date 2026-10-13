@@ -17,7 +17,6 @@ const chunkFor = (id) => {
   }
   if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react-vendor'
   if (MARKDOWN.test(id)) return 'markdown'
-  if (id.includes('@supabase')) return 'supabase'
   if (id.includes('@tauri-apps')) return 'tauri'
   return 'vendor'
 }

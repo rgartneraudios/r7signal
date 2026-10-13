@@ -6,7 +6,7 @@ import { PROVIDERS, connectionState, findProvider, validateProviderKey } from '.
 
 // Modal de conexión del desktop (S12): una key por proveedor, elegida desde el
 // registro de `providers.js`. Deliberadamente separado de PreferencesModal.jsx:
-// esas preferencias sincronizan a Supabase y estas keys nunca pueden tocar la nube.
+// estas keys nunca pueden tocar la nube.
 // Viven solo en AppLocalData (`local_config.json`).
 export default function ApiKeyModal({ onClose, onSaved, required = false }) {
   const [keys, setKeys] = useState(() => getStoredKeys())

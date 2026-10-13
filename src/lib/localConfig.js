@@ -1,7 +1,7 @@
 // R7Signal — Configuración local sensible (solo desktop / Tauri).
 // Guarda las API keys de los proveedores en AppLocalData (nunca en Supabase, nunca
 // en localStorage del navegador). El archivo es dedicado para que PreferencesModal
-// (que sincroniza a Supabase) jamás pueda pisarlo al guardar. S12: una key por
+// jamás pueda pisarlo al guardar. S12: una key por
 // proveedor (`keyField` del registro de `providers.js`); OpenRouter conserva su
 // campo histórico para no perder la key de las instalaciones existentes.
 import { readTextFile, writeTextFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs'

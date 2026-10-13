@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { THEME } from '../theme'
 import { rulesToText, textToRules, PERMISSION_RULE_HINT } from '../lib/cochiPermissions'
 
@@ -11,7 +11,7 @@ const IDIOMAS = [
   '中文(简体)', '中文(繁體)', '日本語', '한국어', 'हिन्दी', 'العربية'
 ]
 
-export default function PreferencesModal({ onClose, supabase, preferences, onSave, onSaved }) {
+export default function PreferencesModal({ onClose, preferences, onSave, onSaved }) {
   const [nombreUsuario, setNombreUsuario] = useState(preferences?.nombre_usuario || '')
   const [nombreAlternativo, setNombreAlternativo] = useState(preferences?.nombre_alternativo || '')
   const [chatLanguage, setChatLanguage] = useState(preferences?.chat_language || 'Español')
@@ -20,76 +20,21 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
   const [lmStudioModel, setLmStudioModel] = useState(preferences?.lmStudioModel || 'local-model')
   const [allowRules, setAllowRules] = useState(rulesToText(preferences?.permissions?.allow))
   const [denyRules, setDenyRules] = useState(rulesToText(preferences?.permissions?.deny))
-  const [loading, setLoading] = useState(() => !preferences && !!supabase)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-
-  useEffect(() => {
-    if (preferences || !supabase) return
-    async function fetchPrefs() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setError('No active session.')
-        setLoading(false)
-        return
-      }
-      const { data, error } = await supabase
-        .from('user_preferences')
-        .select('nombre_usuario, nombre_alternativo, chat_language, ollamaEndpoint, lmStudioEndpoint, lmStudioModel')
-        .eq('user_id', user.id)
-        .maybeSingle()
-      if (data) {
-        setNombreUsuario(data.nombre_usuario || '')
-        setNombreAlternativo(data.nombre_alternativo || '')
-        setChatLanguage(data.chat_language || 'Español')
-        setOllamaEndpoint(data.ollamaEndpoint || 'http://localhost:11434')
-        setLmStudioEndpoint(data.lmStudioEndpoint || 'http://localhost:1234')
-        setLmStudioModel(data.lmStudioModel || 'local-model')
-      }
-      if (error) setError('Failed to load preferences.')
-      setLoading(false)
-    }
-    fetchPrefs()
-  }, [preferences, supabase])
 
   async function handleSave() {
     setSaving(true)
     setError(null)
-    if (onSave) {
-      const newPrefs = { nombre_usuario: nombreUsuario, nombre_alternativo: nombreAlternativo, chat_language: chatLanguage, ollamaEndpoint, lmStudioEndpoint, lmStudioModel, permissions: { allow: textToRules(allowRules), deny: textToRules(denyRules) } }
-      await onSave(newPrefs)
-      onSaved?.(newPrefs)
-      onClose()
-      return
-    }
-    if (!supabase) {
+    if (!onSave) {
       setError('No save method available.')
       setSaving(false)
       return
     }
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setError('No active session.')
-      setSaving(false)
-      return
-    }
-    const { error } = await supabase
-        .from('user_preferences')
-        .upsert({
-          user_id: user.id,
-          nombre_usuario: nombreUsuario,
-          nombre_alternativo: nombreAlternativo,
-          chat_language: chatLanguage,
-          ollamaEndpoint,
-          lmStudioEndpoint,
-          lmStudioModel
-        }, { onConflict: 'user_id' })
-    if (error) {
-      setError('Save failed. Try again.')
-      setSaving(false)
-    } else {
-      window.location.reload()
-    }
+    const newPrefs = { nombre_usuario: nombreUsuario, nombre_alternativo: nombreAlternativo, chat_language: chatLanguage, ollamaEndpoint, lmStudioEndpoint, lmStudioModel, permissions: { allow: textToRules(allowRules), deny: textToRules(denyRules) } }
+    await onSave(newPrefs)
+    onSaved?.(newPrefs)
+    onClose()
   }
 
   const inputStyle = {
@@ -146,10 +91,7 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
           <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${THEME.borderSubtle}`, borderRadius: 8, width: 30, height: 30, color: THEME.textMed, cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
         </div>
 
-        {loading ? (
-          <div style={{ color: THEME.textLow, fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>Loading...</div>
-        ) : (
-          <>
+        <>
             <div style={{ fontSize: '0.7rem', color: THEME.textLow, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Main name</div>
             <input
               type="text"
@@ -261,7 +203,6 @@ export default function PreferencesModal({ onClose, supabase, preferences, onSav
               </button>
             </div>
           </>
-        )}
       </div>
     </div>
   )

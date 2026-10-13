@@ -64,7 +64,7 @@ written by Asun's project mode for Cochi to execute.*
 - `src-tauri/` — the Rust side: the window, the shell and filesystem wiring, and `fetch_url_guarded`,
   a real SSRF guard for `web_fetch` (DNS resolution, validated IP pinned against rebinding,
   revalidated redirects).
-- `harness/` — one `.mjs` per library, 34 suites in total, run by `npm test`. No network required.
+- `harness/` — one `.mjs` per library, 33 suites in total, run by `npm test`. No network required.
 - `supabase/functions/` — optional edge functions (the prompt loader is legacy since the prompts moved
   into the code). Supabase is outside the critical path.
 
@@ -162,9 +162,9 @@ Read these before running the agent on a folder you care about.
   listed [good first issues](docs/PARA-DEEPSEEK.md#seed-issues).
 - **Dependency advisories are tracked, not hidden.** `npm audit` reports advisories that no published
   version fixes inside our ranges. Almost all of them are build tooling (Vite + esbuild, PostCSS,
-  Babel, browserslist, micromatch/braces). The only one that reaches the bundle is `ws`, pulled in by
-  the optional Supabase client, which is loaded only if you configure Supabase. Two unused
-  `@aws-sdk/*` declarations, which accounted for 19 of them, were removed.
+  Babel, browserslist, micromatch/braces). Two unused `@aws-sdk/*` declarations, which accounted for 19
+  of them, were removed, and so was the optional Supabase client: the desktop preferences never went
+  through it (they live in `user_preferences.json`, next to your keys in the app data folder).
 
 ## How this was built
 

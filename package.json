@@ -27,7 +27,6 @@
     "@ffmpeg/util": "^0.12.2",
     "@google/generative-ai": "^0.24.1",
     "@mlc-ai/web-llm": "^0.2.82",
-    "@supabase/supabase-js": "^2.90.1",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/cli": "^2.11.4",
     "@tauri-apps/plugin-dialog": "^2.7.2",

@@ -91,7 +91,14 @@ repo (se edita en la **portada → `About` → engranaje**, NO en Settings) ya d
 `@supabase/*`, alcanzables sólo con Supabase configurado. **Los conteos de GitHub y npm no coinciden**:
 GitHub dice 7 (2/3/2) y npm dice 18 (4/4/10) — npm cuenta rutas del árbol, GitHub advisories.
 `tailwindcss` queda en 3.4.19 (la PR del bot
-apunta a 4.x, major). Pendiente del autor: sacar `@supabase/supabase-js` del bundle (tumba `ws`).
+apunta a 4.x, major). **S22 CERRADA (cliente de Supabase fuera del bundle)**: corte total del cliente
+`@supabase/supabase-js` — `R7Desktop` era su único importador y siempre pasa `onSave` a
+`PreferencesModal`, así que la rama Supabase del modal **nunca corría**; se fue el import y el prop, la
+dependencia de `package.json`, `src/supabaseClient.js` + `src/lib/supabaseConfig.js` con su harness y la
+regla `@supabase` de `manualChunks`. `npm audit` **18 → 15** (4 low / 2 moderate / 9 high) y el chunk
+`supabase-*.js` (164,77 kB / 43,96 kB gzip) desaparece del build; `ws` y `@supabase/*` salen del árbol.
+Lo que queda de Supabase es del hub: `finance-proxy/` (lee `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`
+desde `src/pages/Finanzas.jsx`) y la edge function legacy `get-agent-prompts/`.
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
@@ -137,16 +144,18 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
   fetch** y `cochiAgentPrompt.js` se borró: no hay fallback. La edge function
   `supabase/functions/get-agent-prompts/` y la tabla `agent_prompts` quedan como **legacy** (nadie las
   lee desde la app); las claves `planning`/`task` siguen sin uso.
-- **Supabase opcional (S9) + imagen/música directas (S11):** `src/supabaseClient.js` ya no revienta sin
-  `.env` — la decisión vive en `src/lib/supabaseConfig.js` (puro, sin `import.meta`):
-  `resolveSupabaseConfig(env)` exige key no vacía y URL `http/https`; `createSupabaseClientFrom(env,
-  factory)` devuelve `null` sin config. **Sin Supabase la app arranca** y Asun **genera imagen y música
-  directo contra OpenRouter** con la key del usuario (`src/lib/asunMedia.js`): las edge functions
-  `generar-asset`/`generar-musica` y sus avisos `SUPABASE_*_REQUIRED` se retiraron (S11). Las
-  preferencias del desktop **no** pasan por Supabase: `CochiDesktop.savePreferences` escribe
-  `user_preferences.json` (AppLocalData) y las keys viven en `local_config.json` —una por proveedor,
-  `keyField` del registro `providers.js` (`openrouter_api_key` es la histórica, `deepseek_api_key` la de
-  S12)—; el camino Supabase de `PreferencesModal` sólo corre sin `onSave`.
+- **Supabase opcional (S9) + imagen/música directas (S11) + cliente del desktop retirado (S22):** el
+  desktop **ya no lleva el cliente `@supabase/supabase-js`** — se borraron `src/supabaseClient.js`,
+  `src/lib/supabaseConfig.js` y `supabaseConfig.harness.mjs` porque su única rama viva era la de
+  `PreferencesModal` sin `onSave`, que nunca corre (el desktop siempre pasa `onSave`). **Sin Supabase la
+  app arranca** y Asun **genera imagen y música directo contra OpenRouter** con la key del usuario
+  (`src/lib/asunMedia.js`): las edge functions `generar-asset`/`generar-musica` y sus avisos
+  `SUPABASE_*_REQUIRED` se retiraron (S11). Las preferencias del desktop **no** pasan por Supabase:
+  `CochiDesktop.savePreferences` escribe `user_preferences.json` (AppLocalData) y las keys viven en
+  `local_config.json` —una por proveedor, `keyField` del registro `providers.js` (`openrouter_api_key`
+  es la histórica, `deepseek_api_key` la de S12)—. Lo que sigue siendo Supabase es **del hub web**:
+  `finance-proxy/` (lee `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` desde `src/pages/Finanzas.jsx`) y la
+  edge function legacy `get-agent-prompts/`.
 
 ## Arquitectura (dónde tocar)
 
