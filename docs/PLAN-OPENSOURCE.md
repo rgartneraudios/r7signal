@@ -85,9 +85,10 @@ viva era la de `PreferencesModal` **sin `onSave`**, que nunca corre—, con `src
 `src/lib/supabaseConfig.js`, su harness y la dependencia fuera del árbol: `npm audit` **18 → 15** y el
 chunk `supabase-*.js` (164,77 kB / 43,96 kB gzip) fuera del build. Lo que queda de Supabase es del **hub
 web** (edge function legacy `get-agent-prompts/` y `finance-proxy/`), sin dependencia npm.
-**S24-a y S24-bis CERRADAS** (higiene del repo público antes de difundir, y el anuncio EN+ES con sus
-asserts). **Próxima sesión: S4-ter** (contenido del hub y locale de fecha/número); queda del lado del
-autor el pegado del anuncio en cada canal.
+**S24-a, S24-bis y S24-ter CERRADAS** (higiene del repo público, el anuncio EN+ES publicado en
+Announcements, y el canal oficial con el borrador del mail). **Próxima sesión: S4-ter** (contenido del hub
+y locale de fecha/número); quedan del lado del autor el pegado de los cortos en X/LinkedIn, el mail a
+`api-service@deepseek.com` y el PR a la lista curada de DeepSeek.
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -946,6 +947,23 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   **borrado**: `GET /repos/…/discussions` devuelve **un solo tema**, con `category.name = "Announcements"`
   y `author_association: OWNER`. Sigue del lado del autor el pegado de los cortos en X/LinkedIn y el mail
   a devrel.
+- [x] **S24-ter. Canal oficial de DeepSeek + borrador del mail — CERRADA (1 doc + 1 harness).** Pregunta del
+  autor: si el mail es *el* camino. Los contactos se leyeron de las **propiedades de DeepSeek**, no de
+  memoria: `api-service@deepseek.com` (footer de `api-docs.deepseek.com`, bajo *Community → Email*),
+  `service@deepseek.com` (§Contact de sus repos de modelos), el Discord oficial
+  (`discord.gg/Tc7c45Zzu5`), el X (`@deepseek_ai`) y la **lista curada** `awesome-deepseek-integration`.
+  **No hay dirección de developer relations publicada aparte**: el doc lo declara en vez de inventarla.
+  **Decisión: merece la pena, pero el mail no es el primer movimiento.** El camino público deja rastro y
+  la lista curada ya publica clientes de escritorio construidos sobre la API (Chatbox, Cherry Studio,
+  DeepChat, AingDesk) — la categoría donde cae R7 Desktop—; el repo **no tiene `CONTRIBUTING.md`**
+  (verificado: 404), así que la convención se lee de las entradas existentes: un `docs/<proyecto>/README.md`
+  más una fila en la tabla **Applications** con su logo. El mail queda para los **dos pedidos de
+  plataforma** —contrato de caché por endpoint y entrenar el registro comprimido—, con **borrador completo
+  listo para pegar** (asunto y cuerpo en inglés), más una sección de lo que **no** hay que hacer (no mandar
+  el anuncio, no vender el número como porcentaje de ahorro, no mezclar el PR con el mail como campaña).
+  `metadata.harness.mjs` a **79 checks**: los 4 contactos y el asunto del mail quedan congelados para que no
+  se cambien a mano sin fuente. **Pendiente del autor:** mandar el mail y abrir el PR de la lista; ninguno
+  de los dos es automatizable desde acá (sin token ni `gh`).
 
 ---
 
@@ -1028,6 +1046,8 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S24-a | **Higiene del repo público antes de difundir.** `llms.txt` seguía trackeado desde el INITIAL (2026-05-28) vendiendo el feed viejo —*"R7Signal is the AI-Friendly Data Layer. Token-optimized, post-cutoff data feed for LLMs and AI agents"*, la MISMA frase que S16-ter sacó de la descripción del repo— y lo acompañaban `tauri-build-log.txt`/`tauri-build-log2.txt` (logs de build de julio, `877fa8b`) y `check_braces.cjs` (script suelto). Los 4 **borrados** tras confirmar por `git grep` que **nada** los referencia; `resumen.txt` (el cuaderno del autor, citado como "resumen v24" en `2645d9e`) **destrackeado** y conservado en disco. `.gitignore` cubre `resumen.txt`, `tauri-build-log*.txt` y `check_braces.cjs`. Cero lógica de app. **En la misma sesión el autor habilitó Discussions** (`GET /repos/…`: `has_discussions` `false`→**`true`**), que era el bloqueo del canal del anuncio: 6 categorías por defecto y **Announcements** como destino (sólo el owner crea temas, cualquiera comenta). | lint 0/0 · build OK · test 33/33 | `2c2c394` |
 
 | S24-bis | **Difusión al equipo DeepSeek: el anuncio y sus guardarraíles.** `docs/DIFUSION-S24.md` trae el texto en inglés con su versión en español y **dos registros por idioma** (largo para Discussions/foros/mail; corto para X/LinkedIn, 272 y 279 caracteres). Cubre qué es R7 Desktop, la medición de S19 (13,8% / 42,7% / 77,5% y billable 655 vs 1425, prefijos byte-idénticos, $0.0006), el pedido de **entrenar el registro comprimido** y los links a la nota, al doc de la innovación, al asset de `v0.1.0` y a las issues **#11/#12/#13**. Cierra con lo que el texto **no** reclama: sin porcentaje general de ahorro, no benchmark, OUT no establecido, sin free tier, sin promesa de roadmap. `metadata.harness.mjs` pasa a **73 checks** y congela lo que se pudre: los 4 links, las 3 issues, que ningún porcentaje salga de los tres medidos —y que esos tres estén en `docs/QUE-ES-R7.md`— y el tope de 280 en los posteos cortos. **Pendiente del autor:** el mail a devrel no tiene dirección verificada (el doc lo declara en vez de inventarla) **Publicado por el autor en Announcements** (`discussions/15`, EN+ES en el mismo cuerpo, bienvenida borrada; API: un solo tema). Queda suyo el pegado de los cortos en X/LinkedIn y el mail a devrel. | lint 0/0 · build OK · test 33/33 | `3159204` |
+
+| S24-ter | **Canal oficial de DeepSeek: verificado, y el mail como segundo movimiento.** Los contactos salen de las propiedades de DeepSeek, no de memoria: `api-service@deepseek.com` (footer de `api-docs.deepseek.com`, *Community → Email*), `service@deepseek.com` (§Contact de sus repos de modelos), Discord oficial `discord.gg/Tc7c45Zzu5`, X `@deepseek_ai` y la lista curada `awesome-deepseek-integration`. **No hay dirección de developer relations publicada aparte**: el doc lo dice en vez de inventarla. **Decisión:** el camino público deja más rastro que la bandeja de entrada —la lista curada ya publica clientes de escritorio sobre la API y no tiene `CONTRIBUTING.md` (404), así que la convención es `docs/<proyecto>/README.md` + fila en la tabla *Applications*—, y el mail queda para los dos pedidos de plataforma, con borrador (asunto + cuerpo) listo para pegar y una sección de lo que **no** hacer. `metadata.harness.mjs` a **79 checks** (4 contactos + asunto congelados). Pendiente del autor: mandar el mail y abrir el PR. | lint 0/0 · build OK · test 33/33 | `34bec5a` |
 
 ---
 
