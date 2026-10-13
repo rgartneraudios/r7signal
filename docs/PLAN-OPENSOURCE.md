@@ -98,6 +98,9 @@ dejaría mezclado); **el mail a DeepSeek ya salió** (13/10, acción del autor, 
 y **D6 queda cerrada: no hay free tier, descartado de plano** (BYOK puro, cada uno con su key). Quedan
 del lado del autor, sin prisa, el pegado del corto en X y el PR a la lista curada de DeepSeek — el
 anuncio ya está publicado y el que busca lo encuentra.
+**Estado (13/10): en PAUSA por decisión del autor** — no hay sesión programada. Se retoma cuando haya
+señal: respuesta de DeepSeek al mail, comentario en el anuncio (`discussions/15`), issue/PR nuevo de
+terceros, o simplemente ganas de hacer **S4-ter-b**. Nada de lo que queda es urgente.
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
