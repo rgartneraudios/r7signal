@@ -1,12 +1,6 @@
 // R7Signal — Configuración de Supabase (S9). Lógica pura y sin `import.meta`:
 // la app arranca SIN Supabase (BYOK puro), así que el cliente es `null` cuando
-// falta la env. Las features que aún viven en edge functions avisan con un error
-// legible en vez de reventar en el import.
-export const SUPABASE_IMAGE_REQUIRED =
-  'Image generation is unavailable: Supabase is not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).'
-export const SUPABASE_MUSIC_REQUIRED =
-  'Music generation is unavailable: Supabase is not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).'
-
+// falta la env.
 export function isHttpUrl(value) {
   try {
     const url = new URL(String(value))

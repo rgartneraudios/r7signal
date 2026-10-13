@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, memo } from 'react'
-import { supabase } from '../supabaseClient'
 import { ASUN_MODELS, calculateCost, billableTokens } from '../lib/modelPrices.js'
 import { interpolatePrompt } from '../lib/promptLoader.js'
 import { readFile } from '@tauri-apps/plugin-fs'
@@ -12,7 +11,7 @@ import { commitR7Turn, buildWheelMessages, buildTurnPair } from '../lib/r7Wheel.
 import { stripAsunOpening } from '../lib/sessionOpening.js'
 import { newMessageId, lastUserText } from '../lib/sessionStore.js'
 import { getOpenRouterKey } from '../lib/localConfig.js'
-import { SUPABASE_MUSIC_REQUIRED } from '../lib/supabaseConfig.js'
+import { generateMusic as requestMusic } from '../lib/asunMedia.js'
 import { useWheelSession } from '../hooks/useWheelSession.js'
 import { useAgentPrompts } from '../hooks/useAgentPrompts.js'
 import { useR9Selection } from '../hooks/useR9Selection.js'
@@ -25,9 +24,6 @@ import AsunWatermark from './AsunWatermark.jsx'
 import AsunStatusBar from './AsunStatusBar.jsx'
 import AsunMusicFooter from './AsunMusicFooter.jsx'
 import { open } from '@tauri-apps/plugin-dialog'
-
-const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // ─── Modelos ──────────────────────────────────────────────────────────────────
 const MODELS = {
@@ -194,9 +190,8 @@ function AsunPanel({
   async function sendMessage(text) {
     if (loading || !text) return
 
-    // Estado vacío: LLM y Música van directo a OpenRouter y necesitan la key
-    // local. Imagen usa el edge function server-side, así que no la requiere.
-    if (category !== 'imagen' && !getOpenRouterKey()) {
+    // LLM, música e imagen van directo a OpenRouter: la key local es obligatoria.
+    if (!getOpenRouterKey()) {
       setMessages(prev => [...prev, {
         rol: 'asistente',
         contenido: '🔑 You have not loaded your OpenRouter API key yet. Use the key button in the top bar and paste it to chat.',
@@ -484,23 +479,14 @@ function AsunPanel({
     setGenerating(true)
     setMessages(prev => [...prev, { rol: 'usuario', contenido: '🎵 Generate song', id: newMessageId('asun') }])
     try {
-      if (!supabase) throw new Error(SUPABASE_MUSIC_REQUIRED)
-      const { data: authData } = await supabase.auth.getUser()
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/generar-musica`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON}` },
-        body: JSON.stringify({
-          prompt_musica: promptMusica,
-          modelo_id: MODELS.musica.gen,
-          user_id: authData?.user?.id || null,
-        }),
+      const { audioBase64, transcript } = await requestMusic({
+        modelId: MODELS.musica.gen,
+        prompt: promptMusica,
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error generating music')
 
-      let finalUrl = data.audio_url
-      if (!finalUrl && data.audio_base64) {
-        const bytes = atob(data.audio_base64)
+      let finalUrl = null
+      if (audioBase64) {
+        const bytes = atob(audioBase64)
         const arr = new Uint8Array(bytes.length)
         for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
         finalUrl = URL.createObjectURL(new Blob([arr], { type: 'audio/wav' }))
@@ -516,6 +502,11 @@ function AsunPanel({
         if (typeof onUsage === 'function') {
           onUsage({ source: 'asun', inputTokens: 0, outputTokens: 0, cost: songCost })
         }
+      } else {
+        setMessages(prev => [...prev, {
+          rol: 'asistente', id: newMessageId('asun'),
+          contenido: transcript || 'No audio was generated.',
+        }])
       }
       setPromptMusica(null)
     } catch (err) {

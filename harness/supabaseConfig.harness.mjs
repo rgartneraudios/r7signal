@@ -5,8 +5,6 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  SUPABASE_IMAGE_REQUIRED,
-  SUPABASE_MUSIC_REQUIRED,
   createSupabaseClientFrom,
   isHttpUrl,
   resolveSupabaseConfig,
@@ -54,21 +52,15 @@ check('sin env no suma llamadas', calls.length, 1)
 check('sin factory → null', createSupabaseClientFrom(ENV_OK, null), null)
 check('factory que revienta → null', createSupabaseClientFrom(ENV_OK, () => { throw new Error('supabaseUrl is required.') }), null)
 
-console.log('— mensajes visibles (inglés) —')
-check('imagen nombra Supabase', SUPABASE_IMAGE_REQUIRED.includes('Supabase is not configured'), true)
-check('música nombra Supabase', SUPABASE_MUSIC_REQUIRED.includes('Supabase is not configured'), true)
-check('imagen pide la env', SUPABASE_IMAGE_REQUIRED.includes('VITE_SUPABASE_URL'), true)
-check('música pide la env', SUPABASE_MUSIC_REQUIRED.includes('VITE_SUPABASE_ANON_KEY'), true)
-check('sin acentos raros', /^[\x20-\x7E]+$/.test(SUPABASE_IMAGE_REQUIRED + SUPABASE_MUSIC_REQUIRED), true)
-
 console.log('— cableado —')
 const client = readFileSync(join(root, 'src', 'supabaseClient.js'), 'utf8')
 check('el cliente sale de la config pura', client.includes('createSupabaseClientFrom(import.meta.env, createClient)'), true)
 check('no crea el cliente a mano', client.includes('createClient(supabaseUrl'), false)
+// S11: imagen y música ya no pasan por Supabase (van directo a OpenRouter).
 const panel = readFileSync(join(root, 'src', 'components', 'AsunPanel.jsx'), 'utf8')
-check('música guarda el null', panel.includes('if (!supabase) throw new Error(SUPABASE_MUSIC_REQUIRED)'), true)
+check('música sin Supabase', panel.includes('supabaseClient'), false)
 const flow = readFileSync(join(root, 'src', 'components', 'AsunImagenFlow.jsx'), 'utf8')
-check('imagen guarda el null', flow.includes('if (!supabase) throw new Error(SUPABASE_IMAGE_REQUIRED)'), true)
+check('imagen sin Supabase', flow.includes('supabaseClient'), false)
 
 console.log(`\n[supabaseConfig] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)

@@ -1,11 +1,7 @@
 import { useState, useRef } from 'react'
-import { supabase } from '../supabaseClient'
 import { calculateCost } from '../lib/modelPrices.js'
-import { listImageStyles } from '../lib/imageStyles.js'
-import { SUPABASE_IMAGE_REQUIRED } from '../lib/supabaseConfig.js'
-
-const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
+import { findImageStyle, listImageStyles } from '../lib/imageStyles.js'
+import { generateImage } from '../lib/asunMedia.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // WIZARD IMAGEN
@@ -129,20 +125,13 @@ export default function AsunImagenFlow({ submenu, onUsage, imageModelId }) {
     setError(null)
     setUiState('processing_imagen')
     try {
-      if (!supabase) throw new Error(SUPABASE_IMAGE_REQUIRED)
-      const { data: authData } = await supabase.auth.getUser()
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/generar-asset`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON}` },
-        body: JSON.stringify({
-          ...brief,
-          modelo_id: imageModelId,
-          user_id: authData?.user?.id || null,
-        }),
+      const style = findImageStyle(brief.estilo_id)
+      const { imageUrl } = await generateImage({
+        modelId: imageModelId,
+        stylePromptBase: style?.promptBase || '',
+        brief,
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error generating image')
-      setResultUrl(data.image_url || data.image_b64)
+      setResultUrl(imageUrl)
       setUiState('result')
       const imageCost = calculateCost(imageModelId, 0, 0, 'image')
       if (typeof onUsage === 'function') {

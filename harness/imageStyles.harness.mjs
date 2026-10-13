@@ -1,6 +1,9 @@
 // Harness del catálogo local de estilos de imagen (S10, migrado de `estilos_imagen_public`).
+// S11: cada estilo trae su `prompt_base` congelado (antes lo leía la edge function
+// `generar-asset` de la tabla `estilos_imagen`).
 // Ejecutar:  node harness/imageStyles.harness.mjs
 import { existsSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { IMAGE_STYLES, findImageStyle, listImageStyles, sortImageStyles } from '../src/lib/imageStyles.js'
@@ -17,7 +20,7 @@ function check(label, actual, expected) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}  → ${JSON.stringify(actual)} (esperado ${JSON.stringify(expected)})`)
 }
 
-// UUIDs de producción: son la clave con la que generar-asset resuelve estilos_imagen.prompt_base.
+// UUIDs de producción: identifican las filas de `estilos_imagen` en Supabase.
 const IDS_CONGELADOS = [
   'd05aa9f3-3f6e-400d-8bfe-a94e5fb031e2',
   '433b2528-cb87-4144-b1e6-a44d22a0b0d0',
@@ -49,6 +52,24 @@ check('previews bajo /assets y .webp', IMAGE_STYLES.every(s => /^\/assets\/.+\.w
 check('cada preview existe en public/', IMAGE_STYLES.every(s => existsSync(join(root, 'public', s.previewUrl))), true)
 check('catálogo congelado', Object.isFrozen(IMAGE_STYLES), true)
 check('filas congeladas', IMAGE_STYLES.every(s => Object.isFrozen(s)), true)
+
+console.log('— prompt_base local (S11) —')
+const prompts = IMAGE_STYLES.map(s => s.promptBase)
+check('los 7 traen prompt', prompts.every(p => typeof p === 'string' && p.length > 200), true)
+check('sin acentos raros en prompts', prompts.every(p => /^[\x20-\x7E]+$/.test(p)), true)
+check('prompts únicos', new Set(prompts).size, 7)
+check('prompt de Realism', findImageStyle(IDS_CONGELADOS[0]).promptBase.startsWith('Photorealistic image'), true)
+check('prompt de 3D Illustration', findImageStyle(IDS_CONGELADOS[1]).promptBase.includes('Studio Ghibli x Pixar'), true)
+check('prompt de 2D Illustration', findImageStyle(IDS_CONGELADOS[2]).promptBase.includes('Artgerm and WLOP'), true)
+check('prompt de Comic', findImageStyle(IDS_CONGELADOS[3]).promptBase.includes('cel-shading'), true)
+check('prompt de Cinema', findImageStyle(IDS_CONGELADOS[4]).promptBase.includes('cinematic film still'), true)
+check('prompt de Vector', findImageStyle(IDS_CONGELADOS[5]).promptBase.includes('3D mockup'), true)
+check('prompt de Painting', findImageStyle(IDS_CONGELADOS[6]).promptBase.includes('matte painting'), true)
+check(
+  'hash congelado de los prompts',
+  createHash('sha256').update(JSON.stringify(prompts)).digest('hex'),
+  '210eb9ea888eace917724f382ba6af903b6149657343987e6f4f1297fbad861f',
+)
 
 console.log('— listado —')
 const listado = listImageStyles()

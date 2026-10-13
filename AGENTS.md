@@ -50,6 +50,9 @@ harness), EN es la variante nueva con los samples de registro en inglés.
 **S9 CERRADA**: `supabaseClient` devuelve `null` sin `.env` (config pura en `src/lib/supabaseConfig.js`);
 imagen y música avisan en vez de reventar con `TypeError`. **S10 CERRADA**: los 7 estilos de imagen
 salieron de `estilos_imagen_public` a `src/lib/imageStyles.js` (catálogo congelado, nombres en inglés).
+**S11 CERRADA**: Asun genera **imagen y música directas contra OpenRouter** con la key del usuario
+(`src/lib/asunMedia.js`); las edge functions `generar-asset/` y `generar-musica/` se retiraron del repo
+y los `prompt_base` de los 7 estilos viven en `imageStyles.js` (hash congelado en el harness).
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
@@ -89,14 +92,15 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
   fetch** y `cochiAgentPrompt.js` se borró: no hay fallback. La edge function
   `supabase/functions/get-agent-prompts/` y la tabla `agent_prompts` quedan como **legacy** (nadie las
   lee desde la app); las claves `planning`/`task` siguen sin uso.
-- **Supabase opcional (S9):** `src/supabaseClient.js` ya no revienta sin `.env` — la decisión vive en
-  `src/lib/supabaseConfig.js` (puro, sin `import.meta`): `resolveSupabaseConfig(env)` exige key no vacía
-  y URL `http/https`; `createSupabaseClientFrom(env, factory)` devuelve `null` sin config. **Sin
-  Supabase la app arranca** y las features que aún cuelgan de edge functions (`generar-asset`,
-  `generar-musica`) avisan con `SUPABASE_IMAGE_REQUIRED`/`SUPABASE_MUSIC_REQUIRED` en la burbuja de
-  Asun en vez de tirar un `TypeError`: quedan atadas a S11. Las preferencias del desktop **no** pasan
-  por Supabase: `CochiDesktop.savePreferences` escribe `user_preferences.json` (AppLocalData) y la key
-  vive en `local_config.json`; el camino Supabase de `PreferencesModal` sólo corre sin `onSave`.
+- **Supabase opcional (S9) + imagen/música directas (S11):** `src/supabaseClient.js` ya no revienta sin
+  `.env` — la decisión vive en `src/lib/supabaseConfig.js` (puro, sin `import.meta`):
+  `resolveSupabaseConfig(env)` exige key no vacía y URL `http/https`; `createSupabaseClientFrom(env,
+  factory)` devuelve `null` sin config. **Sin Supabase la app arranca** y Asun **genera imagen y música
+  directo contra OpenRouter** con la key del usuario (`src/lib/asunMedia.js`): las edge functions
+  `generar-asset`/`generar-musica` y sus avisos `SUPABASE_*_REQUIRED` se retiraron (S11). Las
+  preferencias del desktop **no** pasan por Supabase: `CochiDesktop.savePreferences` escribe
+  `user_preferences.json` (AppLocalData) y la key vive en `local_config.json`; el camino Supabase de
+  `PreferencesModal` sólo corre sin `onSave`.
 
 ## Arquitectura (dónde tocar)
 
@@ -122,6 +126,9 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
   - `llmClient.js` / `llmMetrics.js` / `modelPrices.js` — fetch/SSE común, capacidades, reasoning,
     costos, `billableTokens`, `extractUrlCitations`.
   - `cacheAudit.js` — `providerRouting` (pin por modelo) + log `[cache:audit]`.
+  - `asunMedia.js` — imagen y música de Asun **directas** contra OpenRouter con la key del usuario
+    (S11): `/api/v1/images` para Seedream, `/chat/completions` + `modalities:['image']` para Grok y
+    SSE de audio para Lyria. `fetchImpl` inyectable y `prompt_base` del estilo desde `imageStyles.js`.
   - `subagent.js` — mini-loop aislado (hereda capacidad del workspace) → brief.
   - `promptLoader.js` — sirve los prompts de código (S8) + `interpolatePrompt`.
   - `cochiPermissions.js` — allow/deny + `isBlockedUrl` (SSRF, 1ª capa JS).
@@ -130,8 +137,8 @@ Gates obligatorios antes de cerrar cualquier cambio: **lint 0/0 + build OK + `np
 - `src/components/` — UI. `CochiDesktop.jsx` es el orquestador; Asun/Tito espejan la estructura.
 - `src/hooks/` — `useWheelSession`, `useCochiTaskLoop` (**loop único** + `handleSendText`),
   `useAgentPrompts`, `useR9Selection`, `useLiveStream`, `useStableCallback`.
-- `supabase/functions/` — `get-agent-prompts/` (prompts), `generar-musica/`, `generar-asset/`.
-  `procesar-input/` es **legacy web** (nadie la importa).
+- `supabase/functions/` — `get-agent-prompts/` (legacy: nadie la lee desde S8) y `finance-proxy/`
+  (hub web). `generar-asset/` y `generar-musica/` se **retiraron** en S11: imagen y música van directas.
 - `harness/` — un `.mjs` por lib; patrón `check(label, actual, expected)` con `pass/fail`.
 
 ## Convenciones

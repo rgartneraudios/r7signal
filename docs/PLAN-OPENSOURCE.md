@@ -13,12 +13,13 @@ escrita, `VITE_SUPABASE_SERVICE_KEY` purgada del `.env` (era el MISMO valor que
 `AGENTS.md`. S6: purga de identidad (10 archivos de `supabase/.temp/` destrackeados + gitignore,
 `DEFAULT_USER_ID` fuera de las 2 edge functions, avatar `media.r7signal.com` y clima `Oviedo` fuera del
 hub, defaults de nombre genéricos).
-**Fase 3 (desacople de Supabase) ABIERTA: S8, S9 y S10 CERRADAS** — los 5 prompts salieron de `agent_prompts` a
+**Fase 3 (desacople de Supabase) CERRADA: S8, S9, S10 y S11** — los 5 prompts salieron de `agent_prompts` a
 `src/lib/prompts/` con variante EN + ES (`promptLoader.js` ya no hace fetch), los 7 estilos de imagen
-salieron de `estilos_imagen_public` a `src/lib/imageStyles.js` y el cliente de Supabase es `null` sin
-`.env` (la app arranca; el hub y los 3 paneles viven sin Supabase).
-**Próxima sesión: S11 — música e imagen directas** (OpenRouter con la key del usuario; retirar
-`generar-musica` y `generar-asset` del repo público), que es lo que destraba imagen/música sin Supabase.
+salieron de `estilos_imagen_public` a `src/lib/imageStyles.js` (ya con su `prompt_base`), el cliente de
+Supabase es `null` sin `.env` y **la imagen y la música tampoco pasan por Supabase**: Asun las genera
+directo contra OpenRouter con la key del usuario (`src/lib/asunMedia.js`) y las edge functions
+`generar-asset`/`generar-musica` se retiraron del repo.
+**Próxima sesión: S12 — registro de proveedores + modal de conexión** (arranca la Fase 4).
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -382,8 +383,31 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   `supabase.auth.getUser()` y el fetch a la edge function, así que el componente todavía depende de
   Supabase aunque el catálogo ya sea local → **S9**; (c) la tabla `estilos_imagen_public` quedó sin
   lectores en la app (la `estilos_imagen` de `prompt_base` la sigue leyendo la edge function).
-- [ ] **S11. Música e imagen directas.** Llamar a OpenRouter (`google/lyria-3-pro-preview` y el modelo de
-  imagen) con la key del usuario. Retirar `generar-musica` y `generar-asset` del repo público.
+- [x] **S11. Música e imagen directas — CERRADA (1 lib + 2 componentes + 1 harness + 2 edge functions
+  retiradas).** Asun ya no depende de Supabase para imagen ni música. `src/lib/asunMedia.js` (nuevo, puro
+  e inyectable con `fetchImpl`) arma el prompt de imagen con el `prompt_base` del estilo elegido —que
+  ahora vive en `imageStyles.js`, con hash congelado en su harness— más el brief del wizard, llama a
+  OpenRouter con la key del usuario (`getOpenRouterKey`, BYOK puro) y parsea las 3 formas de respuesta:
+  `/api/v1/images` para Seedream (b64 con `media_type` o url), `/chat/completions` +
+  `modalities:['image']` para Grok (`message.images`, `content[]` o string) y SSE de audio para Lyria
+  (chunks base64 concatenados + transcript + tokens). `AsunImagenFlow.jsx` y `AsunPanel.jsx` pierden
+  `supabase.auth.getUser()` y el fetch a la edge function, y `AsunPanel` deja de exceptuar la categoría
+  imagen en el guard de la key.
+  **Decisiones dentro de la sesión:** (a) el paso "prompt engineer" LLM de `generar-asset` se reemplaza
+  por composición determinista local (mismo prompt final, sin round-trip extra y sin depender de un alias
+  de OpenRouter); (b) se elimina el system prompt de `generar-musica`, que era instrucción de texto para
+  un modelo de audio (el prompt ya lo escribió Asun en el turno de chat).
+  **Fix de paso:** el wizard manda `imagen_b64` como data URL completa y la edge function la volvía a
+  prefijar (`data:image/jpeg;base64,data:image/png;base64,…` → referencia rota) — `toDataUrl` normaliza,
+  con assert propio.
+  `SUPABASE_IMAGE_REQUIRED`/`SUPABASE_MUSIC_REQUIRED` se borran (quedaban sin consumidores) y
+  `supabaseConfig.harness.mjs` cambia sus 6 asserts por 2 de "sin Supabase" en los dos componentes.
+  Harness nuevo `asunMedia.harness.mjs` (92 checks): prompt, requests por familia de modelo, parseos,
+  errores, SSE, base64 y retiro de las edge functions.
+  **Hallazgos:** (a) `estilos_imagen` y `estilos_imagen_public` quedan **sin lectores** (la edge function
+  era la única que leía `prompt_base`): borrarlas es paso APARTE, igual que `agent_prompts`; (b)
+  `finance-proxy/` sigue sin documentar en `AGENTS.md` (hallazgo de S3): ahora al menos está listado;
+  (c) el E2E real de imagen/música con key viva queda pendiente del próximo arranque de la app.
 
 ### Fase 4 — Proveedores
 - [ ] **S12. Registro de proveedores + modal de conexión.** OpenRouter por defecto; DeepSeek directo opcional;
@@ -453,6 +477,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S8 | Prompts al código (arranque Fase 3): los 5 prompts de `agent_prompts` pasaron a `src/lib/prompts/` (`cochi.js`, `asun.js`, `tito.js` + `index.js`) con variante **EN + ES** elegida por `chat_language`. El ES es el **texto de producción byte a byte** (generado desde el export de Supabase y congelado por hash en el harness); el EN es la variante nueva (mismo cuerpo, samples de registro/cierres traducidos). `promptLoader.js` sin fetch (sync, conserva `interpolatePrompt`), `useAgentPrompts` síncrono (los 3 paneles pierden la rama muerta de carga/error), `cochiAgentPrompt.js` **borrado** + guard `isLegacyContract` fuera. La rueda NO cambia: los prompts citan literal `── Turno N ──`. Harness nuevo `prompts.harness.mjs` (75 checks). Prueba de la regla 7: **1 turno real por agente** contra OpenRouter con el prompt ya en código (Cochi ES y EN, Tito ES, Asun ES), los 4 en personaje. Hallazgo: `agent_prompts` + edge function `get-agent-prompts/` quedan **legacy**, borrarlas es paso APARTE. | lint 0/0 · build OK · test 29/29 | `359063a` |
 | S9 | Supabase opcional: `supabaseClient.js` hacía `createClient(undefined, undefined)` y reventaba en el import sin `.env` (supabase-js lanza `supabaseUrl is required.`), matando la app. La decisión pasa a un módulo puro sin `import.meta` (`src/lib/supabaseConfig.js`): `resolveSupabaseConfig(env)` (recorta, exige key no vacía y URL http/https) y `createSupabaseClientFrom(env, factory)` que devuelve `null` sin env o si la factory revienta; `supabaseClient.js` queda en una línea. `AsunPanel` (música) y `AsunImagenFlow` (imagen) cortan con error legible (`SUPABASE_IMAGE_REQUIRED` / `SUPABASE_MUSIC_REQUIRED`, en inglés y nombrando las 2 variables) en vez de un `TypeError`. `R7Desktop`/`PreferencesModal` sin cambios: el modal ya guardaba `!supabase` → `No save method available.` y en desktop `onSave` persiste en `user_preferences.json` (AppLocalData); el `local_config.json` era S5. Harness nuevo `supabaseConfig.harness.mjs` (29 checks). Verificado con la `.env` real: cliente configurado, sin regresión; env vacía → `null`. Hallazgos: imagen y música siguen colgando de las edge functions → **S11**; `VITE_SUPABASE_URL` sigue horneando el project-ref en `dist/` (público por diseño). | lint 0/0 · build OK · test 31/31 | `3a193e2` |
 | S10 | Estilos de imagen a catálogo local (S10 antes de S9, por pedido del autor: no dependía de ella). Los 7 estilos de `estilos_imagen_public` se exportaron por REST con la anon key (datos reales, no trascritos) a `src/lib/imageStyles.js`: `IMAGE_STYLES` congelado (`id`, `name`, `previewUrl`, `order`), `sortImageStyles` pura e inyectable, `listImageStyles()` y `findImageStyle(id)`. `AsunImagenFlow.jsx` pierde el `useEffect` + `supabase.from('estilos_imagen_public')` y el mapa `'Ilustración 3D' → 'Illustration 1'` (hallazgo de S4): los nombres visibles nacen en inglés en el catálogo (`Realism`, `3D Illustration`, `2D Illustration`, `Comic`, `Cinema`, `Vector`, `Painting`) y la burbuja de Asun ya no dice `Style Ilustración 3D`. Harness nuevo `imageStyles.harness.mjs` (25 checks): 7 filas, UUID de producción congelados (son la clave con la que `generar-asset` resuelve `estilos_imagen.prompt_base`), orden, nombres sin español, previews existentes en `public/assets/`, catálogo congelado, contratos de `sortImageStyles`/`findImageStyle` y assert de que el componente no cita la tabla. Hallazgos: los `id` no se renombran hasta **S11** (la edge function sigue leyendo `prompt_base` por id) y `AsunImagenFlow` todavía usa `supabase.auth.getUser()` + fetch a la edge function → **S11** (S9 lo dejó nullable y con aviso legible, pero la dependencia sigue). | lint 0/0 · build OK · test 30/30 | `412e89b` |
+| S11 | Música e imagen directas (cierre de la Fase 3): `src/lib/asunMedia.js` genera contra OpenRouter con la key del usuario —imagen por `/api/v1/images` (Seedream, b64/url) o `/chat/completions` + `modalities:['image']` (Grok y chat-nativos) y música por SSE de audio (Lyria: chunks base64 concatenados, transcript y tokens)—. El prompt de imagen se compone local y determinista con el `prompt_base` del estilo, que pasa de Supabase a `imageStyles.js` (hash congelado en el harness); se elimina el paso "prompt engineer" LLM de `generar-asset` y el system prompt de texto de `generar-musica`. `AsunImagenFlow.jsx` y `AsunPanel.jsx` pierden `supabase.auth.getUser()` + el fetch a la edge function y usan `getOpenRouterKey()` (BYOK puro); la categoría imagen deja de exceptuar el guard de la key. Fix de paso: el wizard mandaba `imagen_b64` como data URL completa y la edge function la volvía a prefijar (referencia rota) — `toDataUrl` normaliza. `generar-asset/` y `generar-musica/` **retiradas** del repo y `SUPABASE_IMAGE_REQUIRED`/`SUPABASE_MUSIC_REQUIRED` borradas (sin consumidores). Harness nuevo `asunMedia` (92 checks) + `imageStyles` (+11 con `prompt_base` y hash) y `supabaseConfig` recableado a "sin Supabase". Hallazgos: `estilos_imagen`/`estilos_imagen_public` quedan sin lectores (borrado = paso aparte) y `finance-proxy/` sigue sin documentar (ahora al menos listado). E2E real de imagen/música con key viva: pendiente del próximo arranque de la app. | lint 0/0 · build OK · test 32/32 | `—` |
 
 ---
 
