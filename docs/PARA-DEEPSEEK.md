@@ -9,6 +9,16 @@ The mechanism is written out in [`docs/QUE-ES-R7.md`](QUE-ES-R7.md). This note i
 plus the three things we would ask a model provider to do about it. It is published as an invitation:
 if the numbers below do not reproduce on your side, that is the most useful outcome for us.
 
+## Who built this, and what is being asked for
+
+R7 Desktop is a vibe-coding project. Its author is not a software engineer: the app was built by
+directing AI models in natural language, and it is being published at the point where his own knowledge
+stops being enough. That is the honest reason this note is an invitation and not a release
+announcement. What the project can offer is a running app and a measurement; what it asks for is a
+professional review of whether the method is efficient and viable. The gates, the harnesses and the
+committed recipes exist for exactly that: so that someone who does this for a living can check the
+claims instead of trusting them, and can say plainly what is wrong.
+
 ## What the app does, in one paragraph
 
 Instead of resending an ever-growing transcript, the app keeps a local append-only store of turn pairs

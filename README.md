@@ -172,8 +172,11 @@ Human direction: **R. Gartner (R7Signal)** — the concept, the R7 wheel, the to
 product decisions and this repository's plan. AI assistance: **Claude Sonnet** and **DeepSeek Flash
 4.0 / 4.1**, used as coding assistants through the same agent loop that ships in the app. Saying so
 plainly is part of the project, not a footnote: the interesting question is not whether an LLM wrote
-lines of code, but whether the architecture it was steered into actually saves tokens. That is what
-we want the community to measure and challenge.
+lines of code, but whether the architecture it was steered into actually saves tokens. This is a
+vibe-coding project, and it was published on purpose at the limit of its author's knowledge — he is not
+a software engineer, the gates and harnesses are there so the work can be checked rather than trusted,
+and the next useful step is a professional review of whether the method is efficient and viable, not
+more solo building. That is what we want the community to measure and challenge.
 
 ## Trademark
 
