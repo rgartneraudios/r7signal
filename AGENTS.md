@@ -100,6 +100,12 @@ regla `@supabase` de `manualChunks`. `npm audit` **18 → 15** (4 low / 2 modera
 `supabase-*.js` (164,77 kB / 43,96 kB gzip) desaparece del build; `ws` y `@supabase/*` salen del árbol.
 Lo que queda de Supabase es del hub: `finance-proxy/` (lee `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`
 desde `src/pages/Finanzas.jsx`) y la edge function legacy `get-agent-prompts/`.
+**S26 CERRADA (favicon del hub)**: `index.html` no declaraba **ningún** icono, así que el navegador pedía
+`/favicon.ico` y el catch-all de Cloudflare Pages (`public/_redirects`: `/* /index.html 200`) le devolvía el
+propio índice con **200** → decode fallido → pestaña con el icono genérico. Los PNG ya estaban en
+`public/icons` sin que nadie los citara: se declaran `favicon-32`, `favicon-16` y `apple-touch-icon`, y
+`metadata.harness.mjs` pasa de **81 a 88 checks**. `icon-192/512` y los 2 `maskable` siguen huérfanos:
+cablearlos con un `site.webmanifest` haría instalable el hub — decisión de producto, no tomada.
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
