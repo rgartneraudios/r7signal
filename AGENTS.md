@@ -88,7 +88,9 @@ repo (se edita en la **portada → `About` → engranaje**, NO en Settings) ya d
 (19 de los 45 avisos, cero imports en el repo) y aplicados los 4 bumps de Dependabot dentro de rango
 (`vite` 7.3.7, `postcss` 8.5.30, `brace-expansion` 5.0.12, `postcss-selector-parser` 6.1.4) → `npm audit`
 **45 → 18** (4 low / 4 moderate / 10 high, 0 critical), todo sin fix publicado: build salvo `ws` y
-`@supabase/*`, alcanzables sólo con Supabase configurado. `tailwindcss` queda en 3.4.19 (la PR del bot
+`@supabase/*`, alcanzables sólo con Supabase configurado. **Los conteos de GitHub y npm no coinciden**:
+GitHub dice 7 (2/3/2) y npm dice 18 (4/4/10) — npm cuenta rutas del árbol, GitHub advisories.
+`tailwindcss` queda en 3.4.19 (la PR del bot
 apunta a 4.x, major). Pendiente del autor: sacar `@supabase/supabase-js` del bundle (tumba `ws`).
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
