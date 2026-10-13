@@ -106,6 +106,16 @@ propio índice con **200** → decode fallido → pestaña con el icono genéric
 `public/icons` sin que nadie los citara: se declaran `favicon-32`, `favicon-16` y `apple-touch-icon`, y
 `metadata.harness.mjs` pasa de **81 a 88 checks**. `icon-192/512` y los 2 `maskable` siguen huérfanos:
 cablearlos con un `site.webmanifest` haría instalable el hub — decisión de producto, no tomada.
+**S27 CERRADA (bumps de Dependabot #16 y #10)**: `npm update browserslist @babel/core` (método de S20, sin
+tocar `package.json`) deja `browserslist` **4.28.1 → 4.29.3** (los 2 `high`: OOM sin evicción de caché y
+prototype write vía stats no confiables) y `@babel/core` **7.29.0 → 7.29.7** (el `low` de lectura arbitraria
+por `sourceMappingURL`); sólo `package-lock.json`. Medido: `npm audit` **15 rutas (4/2/9) → 9 (2/2/5)** y
+**6 avisos distintos → 3**. Quedan `braces` 3.0.3 (**high sin parche publicado**: es la última versión),
+`postcss-selector-parser` 6.1.4 (moderate; el fix 7.1.6 es major) y `esbuild` 0.27.3 (low; lo frena el rango
+de Vite). Los 3 son toolchain de build: no entran al bundle. **El banner de GitHub no coincide con el
+lockfile**: decía 5 (1/2/2) cuando la cuenta propia daba 6 (3/1/2), y su lista no es pública
+(`/dependabot/alerts` → **401**). Y **las PRs del bot no se cierran solas** al aterrizar la versión: `#4` y
+`#6` siguen abiertas con sus bumps de S20 ya en `main` (corrige lo que decía S16-quater).
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
