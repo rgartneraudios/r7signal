@@ -54,8 +54,12 @@ aplicados con gate verde.
 del Release publicado y Apple/Linux a la **página de Releases** (todavía no hay build para esas
 plataformas, y el botón lo dice) —, el README suma su sección `## Download` y `metadata.harness.mjs`
 congela la URL del asset (44 checks) para que el link no se pudra en silencio.
-Queda una **sesión de dependencias** (`npm audit`: 45 avisos, con 6 PRs de Dependabot abiertas).
-**Próxima sesión (candidata): deps (`npm audit` + PRs)**, **S19 (medición IN/OUT, con el autor
+Queda
+**S20 CERRADA (dependencias)**: podadas las 2 declaraciones muertas de `@aws-sdk/*` (19 de los 45
+avisos, cero imports en el repo) y aplicados los 4 bumps de Dependabot dentro de rango: `npm audit` pasa
+de **45 (4 low / 26 moderate / 15 high) a 18 (4/4/10), 0 critical**, y todo lo que queda es toolchain de
+build más la cadena **opcional** de Supabase, sin fix publicado.
+**Próxima sesión (candidata): S19 (medición IN/OUT, con el autor
 delante)** o **la de defaults** (`HUD.jsx` muerto,
 `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` sin lectores, default `chat_language: 'Español'` — decisión del
 autor).
@@ -684,6 +688,38 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   contadores que ya existen (`billableTokens`, `[cache:audit]`): IN con y sin pin de caché, OUT con
   formato telegrama y OUT con formato normal. Sin números, la comunidad y el equipo DeepSeek no
   tienen por qué creer el claim. Se mide con 1 turno por agente y se pega la tabla en `docs/QUE-ES-R7.md`.
+- [x] **S20. Dependencias (`npm audit`) — CERRADA (2 manifiestos + 3 docs).** Triaje primero, porque el
+  número mezcla cosas muy distintas. **`npm audit` reporta 45 avisos (4 low / 26 moderate / 15 high,
+  0 critical) y `fixAvailable: false` en los 45**: `npm audit fix` no sirve, así que el camino son los
+  bumps del bot. Reparto real: (a) **19 de los 45 son declaración muerta** — `@aws-sdk/client-s3` y
+  `@aws-sdk/s3-request-presigner` estaban en `dependencies` y **ningún archivo del repo los importa**
+  (`npm ls` confirma que son hijos directos de la raíz, nadie más los pide; el bundle nunca los llevó);
+  (b) el resto es toolchain de build (vite/esbuild, postcss, tailwind, babel/browserslist,
+  micromatch/braces/brace-expansion, eslint); (c) **lo único que entra al bundle es `ws`** (high) por
+  `@supabase/realtime-js` ← `@supabase/supabase-js`, que sólo importa `supabaseClient.js` y éste sólo lo
+  usa `R7Desktop.jsx` para el camino legacy de `PreferencesModal` — y desde S9/S11 sin `.env` el cliente
+  es `null`, o sea que no está en el camino por defecto.
+  **Aplicado:** `npm uninstall @aws-sdk/client-s3 @aws-sdk/s3-request-presigner` (las 2 líneas de
+  `package.json`, 19 avisos y ~2.7k líneas de lock menos) y los **4 bumps de Dependabot dentro de
+  rango** con `npm update vite postcss brace-expansion postcss-selector-parser tailwindcss`: `vite`
+  7.3.2→**7.3.7**, `postcss` 8.5.6→**8.5.30**, `brace-expansion` 5.0.5→**5.0.12** (vía minimatch),
+  `postcss-selector-parser` 6.1.2→**6.1.4** (vía postcss-nested). `tailwindcss` quedó en 3.4.19: la PR
+  del bot (#5) apunta a la línea 4.x, que es **major** contra el `^3.4.1` declarado → **corte (regla 5)**,
+  no se toca acá.
+  **Resultado medido:** `npm audit` **45 → 18** (4 low / 4 moderate / 10 high, 0 critical) y los 18
+  siguen con `fixAvailable: false` (no hay versión publicada que los cierre dentro de los rangos). El
+  residual son 16 de build + `ws`/`@supabase/*` opcionales. **Diferencia de conteo:** GitHub muestra 18
+  en la rama por defecto y `npm audit` mostraba 45 porque cuenta rutas del árbol, no advisories
+  distintos; tras S20 los dos números coinciden. Nota de método: justo después del `npm update`, npm
+  imprimió un resumen transitorio de 11 avisos; el número asentado y reproducible es el de `npm audit`.
+  Nota de entorno: `npm` en el sandbox confinado rechaza la operación al escribir su caché y sus logs
+  fuera del workspace (`AppData\Local\npm-cache`) → verificado escalando el permiso, igual que el
+  `spawn EPERM` de esbuild.
+  **Decisión pendiente del autor (S21 candidata):** sacar `@supabase/supabase-js` del bundle tumbaría
+  `ws` y la cadena de storage, a costa del camino legacy de `PreferencesModal`/`R7Desktop`. Es diseño,
+  no bump: queda anotado, no ejecutado.
+  **Docs:** el README suma el aviso de dependencias en `## Security notes` para no vender el árbol como
+  limpio; `AGENTS.md` actualiza el estado de deps.
 
 ---
 
@@ -712,8 +748,11 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
   `main-protection` activo** (`deletion` + `non_fast_forward` sobre `refs/heads/main`) y Dependabot
   alerts + security updates ON; **S16-ter** cambió la **descripción vieja** del repo ("AI-Friendly Data
   Layer…", que contradecía el README de S7) y cargó los **6 topics**, verificado por API; y
-  **S16-quater** aplicó los 3 bumps de Dependabot con gates verdes. Pendiente: `npm audit` (45 avisos) y
-  las 6 PRs de Dependabot abiertas, en sesión propia.
+  **S16-quater** aplicó los 3 bumps de Dependabot con gates verdes. **S20** (sesión de dependencias)
+  dejó `npm audit` en **18 avisos (4 low / 4 moderate / 10 high, 0 critical)**, todos **sin fix
+  publicado** dentro de los rangos: toolchain de build salvo `ws` y `@supabase/*`, que sólo se alcanzan
+  si el usuario configura Supabase (opcional desde S9/S11). Las 2 declaraciones muertas de `@aws-sdk/*`
+  (19 avisos) y los 4 bumps de Dependabot quedaron aplicados; las 4 PRs del bot se pueden cerrar solas.
 
 ---
 
@@ -749,6 +788,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S16-ter | **Descripción y topics del repo (cierra el hallazgo de S14/S16).** El autor editó la portada: la descripción ya es `R7 Desktop — desktop app (Tauri + React) with three LLM agents and an appendable, cache-friendly context wheel. BYOK, MIT.` y quedaron los **6 topics** (`ai-agents`, `byok`, `llm`, `react`, `tauri`, `token-optimization`), los dos verificados con `GET /repos/rgartneraudios/r7signal`. La frase vieja del feed ("AI-Friendly Data Layer — Token-optimized post-cutoff data feed…"), que contradecía el README de S7, ya no está en el repo. **Nota de UI documentada:** la descripción se edita en la **portada → recuadro `About` → engranaje**, **no** en Settings → General (ahí sólo están el nombre y la rama por defecto), y el campo de Topics **rechaza mayúsculas y espacios**, así que la descripción no se puede pegar ahí ("Repository topics must start with a lowercase letter or number"). Cero código: sólo la config del repo en GitHub. | lint 0/0 · build OK · test 34/34 | `85a2ed0` |
 | S16-quater | **Bumps de Dependabot (3 paquetes).** Las 3 PRs que abrió Dependabot al prender los security updates eran parches de dependencias **transitivas de build**: `nanoid` 3.3.11→3.3.20 (postcss), `source-map-js` 1.2.1→1.2.2 (postcss y `@tailwindcss/node`; trae **CVE-2026-93749**, DoS con source maps maliciosos) y `@humanfs/node` 0.16.7→0.16.8 (+ `@humanfs/core` 0.19.1→0.19.2, eslint). Se aplicaron con `npm update nanoid source-map-js @humanfs/node` —no con `npm install pkg@version`, que los habría vuelto dependencias directas— y el diff quedó **sólo en `package-lock.json`** (29+/15−), sin tocar `package.json`. **Hallazgo (sesión propia):** `npm audit` reporta **45 vulnerabilidades** (4 low / 26 moderate / 15 high), varias del toolchain de dev y `@supabase/supabase-js` → `@supabase/realtime-js`; Dependabot ya abrió 3 PRs más (6 abiertas). | lint 0/0 · build OK · test 34/34 | `85a2ed0` |
 | S15 | **Link de descarga (cierra el último pendiente de la Fase 5 que no depende del autor).** `Descargas.jsx` apuntaba a `url: '#'` en las 3 plataformas: el CTA del hub no bajaba nada. Ahora Windows va al **asset directo** del Release publicado (`/releases/download/v0.1.0/R7.Desktop_0.1.0_x64-setup.exe`, con el **punto** que GitHub pone por el espacio, re-verificado por API: `browser_download_url` idéntico y `digest: sha256:33cfd8…` igual al hash local de S14) y Apple/Linux a la **página de Releases**, porque no hay build para esas plataformas; cada fila lleva su nota en inglés (`installer · v0.1.0` / `no build yet · see all releases`) para que el clic de macOS no caiga en un `.exe` sin explicación. El `README.md` suma **`## Download`** (asset hasheado + link a Releases + aviso de que no hay build de macOS/Linux), que era el otro frente del mismo objetivo: el visitante del repo no tenía por dónde bajar el binario. `metadata.harness.mjs` pasa a **44 checks**: sin `url: '#'`, página de Releases citada, URL del asset **con el punto** atada al `VERSION` de los 3 manifiestos, una URL por plataforma y el README linkeando/nombrando el asset. **CTA de `Home.jsx` revisado sin cambios**: sólo monta `<Descargas variant="landing" />`; el texto en español del hub es **S4-ter**, no S15. El build reincidió en el `spawn EPERM` de esbuild bajo sandbox confinado (S6-bis/S13-bis): gate verificado escalando el permiso y el bundle grepeado después (URL real horneada, cero `'#'`). | lint 0/0 · build OK · test 34/34 | `2bf374b` |
+| S20 | **Dependencias: triaje del `npm audit` y bajada de 45 a 18.** El número mezclaba cosas muy distintas: `fixAvailable: false` en los 45 (o sea, `npm audit fix` no sirve y el camino son los bumps del bot) y **19 de los 45 eran declaración muerta** — `@aws-sdk/client-s3` y `@aws-sdk/s3-request-presigner` figuraban en `dependencies` sin **un solo import** en el repo (`npm ls`: hijos directos de la raíz, nadie más los pide; el bundle nunca los llevó). **Aplicado:** `npm uninstall` de las 2 (19 avisos y ~2.7k líneas de lock menos) y los **4 bumps de Dependabot dentro de rango** con `npm update vite postcss brace-expansion postcss-selector-parser tailwindcss`: `vite` 7.3.2→**7.3.7**, `postcss` 8.5.6→**8.5.30**, `brace-expansion` 5.0.5→**5.0.12**, `postcss-selector-parser` 6.1.2→**6.1.4**. `tailwindcss` queda en **3.4.19**: la PR #5 del bot apunta a la línea 4.x, major contra el `^3.4.1` declarado → **corte (regla 5)**. **Resultado medido:** `npm audit` **45 (4/26/15) → 18 (4 low / 4 moderate / 10 high), 0 critical**, y los 18 siguen sin fix publicado: 16 son toolchain de build y **lo único que entra al bundle es `ws`** (high) por `@supabase/realtime-js`, alcanzable sólo si el usuario configura Supabase (opcional desde S9/S11: sin `.env` el cliente es `null`). GitHub ya mostraba 18 (cuenta advisories, no rutas del árbol): tras S20 los dos números coinciden. Nota de método: el resumen transitorio de 11 avisos que imprimió `npm update` no es el asentado. Nota de entorno: `npm` rechaza escribir su caché/logs fuera del workspace en el sandbox confinado → gate y bump verificados escalando el permiso, igual que el `spawn EPERM` de esbuild. **Docs:** el README suma el aviso en `## Security notes` (no vender el árbol como limpio) y `AGENTS.md` actualiza el estado. **Pendiente del autor (S21 candidata):** sacar `@supabase/supabase-js` del bundle tumbaría `ws` y la cadena de storage, a costa del camino legacy de `PreferencesModal`/`R7Desktop`: es diseño, no bump. | lint 0/0 · build OK · test 34/34 | PENDIENTE |
 
 ---
 

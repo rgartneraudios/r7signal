@@ -84,7 +84,12 @@ scanning/push protection ya activos por default en repo público. **S16-ter CERR
 repo (se edita en la **portada → `About` → engranaje**, NO en Settings) ya dice R7 Desktop y quedaron los
 6 topics. **S16-quater CERRADA**: los 3 bumps de Dependabot entraron con `npm update` y gate verde
 (`nanoid` 3.3.20, `source-map-js` 1.2.2 —CVE-2026-93749—, `@humanfs/node` 0.16.8; sólo
-`package-lock.json`). Pendiente de deps: `npm audit` reporta 45 avisos y Dependabot tiene 6 PRs abiertas.
+`package-lock.json`). **S20 CERRADA (dependencias)**: podadas las 2 declaraciones muertas de `@aws-sdk/*`
+(19 de los 45 avisos, cero imports en el repo) y aplicados los 4 bumps de Dependabot dentro de rango
+(`vite` 7.3.7, `postcss` 8.5.30, `brace-expansion` 5.0.12, `postcss-selector-parser` 6.1.4) → `npm audit`
+**45 → 18** (4 low / 4 moderate / 10 high, 0 critical), todo sin fix publicado: build salvo `ws` y
+`@supabase/*`, alcanzables sólo con Supabase configurado. `tailwindcss` queda en 3.4.19 (la PR del bot
+apunta a 4.x, major). Pendiente del autor: sacar `@supabase/supabase-js` del bundle (tumba `ws`).
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.

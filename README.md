@@ -157,6 +157,11 @@ Read these before running the agent on a folder you care about.
   expected, not a sign of tampering.
 - **The API key is stored in plain text** in the app data folder. A system keyring is on the list of
   good first issues.
+- **Dependency advisories are tracked, not hidden.** `npm audit` reports advisories that no published
+  version fixes inside our ranges. Almost all of them are build tooling (Vite + esbuild, PostCSS,
+  Babel, browserslist, micromatch/braces). The only one that reaches the bundle is `ws`, pulled in by
+  the optional Supabase client, which is loaded only if you configure Supabase. Two unused
+  `@aws-sdk/*` declarations, which accounted for 19 of them, were removed.
 
 ## How this was built
 
