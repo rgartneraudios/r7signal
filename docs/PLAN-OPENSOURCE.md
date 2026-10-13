@@ -135,7 +135,11 @@ redacción el autor marcó dos defectos de la nota —el SO estaba **inventado**
 **Windows 10 Pro 22H2, build 19045.6466**, medido en el registro) y no se entendía de qué hablaba— así que se
 corrigió el SO y la cabecera declara que el tema es **el sandbox del harness**, no R7 Desktop: el proyecto
 sólo aporta el caso. Los 2 hallazgos documentados sumaron su mecanismo en palabras simples (named pipes en el
-stdio canalizado; caché y log de npm fuera del workspace).
+stdio canalizado; caché y log de npm fuera del workspace). **El autor aprobó después que la app pese más** y
+pidió el texto en inglés porque el equipo no va a leer español: el cierre canónico y las 2 versiones cortas
+terminan con 4 líneas de proyecto —R7 Desktop como **otro harness de agentes, no un plugin**, con los números
+de S19 y el link— en lugar de la línea seca del repo. `metadata.harness.mjs` cierra en **107 checks**: el
+cierre tiene que estar en inglés y las 2 versiones cortas tienen que presentar el proyecto con su cifra medida.
 **Estado (13/10): en PAUSA por decisión del autor** — no hay sesión programada. Se retoma cuando haya
 señal: respuesta de DeepSeek al mail, comentario en el anuncio (`discussions/15`), issue/PR nuevo de
 terceros, o simplemente ganas de hacer **S4-ter-b**. Nada de lo que queda es urgente.

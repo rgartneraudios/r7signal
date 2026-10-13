@@ -128,10 +128,11 @@ el `%TEMP%` real que no se puede borrar **ni escalado** y con NTFS heredado corr
 (`SEC_E_NO_CREDENTIALS`) que rompe `git push`/`curl` en los hijos mientras el `fetch` de node funciona, y
 `Get-CimInstance` sin acceso a CIM. **Carril separado a propósito**: el casillero es del Harness y los
 pedidos de plataforma viven en `docs/PARA-DEEPSEEK.md`; no se repiten. Rutas personales generalizadas (S6) y
-la única cifra es la medida (77.5%, atada a `docs/QUE-ES-R7.md`); `metadata.harness.mjs` **88 → 105 checks**.
+la única cifra es la medida (77.5%, atada a `docs/QUE-ES-R7.md`); `metadata.harness.mjs` **88 → 107 checks**.
 La primera redacción tenía el SO **inventado** (decía Windows 11): el real es **Windows 10 Pro 22H2, build
 19045.6466**, medido en el registro, y la cabecera ahora declara que el tema es **el sandbox del harness**, no
-R7 Desktop.
+R7 Desktop. Aprobado después por el autor: el cierre canónico y las 2 versiones cortas presentan el proyecto
+en **inglés** (4 líneas, con los números de S19), no la línea seca del repo.
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
