@@ -65,6 +65,12 @@ written by Asun's project mode for Cochi to execute.*
 - `supabase/functions/` — optional edge functions (the prompt loader is legacy since the prompts moved
   into the code). Supabase is outside the critical path.
 
+## Download
+
+A prebuilt Windows installer (`R7.Desktop_0.1.0_x64-setup.exe`, hashed in the release notes) is on the
+[Releases page](https://github.com/rgartneraudios/r7signal/releases). No macOS or Linux build has been
+published yet — build from source with the steps below.
+
 ## Requirements
 
 - Node.js (see `.nvmrc`)

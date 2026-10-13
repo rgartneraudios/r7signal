@@ -50,10 +50,13 @@ reales** (la anon key de Supabase es pública por diseño; el otro hit es un fal
 directo), **Dependabot alerts + security updates ON**, secret scanning/push protection (que en repo
 público ya vienen activos), **descripción nueva y 6 topics cargados**, y los 3 bumps de Dependabot
 aplicados con gate verde.
-Quedan **S15** (link de descarga) y una **sesión de dependencias** (`npm audit`: 45 avisos, con 6 PRs de
-Dependabot abiertas).
-**Próxima sesión (candidata): S15 (link de descarga)**, **deps (`npm audit` + PRs)**, **S19 (medición
-IN/OUT, con el autor delante)** o **la de defaults** (`HUD.jsx` muerto,
+**S15 CERRADA (link de descarga)**: el hub dejó de apuntar a `url: '#'` — Windows va al **asset directo**
+del Release publicado y Apple/Linux a la **página de Releases** (todavía no hay build para esas
+plataformas, y el botón lo dice) —, el README suma su sección `## Download` y `metadata.harness.mjs`
+congela la URL del asset (44 checks) para que el link no se pudra en silencio.
+Queda una **sesión de dependencias** (`npm audit`: 45 avisos, con 6 PRs de Dependabot abiertas).
+**Próxima sesión (candidata): deps (`npm audit` + PRs)**, **S19 (medición IN/OUT, con el autor
+delante)** o **la de defaults** (`HUD.jsx` muerto,
 `VITE_R7_USER_ID`/`VITE_SHOW_STUDIO` sin lectores, default `chat_language: 'Español'` — decisión del
 autor).
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
@@ -569,12 +572,27 @@ fecha/número (`es-ES` en `R9Drawer`, `es` en `R7TopBar` y `CochiStatusBar`).
   **sin `publisher` ni `copyright`** (CompanyName/LegalCopyright vacíos) porque `tauri.conf.json` no los
   declara: candidato a una sesión corta de metadatos, no se tocó acá; (d) `webviewInstallMode` por
   defecto (`downloadBootstrapper`) ⇒ el primer install necesita red si falta WebView2.
-- [ ] **S15. Link de descarga.** `src/components/Descargas.jsx`: `PLATFORMS` tiene `url: '#'` en las tres
-  plataformas → apuntar a la página de Releases (o a un asset). Revisar el CTA del `Home.jsx`.
-  **Dato de S14 para esta sesión:** el asset ya publicado se llama `R7.Desktop_0.1.0_x64-setup.exe` en
-  GitHub (la plataforma cambia el espacio por un punto): si el link va al asset directo, va **con
-  punto**; a la página de Releases, da igual. La página es
-  `https://github.com/rgartneraudios/r7signal/releases/tag/v0.1.0`.
+- [x] **S15. Link de descarga — CERRADA (2 archivos + 1 harness + 1 doc).** `Descargas.jsx` tenía
+  `url: '#'` en las 3 plataformas: el CTA no llevaba a ningún lado. Ahora `Windows` apunta al **asset
+  directo** del Release publicado
+  (`https://github.com/rgartneraudios/r7signal/releases/download/v0.1.0/R7.Desktop_0.1.0_x64-setup.exe`,
+  con el **punto** que pone GitHub en vez del espacio, verificado otra vez por API: `browser_download_url`
+  idéntico y `digest` `sha256:33cfd8…`, el mismo del build local de S14) y `Apple`/`Linux` a la **página
+  de Releases** (`/releases`), que es lo honesto: no hay build para esas plataformas todavía. Cada fila
+  lleva su nota en inglés (`installer · v0.1.0` / `no build yet · see all releases`) para que un clic de
+  macOS no termine en un `.exe` sin explicación.
+  El README suma **`## Download`** (asset hasheado + link a Releases + "no macOS/Linux build yet"), que
+  era el otro frente del mismo objetivo: el visitante del repo no tenía por dónde bajar el binario.
+  `metadata.harness.mjs` pasa a **44 checks**: cero `url: '#'`, la página de Releases citada, la URL del
+  asset **con el punto** y contra el `VERSION` de los 3 manifiestos, una URL por plataforma y el README
+  linkeando/nombrando el asset (mismo criterio que las capturas de S13-bis: los datos que se pudren solos
+  se congelan en el harness).
+  **CTA de `Home.jsx` revisado: sin cambios** — la columna 1 sólo monta `<Descargas variant="landing" />`,
+  que abre el modal; el texto del hub sigue en español y eso es **S4-ter**, no S15.
+  Gate: lint 0/0 · build OK · test 34/34. El build reincidió en el `spawn EPERM` de esbuild del sandbox
+  confinado (S6-bis/S13-bis): se verificó escalando el permiso, no cambiando el comando; el bundle de
+  `dist/` se grepeó después para confirmar que la URL real viaja horneada (1 coincidencia) y que no queda
+  ningún `'#'`.
 
 ### Fase 6 — Apertura y difusión
 - [x] **S16-bis. Protecciones del repo en GitHub — CERRADA (acciones del autor, verificadas por API).**
@@ -730,6 +748,7 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S16-bis | **Protecciones del repo en GitHub (UI del autor, verificadas por API).** `GET …/rulesets` devuelve el ruleset **`main-protection`** (`id` 24995015, `enforcement: active`) con `conditions.ref_name.include = ["refs/heads/main"]` y `rules = [{deletion}, {non_fast_forward}]`; se dejó **sin** "Require a pull request before merging" a propósito, porque sin bypass tumbaría el push directo a `main` que usa esta sesión para cerrar cada sesión. La GUI no dejaba guardar hasta agregar el alcance en *Target branches* ("Branch targeting has not been configured"). **Dependabot alerts + security updates** quedaron **ON** y ya abrieron 3 PRs (`source-map-js` 1.2.1→1.2.2 con **CVE-2026-93749** —DoS con source maps maliciosos, dependencia transitiva de build—, `nanoid` 3.3.11→3.3.20 y `@humanfs/node` 0.16.7→0.16.8); *Secret scanning* y *Push protection* ya venían activos por default en repo público (la UI muestra el botón de apagado; `security_and_analysis` no es legible sin token, se anota como reportado). **Corte (regla 5):** la descripción vieja del repo y `topics: []` pasan a **S16-ter** (2 clicks). | lint 0/0 · build OK · test 34/34 | `bdba884` |
 | S16-ter | **Descripción y topics del repo (cierra el hallazgo de S14/S16).** El autor editó la portada: la descripción ya es `R7 Desktop — desktop app (Tauri + React) with three LLM agents and an appendable, cache-friendly context wheel. BYOK, MIT.` y quedaron los **6 topics** (`ai-agents`, `byok`, `llm`, `react`, `tauri`, `token-optimization`), los dos verificados con `GET /repos/rgartneraudios/r7signal`. La frase vieja del feed ("AI-Friendly Data Layer — Token-optimized post-cutoff data feed…"), que contradecía el README de S7, ya no está en el repo. **Nota de UI documentada:** la descripción se edita en la **portada → recuadro `About` → engranaje**, **no** en Settings → General (ahí sólo están el nombre y la rama por defecto), y el campo de Topics **rechaza mayúsculas y espacios**, así que la descripción no se puede pegar ahí ("Repository topics must start with a lowercase letter or number"). Cero código: sólo la config del repo en GitHub. | lint 0/0 · build OK · test 34/34 | `85a2ed0` |
 | S16-quater | **Bumps de Dependabot (3 paquetes).** Las 3 PRs que abrió Dependabot al prender los security updates eran parches de dependencias **transitivas de build**: `nanoid` 3.3.11→3.3.20 (postcss), `source-map-js` 1.2.1→1.2.2 (postcss y `@tailwindcss/node`; trae **CVE-2026-93749**, DoS con source maps maliciosos) y `@humanfs/node` 0.16.7→0.16.8 (+ `@humanfs/core` 0.19.1→0.19.2, eslint). Se aplicaron con `npm update nanoid source-map-js @humanfs/node` —no con `npm install pkg@version`, que los habría vuelto dependencias directas— y el diff quedó **sólo en `package-lock.json`** (29+/15−), sin tocar `package.json`. **Hallazgo (sesión propia):** `npm audit` reporta **45 vulnerabilidades** (4 low / 26 moderate / 15 high), varias del toolchain de dev y `@supabase/supabase-js` → `@supabase/realtime-js`; Dependabot ya abrió 3 PRs más (6 abiertas). | lint 0/0 · build OK · test 34/34 | `85a2ed0` |
+| S15 | **Link de descarga (cierra el último pendiente de la Fase 5 que no depende del autor).** `Descargas.jsx` apuntaba a `url: '#'` en las 3 plataformas: el CTA del hub no bajaba nada. Ahora Windows va al **asset directo** del Release publicado (`/releases/download/v0.1.0/R7.Desktop_0.1.0_x64-setup.exe`, con el **punto** que GitHub pone por el espacio, re-verificado por API: `browser_download_url` idéntico y `digest: sha256:33cfd8…` igual al hash local de S14) y Apple/Linux a la **página de Releases**, porque no hay build para esas plataformas; cada fila lleva su nota en inglés (`installer · v0.1.0` / `no build yet · see all releases`) para que el clic de macOS no caiga en un `.exe` sin explicación. El `README.md` suma **`## Download`** (asset hasheado + link a Releases + aviso de que no hay build de macOS/Linux), que era el otro frente del mismo objetivo: el visitante del repo no tenía por dónde bajar el binario. `metadata.harness.mjs` pasa a **44 checks**: sin `url: '#'`, página de Releases citada, URL del asset **con el punto** atada al `VERSION` de los 3 manifiestos, una URL por plataforma y el README linkeando/nombrando el asset. **CTA de `Home.jsx` revisado sin cambios**: sólo monta `<Descargas variant="landing" />`; el texto en español del hub es **S4-ter**, no S15. El build reincidió en el `spawn EPERM` de esbuild bajo sandbox confinado (S6-bis/S13-bis): gate verificado escalando el permiso y el bundle grepeado después (URL real horneada, cero `'#'`). | lint 0/0 · build OK · test 34/34 | PENDIENTE |
 
 ---
 

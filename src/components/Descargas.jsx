@@ -2,10 +2,15 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { THEME } from '../theme'
 
+// Destinos reales de descarga (S15). El asset lo publica GitHub con el espacio del nombre
+// cambiado por un punto: R7.Desktop_0.1.0_x64-setup.exe (verificado por API en el Release v0.1.0).
+const RELEASES_URL = 'https://github.com/rgartneraudios/r7signal/releases'
+const WINDOWS_INSTALLER_URL = `${RELEASES_URL}/download/v0.1.0/R7.Desktop_0.1.0_x64-setup.exe`
+
 const PLATFORMS = [
-  { label: 'Windows', icon: '\u{1F5A5}\uFE0F', url: '#' },
-  { label: 'Apple',   icon: '\u{1F34E}', url: '#' },
-  { label: 'Linux',   icon: '\u{1F427}', url: '#' },
+  { label: 'Windows', icon: '\u{1F5A5}\uFE0F', url: WINDOWS_INSTALLER_URL, note: 'installer · v0.1.0' },
+  { label: 'Apple',   icon: '\u{1F34E}', url: RELEASES_URL, note: 'no build yet · see all releases' },
+  { label: 'Linux',   icon: '\u{1F427}', url: RELEASES_URL, note: 'no build yet · see all releases' },
 ]
 
 function PaginaDescargas({ onClose }) {
@@ -85,7 +90,10 @@ function PaginaDescargas({ onClose }) {
                 }}
               >
                 <span style={{ fontSize:'1.3rem' }}>{p.icon}</span>
-                <span>R7 Desktop · {p.label}</span>
+                <span style={{ display:'flex', flexDirection:'column', alignItems:'flex-start', gap:2 }}>
+                  <span>R7 Desktop · {p.label}</span>
+                  <span style={{ fontSize:'0.68rem', fontWeight:500, letterSpacing:'0.05em', color:THEME.textMed }}>{p.note}</span>
+                </span>
               </a>
             ))}
           </div>

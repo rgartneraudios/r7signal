@@ -71,7 +71,10 @@ en el README, con los pies leídos por OCR nativo; `metadata.harness.mjs` exige 
 CERRADA (build + Release)**: `npx tauri build` deja el único instalador NSIS
 `R7 Desktop_0.1.0_x64-setup.exe` (5.856.905 B, SHA-256 `33CFD8…`) y el Release `v0.1.0` está publicado
 con el asset verificado por API (`digest` idéntico al hash local); las notas viven en
-`docs/RELEASE-v0.1.0.md`. **S16 CERRADA (escaneo de secretos)**: `gitleaks` 8.30.1 sobre las 243 commits
+`docs/RELEASE-v0.1.0.md`. **S15 CERRADA (link de descarga)**: el hub ya no apunta a `#` —asset directo en
+Windows (`R7.Desktop_0.1.0_x64-setup.exe`, con punto) y página de Releases en Apple/Linux, que no tienen
+build— y el README suma `## Download`; `metadata.harness.mjs` congela la URL del asset (44 checks). **S16
+CERRADA (escaneo de secretos)**: `gitleaks` 8.30.1 sobre las 243 commits
 del historial (`--all --full-history`) → **0 secretos reales** (la anon key de Supabase es pública por
 diseño y el otro hit es un falso positivo de `generic-api-key`), así que D4 se cumple sin squash; los 2
 fingerprints quedan en `.gitleaksignore`. **S16-bis CERRADA**: ruleset `main-protection` activo en GitHub
