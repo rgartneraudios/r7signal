@@ -93,9 +93,11 @@ y `R9Drawer.jsx`) dejan `es`/`es-ES` por **`en-US`**, coherente con la UI visibl
 **Próxima sesión: S4-ter-b** (contenido del hub `finanzas.js`/`financiero.js`/`Finanzas.jsx`/`PromoRail.jsx`
 + el truncado de `DiffViewer.jsx` + el locale del lado hub: `AppHeader.jsx` y `SidebarPanel.jsx`, que se
 dejan juntos A PROPÓSITO porque el hub todavía está en español y cambiarle la fecha antes que el texto lo
-dejaría mezclado); quedan del lado del
-autor el pegado del corto en X, el mail a `api-service@deepseek.com` y el PR a la lista curada de DeepSeek
-—los tres en pausa por decisión suya: el anuncio ya está publicado y el que busca lo encuentra.
+dejaría mezclado); **el mail a DeepSeek ya salió** (13/10, acción del autor, a las **dos** direcciones —
+`api-service@deepseek.com` y `service@deepseek.com`, con el asunto y el cuerpo de `docs/DIFUSION-S24.md`)
+y **D6 queda cerrada: no hay free tier, descartado de plano** (BYOK puro, cada uno con su key). Quedan
+del lado del autor, sin prisa, el pegado del corto en X y el PR a la lista curada de DeepSeek — el
+anuncio ya está publicado y el que busca lo encuentra.
 Hallazgo de S6 **CERRADO en S6-bis**: el badge de clima del hub (Web) vuelve como **widget funcional con API
 pública online** (Open-Meteo: sin key, CORS abierto, encaja con BYOK). Cliente puro en `src/lib/weather.js`
 + `WeatherWidget.jsx` + harness. Necesario en Web; en Tauri no hace falta.
@@ -187,8 +189,13 @@ locale alcanza también a 2 libs model-facing (el `when` de `memoriesStore.js:85
   $0.15/$0.30, output $0.60/$1.20; Pro hit $0.022/$0.044, miss $0.66/$1.32, output $1.98/$3.96
   (peak = 01:00-04:00 y 06:00-10:00 UTC L-V). **Pendiente para el día del release:** verificar la lista
   de OpenRouter (los alias `~deepseek/...` son el contrato con esa puerta).
-- [ ] **D6. ¿Free tier?** Hoy: no (BYOK puro). Si algún día se quiere, va por proxy propio con rate
-  limit y la key del autor del lado servidor — nunca en el binario.
+- [x] **D6. Free tier — CERRADA (13/10, decisión del autor): NO, y descartado de plano.** Cada usuario
+  pone su propia key: BYOK puro, sin proxy, sin tier hospedado. Motivo: con proxy propio la key vive en
+  un servidor del proyecto, el gasto corre por el autor y el rate limit lo come cualquier usuario; además
+  contradice el diseño abierto y lo que ya declaran el README y `docs/QUE-ES-R7.md` (*no free tier, no
+  hosted tier, no proxy*). Si algún día se quisiera, la única forma sana sigue siendo proxy propio con
+  rate limit y la key del lado servidor — **nunca en el binario** — y sería una decisión nueva, no un
+  pendiente abierto. Cierra el último ítem de §3.
 
 ---
 
@@ -1075,6 +1082,8 @@ Se publica igual, pero la UI mezcla idiomas y algunas features quedan deshabilit
 | S24-quater | **Lienzo a carbón y capturas nuevas.** El velo de los 3 paneles era un violeta propio (`rgba(37, 10, 48, 0.25)`) fuera de la escala del tema; pasa a **`rgba(9, 8, 10, 0.6)`**, el carbón `#09080A` al alfa de `CochiTodoList`, en `CochiDesktop.jsx:395`, `R7Desktop.jsx:377` (`.tito-chat`) y `AsunPanel.jsx:646`. El autor re-disparó las **10 capturas** (1920x1039, mismos nombres) y se verificaron por **píxeles contra HEAD**: la brecha R-G del violeta (5,5–6,0) cae a 0,6–0,9 y el azul queda apenas arriba del rojo, la firma de la mezcla nueva. Sin visión en el modelo: mismo método que S13-bis-2. | lint 0/0 · build OK · test 33/33 | `da18496` |
 
 | S4-ter-a | **Locale de número y fecha de los paneles a `en-US` (primera mitad de S4-ter).** La Fase 1 pasó el texto visible a inglés pero el formato quedó en `es`/`es-ES`: el header pintaba `1.425` y el drawer la fecha en español sobre una UI en inglés. Se alinean los **3 archivos que el plan ya tenía listados** —`R7TopBar.jsx` (los 3 contadores de tokens), `CochiStatusBar.jsx` (`cached`) y `R9Drawer.jsx` (`formatWhen`)— a `toLocaleString('en-US')`. **Fuera a propósito:** el lado hub (`AppHeader.jsx:93` y `SidebarPanel.jsx:101`, que siguen `es-ES`) va con el contenido del hub en **S4-ter-b**, porque el hub todavía está en español y cambiarle la fecha antes que el texto lo dejaría mezclado; y el `when` de `memoriesStore.js:85`/`r9Store.js:49` **no** es cosmético —ese texto entra al bloque que puede viajar al modelo (`[USER MEMORIES]`/R9)— así que pide prueba de turno real, como un prompt. Cero lógica: sólo literales, sin harness nuevo (ningún assert tocaba el locale). Gate: lint 0/0 · build OK (reincidió el `spawn EPERM` de esbuild y se verificó escalando el permiso, igual que S6-bis/S13-bis/S15/S20) · test **33/33**. | lint 0/0 · build OK · test 33/33 | `670a157` |
+
+| S24-quinquies | **El mail salió, y D6 se cierra en NO (acciones del autor, 13/10).** El autor envió a DeepSeek el borrador de S24-ter —asunto y cuerpo tal como están congelados en `docs/DIFUSION-S24.md`— **a las dos direcciones**: `api-service@deepseek.com` (la del pedido de plataforma) y `service@deepseek.com` (la general). Con eso cae el pendiente que S24-ter dejó abierto y quedan solo dos acciones suyas, sin prisa: el corto en X y el PR a `awesome-deepseek-integration`. **D6 cerrada de plano:** no hay free tier ni tier hospedado — cada usuario pone su key (BYOK puro), y la única forma sana de un tier propio seguiría siendo un proxy con la key del lado servidor, jamás en el binario. Cierra §3: Fase 0 al 100 %, sin decisiones abiertas. Cero código: 2 puntos del plan. | sin gate (sólo docs) | pendiente |
 
 ---
 
