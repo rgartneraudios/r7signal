@@ -4,13 +4,12 @@ import { THEME } from '../theme'
 
 // Destinos reales de descarga (S15). El asset lo publica GitHub con el espacio del nombre
 // cambiado por un punto: R7.Desktop_0.1.0_x64-setup.exe (verificado por API en el Release v0.1.0).
+// S25: una sola fila, la que existe. Apple y Linux no tienen build y no fingen serlo.
 const RELEASES_URL = 'https://github.com/rgartneraudios/r7signal/releases'
 const WINDOWS_INSTALLER_URL = `${RELEASES_URL}/download/v0.1.0/R7.Desktop_0.1.0_x64-setup.exe`
 
 const PLATFORMS = [
   { label: 'Windows', icon: '\u{1F5A5}\uFE0F', url: WINDOWS_INSTALLER_URL, note: 'installer · v0.1.0' },
-  { label: 'Apple',   icon: '\u{1F34E}', url: RELEASES_URL, note: 'no build yet · see all releases' },
-  { label: 'Linux',   icon: '\u{1F427}', url: RELEASES_URL, note: 'no build yet · see all releases' },
 ]
 
 function PaginaDescargas({ onClose }) {
@@ -58,7 +57,7 @@ function PaginaDescargas({ onClose }) {
             DOWNLOAD R7 DESKTOP
           </div>
           <div style={{ fontSize:'0.9rem', color:THEME.textMed, fontFamily:"'Exo 2',sans-serif", lineHeight:1.6, marginBottom:28 }}>
-            Pick your platform to download R7 Desktop — your local team of agents
+            Download R7 Desktop for Windows — your local team of agents
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
             {PLATFORMS.map(p => (
@@ -96,6 +95,17 @@ function PaginaDescargas({ onClose }) {
                 </span>
               </a>
             ))}
+          </div>
+          <div style={{ marginTop:18, fontSize:'0.68rem', color:THEME.textMed, letterSpacing:'0.04em' }}>
+            macOS and Linux have no build yet ·{' '}
+            <a
+              href={RELEASES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color:THEME.celeste, textDecoration:'none' }}
+            >
+              see all releases
+            </a>
           </div>
         </div>
       </div>

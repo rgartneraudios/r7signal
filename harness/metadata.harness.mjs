@@ -86,7 +86,8 @@ check('capturas en docs/media', shots.length, 10)
 
 // El link de descarga es otro dato que se pudre solo (S15): el hub apuntaba a `url: '#'` en las 3
 // plataformas. El asset lo publica GitHub con el espacio del nombre cambiado por un punto, asi que
-// la URL exacta se congela aca contra el tag del Release.
+// la URL exacta se congela aca contra el tag del Release. S25 recorto el modal a la unica fila que
+// existe (Windows): las otras dos fingian un build que el repo no publica.
 console.log('— descarga —')
 const REPO_URL = 'https://github.com/rgartneraudios/r7signal'
 const RELEASES_URL = `${REPO_URL}/releases`
@@ -95,7 +96,9 @@ const descargas = readFileSync(join(root, 'src', 'components', 'Descargas.jsx'),
 check('sin destino placeholder', /url: '#/.test(descargas), false)
 check('pagina de releases', descargas.includes(`'${RELEASES_URL}'`), true)
 check('asset del Release con punto', descargas.includes(`/download/v${VERSION}/${INSTALLER_ASSET}`), true)
-check('una url por plataforma', [...descargas.matchAll(/url: [A-Za-z_$]/g)].length, 3)
+check('una url por plataforma', [...descargas.matchAll(/url: [A-Za-z_$]/g)].length, 1)
+check('sin filas de plataformas sin build', /label: 'Apple'|label: 'Linux'/.test(descargas), false)
+check('el modal declara que solo hay Windows', descargas.includes('macOS and Linux have no build yet'), true)
 check('el README linkea los Releases', readme.includes(`](${RELEASES_URL})`), true)
 check('el README nombra el asset', readme.includes(INSTALLER_ASSET), true)
 
