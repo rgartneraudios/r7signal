@@ -4,7 +4,7 @@ import {
   OPERATIONS, OP_BY_KEY,
   formatNumber, formatAmount, parseAmount,
   compute, buildPhrase,
-  addIva, removeIva, percentOf,
+  addIva, removeIva, percentOf, percentOff,
   initialCalcState, pressDigit, pressDecimal, pressOperator, pressResult, calcDisplay, calcLines,
 } from '../src/lib/calculadora.js'
 
@@ -144,6 +144,16 @@ console.log('— percentOf —')
 check('21% de 200 = 42', percentOf(21, 200), 42)
 check('10% de 50 = 5', percentOf(10, 50), 5)
 check('base texto → null', percentOf('x', 5), null)
+
+console.log('— percentOff (inversa: total tras descuento) —')
+check('80% dto de 50 = 10', percentOff(80, 50), 10)
+check('20% dto de 50 = 40', percentOff(20, 50), 40)
+check('0% dto no cambia', percentOff(0, 50), 50)
+check('100% dto = 0', percentOff(100, 50), 0)
+check('sin descuento → base', percentOff('', 50), null)
+check('total de texto → null', percentOff(80, 'x'), null)
+check('10,5% dto de 200 = 179', percentOff(10.5, 200), 179)
+check('acotado a 6 decimales', percentOff(33.3333, 100), 66.6667)
 
 console.log(`\n[calculadora] ${pass}/${pass + fail} checks en verde`)
 process.exit(fail === 0 ? 0 : 1)

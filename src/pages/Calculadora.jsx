@@ -9,6 +9,7 @@ import {
   addIva,
   removeIva,
   percentOf,
+  percentOff,
   initialCalcState,
   pressDigit,
   pressDecimal,
@@ -224,6 +225,28 @@ function PercentPanel() {
   )
 }
 
+function DiscountPanel() {
+  const [pct, setPct] = useState('')
+  const [total, setTotal] = useState('')
+  const result = percentOff(parseAmount(pct), parseAmount(total))
+
+  return (
+    <Panel title="% descuento" subtitle="total después del descuento">
+      <div style={{ display: 'grid', gridTemplateColumns: '88px 1fr 1.7fr', gap: 12, alignItems: 'end' }}>
+        <Field label="% descuento">
+          <input className="calc-num" value={pct} onChange={e => setPct(e.target.value)} placeholder="0" inputMode="decimal" />
+        </Field>
+        <Field label="De (Monto Total)">
+          <input className="calc-num" value={total} onChange={e => setTotal(e.target.value)} placeholder="0" inputMode="decimal" />
+        </Field>
+        <Field label="Resultado">
+          <ResultBox value={result === null ? '' : formatAmount(result)} />
+        </Field>
+      </div>
+    </Panel>
+  )
+}
+
 const CONV_ROW = {
   display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 14, alignItems: 'end',
   background: 'rgba(11,10,13,0.5)', border: `1px solid ${THEME.borderSubtle}`,
@@ -327,6 +350,7 @@ export default function Calculadora() {
       <style>{CSS}</style>
       <MainCalculator />
       <PercentPanel />
+      <DiscountPanel />
       <IvaPanel />
       <ConversionPanel title="Peso" subtitle="libras ↔ kilos" rows={PESO_ROWS} />
       <ConversionPanel title="Longitud" subtitle="pies ↔ metros" rows={LONGITUD_ROWS} />

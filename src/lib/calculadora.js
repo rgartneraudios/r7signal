@@ -77,6 +77,13 @@ export function percentOf(pct, base) {
   return round((b * p) / 100, 6)
 }
 
+export function percentOff(pct, base) {
+  const p = toNumber(pct)
+  const b = toNumber(base)
+  if (p === null || b === null) return null
+  return round(b * (1 - p / 100), 6)
+}
+
 export function initialCalcState() {
   return { entry: '', a: null, b: null, op: null, result: null, error: '' }
 }
