@@ -5,7 +5,7 @@ import {
   formatNumber, formatAmount, parseAmount,
   compute, buildPhrase,
   addIva, removeIva, percentOf,
-  initialCalcState, pressDigit, pressOperator, pressResult, calcDisplay, calcLines,
+  initialCalcState, pressDigit, pressDecimal, pressOperator, pressResult, calcDisplay, calcLines,
 } from '../src/lib/calculadora.js'
 
 let pass = 0
@@ -86,6 +86,25 @@ check('display error', calcDisplay(divZero).kind, 'error')
 check('operador copia resultado', pressOperator({
   entry: '', a: 10, b: 2, op: 'sumar', result: 12, error: '',
 }, 'multiplicar').a, 12)
+
+console.log('— tecla decimal —')
+check('punto en vacío → "0."', pressDecimal(initialCalcState()).entry, '0.')
+check('punto tras dígito → "25."', pressDecimal(pressDigit(pressDigit(initialCalcState(), 2), 5)).entry, '25.')
+check('punto repetido es no-op', pressDecimal(pressDecimal(pressDigit(initialCalcState(), 5))).entry, '5.')
+check('dígito tras punto → "5.2"', pressDigit(pressDecimal(pressDigit(initialCalcState(), 5)), 2).entry, '5.2')
+check('punto tras operador → "0."', pressDecimal(pressOperator(pressDigit(initialCalcState(), 7), 'sumar')).entry, '0.')
+check('punto tras resultado reinicia', pressDecimal(pressResult(pressDigit(pressOperator(pressDigit(initialCalcState(), 5), 'dividir'), 2))).entry, '0.')
+check('punto tras resultado no deja operador', pressDecimal(pressResult(pressDigit(pressOperator(pressDigit(initialCalcState(), 5), 'dividir'), 2))).op, null)
+check('punto tras error arranca en "0."', pressDecimal(divZero).entry, '0.')
+check('punto tras error limpia error', pressDecimal(divZero).error, '')
+let ds = pressDigit(pressDecimal(initialCalcState()), 5)
+check('visor "0.5" mientras tipea', calcLines(ds).result, '0.5')
+ds = pressOperator(ds, 'sumar')
+ds = pressDigit(pressDigit(pressDecimal(ds), 2), 5)
+check('visor "0.5 + 0.25"', calcLines(ds).equation, '0.5 + 0.25')
+ds = pressResult(ds)
+check('0,5 sumar 0,25 = 0,75', ds.result, 0.75)
+check('visor final decimal', calcLines(ds).result, '0.75')
 
 console.log('— calcLines (visor: ecuación con signos + resultado) —')
 check('inicial', calcLines(initialCalcState()), { equation: '', result: '0', isError: false })

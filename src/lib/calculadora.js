@@ -90,6 +90,15 @@ export function pressDigit(state, digit) {
   return { ...state, entry, error: '' }
 }
 
+export function pressDecimal(state) {
+  if (state.result !== null || state.error) {
+    return { entry: '0.', a: null, b: null, op: null, result: null, error: '' }
+  }
+  if (state.entry === '') return { ...state, entry: '0.', error: '' }
+  if (state.entry.includes('.')) return { ...state, error: '' }
+  return { ...state, entry: `${state.entry}.`, error: '' }
+}
+
 export function pressOperator(state, opKey) {
   if (!OP_BY_KEY[opKey]) return state
   let value = null

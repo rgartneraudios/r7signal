@@ -11,6 +11,7 @@ import {
   percentOf,
   initialCalcState,
   pressDigit,
+  pressDecimal,
   pressOperator,
   pressResult,
   calcLines,
@@ -94,6 +95,7 @@ function MainCalculator() {
   const lines = calcLines(state)
 
   const onDigit = (d) => setState(s => pressDigit(s, d))
+  const onDecimal = () => setState(s => pressDecimal(s))
   const onOp = (key) => setState(s => pressOperator(s, key))
   const onResult = () => setState(s => pressResult(s))
   const onClear = () => setState(initialCalcState())
@@ -143,7 +145,8 @@ function MainCalculator() {
         {[4, 5, 6].map(d => <CalcKey key={d} glow={COLORS.silver} onClick={() => onDigit(d)}>{d}</CalcKey>)}
         {[1, 2, 3].map(d => <CalcKey key={d} glow={COLORS.silver} onClick={() => onDigit(d)}>{d}</CalcKey>)}
 
-        <CalcKey glow={COLORS.silver} colSpan={3} onClick={() => onDigit(0)}>0</CalcKey>
+        <CalcKey glow={COLORS.silver} colSpan={2} onClick={() => onDigit(0)}>0</CalcKey>
+        <CalcKey glow={COLORS.silver} size="symbol" onClick={onDecimal}>.</CalcKey>
         <CalcKey glow={COLORS.rose} size="symbol" onClick={onClear}>C</CalcKey>
       </div>
     </div>
