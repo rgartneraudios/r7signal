@@ -374,6 +374,22 @@ El costo de las búsquedas web (server tool) va **aparte** de los tokens.
 - **TYPO de archivo**: `read_file` detecta el nombre mal escrito y lee el archivo más parecido
   (`findClosestPath` + `TYPO RESOLVED`, `cochiTools.js`). Implementado. **Idioma**: los tool results
   que ve el modelo y los errores visibles de las libs nacen en inglés (cerrado en S4/S4-bis del plan).
+- **404 de asset en Pages — no existe como recurso (15/10)**: un asset ausente (`/assets/*.js`) **no** da
+  404 — el catch-all `/*  /index.html  200` de `public/_redirects` lo come y devuelve el índice con **200
+  `text/html`**, que el navegador (y el edge) cachea bajo la URL del `.js` (medido: `cache-control:
+  public, max-age=14400, must-revalidate`) → `Failed to load module script: … MIME type of "text/html"`
+  hasta purgar. Medido en `r7signal.com` tras el push de `887a2b1`: el bundle desplegado **era el
+  correcto** (`index-DDKBln0Q.js` → 200 `application/javascript`, 433.160 B, con el panel nuevo), o sea
+  carrera de propagación + caché, no un build roto; el asset real **sí** gana al catch-all y sólo el
+  ausente cae al índice (contradice la letra de la doc de Pages: vale lo medido). **No se arregla en
+  `_redirects`**: los rewrites con otro status están **no soportados** (`❌ /blog/* /blog/404.html 404`;
+  sólo 301/302/303/307/308 + proxy 200), y `_headers` tampoco sirve porque *los redirects corren antes
+  que los headers* —un `immutable` sobre `/assets/*` cachearía el HTML envenenado más tiempo, no menos—.
+  La única vía soportada sería una Pages Function sobre `/assets/*` con `env.ASSETS.fetch` (superficie
+  nueva en el camino crítico del hub, no validable desde acá): DESCARTADO; una regla WAF de zona tampoco
+  sirve, porque bloquearía también los assets reales. **Síntoma = purgar** (zona
+  `r7signal.com` → Caching → Purge Everything) + recarga dura con la caché desactivada. No reintentar la
+  regla.
 
 ## Pendientes / opcional
 
