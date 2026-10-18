@@ -8,13 +8,17 @@ import {
   parseAmount,
   addIva,
   removeIva,
+  ivaAmount,
+  ivaAmountFromGross,
   percentOf,
   percentOff,
+  discountAmount,
   initialCalcState,
   pressDigit,
   pressDecimal,
   pressOperator,
   pressResult,
+  pressBackspace,
   calcLines,
 } from '../lib/calculadora'
 import {
@@ -99,6 +103,7 @@ function MainCalculator() {
   const onDecimal = () => setState(s => pressDecimal(s))
   const onOp = (key) => setState(s => pressOperator(s, key))
   const onResult = () => setState(s => pressResult(s))
+  const onBackspace = () => setState(s => pressBackspace(s))
   const onClear = () => setState(initialCalcState())
 
   return (
@@ -141,14 +146,15 @@ function MainCalculator() {
         <CalcKey glow={COLORS.calcGold} size="symbol" onClick={() => onOp('sumar')}>+</CalcKey>
 
         {[7, 8, 9].map(d => <CalcKey key={d} glow={COLORS.silver} onClick={() => onDigit(d)}>{d}</CalcKey>)}
-        <CalcKey glow={COLORS.lilac} size="symbol" gridColumn="4" gridRow="2 / 5" onClick={onResult}>=</CalcKey>
+        <CalcKey glow={COLORS.lilac} size="symbol" gridColumn="4" gridRow="2 / 4" onClick={onResult}>=</CalcKey>
 
         {[4, 5, 6].map(d => <CalcKey key={d} glow={COLORS.silver} onClick={() => onDigit(d)}>{d}</CalcKey>)}
         {[1, 2, 3].map(d => <CalcKey key={d} glow={COLORS.silver} onClick={() => onDigit(d)}>{d}</CalcKey>)}
+        <CalcKey glow={COLORS.rose} size="symbol" gridColumn="4" gridRow="4" onClick={onClear}>C</CalcKey>
 
-        <CalcKey glow={COLORS.silver} colSpan={2} onClick={() => onDigit(0)}>0</CalcKey>
-        <CalcKey glow={COLORS.silver} size="symbol" onClick={onDecimal}>.</CalcKey>
-        <CalcKey glow={COLORS.rose} size="symbol" onClick={onClear}>C</CalcKey>
+        <CalcKey glow={COLORS.silver} colSpan={2} gridRow="5" onClick={() => onDigit(0)}>0</CalcKey>
+        <CalcKey glow={COLORS.silver} size="symbol" gridRow="5" onClick={onDecimal}>.</CalcKey>
+        <CalcKey glow={COLORS.silver} size="symbol" gridRow="5" gridColumn="4" onClick={onBackspace}>⌫</CalcKey>
       </div>
     </div>
   )
@@ -169,21 +175,26 @@ function IvaPanel() {
   const rate = parseAmount(iva)
   const conIva = rate === null ? null : addIva(parseAmount(neto), rate)
   const sinIva = rate === null ? null : removeIva(parseAmount(bruto), rate)
+  const ivaDeNeto = rate === null ? null : ivaAmount(parseAmount(neto), rate)
+  const ivaDeBruto = rate === null ? null : ivaAmountFromGross(parseAmount(bruto), rate)
 
   const rowStyle = {
-    display: 'grid', gridTemplateColumns: '1fr 128px 1fr', gap: 16, alignItems: 'end',
+    display: 'grid', gridTemplateColumns: '1fr 88px 1fr 1.2fr', gap: 12, alignItems: 'end',
     background: 'rgba(11,10,13,0.5)', border: `1px solid ${THEME.borderSubtle}`,
     borderRadius: 12, padding: '14px 16px',
   }
 
   return (
-    <Panel title="IVA · Neto / Bruto" subtitle="ingreso a la izquierda · resultado a la derecha">
+    <Panel title="IVA · Neto / Bruto" subtitle="porcentaje · monto · cuota de IVA · total">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={rowStyle}>
           <Field label="Monto sin IVA">
             <input className="calc-num" value={neto} onChange={e => setNeto(e.target.value)} placeholder="0" inputMode="decimal" />
           </Field>
           <IvaInput value={iva} onChange={setIva} />
+          <Field label="IVA (€)">
+            <ResultBox value={ivaDeNeto === null ? '' : formatAmount(ivaDeNeto)} />
+          </Field>
           <Field label="Monto con IVA">
             <ResultBox value={conIva === null ? '' : formatAmount(conIva)} />
           </Field>
@@ -194,6 +205,9 @@ function IvaPanel() {
             <input className="calc-num" value={bruto} onChange={e => setBruto(e.target.value)} placeholder="0" inputMode="decimal" />
           </Field>
           <IvaInput value={iva} onChange={setIva} />
+          <Field label="IVA (€)">
+            <ResultBox value={ivaDeBruto === null ? '' : formatAmount(ivaDeBruto)} />
+          </Field>
           <Field label="Monto sin IVA">
             <ResultBox value={sinIva === null ? '' : formatAmount(sinIva)} />
           </Field>
@@ -229,15 +243,19 @@ function DiscountPanel() {
   const [pct, setPct] = useState('')
   const [total, setTotal] = useState('')
   const result = percentOff(parseAmount(pct), parseAmount(total))
+  const off = discountAmount(parseAmount(pct), parseAmount(total))
 
   return (
-    <Panel title="% descuento" subtitle="total después del descuento">
-      <div style={{ display: 'grid', gridTemplateColumns: '88px 1fr 1.7fr', gap: 12, alignItems: 'end' }}>
+    <Panel title="% descuento" subtitle="porcentaje · monto · descuento · total">
+      <div style={{ display: 'grid', gridTemplateColumns: '88px 1fr 1fr 1.7fr', gap: 12, alignItems: 'end' }}>
         <Field label="% descuento">
           <input className="calc-num" value={pct} onChange={e => setPct(e.target.value)} placeholder="0" inputMode="decimal" />
         </Field>
         <Field label="De (Monto Total)">
           <input className="calc-num" value={total} onChange={e => setTotal(e.target.value)} placeholder="0" inputMode="decimal" />
+        </Field>
+        <Field label="Descuento (€)">
+          <ResultBox value={off === null ? '' : formatAmount(off)} />
         </Field>
         <Field label="Resultado">
           <ResultBox value={result === null ? '' : formatAmount(result)} />

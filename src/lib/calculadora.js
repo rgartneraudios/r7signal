@@ -70,6 +70,22 @@ export function removeIva(bruto, rate) {
   return round(n / factor, 6)
 }
 
+export function ivaAmount(neto, rate) {
+  const n = toNumber(neto)
+  const r = toNumber(rate)
+  if (n === null || r === null) return null
+  return round((n * r) / 100, 6)
+}
+
+export function ivaAmountFromGross(bruto, rate) {
+  const n = toNumber(bruto)
+  const r = toNumber(rate)
+  if (n === null || r === null) return null
+  const factor = 1 + r / 100
+  if (factor === 0) return null
+  return round(n - n / factor, 6)
+}
+
 export function percentOf(pct, base) {
   const p = toNumber(pct)
   const b = toNumber(base)
@@ -82,6 +98,13 @@ export function percentOff(pct, base) {
   const b = toNumber(base)
   if (p === null || b === null) return null
   return round(b * (1 - p / 100), 6)
+}
+
+export function discountAmount(pct, base) {
+  const p = toNumber(pct)
+  const b = toNumber(base)
+  if (p === null || b === null) return null
+  return round((b * p) / 100, 6)
 }
 
 export function initialCalcState() {
@@ -125,6 +148,18 @@ export function pressResult(state) {
     return { ...state, result: null, error: 'No se puede dividir entre cero' }
   }
   return { entry: '', a: state.a, b, op: state.op, result, error: '' }
+}
+
+export function pressBackspace(state) {
+  if (state.error || state.result !== null) return initialCalcState()
+  if (state.entry) {
+    return { ...state, entry: state.entry.slice(0, -1), error: '' }
+  }
+  if (state.op) {
+    const restored = state.a === null ? '' : formatNumber(state.a)
+    return { entry: restored, a: null, b: null, op: null, result: null, error: '' }
+  }
+  return state
 }
 
 export function calcDisplay(state) {

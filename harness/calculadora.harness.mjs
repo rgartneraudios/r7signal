@@ -4,8 +4,8 @@ import {
   OPERATIONS, OP_BY_KEY,
   formatNumber, formatAmount, parseAmount,
   compute, buildPhrase,
-  addIva, removeIva, percentOf, percentOff,
-  initialCalcState, pressDigit, pressDecimal, pressOperator, pressResult, calcDisplay, calcLines,
+  addIva, removeIva, ivaAmount, ivaAmountFromGross, percentOf, percentOff, discountAmount,
+  initialCalcState, pressDigit, pressDecimal, pressOperator, pressResult, pressBackspace, calcDisplay, calcLines,
 } from '../src/lib/calculadora.js'
 
 let pass = 0
@@ -87,6 +87,26 @@ check('operador copia resultado', pressOperator({
   entry: '', a: 10, b: 2, op: 'sumar', result: 12, error: '',
 }, 'multiplicar').a, 12)
 
+console.log('— tecla de borrado (⌫) —')
+const typed = (str) => str.split('').reduce((st, ch) => pressDigit(st, ch), initialCalcState())
+check('123 ⌫ → 12', pressBackspace(typed('123')).entry, '12')
+check('1 ⌫ → vacío', pressBackspace(typed('1')).entry, '')
+check('vacío ⌫ → no-op', pressBackspace(initialCalcState()).entry, '')
+check('visor refleja el borrado', calcLines(pressBackspace(typed('123'))).result, '12')
+const bsOp = pressBackspace(pressOperator(typed('25'), 'sumar'))
+check('⌫ tras operador restaura el operando', [bsOp.entry, bsOp.a, bsOp.op], ['25', null, null])
+const bsDec = pressBackspace(pressDigit(pressDecimal(typed('1')), 5))
+check('⌫ sobre "1.5" deja "1."', bsDec.entry, '1.')
+const bsRes = pressBackspace(pressResult(pressDigit(pressOperator(typed('12'), 'sumar'), 3)))
+check('⌫ tras resultado reinicia', [bsRes.entry, bsRes.result, bsRes.op], ['', null, null])
+check('⌫ tras error limpia el error', pressBackspace(divZero).error, '')
+check('⌫ tras error arranca de cero', pressBackspace(divZero).entry, '')
+check('⌫ no toca el primer operando', (() => {
+  const st = pressBackspace(pressOperator(typed('65'), 'sumar'))
+  return [st.entry, st.a]
+})(), ['65', null])
+check('⌫ dos veces en "140" → "1"', pressBackspace(pressBackspace(pressDigit(pressDigit(pressDigit(pressOperator(typed('6'), 'sumar'), 1), 4), 0))).entry, '1')
+
 console.log('— tecla decimal —')
 check('punto en vacío → "0."', pressDecimal(initialCalcState()).entry, '0.')
 check('punto tras dígito → "25."', pressDecimal(pressDigit(pressDigit(initialCalcState(), 2), 5)).entry, '25.')
@@ -139,6 +159,23 @@ check('100 + 10,5% = 110,5', addIva(100, 10.5), 110.5)
 check('neto null → null', addIva(null, 21), null)
 check('rate texto → null', addIva(100, 'abc'), null)
 check('factor cero → null', removeIva(100, -100), null)
+
+console.log('— ivaAmount / ivaAmountFromGross —')
+check('IVA de 10 al 21% = 2,1', ivaAmount(10, 21), 2.1)
+check('IVA de 100 al 21% = 21', ivaAmount(100, 21), 21)
+check('IVA de 0 al 21% = 0', ivaAmount(0, 21), 0)
+check('IVA sin tasa → null', ivaAmount(10, null), null)
+check('IVA sin monto → null', ivaAmount(null, 21), null)
+check('IVA de 121 al 21% = 21', ivaAmountFromGross(121, 21), 21)
+check('IVA de 10 con 0% = 0', ivaAmountFromGross(10, 0), 0)
+check('IVA bruto factor cero → null', ivaAmountFromGross(100, -100), null)
+
+console.log('— discountAmount —')
+check('20% de 50 = 10', discountAmount(20, 50), 10)
+check('0% de 50 = 0', discountAmount(0, 50), 0)
+check('100% de 50 = 50', discountAmount(100, 50), 50)
+check('sin porcentaje → null', discountAmount('', 50), null)
+check('monto texto → null', discountAmount(20, 'x'), null)
 
 console.log('— percentOf —')
 check('21% de 200 = 42', percentOf(21, 200), 42)
