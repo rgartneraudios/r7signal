@@ -55,6 +55,21 @@ updates:
       - dependency-name: "phaser"
         update-types:
           - "version-update:semver-major"
+      - dependency-name: "@eslint/js"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "globals"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@vitejs/plugin-react"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "eslint-plugin-react-hooks"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "eslint-plugin-react-refresh"
+        update-types:
+          - "version-update:semver-major"
 
   # ---- Escritorio (Tauri / Rust) ----
   # Los mayores de Tauri y gtk-rs se migran a mano: mueven ABI y dependen del SO.
