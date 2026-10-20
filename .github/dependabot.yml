@@ -72,35 +72,8 @@ updates:
           - "version-update:semver-major"
 
   # ---- Escritorio (Tauri / Rust) ----
-  # Los mayores de Tauri y gtk-rs se migran a mano: mueven ABI y dependen del SO.
-  - package-ecosystem: "cargo"
-    directory: "/src-tauri"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:15"
-      timezone: "Europe/Madrid"
-    open-pull-requests-limit: 2
-    commit-message:
-      prefix: "chore(deps-tauri)"
-    labels:
-      - "dependencias"
-    groups:
-      tauri-parches:
-        applies-to: version-updates
-        update-types:
-          - "minor"
-          - "patch"
-    ignore:
-      - dependency-name: "tauri"
-        update-types:
-          - "version-update:semver-major"
-      - dependency-name: "tauri-build"
-        update-types:
-          - "version-update:semver-major"
-      - dependency-name: "glib"
-        update-types:
-          - "version-update:semver-major"
-      - dependency-name: "gtk"
-        update-types:
-          - "version-update:semver-major"
+  # Desactivado a proposito. Los PRs de cargo no se pueden verificar en CI
+  # (compilar Rust con GTK excede el runner por defecto) y Tauri mueve ABI.
+  # Se actualizan a mano con `cargo update` y `cargo build` en ventana propia.
+  # - package-ecosystem: "cargo"
+  #   directory: "/src-tauri"
