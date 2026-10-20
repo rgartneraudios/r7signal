@@ -1,6 +1,17 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@source "../index.html";
+@source "./**/*.{js,jsx}";
+
+/* Paridad v3: Tailwind 4 usa currentColor como color de borde por defecto.
+   Restauramos el gray-200 de v3 para no alterar los bordes existentes. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop {
+    border-color: var(--color-gray-200, #e5e7eb);
+  }
+}
 
 *,
 *::before,
