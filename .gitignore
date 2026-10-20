@@ -42,3 +42,7 @@ output/
 resumen.txt
 tauri-build-log*.txt
 check_braces.cjs
+
+# Carpeta temporal para builds y respaldos. Evita el Temp del sistema, que a veces
+# bloquea a esbuild con "Access is denied" al borrar sus archivos temporales.
+.tmp-build/
