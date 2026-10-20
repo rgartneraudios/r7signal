@@ -46,3 +46,14 @@ check_braces.cjs
 # Carpeta temporal para builds y respaldos. Evita el Temp del sistema, que a veces
 # bloquea a esbuild con "Access is denied" al borrar sus archivos temporales.
 .tmp-build/
+
+# Claves y credenciales locales, sea cual sea el nombre del archivo
+*.pem
+*.p12
+*.pfx
+*.key
+.env.*
+!.env.example
+
+# Target de Rust (builds de Tauri)
+src-tauri/target/
