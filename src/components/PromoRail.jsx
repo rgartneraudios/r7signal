@@ -2,11 +2,10 @@ import HoloPrism from './HoloPrism'
 import { BRO7VISION_URL } from '../lib/webRoutes'
 import { COLORS, rgba } from './toolPalette'
 
-const HOLO_IMAGES = [
-  '/assets/holoPrisma1.webp',
-  '/assets/holoPrisma2.webp',
-  '/assets/holoPrisma3.webp',
-  '/assets/holoPrisma4.webp',
+const HOLO_SETS = [
+  ['/assets/holoPrisma1.webp', '/assets/holoPrisma2.webp', '/assets/holoPrisma3.webp', '/assets/holoPrisma4.webp'],
+  ['/assets/holoPrisma5.webp', '/assets/holoPrisma6.webp', '/assets/holoPrisma7.webp', '/assets/holoPrisma8.webp'],
+  ['/assets/holoPrisma9.webp', '/assets/holoPrisma10.webp', '/assets/holoPrisma11.webp', '/assets/holoPrisma12.webp'],
 ]
 
 const DIGITAL_PRODUCTS = [
@@ -25,14 +24,14 @@ const CARD_STYLE = {
   background: '#131215',
 }
 
-function HoloCard() {
+function HoloCard({ images }) {
   return (
     <div className="lux-card" style={{
       ...CARD_STYLE,
       background: `radial-gradient(ellipse at 50% 18%, ${rgba(COLORS.lilac, 0.14)} 0%, transparent 62%), linear-gradient(165deg, #17161C 0%, #0B0A0D 100%)`,
       borderColor: rgba(COLORS.lilac, 0.35),
     }}>
-      <HoloPrism images={HOLO_IMAGES} style={{ position: 'absolute', inset: 0 }} />
+      <HoloPrism images={images} style={{ position: 'absolute', inset: 0 }} />
       <div style={{
         position: 'absolute', left: 0, right: 0, bottom: 0, padding: '18px 16px',
         background: 'linear-gradient(180deg, transparent 0%, rgba(8,7,10,0.9) 100%)',
@@ -75,8 +74,18 @@ function Column({ children }) {
 
 export function PromoRail({ side = 'left' }) {
   const items = side === 'left'
-    ? [<HoloCard key="holo" />, <DigitalCard key="d0" {...DIGITAL_PRODUCTS[0]} />, <DigitalCard key="d1" {...DIGITAL_PRODUCTS[1]} />]
-    : DIGITAL_PRODUCTS.slice(2).map((p, i) => <DigitalCard key={`d${i + 2}`} {...p} />)
+    ? [
+        <HoloCard key="holo0" images={HOLO_SETS[0]} />,
+        <DigitalCard key="d0" {...DIGITAL_PRODUCTS[0]} />,
+        <HoloCard key="holo1" images={HOLO_SETS[1]} />,
+        <DigitalCard key="d1" {...DIGITAL_PRODUCTS[1]} />,
+      ]
+    : [
+        <DigitalCard key="d2" {...DIGITAL_PRODUCTS[2]} />,
+        <HoloCard key="holo2" images={HOLO_SETS[2]} />,
+        <DigitalCard key="d3" {...DIGITAL_PRODUCTS[3]} />,
+        <DigitalCard key="d4" {...DIGITAL_PRODUCTS[4]} />,
+      ]
   return <Column>{items}</Column>
 }
 
