@@ -27,5 +27,6 @@ Quedan fuera: las claves BYOK del usuario (responsabilidad de cada usuario), los
 
 ## Dependencias
 
-Dependabot vigilando dos ecosistemas (`npm` y `cargo`): alertas de seguridad activas, parches y menores agrupados en un PR semanal, escaneo de secretos con push protection activo.
+Dependabot vigila el ecosistema **`npm`**: alertas de seguridad activas, parches y menores agrupados en un PR semanal, escaneo de secretos con push protection activo.
+El ecosistema **`cargo`** está desactivado a propósito (compilar Rust con GTK excede el runner de CI y Tauri mueve ABI): se actualiza a mano con `cargo update` y build verificado.
 Los saltos mayores —incluido Tauri, `glib` y las migraciones de CSS— se hacen a mano, en rama propia y con build verificado.

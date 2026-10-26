@@ -92,7 +92,7 @@ repo (se edita en la **portada → `About` → engranaje**, NO en Settings) ya d
 `@supabase/*`, alcanzables sólo con Supabase configurado. **Los conteos de GitHub y npm no coinciden**:
 GitHub dice 7 (2/3/2) y npm dice 18 (4/4/10) — npm cuenta rutas del árbol, GitHub advisories.
 `tailwindcss` queda en 3.4.19 (la PR del bot
-apunta a 4.x, major). **S22 CERRADA (cliente de Supabase fuera del bundle)**: corte total del cliente
+apunta a 4.x, major) → **4.3.3** en S29. **S22 CERRADA (cliente de Supabase fuera del bundle)**: corte total del cliente
 `@supabase/supabase-js` — `R7Desktop` era su único importador y siempre pasa `onSave` a
 `PreferencesModal`, así que la rama Supabase del modal **nunca corría**; se fue el import y el prop, la
 dependencia de `package.json`, `src/supabaseClient.js` + `src/lib/supabaseConfig.js` con su harness y la
@@ -133,6 +133,36 @@ La primera redacción tenía el SO **inventado** (decía Windows 11): el real es
 19045.6466**, medido en el registro, y la cabecera ahora declara que el tema es **el sandbox del harness**, no
 R7 Desktop. Aprobado después por el autor: el cierre canónico y las 2 versiones cortas presentan el proyecto
 en **inglés** (4 líneas, con los números de S19), no la línea seca del repo.
+**S29 CERRADA (seguridad de dependencias, 20/10 — registro tardío)**: `aa61be1` sumó `SECURITY.md`,
+`.github/dependabot.yml` y el CI con build + harness + audit. Dependabot quedó en **npm** solamente:
+`weekly` lunes 06:00 Europe/Madrid, grupos `produccion-parches`/`desarrollo-parches`, `ignore` de todo
+semver-major (vite, tailwind, react, eslint y compañía), límite 4 PRs y `chore(deps)`/`chore(deps-dev)`
+de prefijo; el ecosistema `cargo` se **desactivó a propósito** en `0e233b7` (compilar Rust con GTK
+excede el runner y Tauri mueve ABI: se actualiza a mano con `cargo update` y build verificado). Las dos
+fases de seguridad dejaron en `package.json` los `overrides` `esbuild ^0.28.1` y
+`postcss-selector-parser ^7.1.6` (fase 1) y `tailwindcss`/`@tailwindcss/postcss` **4.3.3** con config
+CSS-first y paridad v3 en el color de borde (fase 2). `npm audit` **re-medido al cerrar S30: 0
+vulnerabilidades** en los 5 tramos (low/moderate/high/critical/info); los conteos de S20/S27 quedan
+como historia, no como estado.
+**S30 CERRADA (CI, documentación y cola del bot)**: pedido del autor tras los 3 correos del lunes.
+`ci.yml` corría build, harness y audit pero **no lint**, así que un bump del bot podía romper
+`npm run lint` en local con el CI en verde —el caso vivo era `#23`, `eslint-plugin-react-refresh` 0.4.26
+→ **0.5.7**, un minor de un paquete 0.x con breaking changes que el `ignore` de semver-major no frena—:
+se agrega el paso `npm run lint` entre `npm ci` y el build y el job pasa a `Lint, build, harness y
+auditoría`. **Medido al añadirlo: `npm run lint` ya estaba ROJO en `main`** —5 errores, todos de reglas
+nuevas del `recommended` de `eslint-plugin-react-hooks` **7.1.1**, en archivos que nadie tocó:
+`react-hooks/refs` en `CochiDesktop.jsx:273` y `useWheelSession.js:48`, `set-state-in-effect` en
+`ProjectPlanView.jsx:53` y `useCochiTaskLoop.js:71`, `immutability` en `useSequencer.js:97`—, así que
+el paso entra **informativo** (`continue-on-error`) para no pintar de rojo el CI en el próximo push:
+**S31 = arreglar esos 5 y quitar el `continue-on-error`**. El hueco no era teórico: la regla de 0/0
+existía y nadie la miraba porque el CI no la corría. `SECURITY.md` afirmaba que Dependabot vigilaba `npm` **y** `cargo`, y cargo está comentado
+desde `0e233b7`: la línea se reescribe con el motivo. **Medido en el remoto** (API, no supuesto): 2 PRs
+del bot abiertas —`#23` cabeza `74d87cc`, `#24` cabeza `2d70de0`— y ambas con `Build, harness y
+auditoría` + `Cloudflare Pages` en success; los correos de las 06:43 son el **cron semanal de los lunes
+06:00 Europe/Madrid**, no un efecto del push de la noche anterior, y Cloudflare sólo comenta previews en
+PRs, nunca en `main`. **Corte (regla de 3 archivos)**: mover `@tauri-apps/cli` de `dependencies` a
+`devDependencies` —está declarado como dependencia de producción siendo tooling, por eso cae en
+`produccion-parches`— toca `package.json` + `package-lock.json` y queda pendiente del autor.
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.
