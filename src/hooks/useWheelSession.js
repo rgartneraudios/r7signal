@@ -45,7 +45,7 @@ export function useWheelSession({
   useEffect(() => { messagesRef.current = messages }, [messages])
 
   const onRestoreRef = useRef(onRestore)
-  onRestoreRef.current = onRestore
+  useEffect(() => { onRestoreRef.current = onRestore })
 
   // Arranque: sesión FRÍA (sin rueda). Si existe un puntero a la sesión ACTIVA
   // (reload de HMR/Ctrl+R o reapertura) se retoma esa conversación —mensajes +

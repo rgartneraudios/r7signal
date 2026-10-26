@@ -269,8 +269,8 @@ function CochiDesktop({
 
   // Registro estable: el padre guarda la función en un ref; le pasamos un
   // wrapper que siempre invoca la última versión (sin correr en cada render).
-  const savePreferencesRef = useRef(null)
-  savePreferencesRef.current = savePreferences
+  const savePreferencesRef = useRef(savePreferences)
+  useEffect(() => { savePreferencesRef.current = savePreferences })
   useEffect(() => {
     if (onSavePreferences) onSavePreferences((prefs) => savePreferencesRef.current?.(prefs))
   }, [onSavePreferences])

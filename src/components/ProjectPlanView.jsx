@@ -50,6 +50,7 @@ export default function ProjectPlanView({ onSendToCochi, onSendToAsun, onClose, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { refresh() }, [refresh])
 
   const plan = plans.find(p => p.id === selectedId) || null

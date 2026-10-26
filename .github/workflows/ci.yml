@@ -30,9 +30,8 @@ jobs:
       - name: Instalación reproducible
         run: npm ci
 
-      - name: Lint (informativo hasta cerrar los 5 react-hooks)
+      - name: Lint
         run: npm run lint
-        continue-on-error: true
 
       - name: Compilación
         run: npm run build

@@ -83,7 +83,7 @@ export function useSequencer(pattern) {
     setCurrentStep(-1)
   }, [])
 
-  const tick = useCallback(() => {
+  const tick = useCallback(function step() {
     const transport = Tone.getTransport()
     const ticksPerStep = transport.PPQ / 4
     const p = patternRef.current
@@ -94,7 +94,7 @@ export function useSequencer(pattern) {
       return
     }
     setCurrentStep(rawStep % total)
-    rafRef.current = requestAnimationFrame(tick)
+    rafRef.current = requestAnimationFrame(step)
   }, [stop])
 
   const play = useCallback(async () => {

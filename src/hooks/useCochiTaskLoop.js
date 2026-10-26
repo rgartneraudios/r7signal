@@ -68,6 +68,7 @@ export function useCochiTaskLoop({
 
   const permissionRules = normalizeRules(preferences?.permissions)
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setAskInput(''); setAskChecks([]) }, [pendingQuestion])
 
   function pushActivity(icon, label, detail = '', diff = null) {
