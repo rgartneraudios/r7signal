@@ -153,9 +153,8 @@ auditoría`. **Medido al añadirlo: `npm run lint` ya estaba ROJO en `main`** �
 nuevas del `recommended` de `eslint-plugin-react-hooks` **7.1.1**, en archivos que nadie tocó:
 `react-hooks/refs` en `CochiDesktop.jsx:273` y `useWheelSession.js:48`, `set-state-in-effect` en
 `ProjectPlanView.jsx:53` y `useCochiTaskLoop.js:71`, `immutability` en `useSequencer.js:97`—, así que
-el paso entra **informativo** (`continue-on-error`) para no pintar de rojo el CI en el próximo push:
-**S31 = arreglar esos 5 y quitar el `continue-on-error`**. El hueco no era teórico: la regla de 0/0
-existía y nadie la miraba porque el CI no la corría. `SECURITY.md` afirmaba que Dependabot vigilaba `npm` **y** `cargo`, y cargo está comentado
+el paso entró **informativo** (`continue-on-error`) en S30 y **S31 los arregló y lo quitó**. El hueco no
+era teórico: la regla de 0/0 existía y nadie la miraba porque el CI no la corría. `SECURITY.md` afirmaba que Dependabot vigilaba `npm` **y** `cargo`, y cargo está comentado
 desde `0e233b7`: la línea se reescribe con el motivo. **Medido en el remoto** (API, no supuesto): 2 PRs
 del bot abiertas —`#23` cabeza `74d87cc`, `#24` cabeza `2d70de0`— y ambas con `Build, harness y
 auditoría` + `Cloudflare Pages` en success; los correos de las 06:43 son el **cron semanal de los lunes
@@ -163,6 +162,21 @@ auditoría` + `Cloudflare Pages` en success; los correos de las 06:43 son el **c
 PRs, nunca en `main`. **Corte (regla de 3 archivos)**: mover `@tauri-apps/cli` de `dependencies` a
 `devDependencies` —está declarado como dependencia de producción siendo tooling, por eso cae en
 `produccion-parches`— toca `package.json` + `package-lock.json` y queda pendiente del autor.
+**S31 CERRADA (los 5 de lint, gate 0/0 y congelamiento de la app)**: el autor pidió cerrar del todo y
+fijó el rumbo: **la app queda congelada** —open source, sin más versiones ni mejoras por ahora— y el
+trabajo futuro es **sólo del hub web** (promociones y contenido); los gates se mantienen por si hay que
+tocar el hub. Los 5 se cerraron con **2 arreglos y 3 excepciones**: `react-hooks/refs` en
+`CochiDesktop.jsx` y `useWheelSession.js` pasa a `useEffect(() => { ref.current = … })` con el ref
+**inicializado al valor actual** (equivale: la asignación se declara antes del efecto que lee el ref y el
+valor se lee después del commit); `react-hooks/immutability` en `useSequencer.js` se arregla con **función
+nombrada** dentro de `useCallback` (`function step()`), que resuelve la recursión al binding propio y no a
+la constante todavía sin inicializar; y `set-state-in-effect` en `useCochiTaskLoop.js` (reset del
+ask-user al cambiar de pregunta) y `ProjectPlanView.jsx` (`refresh()` al montar) quedan con
+**`eslint-disable-next-line` puntual**, el mismo patrón que el repo ya usaba para `exhaustive-deps`: son
+arranques de efecto que no se derivan sin cambiar comportamiento, en una app congelada. Medido: **lint
+0/0**, build OK y `npm test` 33/33 (webRoutes 40/40), y el CI vuelve a **bloquear** con lint.
+`README.md` suma **`## Status`**: la app no tiene más releases y el trabajo va al hub, para que nadie
+espere versiones.
 
 **Idioma (Fase 1 en curso):** el texto visible al usuario nace en **inglés**. Los comentarios de código
 y este archivo siguen en español.

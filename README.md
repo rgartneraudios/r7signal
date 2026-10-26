@@ -15,6 +15,13 @@ with are written out in [`docs/QUE-ES-R7.md`](docs/QUE-ES-R7.md). What we are as
 do about it, and the seed issues for newcomers, are in
 [`docs/PARA-DEEPSEEK.md`](docs/PARA-DEEPSEEK.md).
 
+## Status
+
+The desktop app is **feature-frozen**: it is published as it is — v0.1.0, the single Windows installer —
+and no further app releases are planned for now. Active work happens on the web hub at
+[r7signal.com](https://r7signal.com): content and promotions, not the agents. Bug reports and security
+reports are still read and answered, per [`SECURITY.md`](SECURITY.md).
+
 ## The three agents
 
 - **Cochi** — the task agent. Reads, writes and runs commands inside a chosen workspace folder,
