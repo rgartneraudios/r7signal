@@ -22,7 +22,7 @@ import {
   calcLines,
 } from '../lib/calculadora'
 import {
-  lbToKg, kgToLb, ftToM, mToFt, haToM2, m2ToHa,
+  lbToKg, kgToLb, ftToM, mToFt, miToKm, kmToMi, haToM2, m2ToHa,
   cToF, fToC, cToK, kToC,
   lToGalUS, galUSToL, lToGalUK, galUKToL,
   kmhToMph, mphToKmh, kmhToKn, knToKmh,
@@ -316,6 +316,8 @@ const PESO_ROWS = [
 const LONGITUD_ROWS = [
   { labelIn: 'Pies', labelOut: 'Metros', convert: ftToM },
   { labelIn: 'Metros', labelOut: 'Pies', convert: mToFt },
+  { labelIn: 'Millas', labelOut: 'Km', convert: miToKm },
+  { labelIn: 'Km', labelOut: 'Millas', convert: kmToMi },
 ]
 const SUPERFICIE_ROWS = [
   { labelIn: 'Hectáreas', labelOut: 'Metros²', convert: haToM2 },
@@ -371,7 +373,7 @@ export default function Calculadora() {
       <DiscountPanel />
       <IvaPanel />
       <ConversionPanel title="Peso" subtitle="libras ↔ kilos" rows={PESO_ROWS} />
-      <ConversionPanel title="Longitud" subtitle="pies ↔ metros" rows={LONGITUD_ROWS} />
+      <ConversionPanel title="Longitud" subtitle="pies ↔ metros · millas ↔ km" rows={LONGITUD_ROWS} />
       <ConversionPanel title="Superficie" subtitle="hectáreas ↔ metros²" rows={SUPERFICIE_ROWS} />
       <ConversionPanel title="Temperatura" subtitle="Celsius ↔ Fahrenheit ↔ Kelvin" rows={TEMPERATURA_ROWS} />
       <ConversionPanel title="Volumen" subtitle="litros ↔ galones (US/UK)" rows={VOLUMEN_ROWS} />

@@ -5,6 +5,7 @@ const F_PER_C = 1.8
 const K_OFFSET = 273.15
 const L_PER_GAL_US = 3.785411784
 const L_PER_GAL_UK = 4.54609
+const KM_PER_MI = 1.609344
 const KMH_PER_MPH = 1.609344
 const KMH_PER_KN = 1.852
 const KJ_PER_CAL = 0.004184
@@ -42,6 +43,16 @@ export function ftToM(ft) {
 export function mToFt(m) {
   const n = toNumber(m)
   return n === null ? null : round(n / M_PER_FT)
+}
+
+export function miToKm(mi) {
+  const n = toNumber(mi)
+  return n === null ? null : round(n * KM_PER_MI)
+}
+
+export function kmToMi(km) {
+  const n = toNumber(km)
+  return n === null ? null : round(n / KM_PER_MI)
 }
 
 export function haToM2(ha) {
@@ -175,7 +186,7 @@ export function radToDeg(rad) {
 }
 
 export const CONVERSION_FACTORS = {
-  KG_PER_LB, M_PER_FT, M2_PER_HA,
+  KG_PER_LB, M_PER_FT, KM_PER_MI, M2_PER_HA,
   F_PER_C, K_OFFSET, L_PER_GAL_US, L_PER_GAL_UK,
   KMH_PER_MPH, KMH_PER_KN, KJ_PER_CAL,
   MB_PER_GB, GB_PER_TB, PSI_PER_BAR, RAD_PER_DEG,
